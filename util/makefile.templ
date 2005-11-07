@@ -1,0 +1,28 @@
+all: fd0.img
+
+MAKE=make
+
+BUILDDIR=$(BASEDIR)/build
+
+CXXFLAGS=-fleading-underscore -fno-exceptions
+
+fd0.img:
+	cd util ; $(MAKE)
+	cd bochs ; $(MAKE)
+	cd boot ; $(MAKE)
+	cd io ; $(MAKE)
+	cd sistema ; $(MAKE)
+	cd utente ; $(MAKE)
+	cd $(BUILDDIR) ; ./embed ; ./costr
+
+clean:
+	cd util ; $(MAKE) clean
+	cd bochs ; $(MAKE) clean
+	cd boot ; $(MAKE) clean
+	cd io ; $(MAKE) clean
+	cd sistema ; $(MAKE) clean
+	cd utente ; $(MAKE) clean
+	rm -f $(BUILDDIR)/*
+
+export BASEDIR BUILDDIR CXXFLAGS MAKE
+
