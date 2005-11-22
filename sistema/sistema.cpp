@@ -1,6 +1,297 @@
+/* kernel.c - the C part of the kernel */
+     /* Copyright (C) 1999  Free Software Foundation, Inc.
+     
+        This program is free software; you can redistribute it and/or modify
+        it under the terms of the GNU General Public License as published by
+        the Free Software Foundation; either version 2 of the License, or
+        (at your option) any later version.
+     
+        This program is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        GNU General Public License for more details.
+     
+        You should have received a copy of the GNU General Public License
+        along with this program; if not, write to the Free Software
+        Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA. */
+
+     
+     #include "multiboot.h"
+     
+     /* Macros. */
+     
+     /* Check if the bit BIT in FLAGS is set. */
+     #define CHECK_FLAG(flags,bit)   ((flags) & (1 << (bit)))
+     
+     /* Some screen stuff. */
+     /* The number of columns. */
+     #define COLUMNS                 80
+     /* The number of lines. */
+     #define LINES                   24
+     /* The attribute of an character. */
+     #define ATTRIBUTE               7
+     /* The video memory address. */
+     #define VIDEO                   0xB8000
+     
+     /* Variables. */
+     /* Save the X position. */
+     static int xpos;
+     /* Save the Y position. */
+     static int ypos;
+     /* Point to the video memory. */
+     static volatile unsigned char *video;
+     
+     /* Forward declarations. */
+     extern "C" void cmain (unsigned long magic, unsigned long addr);
+     static void cls (void);
+     static void itoa (char *buf, int base, int d);
+     static void putchar (int c);
+     extern "C" void printf (const char *format, ...);
+     
+     /* Check if MAGIC is valid and print the Multiboot information structure
+        pointed by ADDR. */
+     extern "C" void
+     cmain (unsigned long magic, unsigned long addr)
+     {
+       multiboot_info_t *mbi;
+     
+       /* Clear the screen. */
+       cls ();
+     
+       /* Am I booted by a Multiboot-compliant boot loader? */
+       if (magic != MULTIBOOT_BOOTLOADER_MAGIC)
+         {
+           printf ("Invalid magic number: 0x%x\n", (unsigned) magic);
+           return;
+         }
+     
+       /* Set MBI to the address of the Multiboot information structure. */
+       mbi = (multiboot_info_t *) addr;
+     
+       /* Print out the flags. */
+       printf ("flags = 0x%x\n", (unsigned) mbi->flags);
+     
+       /* Are mem_* valid? */
+       if (CHECK_FLAG (mbi->flags, 0))
+         printf ("mem_lower = %uKB, mem_upper = %uKB\n",
+                 (unsigned) mbi->mem_lower, (unsigned) mbi->mem_upper);
+     
+       /* Is boot_device valid? */
+       if (CHECK_FLAG (mbi->flags, 1))
+         printf ("boot_device = 0x%x\n", (unsigned) mbi->boot_device);
+     
+       /* Is the command line passed? */
+       if (CHECK_FLAG (mbi->flags, 2))
+         printf ("cmdline = %s\n", (char *) mbi->cmdline);
+     
+       /* Are mods_* valid? */
+       if (CHECK_FLAG (mbi->flags, 3))
+         {
+           module_t *mod;
+           int i;
+     
+           printf ("mods_count = %d, mods_addr = 0x%x\n",
+                   (int) mbi->mods_count, (int) mbi->mods_addr);
+           for (i = 0, mod = (module_t *) mbi->mods_addr;
+                i < mbi->mods_count;
+                i++, mod++)
+             printf (" mod = 0x%x mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
+		     (unsigned) mod,
+                     (unsigned) mod->mod_start,
+                     (unsigned) mod->mod_end,
+                     (char *) mod->string);
+         }
+     
+       /* Bits 4 and 5 are mutually exclusive! */
+       if (CHECK_FLAG (mbi->flags, 4) && CHECK_FLAG (mbi->flags, 5))
+         {
+           printf ("Both bits 4 and 5 are set.\n");
+           return;
+         }
+     
+       /* Is the symbol table of a.out valid? */
+       if (CHECK_FLAG (mbi->flags, 4))
+         {
+           aout_symbol_table_t *aout_sym = &(mbi->u.aout_sym);
+     
+           printf ("aout_symbol_table: tabsize = 0x%0x, "
+                   "strsize = 0x%x, addr = 0x%x\n",
+                   (unsigned) aout_sym->tabsize,
+                   (unsigned) aout_sym->strsize,
+                   (unsigned) aout_sym->addr);
+         }
+     
+       /* Is the section header table of ELF valid? */
+       if (CHECK_FLAG (mbi->flags, 5))
+         {
+           elf_section_header_table_t *elf_sec = &(mbi->u.elf_sec);
+     
+           printf ("elf_sec: num = %u, size = 0x%x,"
+                   " addr = 0x%x, shndx = 0x%x\n",
+                   (unsigned) elf_sec->num, (unsigned) elf_sec->size,
+                   (unsigned) elf_sec->addr, (unsigned) elf_sec->shndx);
+         }
+     
+       /* Are mmap_* valid? */
+       if (CHECK_FLAG (mbi->flags, 6))
+         {
+           memory_map_t *mmap;
+     
+           printf ("mmap_addr = 0x%x, mmap_length = 0x%x\n",
+                   (unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
+           for (mmap = (memory_map_t *) mbi->mmap_addr;
+                (unsigned long) mmap < mbi->mmap_addr + mbi->mmap_length;
+                mmap = (memory_map_t *) ((unsigned long) mmap
+                                         + mmap->size + sizeof (mmap->size)))
+             printf (" size = 0x%x, base_addr = 0x%x%x,"
+                     " length = 0x%x%x, type = 0x%x\n",
+                     (unsigned) mmap->size,
+                     (unsigned) mmap->base_addr_high,
+                     (unsigned) mmap->base_addr_low,
+                     (unsigned) mmap->length_high,
+                     (unsigned) mmap->length_low,
+                     (unsigned) mmap->type);
+         }
+     }
+     
+     /* Clear the screen and initialize VIDEO, XPOS and YPOS. */
+     static void
+     cls (void)
+     {
+       int i;
+     
+       video = (unsigned char *) VIDEO;
+     
+       for (i = 0; i < COLUMNS * LINES * 2; i++)
+         *(video + i) = 0;
+     
+       xpos = 0;
+       ypos = 0;
+     }
+     
+     /* Convert the integer D to a string and save the string in BUF. If
+        BASE is equal to 'd', interpret that D is decimal, and if BASE is
+        equal to 'x', interpret that D is hexadecimal. */
+     static void
+     itoa (char *buf, int base, int d)
+     {
+       char *p = buf;
+       char *p1, *p2;
+       unsigned long ud = d;
+       int divisor = 10;
+     
+       /* If %d is specified and D is minus, put `-' in the head. */
+       if (base == 'd' && d < 0)
+         {
+           *p++ = '-';
+           buf++;
+           ud = -d;
+         }
+       else if (base == 'x')
+         divisor = 16;
+     
+       /* Divide UD by DIVISOR until UD == 0. */
+       do
+         {
+           int remainder = ud % divisor;
+     
+           *p++ = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
+         }
+       while (ud /= divisor);
+     
+       /* Terminate BUF. */
+       *p = 0;
+     
+       /* Reverse BUF. */
+       p1 = buf;
+       p2 = p - 1;
+       while (p1 < p2)
+         {
+           char tmp = *p1;
+           *p1 = *p2;
+           *p2 = tmp;
+           p1++;
+           p2--;
+         }
+     }
+     
+     /* Put the character C on the screen. */
+     static void
+     putchar (int c)
+     {
+       if (c == '\n' || c == '\r')
+         {
+         newline:
+           xpos = 0;
+           ypos++;
+           if (ypos >= LINES)
+             ypos = 0;
+           return;
+         }
+     
+       *(video + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
+       *(video + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
+     
+       xpos++;
+       if (xpos >= COLUMNS)
+         goto newline;
+     }
+     
+     /* Format a string and print it on the screen, just like the libc
+        function printf. */
+     extern "C" void
+     printf (const char *format, ...)
+     {
+       char **arg = (char **) &format;
+       int c;
+       char buf[20];
+     
+       arg++;
+     
+       while ((c = *format++) != 0)
+         {
+           if (c != '%')
+             putchar (c);
+           else
+             {
+               char *p;
+     
+               c = *format++;
+               switch (c)
+                 {
+                 case 'd':
+                 case 'u':
+                 case 'x':
+                   itoa (buf, c, *((int *) arg++));
+                   p = buf;
+                   goto string;
+                   break;
+     
+                 case 's':
+                   p = *arg++;
+                   if (! p)
+                     p = "(null)";
+     
+                 string:
+                   while (*p)
+                     putchar (*p++);
+                   break;
+     
+                 default:
+                   putchar (*((int *) arg++));
+                   break;
+                 }
+             }
+         }
+     }
+
+     extern "C" void gestore_eccezioni(int tipo, unsigned errore) {
+	     printf("Eccezione %d, errore %x\n", tipo, errore);
+     }
+
 // sistema.cpp
 //
-
+#include "costanti.h"
 //////////////////////////////////////////////////////////////////////////////
 //                             STRUTTURE DATI                               //
 //////////////////////////////////////////////////////////////////////////////
@@ -80,7 +371,7 @@ const int PRIO_DUMMY = 1;
 
 // identificatore del processo creato da begin_p
 //
-const int ID_MAIN = 0x28;
+const int ID_MAIN = 5;
 
 // tipo per il gestore dell' allocazione di memoria
 //
@@ -124,13 +415,12 @@ struct des_proc {
 	unsigned int edi;
 
 	unsigned int es;
-	unsigned int cs;
+	unsigned int cs; 	// char cpl;
 	unsigned int ss;
 	unsigned int ds;
 	unsigned int fs;
 	unsigned int gs;
 	unsigned int ldt;
-//	char cpl;
 
 	unsigned int io_map;
 
@@ -206,10 +496,7 @@ void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem)
 //
 extern "C" void schedulatore(void)
 {
-	proc_elem *pp;
-
-	rimozione_coda(pronti, pp);
-	esecuzione = pp;
+	rimozione_coda(pronti, esecuzione);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -371,40 +658,40 @@ extern "C" void c_sem_signal(int sem)
 
 extern "C" void *c_mem_alloc(int dim)
 {
-	des_proc *p_des = cur_des();
-	void *rv;
+	//des_proc *p_des = cur_des();
+	//void *rv;
 
-	if(!p_des->vzone)		// prima allocazione
-		if(!mod_vzone(p_des, dim, true))
-			return 0;
+	//if(!p_des->vzone)		// prima allocazione
+	//	if(!mod_vzone(p_des, dim, true))
+	//		return 0;
 
-	rv = zone_alloc(p_des->vzone, dim);
-	if(rv == 0) {
-		if(!mod_vzone(p_des, dim, false))
-			return 0;
+	//rv = zone_alloc(p_des->vzone, dim);
+	//if(rv == 0) {
+	//	if(!mod_vzone(p_des, dim, false))
+	//		return 0;
 
-		rv = zone_alloc(p_des->vzone, dim);
-	}
+	//	rv = zone_alloc(p_des->vzone, dim);
+	//}
 
-	return rv;
+	//return rv;
 }
 
 extern "C" void c_mem_free(void *pv)
 {
-	des_proc *p_des = cur_des();
+	//des_proc *p_des = cur_des();
 
-	// la terminazione sarebbe stata piu' coerente, ma l' errore e'
-	//  molto comune. Non e' nemmeno l' unica condizione di errore
-	//  possibile: l' indirizzo puo' non essere stato allocato con
-	//  mem_alloc. In questo caso il processo si trova uno heap
-	//  in stato inconsistente dopo l' esecuzione di pool_free, ma
-	//  non ci sono conseguenze per gli altri processi o per il
-	//  sistema.
-	//
-	if(!heap_addr(pv))
-		return;
+	//// la terminazione sarebbe stata piu' coerente, ma l' errore e'
+	////  molto comune. Non e' nemmeno l' unica condizione di errore
+	////  possibile: l' indirizzo puo' non essere stato allocato con
+	////  mem_alloc. In questo caso il processo si trova uno heap
+	////  in stato inconsistente dopo l' esecuzione di pool_free, ma
+	////  non ci sono conseguenze per gli altri processi o per il
+	////  sistema.
+	////
+	//if(!heap_addr(pv))
+	//	return;
 
-	zone_free(p_des->vzone, pv);
+	//zone_free(p_des->vzone, pv);
 }
 
 void inserimento_coda_timer(richiesta *p);
@@ -890,76 +1177,6 @@ void *memset(void *dest, int c, size_t n)
         return dest;
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE SEGMENTI IN GDT                         //
-//////////////////////////////////////////////////////////////////////////////
-
-// selettori
-// Valori usati da sistema.s
-//
-#define KERNEL_CODE     0x08
-#define KERNEL_DATA     0x10
-#define USER_CODE       0x1b
-#define USER_DATA       0x23
-
-// ID_MAIN = 0x28
-
-#define FIRST_FREE      0x30
-
-#define SEG_SEL_GDT	0
-#define SEG_SEL_RPL0	0
-
-#define seg_index(sel) 	((sel) >> 3)
-#define seg_sel(idx, ti, rpl) (((idx) << 3) | ((ti) << 2) | (rpl))
-
-#define SEG_DPL0	0x0000
-#define SEG_DPL3	0x6000
-
-#define SEG_G		0x00800000
-#define SEG_P		0x00008000
-
-#define SEG_TYPE_DATA	0x00401000	/* b = 1 s = 1 type = data */
-#define SEG_TYPE_CODE	0x00401800	/* d = 1 s = 1 type = code */
-
-#define SEG_DATA_W	0x0200
-
-#define SEG_CODE_C	0x0400
-#define SEG_CODE_R	0x0200
-
-#define SEG_TYPE_LDT	0x0200
-#define SEG_TYPE_TSS	0x0900
-
-// imposta i valori del descrittore desc
-//
-#define seg_fill_desc(desc, base, limit, type, dpl, g) do {\
-	(desc)->data[0] = ((limit) & 0xffff) | (((base) & 0xffff) << 16);\
-	(desc)->data[1] = ((base) & 0xff000000) | (g) |\
-		((limit) & 0x000f0000) | SEG_P | (dpl) | (type) |\
-		(((base) & 0x00ff0000) >> 16);\
-} while(0)
-
-// imposta i valori per un descrittore di un segmento assente
-//
-#define gdt_fill_np_desc(sel)\
-	seg_fill_np_desc(&gdt[seg_index(sel)]);
-
-// imposta i valori per il descrittore di un tss
-//
-#define gdt_fill_tss_desc(sel, base, limit)\
-	seg_fill_desc(&gdt[seg_index(sel)], base, limit, SEG_TYPE_TSS, SEG_DPL0, 0)
-
-// si utilizza la dimensione massima della gdt
-#define GDT_SIZE	0x2000
-
-// tipo per il descrittore di segmento
-//
-typedef struct seg_desc {
-	unsigned long data[2];
-} seg_desc_t;
-
-// puntatore nella memoria lineare alla gdt (la gdt occupa gli indirizzi
-//  0 - 0x00001000)
-seg_desc_t *gdt = 0;
 
 // bitmap per l' allocazione dei descrittori della gdt
 //
@@ -1004,18 +1221,18 @@ unsigned int *page_bitmap_buf;		// buffer per la mappa
 //
 void *mem_page_alloc(int n = 1)
 {
-        unsigned int pos;
-        if(!bm_alloc(&page_bitmap, &pos, n))
-                return 0;
+       // unsigned int pos;
+       // if(!bm_alloc(&page_bitmap, &pos, n))
+       //         return 0;
 
-        return (void *)(MEM_LOW + pos * PAGE_SIZE);
+       // return (void *)(MEM_LOW + pos * PAGE_SIZE);
 }
 
 // rilascia piu' pagine fisiche consecutive
 //
 void mem_page_free(void *p, int n = 1)
 {
-        bm_free(&page_bitmap, ((unsigned int)p - MEM_LOW) / PAGE_SIZE, n);
+       // bm_free(&page_bitmap, ((unsigned int)p - MEM_LOW) / PAGE_SIZE, n);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1092,35 +1309,35 @@ inline unsigned int pg_pa(pdb_t pdb, unsigned int va)
 //
 inline bool pg_add(pdb_t pdb, unsigned int pa, unsigned int va, int flags)
 {
-	pde_t *pde = pg_pde_addr(pdb, va);
-
-	if(!(*pde & PG_P)) {		// tabella delle pagine assente
-		void *tab = mem_page_alloc();
-		if(!tab)
-			return false;
-
-		memset(tab, 0, PAGE_SIZE);
-		*pde = pg_pde((unsigned int)tab, flags | PG_WRITE | PG_P);
-	}
-
-	// se si vuole aggiungere una pagina utente la tabella deve essere
-	//  accessibile all' utente stesso (le pagine sistema sono protette
- 	//  dai relativi descrittori, con U/S a 0)
- 	//
-	if(!(*pde & PG_USER) && (flags & PG_USER))
-		*pde |= PG_USER;
-
-	pte_t *pte = pg_pte_addr(pdb, va);
-	bool old_p = *pte & PG_P;
-	*pte = pg_pte(pa, flags | PG_P);
-
-	// se il direttorio e' in uso e la pagina era presente e' necessario
-	//  invalidare l' entrata del tlb relativa alla pagina appena inserita
-	// NOTA: tale eventualita' non si presenta mai
-	//
-	if(cur_des()->cr3 == pdb && old_p)
-		asm("invlpg %0" : : "m"(*(char *)(va)));
-
+//	pde_t *pde = pg_pde_addr(pdb, va);
+//
+//	if(!(*pde & PG_P)) {		// tabella delle pagine assente
+//		void *tab = mem_page_alloc();
+//		if(!tab)
+//			return false;
+//
+//		memset(tab, 0, PAGE_SIZE);
+//		*pde = pg_pde((unsigned int)tab, flags | PG_WRITE | PG_P);
+//	}
+//
+//	// se si vuole aggiungere una pagina utente la tabella deve essere
+//	//  accessibile all' utente stesso (le pagine sistema sono protette
+// 	//  dai relativi descrittori, con U/S a 0)
+// 	//
+//	if(!(*pde & PG_USER) && (flags & PG_USER))
+//		*pde |= PG_USER;
+//
+//	pte_t *pte = pg_pte_addr(pdb, va);
+//	bool old_p = *pte & PG_P;
+//	*pte = pg_pte(pa, flags | PG_P);
+//
+//	// se il direttorio e' in uso e la pagina era presente e' necessario
+//	//  invalidare l' entrata del tlb relativa alla pagina appena inserita
+//	// NOTA: tale eventualita' non si presenta mai
+//	//
+//	if(cur_des()->cr3 == pdb && old_p)
+//		asm("invlpg %0" : : "m"(*(char *)(va)));
+//
 	return true;
 }
 
@@ -1143,26 +1360,26 @@ inline bool pg_add_region(pdb_t pdb, unsigned int pa,
 //
 inline bool pg_remove(pdb_t pdb, unsigned int va)
 {
-	pde_t *pde = pg_pde_addr(pdb, va);
+	//pde_t *pde = pg_pde_addr(pdb, va);
 
-	if(!(*pde & PG_P))		// tabella delle pagine assente
-		return false;
+	//if(!(*pde & PG_P))		// tabella delle pagine assente
+	//	return false;
 
-	pte_t *pte = pg_pte_addr(pdb, va);
-	if(!(*pte & PG_P))		// pagina gia' rimossa
-		return false;
+	//pte_t *pte = pg_pte_addr(pdb, va);
+	//if(!(*pte & PG_P))		// pagina gia' rimossa
+	//	return false;
 
-	*pte = 0;
+	//*pte = 0;
 
-	// se il direttorio e' in uso e' necessario invalidare l' entrata
-	//  del tlb relativa alla pagina appena inserita
-	//
-	// NOTA: tale situazione non si dovrebbe mai presentare, dato che
-	//  attualmente le pagine vengono rimosse solo alla fine di un processo
-	//  (la rimozione viene fatta in pg_vfree)
-	//
-	if(cur_des()->cr3 == pdb)
-		asm("invlpg %0" : : "m"(*(char *)(va)));
+	//// se il direttorio e' in uso e' necessario invalidare l' entrata
+	////  del tlb relativa alla pagina appena inserita
+	////
+	//// NOTA: tale situazione non si dovrebbe mai presentare, dato che
+	////  attualmente le pagine vengono rimosse solo alla fine di un processo
+	////  (la rimozione viene fatta in pg_vfree)
+	////
+	//if(cur_des()->cr3 == pdb)
+	//	asm("invlpg %0" : : "m"(*(char *)(va)));
 
 	return true;
 }
@@ -1260,152 +1477,39 @@ void pg_init(void)
 
 void mem_init(void)
 {
-        kernel_pool = pool_create(FINE_IDT, INIZIO_MEM_VIDEO);
-        page_bitmap_buf = new unsigned int[BM_BUFSIZE(FREE_PAGES)];
-        bm_create(&page_bitmap, page_bitmap_buf, FREE_PAGES);
-        pg_init();
+        //kernel_pool = pool_create(FINE_IDT, INIZIO_MEM_VIDEO);
+        //page_bitmap_buf = new unsigned int[BM_BUFSIZE(FREE_PAGES)];
+        //bm_create(&page_bitmap, page_bitmap_buf, FREE_PAGES);
+        //pg_init();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//                    CARICAMENTO DEI PROGRAMMI UTENTE                        //
-////////////////////////////////////////////////////////////////////////////////
-
-// i programmi utente sono contenuti nel floppy di avviamento subito dopo
-//  l' immagine del nucleo e sono caricati in memoria da boot.s
-//
-// il contenuto della memoria immediatamente successiva al nucleo e':
-//  - testo condiviso per il livello utente
-//  - testo condiviso per il livello sistema
-//  - testo dei programmi utente
-//  - dati condivisi per il livello utente
-//  - dati condivisi per il lovello sistema
-//  - dati dei programmi utente
-//
-// NOTA: il libro non prevede testo condiviso (tra processi con corpo diverso),
-//  questo si rende necessario per poter avere una sola copia delle librerie
-//  usando piu' file sorgente per i programmi utente (invece del
-//  solo utente.cpp)
-//  
-
-// indirizzo della funzione main
-// NOTA: per evitare il collegamento il valore di questo puntatore viene
-//  scritto nell' immagine dopo la compilazione dei programmi utente;
-//  ovviamente questo simbolo non e' il simbolo main di utente.cpp (altrimenti
-//  sarebbe stato extern void main(void))
-//
-extern void (*main)(void);
-
-// le seguenti variabili sono gli indirizzi logici dei limiti delle zone
-//  citate in precedenza DOPO il caricamento
-//
-
-extern unsigned u_usr_shtext_end;	// fine testo utente condiviso
-extern unsigned u_sys_shtext_end;	// fine testo sistema condiviso
-extern unsigned u_data;			// inizio dati utente
-extern unsigned u_usr_shdata_end;	// fine dati utente condiviso
-extern unsigned u_sys_shdata_end;	// fine dati sistema condivisi
-extern unsigned u_end;			// fine dati utente
-
-extern int end;				// variabile alla fine del nucleo
-
-// indirizzi logici a cui effettuare il caricamento
-//
-#define USER_LOADADDR		0x02000000
-#define IO_LOADADDR		0x00198000
-#define KERN_LOADADDR		0x00100000
-
-#define SHUSRTEXT_START		USER_LOADADDR
-#define SHSYSTEXT_START		u_usr_shtext_end
-#define TEXT_START		u_sys_shtext_end
-#define SHUSRDATA_START		u_data
-#define SHSYSDATA_START		u_usr_shdata_end
-#define DATA_START		u_sys_shdata_end
-#define DATA_END		u_end
-
-// indirizzo in memoria (fisica) dei programmi utente
-//
-#define SRC_UTEXT		((unsigned)&end + io_end - IO_LOADADDR)
-
-// dimensione di utente.bin
-//
-#define USER_SIZE		(DATA_END - USER_LOADADDR)
-
-// primo indirizzo virtuale libero in ogni spazio di indirizzi
-//
-#define FREE_VIRT_START		(USER_LOADADDR + USER_SIZE)
-
-// fine in memoria (fisica) dei programmi utente
-//
-#define SRC_UDATA_END		(SRC_UTEXT + USER_SIZE)
-
-// indirizzi in memoria (fisica) del testo utente condiviso
-//
-#define SRC_SHUSRTEXT_START	SRC_UTEXT
-#define SRC_SHUSRTEXT_END	(SRC_UTEXT + u_usr_shtext_end - USER_LOADADDR)
-#define SRC_SHUSRTEXT_SIZE	(SRC_SHUSRTEXT_END - SRC_SHUSRTEXT_START)
-#define SRC_SHUSRTEXT_PAGES	(SRC_SHUSRTEXT_SIZE / PAGE_SIZE)
-
-// indirizzi in memoria del testo sistema condiviso
-//
-#define SRC_SHSYSTEXT_START	SRC_SHUSRTEXT_END
-#define SRC_SHSYSTEXT_END	(SRC_UTEXT + u_sys_shtext_end - USER_LOADADDR)
-#define SRC_SHSYSTEXT_SIZE	(SRC_SHSYSTEXT_END - SRC_SHSYSTEXT_START)
-#define SRC_SHSYSTEXT_PAGES	(SRC_SHSYSTEXT_SIZE / PAGE_SIZE)
-
-// indirizzi in memoria del testo dei programmi utente
-//
-#define SRC_TEXT_START		SRC_SHSYSTEXT_END
-#define SRC_TEXT_END		(SRC_UTEXT + u_data - USER_LOADADDR)
-#define SRC_TEXT_SIZE		(SRC_TEXT_END - SRC_TEXT_START)
-#define SRC_TEXT_PAGES		(SRC_TEXT_SIZE / PAGE_SIZE)
-
-// indirizzi in memoria dei dati utente condivisi
-//
-#define SRC_SHUSRDATA_START	SRC_TEXT_END
-#define SRC_SHUSRDATA_END	(SRC_UTEXT + u_usr_shdata_end - USER_LOADADDR)
-#define SRC_SHUSRDATA_SIZE	(SRC_SHUSRDATA_END - SRC_SHUSRDATA_START)
-#define SRC_SHUSRDATA_PAGES	(SRC_SHUSRDATA_SIZE / PAGE_SIZE)
-
-// indirizzi in memoria dei dati sistema condivisi
-//
-#define SRC_SHSYSDATA_START	SRC_SHUSRDATA_END
-#define SRC_SHSYSDATA_END	(SRC_UTEXT + u_sys_shdata_end - USER_LOADADDR)
-#define SRC_SHSYSDATA_SIZE	(SRC_SHSYSDATA_END - SRC_SHSYSDATA_START)
-#define SRC_SHSYSDATA_PAGES	(SRC_SHSYSDATA_SIZE / PAGE_SIZE)
-
-// indirizzi in memoria dei dati dei programmi utente
-//
-#define SRC_DATA_START		SRC_SHSYSDATA_END
-#define SRC_DATA_END		SRC_UDATA_END
-#define SRC_DATA_SIZE		(SRC_DATA_END - SRC_DATA_START)
-#define SRC_DATA_PAGES		(SRC_DATA_SIZE / PAGE_SIZE)
 
 // creazione di un nuovo direttorio (clone di kernel_pdb)
 //
 bool pg_new_pd(pdb_t *pdb)
 {
-	void *dir = mem_page_alloc(), *pt;
-	unsigned int va, pa;
-	pte_t *spte;
+	//void *dir = mem_page_alloc(), *pt;
+	//unsigned int va, pa;
+	//pte_t *spte;
 
-	if(!dir)
-		return false;
+	//if(!dir)
+	//	return false;
 
-	*pdb = pg_pdb(dir);
+	//*pdb = pg_pdb(dir);
 
-	memset(dir, 0, PAGE_SIZE);
+	//memset(dir, 0, PAGE_SIZE);
 
-	// le tabelle delle pagine con la memoria fisica sono condivise
-	memcpy(dir, (void *)(kernel_pdb & 0xfffff000),
- 		sizeof(pde_t) * MEM_HIGH / (1024 * PAGE_SIZE));
+	//// le tabelle delle pagine con la memoria fisica sono condivise
+	//memcpy(dir, (void *)(kernel_pdb & 0xfffff000),
+ 	//	sizeof(pde_t) * MEM_HIGH / (1024 * PAGE_SIZE));
 
-	for(va = MEM_HIGH; va < FREE_VIRT_START; va += PAGE_SIZE) {
-		spte = pg_pte_addr(kernel_pdb, va);
-		if(*spte & PG_P)
-			if(!pg_add(*pdb, pg_pa(kernel_pdb, va),
-   					va, *spte & 0xfff))
-				return false;
-	}
+	//for(va = MEM_HIGH; va < FREE_VIRT_START; va += PAGE_SIZE) {
+	//	spte = pg_pte_addr(kernel_pdb, va);
+	//	if(*spte & PG_P)
+	//		if(!pg_add(*pdb, pg_pa(kernel_pdb, va),
+   	//				va, *spte & 0xfff))
+	//			return false;
+	//}
 
 	return true;
 }
@@ -1435,25 +1539,6 @@ void pg_delete_pd(pdb_t pdb)
 //
 void load_shared()
 {
-	// testo utente condiviso (sola lettura, livello utente)
-	if(!pg_add_region(kernel_pdb, SRC_SHUSRTEXT_START, SHUSRTEXT_START,
- 			SRC_SHUSRTEXT_PAGES, PG_USER))
-		panic("Impossibile caricare i programmi utente (testo utente condiviso)");
-
-	// testo sistema condiviso (sola lettura (ignorato), livello sistema)
-	if(!pg_add_region(kernel_pdb, SRC_SHSYSTEXT_START, SHSYSTEXT_START,
- 			SRC_SHSYSTEXT_PAGES, 0))
-		panic("Impossibile caricare i programmi utente (testo sistema condiviso)");
-
-	// dati utente condivisi (livello utente)
-	if(!pg_add_region(kernel_pdb, SRC_SHUSRDATA_START, SHUSRDATA_START,
- 			SRC_SHUSRDATA_PAGES, PG_USER|PG_WRITE))
-		panic("Impossibile caricare i programmi utente (dati utente condivisi)");
-
-	// dati sistema condivisi (livello sistema)
-	if(!pg_add_region(kernel_pdb, SRC_SHSYSDATA_START, SHSYSDATA_START,
- 			SRC_SHSYSDATA_PAGES, PG_WRITE))
-		panic("Impossibile caricare i programmi utente (dati sistema condivisi)");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1473,15 +1558,15 @@ bm_t sem_bm_mem;
 //
 void misc_init()
 {
-	gdt_bm_buf = new unsigned int[BM_BUFSIZE(GDT_SIZE)];
+	//gdt_bm_buf = new unsigned int[BM_BUFSIZE(GDT_SIZE)];
 	sem_bm_buf = new unsigned int[BM_BUFSIZE(MAX_SEM)];
 
 	if(gdt_bm_buf == 0 || sem_bm_buf == 0)
 		panic("Memoria insufficiente per le bitmap del nucleo\n.");
 
 	// bitmap della gdt
-        bm_create(&gdt_bitmap, gdt_bm_buf, GDT_SIZE);
-        bm_set(&gdt_bitmap, 0, FIRST_FREE >> 3);
+        //bm_create(&gdt_bitmap, gdt_bm_buf, GDT_SIZE);
+        //bm_set(&gdt_bitmap, 0, FIRST_FREE >> 3);
 
         // bitmap dei semafori
         bm_create(&sem_bm_mem, sem_bm_buf, MAX_SEM);
@@ -1517,33 +1602,33 @@ extern "C" void call_main(void);
 //
 void run_main(void)
 {
-	void *sp;
+	//void *sp;
 
-	// allocazione delle pile
-	if(!pg_valloc(kernel_pdb, FREE_VIRT_START, MAIN_STACK_PAGES,
- 			PG_USER|PG_WRITE) ||
-    			(sp = mem_page_alloc(MAIN_SYSSTACK_PAGES)) == 0)
-		panic("Impossibile eseguire main, memoria insufficiente");
+	//// allocazione delle pile
+	//if(!pg_valloc(kernel_pdb, FREE_VIRT_START, MAIN_STACK_PAGES,
+ 	//		PG_USER|PG_WRITE) ||
+    	//		(sp = mem_page_alloc(MAIN_SYSSTACK_PAGES)) == 0)
+	//	panic("Impossibile eseguire main, memoria insufficiente");
 
-	// valori usati nel passaggio a livello sistema
-	main_des.ss0 = KERNEL_DATA;
-	main_des.esp0 = (unsigned int)sp + MAIN_SYSSTACK_PAGES * PAGE_SIZE;
+	//// valori usati nel passaggio a livello sistema
+	//main_des.ss0 = KERNEL_DATA;
+	//main_des.esp0 = (unsigned int)sp + MAIN_SYSSTACK_PAGES * PAGE_SIZE;
 
-	main_des.ss = USER_DATA;
-	main_des.esp = FREE_VIRT_START + MAIN_STACK_PAGES * PAGE_SIZE;
+	//main_des.ss = USER_DATA;
+	//main_des.esp = FREE_VIRT_START + MAIN_STACK_PAGES * PAGE_SIZE;
 
-	main_des.cr3 = kernel_pdb;
-	main_des.liv = LIV_UTENTE;
+	//main_des.cr3 = kernel_pdb;
+	//main_des.liv = LIV_UTENTE;
 
-	gdt_fill_tss_desc(ID_MAIN, (int)&main_des, sizeof(des_proc));
+	//gdt_fill_tss_desc(ID_MAIN << 3, (int)&main_des, sizeof(des_proc));
 
-	// per permettere a begin_p di usare salva_stato
-	esecuzione = &main_proc;
+	//// per permettere a begin_p di usare salva_stato
+	//esecuzione = &main_proc;
 
-	// per permettere il passaggio a livello sistema tramite interruzione
-	asm("ltr %0": : "m"(ID_MAIN));
+	//// per permettere il passaggio a livello sistema tramite interruzione
+	//asm("ltr %0": : "m"(ID_MAIN << 3));
 
-	call_main();
+	//call_main();
 }
 
 // inizializzazione della console
@@ -1564,29 +1649,29 @@ extern "C" void (*io_init)(void);
 //
 extern "C" void cpp_init(void)
 {
-	con_init();		// rende possibile chiamare printk e panic
+	//con_init();		// rende possibile chiamare printk e panic
 
-	printk("Inizializzazione del sistema in corso...\n\n");
+	//printk("Inizializzazione del sistema in corso...\n\n");
 
-	printk("Gestore della memoria.\n");
-	mem_init();		// inizializzazione gest. memoria
+	//printk("Gestore della memoria.\n");
+	//mem_init();		// inizializzazione gest. memoria
 
-	printk("Componenti secondarie.\n");
-	misc_init();		// varie
+	//printk("Componenti secondarie.\n");
+	//misc_init();		// varie
 
-	printk("Caricamento del modulo di IO.\n");
-	load_io();		// caricamento modulo IO
+	//printk("Caricamento del modulo di IO.\n");
+	//load_io();		// caricamento modulo IO
 
-	printk("Caricamento sezioni condivise.\n");
-	load_shared();		// caricamento sez. condivise
+	//printk("Caricamento sezioni condivise.\n");
+	//load_shared();		// caricamento sez. condivise
 
-	printk("Inizializzazione modulo di IO.\n");
-	io_init();		// dopo il caricamento delle sez. condivise,
-				//  per farle usare ai processi esterni
+	//printk("Inizializzazione modulo di IO.\n");
+	//io_init();		// dopo il caricamento delle sez. condivise,
+	//			//  per farle usare ai processi esterni
 
-        printk("\nEsecuzione di main\n");
+        //printk("\nEsecuzione di main\n");
 
-        run_main();		// esecuzione di main a liv. utente
+        //run_main();		// esecuzione di main a liv. utente
 }
 
 // template per i descrittori dei processi sistema
@@ -1608,10 +1693,10 @@ des_proc kptempl = {
 	0,				// ebp
 	0,				// esi
 	0,				// edi
-	KERNEL_DATA,			// es
-	KERNEL_CODE,			// cs (prelevato dalla pila)
-	KERNEL_DATA,			// ss
-	KERNEL_DATA,			// ds
+	SEL_DATI_SISTEMA,		// es
+	SEL_CODICE_SISTEMA,		// cs (prelevato dalla pila)
+	SEL_DATI_SISTEMA,		// ss
+	SEL_DATI_SISTEMA,		// ds
 	0,				// fs
 	0,				// gs
 	0,				// ldt
@@ -1632,7 +1717,7 @@ des_proc kptempl = {
 //
 des_proc uptempl = {
 	0,				// link
-	0, KERNEL_DATA,			// esp0 (*), ss0
+	0, SEL_DATI_SISTEMA,		// esp0 (*), ss0
 	0, 0,				// esp1, ss1
 	0, 0,				// esp2, ss2
 	0,				// cr3 (*)
@@ -1646,10 +1731,10 @@ des_proc uptempl = {
 	0,				// ebp
 	0,				// esi
 	0,				// edi
-	USER_DATA,			// es
-	KERNEL_CODE,			// cs (prelevato dalla pila)
-	KERNEL_DATA,			// ss
-	USER_DATA,			// ds
+	SEL_DATI_UTENTE,		// es
+	SEL_CODICE_SISTEMA,		// cs (prelevato dalla pila)
+	SEL_DATI_SISTEMA,		// ss
+	SEL_DATI_UTENTE,		// ds
 	0,				// fs
 	0,				// gs
 	0,				// ldt
@@ -1675,119 +1760,120 @@ des_proc uptempl = {
 //
 bool crea_pile(des_proc *dp, void (*f)(int), int a, char liv)
 {
-	void *sp0;
-	unsigned int *stack;
+	//void *sp0;
+	//unsigned int *stack;
 
-	switch(liv) {
-		case LIV_SISTEMA:
-			sp0 = mem_page_alloc(OWN_STACK_PAGES);
-			if(!sp0)
-				return false;
+	//switch(liv) {
+	//	case LIV_SISTEMA:
+	//		sp0 = mem_page_alloc(OWN_STACK_PAGES);
+	//		if(!sp0)
+	//			return false;
 
-			memset(sp0, 0, OWN_STACK_PAGES * PAGE_SIZE);
+	//		memset(sp0, 0, OWN_STACK_PAGES * PAGE_SIZE);
 
-			dp->esp = (unsigned int)sp0 + OWN_STACK_PAGES *
-   				PAGE_SIZE - 20;
+	//		dp->esp = (unsigned int)sp0 + OWN_STACK_PAGES *
+   	//			PAGE_SIZE - 20;
 
-   			dp->esp0 = (unsigned int)sp0;	// per la deallocazione
+   	//		dp->esp0 = (unsigned int)sp0;	// per la deallocazione
 
-   			stack = (unsigned int *)dp->esp;
-   			stack[0] = (unsigned int)f;
-   			stack[1] = KERNEL_CODE;
-   			stack[2] = 0x00000200;
-   			stack[3] = 0xffffffff;
-   			stack[4] = a;
+   	//		stack = (unsigned int *)dp->esp;
+   	//		stack[0] = (unsigned int)f;
+   	//		stack[1] = KERNEL_CODE;
+   	//		stack[2] = 0x00000200;
+   	//		stack[3] = 0xffffffff;
+   	//		stack[4] = a;
 
-			break;
-		case LIV_UTENTE:
-			sp0 = mem_page_alloc(SYS_STACK_PAGES);
-			if(!sp0)
-				return false;
-			if(!pg_valloc(dp->cr3, FREE_VIRT_START, OWN_STACK_PAGES,
-					PG_USER|PG_WRITE)) {
-				mem_page_free(sp0, SYS_STACK_PAGES);
-				return false;
-			}
+	//		break;
+	//	case LIV_UTENTE:
+	//		sp0 = mem_page_alloc(SYS_STACK_PAGES);
+	//		if(!sp0)
+	//			return false;
+	//		if(!pg_valloc(dp->cr3, FREE_VIRT_START, OWN_STACK_PAGES,
+	//				PG_USER|PG_WRITE)) {
+	//			mem_page_free(sp0, SYS_STACK_PAGES);
+	//			return false;
+	//		}
 
-			memset(sp0, 0, SYS_STACK_PAGES * PAGE_SIZE);
-			memset((void *)pg_pa(dp->cr3, FREE_VIRT_START), 0,
-				OWN_STACK_PAGES * PAGE_SIZE);
+	//		memset(sp0, 0, SYS_STACK_PAGES * PAGE_SIZE);
+	//		memset((void *)pg_pa(dp->cr3, FREE_VIRT_START), 0,
+	//			OWN_STACK_PAGES * PAGE_SIZE);
 
-			dp->esp0 = (unsigned int)sp0 + SYS_STACK_PAGES *
-   				PAGE_SIZE;
-   			dp->esp = (unsigned int)sp0 + SYS_STACK_PAGES *
-      				PAGE_SIZE - 20;
+	//		dp->esp0 = (unsigned int)sp0 + SYS_STACK_PAGES *
+   	//			PAGE_SIZE;
+   	//		dp->esp = (unsigned int)sp0 + SYS_STACK_PAGES *
+      	//			PAGE_SIZE - 20;
 
-      			stack = (unsigned int *)dp->esp;
-		      	stack[0] = (unsigned int)f;
-			stack[1] = USER_CODE;
-			stack[2] = 0x00000200;
-			stack[3] = FREE_VIRT_START + OWN_STACK_PAGES *
-   				PAGE_SIZE - 8;
-			stack[4] = USER_DATA;
+      	//		stack = (unsigned int *)dp->esp;
+	//	      	stack[0] = (unsigned int)f;
+	//		stack[1] = USER_CODE;
+	//		stack[2] = 0x00000200;
+	//		stack[3] = FREE_VIRT_START + OWN_STACK_PAGES *
+   	//			PAGE_SIZE - 8;
+	//		stack[4] = USER_DATA;
 
-			stack = (unsigned int *)pg_pa(dp->cr3,
-   				FREE_VIRT_START + OWN_STACK_PAGES
-       				* PAGE_SIZE - 8);
-			stack[0] = 0xffffffff;
-			stack[1] = a;
+	//		stack = (unsigned int *)pg_pa(dp->cr3,
+   	//			FREE_VIRT_START + OWN_STACK_PAGES
+       	//			* PAGE_SIZE - 8);
+	//		stack[0] = 0xffffffff;
+	//		stack[1] = a;
 
-			break;
-	}
+	//		break;
+	//}
 
-	return true;
+	//return true;
 }
 
 // crea un processo (descrittore, direttorio, pile)
 //
 bool crea_proc(void f(int), int a, char liv, short &id)
 {
-	int idx;
-	des_proc *dp;
-	pdb_t pdb;
-
-	// allocazione dell' indice del tss, del descrittore e del direttorio
-	if((idx = gdt_alloc_index()) == -1 || !(dp = new des_proc) ||
- 			!pg_new_pd(&pdb))
-		return false;
-
-	// impostazione dei valori in gdt
-	gdt_fill_tss_desc(idx << 3, (unsigned)dp, sizeof(des_proc));
-
-	// inizializzazione del descrittore
-	*dp = liv == LIV_UTENTE ? uptempl: kptempl;
-
-	// indirizzo del direttorio delle pagine
-	dp->cr3 = pdb;
-
-	// inizializzazione delle pile
-	if(!crea_pile(dp, f, a, liv))
-		goto errore;
-
-	// inserimento della sezione testo nello spazio logico del processo
-	if(!pg_add_region(dp->cr3, SRC_TEXT_START, TEXT_START,
- 			SRC_TEXT_PAGES, liv == LIV_UTENTE ? PG_USER: 0))
-		goto errore;
-
-	// inserimento della sezione dati (ogni processo ne ha una copia)
-	if(!pg_valloc(dp->cr3, DATA_START, SRC_DATA_PAGES,
- 			liv == LIV_UTENTE ? (PG_USER|PG_WRITE): PG_WRITE))
-		goto errore;
-
-	memcpy((void *)pg_pa(dp->cr3, DATA_START), (void *)SRC_DATA_START,
- 		SRC_DATA_PAGES * PAGE_SIZE);
-
-	// selettore del tss usato come id del nuovo processo
-	id = seg_sel(idx, SEG_SEL_GDT, SEG_SEL_RPL0);
-
-        return true;
-
-errore:
-	mem_page_free((void *)((unsigned)dp->cr3 & 0xfffff000));
-	delete dp;
-	gdt_free_index(idx);
-
-	return false;
+//	int idx;
+//	des_proc *dp;
+//	pdb_t pdb;
+//
+//	// allocazione dell' indice del tss, del descrittore e del direttorio
+//	if((idx = gdt_alloc_index()) == -1 || !(dp = new des_proc) ||
+// 			!pg_new_pd(&pdb))
+//		return false;
+//
+//	// impostazione dei valori in gdt
+//	gdt_fill_tss_desc(idx << 3, (unsigned)dp, sizeof(des_proc));
+//
+//	// inizializzazione del descrittore
+//	*dp = liv == LIV_UTENTE ? uptempl: kptempl;
+//
+//	// indirizzo del direttorio delle pagine
+//	dp->cr3 = pdb;
+//
+//	// inizializzazione delle pile
+//	if(!crea_pile(dp, f, a, liv))
+//		goto errore;
+//
+//	// inserimento della sezione testo nello spazio logico del processo
+//	if(!pg_add_region(dp->cr3, SRC_TEXT_START, TEXT_START,
+// 			SRC_TEXT_PAGES, liv == LIV_UTENTE ? PG_USER: 0))
+//		goto errore;
+//
+//	// inserimento della sezione dati (ogni processo ne ha una copia)
+//	if(!pg_valloc(dp->cr3, DATA_START, SRC_DATA_PAGES,
+// 			liv == LIV_UTENTE ? (PG_USER|PG_WRITE): PG_WRITE))
+//		goto errore;
+//
+//	memcpy((void *)pg_pa(dp->cr3, DATA_START), (void *)SRC_DATA_START,
+// 		SRC_DATA_PAGES * PAGE_SIZE);
+//
+//	// selettore del tss usato come id del nuovo processo
+//	//id = seg_sel(idx, SEG_SEL_GDT, SEG_SEL_RPL0);
+//	id = idx;
+//
+//        return true;
+//
+//errore:
+//	mem_page_free((void *)((unsigned)dp->cr3 & 0xfffff000));
+//	delete dp;
+//	gdt_free_index(idx);
+//
+//	return false;
 }
 
 const unsigned int HEAP_START = 0x10000000;	// va bene qualsiasi indirizzo
@@ -1797,70 +1883,71 @@ const unsigned int HEAP_START = 0x10000000;	// va bene qualsiasi indirizzo
 //
 void canc_proc(proc_elem *p)
 {
-	des_proc *p_des = des_p(p->identifier);
+	//des_proc *p_des = des_p(p->identifier);
 
-	// rilascia heap
-	if(p_des->vzone) {
-		pg_vfree(p_des->cr3, HEAP_START,
-  			(p_des->vend - HEAP_START) / PAGE_SIZE);
-		zone_destroy(p_des->vzone);
-	}
+	//// rilascia heap
+	//if(p_des->vzone) {
+	//	pg_vfree(p_des->cr3, HEAP_START,
+  	//		(p_des->vend - HEAP_START) / PAGE_SIZE);
+	//	zone_destroy(p_des->vzone);
+	//}
 
-	// il direttorio attuale viene deallocato
-	asm("movl %0, %%cr3" : : "r"(kernel_pdb));
+	//// il direttorio attuale viene deallocato
+	//asm("movl %0, %%cr3" : : "r"(kernel_pdb));
 
-	// rilascio della copia privata della sezione dati
-	pg_vfree(p_des->cr3, DATA_START, SRC_DATA_PAGES);
+	//// rilascio della copia privata della sezione dati
+	//pg_vfree(p_des->cr3, DATA_START, SRC_DATA_PAGES);
 
-	// rilascio delle pile
-	if((p_des->liv) == LIV_UTENTE) {
-		pg_vfree(p_des->cr3, FREE_VIRT_START, OWN_STACK_PAGES);
-		mem_page_free((void *)(p_des->esp0 - SYS_STACK_PAGES * PAGE_SIZE),
-  			SYS_STACK_PAGES);
-	} else
-		mem_page_free((void *)p_des->esp0, OWN_STACK_PAGES);
+	//// rilascio delle pile
+	//if((p_des->liv) == LIV_UTENTE) {
+	//	pg_vfree(p_des->cr3, FREE_VIRT_START, OWN_STACK_PAGES);
+	//	mem_page_free((void *)(p_des->esp0 - SYS_STACK_PAGES * PAGE_SIZE),
+  	//		SYS_STACK_PAGES);
+	//} else
+	//	mem_page_free((void *)p_des->esp0, OWN_STACK_PAGES);
 
-	// deallocazione del direttorio e delle tabelle delle pagine
-	pg_delete_pd(p_des->cr3);
+	//// deallocazione del direttorio e delle tabelle delle pagine
+	//pg_delete_pd(p_des->cr3);
 
-	// rilascio del selettore del tss
-	gdt_free_index(seg_index(p->identifier));
+	//// rilascio del selettore del tss
+	////gdt_free_index(seg_index(p->identifier));
+	//gdt_free_index(p->identifier);
 
-	delete p_des;
-	delete p;
+	//delete p_des;
+	//delete p;
 }
 
 // modifica le dimensioni della zona di memoria usata da mem_alloc
 //
 bool mod_vzone(des_proc *p_des, int dim, bool crea)
 {
-	unsigned int est_size = dim << 2;
-	unsigned int pages;
+	//unsigned int est_size = dim << 2;
+	//unsigned int pages;
 
-	est_size = (est_size & 0xfffff000) + ((est_size & 0xfff) ? 0x1000: 0);
-	pages = est_size / PAGE_SIZE;
+	//est_size = (est_size & 0xfffff000) + ((est_size & 0xfff) ? 0x1000: 0);
+	//pages = est_size / PAGE_SIZE;
 
-	if(crea) {
-		if(!pg_valloc(p_des->cr3, HEAP_START, pages,
- 				(p_des->liv == LIV_UTENTE? PG_USER: 0)|PG_WRITE))
-			return false;
-		p_des->vend = HEAP_START + est_size;
+	//if(crea) {
+	//	if(!pg_valloc(p_des->cr3, HEAP_START, pages,
+ 	//			(p_des->liv == LIV_UTENTE? PG_USER: 0)|PG_WRITE))
+	//		return false;
+	//	p_des->vend = HEAP_START + est_size;
 
-		memset((void *)pg_pa(p_des->cr3, HEAP_START), 0,
-  				pages * PAGE_SIZE);
+	//	memset((void *)pg_pa(p_des->cr3, HEAP_START), 0,
+  	//			pages * PAGE_SIZE);
 
-  		return (p_des->vzone = zone_create((void *)HEAP_START,
-			(void *)p_des->vend)) != 0;
-	} else {
-		if(!pg_valloc(p_des->cr3, p_des->vend, pages,
- 				(p_des->liv == LIV_UTENTE? PG_USER: 0)|PG_WRITE))
-			return false;
-		memset((void *)pg_pa(p_des->cr3, p_des->vend), 0,
-  				pages * PAGE_SIZE);
-		p_des->vend += est_size;
+  	//	return (p_des->vzone = zone_create((void *)HEAP_START,
+	//		(void *)p_des->vend)) != 0;
+	//} else {
+	//	if(!pg_valloc(p_des->cr3, p_des->vend, pages,
+ 	//			(p_des->liv == LIV_UTENTE? PG_USER: 0)|PG_WRITE))
+	//		return false;
+	//	memset((void *)pg_pa(p_des->cr3, p_des->vend), 0,
+  	//			pages * PAGE_SIZE);
+	//	p_des->vend += est_size;
 
-		return zone_grow(p_des->vzone, (void *)p_des->vend);
-	}
+	//	return zone_grow(p_des->vzone, (void *)p_des->vend);
+	//}
 }
 
 // true se pv e' un indirizzo dello heap del processo
@@ -1880,47 +1967,47 @@ inline bool heap_addr(void *pv)
 //
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
 {
-	unsigned int p, cs;
-	int pages;
-	pdb_t cr3;
-	char liv;
+	//unsigned int p, cs;
+	//int pages;
+	//pdb_t cr3;
+	//char liv;
 
-	if(esecuzione != 0) {
-		// sistema avviato, esecuzione e' valido
-		cr3 = cur_des()->cr3;
-		liv = cur_des()->liv;
-	} else {
-		// sistema in avviamento, si inizializzano semafori
-		//  per IO, ecc...
-		cr3 = kernel_pdb;
-		liv = LIV_SISTEMA;
-	}
+	//if(esecuzione != 0) {
+	//	// sistema avviato, esecuzione e' valido
+	//	cr3 = cur_des()->cr3;
+	//	liv = cur_des()->liv;
+	//} else {
+	//	// sistema in avviamento, si inizializzano semafori
+	//	//  per IO, ecc...
+	//	cr3 = kernel_pdb;
+	//	liv = LIV_SISTEMA;
+	//}
 
-	p = (unsigned int)area;
-	dim += p & 0x00000fff;
-	pages = dim / PAGE_SIZE + (dim % PAGE_SIZE) != 0;
-	p &= 0xfffff000;
+	//p = (unsigned int)area;
+	//dim += p & 0x00000fff;
+	//pages = dim / PAGE_SIZE + (dim % PAGE_SIZE) != 0;
+	//p &= 0xfffff000;
 
-	while(pages > 0) {
-		pde_t *pde = pg_pde_addr(cr3, p);
+	//while(pages > 0) {
+	//	pde_t *pde = pg_pde_addr(cr3, p);
 
-		if(!(*pde & PG_P))
-			return false;
+	//	if(!(*pde & PG_P))
+	//		return false;
 
-		pte_t *pte = pg_pte_addr(cr3, p);
+	//	pte_t *pte = pg_pte_addr(cr3, p);
 
-		if(!(*pte & PG_P))
-			return false;
+	//	if(!(*pte & PG_P))
+	//		return false;
 
-		// si impedisce ai processi sistema di scrivere in pagine a sola
-		//  lettura tramite chiamate di sistema
-		if(liv == LIV_UTENTE && (!(*pte & PG_USER) ||
-				write && !(*pte & PG_WRITE)))
-			return false;
+	//	// si impedisce ai processi sistema di scrivere in pagine a sola
+	//	//  lettura tramite chiamate di sistema
+	//	if(liv == LIV_UTENTE && (!(*pte & PG_USER) ||
+	//			write && !(*pte & PG_WRITE)))
+	//		return false;
 
-		p += PAGE_SIZE;
-		--pages;
-	}
+	//	p += PAGE_SIZE;
+	//	--pages;
+	//}
 
 	return true;
 }
@@ -1931,7 +2018,7 @@ extern "C" void hwexc(int num, unsigned int codice, unsigned int ind)
 {
 	printk("Eccezione hardware %d (codice di errore %x), EIP = %x\n",
 		num, codice, ind);
-	printk("Il processo %x verra' terminato\n\n", esecuzione->identifier);
+	printk("Il processo %d verra' terminato\n\n", esecuzione->identifier);
 
 	abort_p();
 }

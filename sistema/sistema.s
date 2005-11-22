@@ -20,6 +20,8 @@
 #
 .set BYTE_SEM, 8*64
 
+# indirizzo a cui l'immagine viene caricata dal boot loader
+.set BOOTADDR, 0x8000
 # Indirizzi di caricamento dei moduli del sistema
 #
 .set USER_LOADADDR, 0x02000000
@@ -166,7 +168,7 @@ idt_pd: .word 0x800
 _io_init:		.long	0
 
 	.global _io_end
-_io_end:		.long	0	# offset hardcoded
+_io_end:		.long	0
 
 	.global _main
 _main:			.long	0
@@ -187,7 +189,7 @@ _u_usr_shdata_end:	.long	0
 _u_sys_shdata_end:	.long	0
 
 	.global _u_end
-_u_end:			.long	0	# offset hardcoded
+_u_end:			.long	0
 
 ##############################################################################
 ##                            CODICE DI AVVIAMENTO                          ##
@@ -204,24 +206,27 @@ start:				# offset hardcoded nel bootloader
 	movw %ax, %ds
 	movw %ax, %es
 	movw %ax, %ss
-
-        movl $0x8000, %esi              # spostamento del nucleo (e dei
-        movl $KERN_LOADADDR, %edi	#  programmi utente) ad 1Mb
+	
+        movl $BOOTADDR, %esi            # spostamento del nucleo (e dei
+        movl $_text, %edi		#  programmi utente) ad 1Mb
+					# (ovvero all'indirizzo di collegamento)
 
         movl $_end, %ecx
-        subl $KERN_LOADADDR, %ecx	# dimensione del nucleo in ecx
+        subl $_text, %ecx		# dimensione del nucleo in ecx
 
-	movl 0x00008004, %eax		# _io_end in ecx
-					# non si puo' usare il simbolo
-					#  perche' questo codice non e'
-					#  ancora caricato all' indirizzo
-					#  0x100000
+	movl $_io_end, %ebx		
+	subl $(_text - BOOTADDR), %ebx	# aggiustamento del simbolo _io_end
+			
+	movl (%ebx), %eax
 	subl $IO_LOADADDR, %eax		# lunghezza del modulo di io in eax
 	addl %eax, %ecx			# totale delle dimesioni (sistema
 					#  e io) in ecx
 
-        movl 0x00008020, %ecx		# _u_end in ecx
-        subl $USER_LOADADDR, %ecx	# lunghezza in bytes dei programmi
+        movl $_u_end, %ebx		
+	subl $(_text - BOOTADDR), %ebx	# aggiustamento del simbolo _u_end
+	movl (%ebx), %eax
+					# _u_end in ecx
+        subl $USER_LOADADDR, %eax	# lunghezza in bytes dei programmi
         				#  utente in ecx
         addl %eax, %ecx			# totale in ecx
 
@@ -251,7 +256,7 @@ go:
 	movw $0, %ax			# fs e gs non sono usati
 	movw %ax, %fs
 	movw %ax, %gs
-
+	
         jmp _cpp_init                   # esegue l' inizializzazione di alto
                                         #  livello (in sistema.cpp)
 
@@ -290,10 +295,9 @@ salva_stato:
 	pushl %eax
         pushl %edx
 
-	xorl %ebx, %ebx
+	movl $0, %ebx
 	movl _esecuzione, %edx
         movw (%edx), %bx		# esecuzione->identifier in ebx
-        shrl $3, %ebx			# indice del tss in ebx
         movl gdt_ptr, %edx
         leal (%edx, %ebx, 8), %eax      # ind. entrata della gdt relativa in eax
         movl (%eax), %ebx
@@ -342,17 +346,15 @@ salva_stato:
 # carica lo stato del processo in _esecuzione
 #
 carica_stato:
-	xorl %ebx, %ebx
+	movl $0, %ebx
         movl _esecuzione, %edx
         movw (%edx), %bx		# esecuzione->identifier in ebx
-        pushl %ebx
 
-        shrl $3, %ebx
         movl gdt_ptr, %edx
         leal (%edx, %ebx, 8), %eax      # ind. entrata della gdt relativa in eax
         andl $0xfffffdff, 4(%eax)       # bit busy del tss a zero
 
-        popl %ebx
+	shll $3, %ebx			# trasformo indice->selettore
        	ltr %bx
 
         movl (%eax), %ebx
@@ -748,7 +750,7 @@ i8259_init:
 	movb $0b11111011, %al	# maschera tutte le interruzioni, tranne quelle
 	outb %al, $OCW1M	#  provenienti dallo slave
 	delay
-	movb $0x40, %al
+	movb $0x48, %al
 	outb %al, $OCW3M
 	delay
 
@@ -767,7 +769,7 @@ i8259_init:
 	movb $0b11111111, %al	# maschera tutte le interruzioni
 	outb %al, $OCW1S
 	delay
-	movb $0x40, %al
+	movb $0x48, %al
 	outb %al, $OCW3S
 	delay
 
@@ -889,7 +891,7 @@ fill_gate:
 #
 idt_init:
 	movl idt_ptr, %edi
-	xorl %eax, %eax
+	movl $0, %eax
 	movl $0x200, %ecx
 	rep
 		stosl
@@ -1043,7 +1045,7 @@ seg_fill_desc:
 
 gdt_init:
         movl gdt_ptr, %edi
-        xorl %eax, %eax
+        movl $0, %eax
         movl $0x4000, %ecx
         rep
            stosl
@@ -1207,9 +1209,8 @@ _des_p:
 	pushl %ebx
 	pushl %edx
 
-	xorl %ebx, %ebx
+	movl $0, %ebx
 	movw 12(%esp), %bx		# identificatore in ebx
-        shrl $3, %ebx			# indice del tss in ebx
         movl gdt_ptr, %edx
         leal (%edx, %ebx, 8), %eax      # ind. entrata della gdt relativa in eax
         movl (%eax), %ebx
@@ -1247,7 +1248,7 @@ null_idtr:
 	.global _reboot
 _reboot:
 	lidt null_idtr
-	xorl %ecx, %ecx
+	movl $0, %ecx
 	divl %ecx			# la divisione per 0 provoca un'
  					#  eccezione non gestita
 die:	jmp die				# non si sa mai...
