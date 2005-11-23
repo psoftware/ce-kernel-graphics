@@ -42,7 +42,6 @@
      static volatile unsigned char *video;
      
      /* Forward declarations. */
-     extern "C" void cmain (unsigned long magic, unsigned long addr);
      static void cls (void);
      static void itoa (char *buf, int base, int d);
      static void putchar (int c);
@@ -52,6 +51,7 @@
 // sistema.cpp
 //
 #include "costanti.h"
+#include "elf.h"
 //////////////////////////////////////////////////////////////////////////////
 //                             STRUTTURE DATI                               //
 //////////////////////////////////////////////////////////////////////////////
@@ -2391,6 +2391,178 @@ void zone_destroy(zone_t *zone)
 	delete zone;
 }
 
+// indirizzo fisico del primo byte non riferibile
+// in memoria inferiore e superiore
+unsigned int max_mem_lower;
+unsigned int max_mem_upper;
+
+extern unsigned int end;
+unsigned int mem_upper = end;
+
+
+
+// allocatore first fit classico e senza fronzoli
+
+struct des_memlibera {
+	unsigned int dimensione;
+	des_memlibera* next;
+};
+
+des_memlibera* memlibera = 0;
+
+unsigned int allinea(unsigned int valore) {
+	return (valore % 4 == 0) ? valore : (valore + 3) & 0xfffffffc;
+}
+
+void* malloc(unsigned int size) {
+
+	void* p = 0;
+	des_memlibera *prec = 0, *scorri = memlibera;
+
+	size = allinea(size);
+
+	while (scorri != 0 && scorri->dimensione < size) {
+		prec = scorri;
+		scorri = scorri->next;
+	}
+
+	if (scorri != 0) {
+		if (scorri->dimensione - size > sizeof(des_memlibera)) {
+			des_memlibera* tmp = (des_memlibera*)((unsigned int)scorri + size);
+			tmp->dimensione = scorri->dimensione - size;
+			tmp->next = scorri->next;
+			if (prec != 0) 
+				prec->next = tmp;
+			else
+				memlibera = tmp;
+			p = scorri;
+		}
+	}
+
+	return p;
+}
+
+void free(void* indirizzo, unsigned int size) {
+
+	des_memlibera *prec = 0, *scorri = memlibera;
+
+	size = size & 0xfffffffc;
+	indirizzo = (void*)allinea((unsigned int)indirizzo);
+
+	if (size < sizeof(des_memlibera)) return;
+
+
+	while (scorri != 0 && scorri < indirizzo) {
+		prec = scorri;
+		scorri = scorri->next;
+	}
+
+	if ((unsigned int)indirizzo + size > (unsigned int)scorri) 
+		panic("errore nell'allocatore\n");
+
+	des_memlibera* tmp = (des_memlibera*)indirizzo;
+	if (prec != 0 && (unsigned int)prec + prec->dimensione == (unsigned int)tmp) {
+		prec->dimensione += size;
+		tmp = prec;
+	} else {
+		tmp->dimensione = size;
+		tmp->next = scorri;
+		if (prec != 0) 
+			prec->next = tmp;
+		else
+			memlibera = tmp;
+	}
+
+	if (scorri != 0 && (unsigned int)tmp + tmp->dimensione == (unsigned int)scorri) {
+		tmp->dimensione += scorri->dimensione;
+		tmp->next = scorri->next;
+	}
+		
+}
+
+void debug_malloc() {
+	des_memlibera* scorri = memlibera;
+	unsigned int tot = 0;
+	printf("--- MEMORIA LIBERA ---\n");
+	while (scorri != 0) {
+		printf("%d byte a 0x%x\n", scorri->dimensione, (void*)scorri);
+		tot += scorri->dimensione;
+		scorri = scorri->next;
+	}
+	printf("TOT: %d byte (%d KB)\n", tot, tot / 1024);
+	printf("----------------------\n");
+}
+
+void* occupa(int quanti) {
+	void* p = 0;
+	if (mem_upper + quanti <= max_mem_upper) {
+		p = (void*)mem_upper;
+		mem_upper += quanti;
+	}
+	return p;
+}
+
+int salta_a(unsigned int indirizzo) {
+	int saltati = -1;
+	if (indirizzo >= mem_upper && indirizzo < max_mem_upper) {
+		saltati = indirizzo - mem_upper;
+		int liberabili = (indirizzo - allinea(mem_upper)) & 0xfffffffc;;
+		free((void*)mem_upper, liberabili);
+		mem_upper = indirizzo;
+	}
+	return saltati;
+}
+
+void carica_modulo(module_t* mod) {
+	Elf32_Ehdr* elf_h = (Elf32_Ehdr*)mod->mod_start;
+
+	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
+	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
+	{
+		printf("Formato del modulo '%s' non riconosciuto\n", mod->string);
+		return;
+	}
+
+	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS32  &&
+	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&
+	      elf_h->e_type	       == ET_EXEC     &&
+	      elf_h->e_machine 	       == EM_386))
+	{ 
+		printf("Il modulo '%s' non contiene un esegubile per Intel x86\n", 
+				mod->string);
+		return;
+	}
+
+	Elf32_Phdr* elf_ph = (Elf32_Phdr*)(mod->mod_start + elf_h->e_phoff);
+	for (int i = 0; i < elf_h->e_phnum; i++) {
+		if (elf_ph->p_type != PT_LOAD)
+			continue;
+
+		if (salta_a(elf_ph->p_vaddr) < 0) {
+			printf("Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
+			continue;
+		}
+
+		if (occupa(elf_ph->p_memsz) == 0) {
+			printf("Memoria insufficiente per '%s'\n", mod->string);
+			continue;
+		}
+
+		memcpy((void*)elf_ph->p_vaddr,
+		       (void*)(mod->mod_start + elf_ph->p_offset),
+		       elf_ph->p_filesz);
+		printf("Copiata sezione di %d byte all'indirizzo 0x%x\n",
+				elf_ph->p_filesz, elf_ph->p_vaddr);
+		memset((void*)(elf_ph->p_vaddr + elf_ph->p_filesz), 0,
+		       elf_ph->p_memsz - elf_ph->p_filesz);
+		printf("azzerati ulteriori %d byte\n",
+				elf_ph->p_memsz - elf_ph->p_filesz);
+		elf_ph = (Elf32_Phdr*)((unsigned int)elf_ph + elf_h->e_phentsize);
+	}
+	//free((void*)mod->mod_start, mod->mod_end - mod->mod_start);
+}
 
 /* Check if MAGIC is valid and print the Multiboot information structure
    pointed by ADDR. */
@@ -2406,85 +2578,49 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		return;
 	}
 
-	/* Print out the flags. */
-	printf ("flags = 0x%x\n", (unsigned) mbi->flags);
+	printf ("flags = 0x%x\n", mbi->flags);
 
-	/* Are mem_* valid? */
-	if (CHECK_FLAG (mbi->flags, 0))
+	if (CHECK_FLAG (mbi->flags, 0)) {
 		printf ("mem_lower = %uKB, mem_upper = %uKB\n",
-				(unsigned) mbi->mem_lower, (unsigned) mbi->mem_upper);
+				 mbi->mem_lower, mbi->mem_upper);
+		max_mem_lower = mbi->mem_lower * 1024;
+		max_mem_upper = mbi->mem_upper * 1024 + 0x100000;
+	} else {
+		printf ("Quantita' di memoria sconosciuta, assumo 32MB\n");
+		max_mem_lower = 639 * 1024;
+		max_mem_upper = 32 * 1024 * 1024;
+	}
 
-	/* Is boot_device valid? */
+
 	if (CHECK_FLAG (mbi->flags, 1))
-		printf ("boot_device = 0x%x\n", (unsigned) mbi->boot_device);
+		printf ("boot_device = 0x%x\n", mbi->boot_device);
 
-	/* Is the command line passed? */
 	if (CHECK_FLAG (mbi->flags, 2))
-		printf ("cmdline = %s\n", (char *) mbi->cmdline);
+		printf ("cmdline = %s\n", mbi->cmdline);
 
-	/* Are mods_* valid? */
 	if (CHECK_FLAG (mbi->flags, 3)) {
-		module_t *mod;
-		int i;
 
 		printf ("mods_count = %d, mods_addr = 0x%x\n",
-				(int) mbi->mods_count, (int) mbi->mods_addr);
-		for (i = 0, mod = (module_t *) mbi->mods_addr;
-				i < mbi->mods_count;
-				i++, mod++)
-			printf (" mod = 0x%x mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
-					(unsigned) mod,
-					(unsigned) mod->mod_start,
-					(unsigned) mod->mod_end,
-					(char *) mod->string);
+				mbi->mods_count, mbi->mods_addr);
+		module_t* mod = mbi->mods_addr;
+		for (int i = 0; i < mbi->mods_count; i++) {
+			printf (" mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
+					mod->mod_start, mod->mod_end, mod->string);
+			if (salta_a(mod->mod_end) < 0) {
+				panic("Errore nel caricamento");
+			}
+			mod++;
+		}
+		mod = mbi->mods_addr;
+		for (int i = 0; i < mbi->mods_count; i++) {
+			carica_modulo(mod);
+			mod++;
+		}
+
 	}
+	free((void*)4096, max_mem_lower);
+	debug_malloc();
 
-	/* Bits 4 and 5 are mutually exclusive! */
-	if (CHECK_FLAG (mbi->flags, 4) && CHECK_FLAG (mbi->flags, 5)) {
-		printf ("Both bits 4 and 5 are set.\n");
-		return;
-	}
-
-	/* Is the symbol table of a.out valid? */
-	if (CHECK_FLAG (mbi->flags, 4)) {
-		aout_symbol_table_t *aout_sym = &(mbi->u.aout_sym);
-
-		printf ("aout_symbol_table: tabsize = 0x%0x, "
-				"strsize = 0x%x, addr = 0x%x\n",
-				(unsigned) aout_sym->tabsize,
-				(unsigned) aout_sym->strsize,
-				(unsigned) aout_sym->addr);
-	}
-
-	/* Is the section header table of ELF valid? */
-	if (CHECK_FLAG (mbi->flags, 5)) {
-		elf_section_header_table_t *elf_sec = &(mbi->u.elf_sec);
-
-		printf ("elf_sec: num = %u, size = 0x%x,"
-				" addr = 0x%x, shndx = 0x%x\n",
-				(unsigned) elf_sec->num, (unsigned) elf_sec->size,
-				(unsigned) elf_sec->addr, (unsigned) elf_sec->shndx);
-	}
-
-	/* Are mmap_* valid? */
-	if (CHECK_FLAG (mbi->flags, 6)) {
-		memory_map_t *mmap;
-
-		printf ("mmap_addr = 0x%x, mmap_length = 0x%x\n",
-				(unsigned) mbi->mmap_addr, (unsigned) mbi->mmap_length);
-		for (mmap = (memory_map_t *) mbi->mmap_addr;
-				(unsigned long) mmap < mbi->mmap_addr + mbi->mmap_length;
-				mmap = (memory_map_t *) ((unsigned long) mmap
-					+ mmap->size + sizeof (mmap->size)))
-			printf (" size = 0x%x, base_addr = 0x%x%x,"
-					" length = 0x%x%x, type = 0x%x\n",
-					(unsigned) mmap->size,
-					(unsigned) mmap->base_addr_high,
-					(unsigned) mmap->base_addr_low,
-					(unsigned) mmap->length_high,
-					(unsigned) mmap->length_low,
-					(unsigned) mmap->type);
-	}
 }
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS. */

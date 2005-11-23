@@ -75,6 +75,15 @@
        unsigned long addr;
        unsigned long shndx;
      } elf_section_header_table_t;
+
+     /* The module structure. */
+     typedef struct module
+     {
+       unsigned long mod_start;
+       unsigned long mod_end;
+       char*	     string;
+       unsigned long reserved;
+     } module_t;
      
      /* The Multiboot information. */
      typedef struct multiboot_info
@@ -83,9 +92,9 @@
        unsigned long mem_lower;
        unsigned long mem_upper;
        unsigned long boot_device;
-       unsigned long cmdline;
+       char*	     cmdline;
        unsigned long mods_count;
-       unsigned long mods_addr;
+       module_t*     mods_addr;
        union
        {
          aout_symbol_table_t aout_sym;
@@ -95,14 +104,6 @@
        unsigned long mmap_addr;
      } multiboot_info_t;
      
-     /* The module structure. */
-     typedef struct module
-     {
-       unsigned long mod_start;
-       unsigned long mod_end;
-       unsigned long string;
-       unsigned long reserved;
-     } module_t;
      
      /* The memory map. Be careful that the offset 0 is base_addr_low
         but no size. */
