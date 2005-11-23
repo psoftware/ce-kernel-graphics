@@ -319,6 +319,8 @@ carica_stato:
 init_gdt:
 	pushl %ebp
 	movl %esp, %ebp
+	pushl %ecx
+	pushl %ebx
 
 			#indice	base	limite	P	DPL		TIPO		G
 	carica_descr	0	0	0	NON_P	0		0		0
@@ -327,6 +329,28 @@ init_gdt:
 	carica_descr	3	0	0xfffff	PRES	DPL_UTENTE	SEG_CODICE	G_PAGINA
 	carica_descr	4	0	0xfffff	PRES	DPL_UTENTE	SEG_DATI	G_PAGINA
 
+	movl $_array_desp, %ebx
+	movl $5, %ecx
+ciclo_tss:
+	cmpl $(MAX_PROCESSI + 5), %ecx
+	jl carica_tss
+	jmp fine_carica_tss
+carica_tss:
+	pushl $G_BYTE
+	pushl $SEG_TSS
+	pushl $DPL_SISTEMA
+	pushl $NON_P
+	pushl $(SIZE_DESP-1)
+	pushl %ebx
+	pushl %ecx
+	call _init_descrittore
+	addl $28, %esp
+	incl %ecx
+	addl $SIZE_DESP, %ebx
+	jmp ciclo_tss
+fine_carica_tss:
+	popl %ebx
+	popl %ecx
 	leave
 	ret
 
@@ -355,7 +379,7 @@ init_gdt:
 init_idt:
 	pushl %ebp
 	movl %esp, %ebp
-	#		indice	routine		dpl
+	#		indice		routine			dpl
 	# gestori eccezioni:
 	carica_gate	0 	divide_error 	DPL_SISTEMA
 	carica_gate	1 	debug 		DPL_SISTEMA
@@ -363,7 +387,7 @@ init_idt:
 	carica_gate	3 	breakpoint 	DPL_SISTEMA
 	carica_gate	4 	overflow 	DPL_SISTEMA
 	carica_gate	5 	bound_re 	DPL_SISTEMA
-	carica_gate	6 	invalid_opcode 	DPL_SISTEMA
+	carica_gate	6 	invalid_opcode	DPL_SISTEMA
 	carica_gate	7 	dev_na 		DPL_SISTEMA
 	carica_gate	8 	double_fault 	DPL_SISTEMA
 	carica_gate	9 	coproc_so 	DPL_SISTEMA
@@ -914,7 +938,9 @@ _esecuzione:	.long
 .global		_pronti
 _pronti:	.long
 .global		_array_dess
-_array_dess:	.space	4
+_array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
+.global		_array_desp
+_array_desp:	.space SIZE_DESP * MAX_PROCESSI
 	
 	# puntatori alle tabelle GDT e IDT
 	# nel formato richiesto dalle istruzioni LGDT e LIDT

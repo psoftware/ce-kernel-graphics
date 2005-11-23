@@ -22,5 +22,5 @@ kernel.o: kernel.c multiboot.h
 	gcc -fno-builtin -fleading-underscore -c -g kernel.c
 
 kernel: boot.o sist_cpp.o
-	ld -nostdlib -Ttext 100000 -g boot.o sist_cpp.o -o kernel
+	ld -nostdlib -Ttext 100000 -s boot.o sist_cpp.o -o kernel
  
