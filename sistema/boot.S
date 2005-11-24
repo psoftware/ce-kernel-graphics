@@ -171,6 +171,8 @@ qui:
      movw    %cx,  %fs
      movw    %cx,  %gs
 
+     movl    $0, %ebp
+
      call    init_idt			# riempie i gate per le eccezioni
      lidt    idt_pointer		# carichiamo la nuova IDT
 	
@@ -178,7 +180,6 @@ qui:
      popf				# N.B.: interrupt ancora disabilitati
 
      call    init_8259			# init. controllore interruz.
-
      pushl   %ebx			# parametri passati
      pushl   %eax			# dal boot loader
      call    _cmain
@@ -196,6 +197,31 @@ halt_message:
 #################################################################
 # funzioni di utilita'						#
 #################################################################
+stringa_backtrace:
+	.asciz "0x%x\n"
+	.global _backtrace
+_backtrace:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %esi
+
+	movl %ebp, %esi
+3:
+	cmpl $0, %esi
+	je 2f
+	jmp 1f
+1:
+	pushl 4(%esi)
+	pushl $stringa_backtrace
+	call _printf
+	addl $8, %esp
+	movl (%esi), %esi
+	jmp 3b
+2:
+	popl %esi
+	leave
+	ret
+	
 
 # inserimento del processo in _esecuzione in testa alla coda dei pronti
 #  (non salva i registri, viene chiamata dopo salva_stato)
@@ -933,6 +959,8 @@ a_fill_gate:
 # sezione dati: tabelle e stack				      #
 ###############################################################
 .data
+.global		_mem_upper
+_mem_upper:	 .long _end
 .global		 _esecuzione
 _esecuzione:	.long
 .global		_pronti

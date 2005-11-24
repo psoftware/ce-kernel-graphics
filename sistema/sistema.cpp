@@ -640,20 +640,12 @@ extern "C" void c_driver_t(void)
 //        ALLOCAZIONE E DEALLOCAZIONE DELLA MEMORIA DINAMICA DEL NUCLEO       //
 ////////////////////////////////////////////////////////////////////////////////
 
-void *operator new(unsigned int size)
-{
-	return pool_alloc(kernel_pool, size);
-}
 
 void *operator new[](unsigned int size)
 {
         return pool_alloc(kernel_pool, size);
 }
 
-void operator delete(void *ptr)
-{
-        pool_free(kernel_pool, ptr);
-}
 
 void operator delete[](void *ptr)
 {
@@ -1791,10 +1783,12 @@ extern "C" void hwexc(int num, unsigned int codice, unsigned int ind)
 
 // stampa MSG su schermo e termina le elaborazioni del sistema
 //
+extern "C" void backtrace();
 extern "C" void panic(const char *msg)
 {
-	printk("%s\n", msg);
-	asm("cli;hlt");
+	printf("%s\n", msg);
+	backtrace();
+	asm("1: nop; jmp 1b");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2396,92 +2390,118 @@ void zone_destroy(zone_t *zone)
 unsigned int max_mem_lower;
 unsigned int max_mem_upper;
 
-extern unsigned int end;
-unsigned int mem_upper = end;
+extern unsigned int mem_upper;
 
 
-
-// allocatore first fit classico e senza fronzoli
-
-struct des_memlibera {
+struct des_mem {
 	unsigned int dimensione;
-	des_memlibera* next;
+	des_mem* next;
 };
 
-des_memlibera* memlibera = 0;
+des_mem* memlibera = 0;
 
-unsigned int allinea(unsigned int valore) {
-	return (valore % 4 == 0) ? valore : (valore + 3) & 0xfffffffc;
+unsigned int allinea(unsigned int valore)
+{
+	const int a = sizeof(int);
+	return (valore % a == 0 ? 
+		valore :
+		((valore + a - 1) / a) * a);
 }
 
-void* malloc(unsigned int size) {
+// allocatore a lista first-fit, con strutture dati immerse
+void* malloc(unsigned int quanti) {
 
-	void* p = 0;
-	des_memlibera *prec = 0, *scorri = memlibera;
+	unsigned int dim = allinea(quanti);
 
-	size = allinea(size);
-
-	while (scorri != 0 && scorri->dimensione < size) {
+	des_mem *prec = 0, *scorri = memlibera;
+	while (scorri != 0 && scorri->dimensione < dim) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
 
+	unsigned int p = 0;
 	if (scorri != 0) {
-		if (scorri->dimensione - size > sizeof(des_memlibera)) {
-			des_memlibera* tmp = (des_memlibera*)((unsigned int)scorri + size);
-			tmp->dimensione = scorri->dimensione - size;
-			tmp->next = scorri->next;
+		p = (unsigned int)(scorri + 1);
+		if (scorri->dimensione - dim >= sizeof(des_mem) + sizeof(int)) {
+			des_mem* nuovo = (des_mem*)(p + dim);
+			nuovo->dimensione = scorri->dimensione - dim - sizeof(des_mem);
+			if ((int)nuovo->dimensione < 0) {
+				printf("scorri = 0x%x, dim = %d, nuovo = 0x%x\n",
+						scorri, dim, nuovo);
+				panic("errore");
+			}
+			scorri->dimensione = dim;
+			nuovo->next = scorri->next;
 			if (prec != 0) 
-				prec->next = tmp;
+				prec->next = nuovo;
 			else
-				memlibera = tmp;
-			p = scorri;
+				memlibera = nuovo;
+		} else {
+			if (prec != 0)
+				prec->next = scorri->next;
+			else
+				memlibera = scorri->next;
 		}
+		scorri->next = (des_mem*)0xdeadbeef;
+		
 	}
-
-	return p;
+	return (void*)p;
 }
 
-void free(void* indirizzo, unsigned int size) {
 
-	des_memlibera *prec = 0, *scorri = memlibera;
+void free_interna(void* indirizzo, unsigned int quanti) {
 
-	size = size & 0xfffffffc;
-	indirizzo = (void*)allinea((unsigned int)indirizzo);
+	if (quanti == 0) return;
 
-	if (size < sizeof(des_memlibera)) return;
-
-
+	des_mem *prec = 0, *scorri = memlibera;
 	while (scorri != 0 && scorri < indirizzo) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
+	if (scorri == indirizzo) {
+		printf("indirizzo = 0x%x\n", indirizzo);
+		panic("double free\n");
+	}
 
-	if ((unsigned int)indirizzo + size > (unsigned int)scorri) 
-		panic("errore nell'allocatore\n");
-
-	des_memlibera* tmp = (des_memlibera*)indirizzo;
-	if (prec != 0 && (unsigned int)prec + prec->dimensione == (unsigned int)tmp) {
-		prec->dimensione += size;
-		tmp = prec;
-	} else {
-		tmp->dimensione = size;
-		tmp->next = scorri;
+	if (prec != 0 && (unsigned int)(prec + 1) + prec->dimensione == (unsigned int)indirizzo) {
+		if (scorri != 0 && (unsigned int)indirizzo + quanti == (unsigned int)scorri) {
+			prec->dimensione += quanti + sizeof(des_mem) + scorri->dimensione;
+			prec->next = scorri->next;
+		} else {
+			prec->dimensione += quanti;
+		}
+	} else if (scorri != 0 && (unsigned int)indirizzo + quanti == (unsigned int)scorri) {
+		des_mem salva = *scorri;
+		des_mem* nuovo = (des_mem*)indirizzo;
+		*nuovo = salva;
+		nuovo->dimensione += quanti;
 		if (prec != 0) 
-			prec->next = tmp;
+			prec->next = nuovo;
 		else
-			memlibera = tmp;
+			memlibera = nuovo;
+	} else if (quanti >= sizeof(des_mem)) {
+		des_mem* nuovo = (des_mem*)indirizzo;
+		nuovo->dimensione = quanti - sizeof(des_mem);
+		nuovo->next = scorri;
+		if (prec != 0)
+			prec->next = nuovo;
+		else
+			memlibera = nuovo;
 	}
-
-	if (scorri != 0 && (unsigned int)tmp + tmp->dimensione == (unsigned int)scorri) {
-		tmp->dimensione += scorri->dimensione;
-		tmp->next = scorri->next;
-	}
-		
 }
 
+void free(void* p) {
+	if (p == 0) return;
+	des_mem* des = (des_mem*)p - 1;
+	if (des->next != (void*)0xdeadbeef)
+		panic("free() errata");
+	free_interna(des, des->dimensione + sizeof(des_mem));
+}
+
+
+
 void debug_malloc() {
-	des_memlibera* scorri = memlibera;
+	des_mem* scorri = memlibera;
 	unsigned int tot = 0;
 	printf("--- MEMORIA LIBERA ---\n");
 	while (scorri != 0) {
@@ -2491,6 +2511,14 @@ void debug_malloc() {
 	}
 	printf("TOT: %d byte (%d KB)\n", tot, tot / 1024);
 	printf("----------------------\n");
+}
+
+void* operator new(unsigned int size) {
+	return malloc(size);
+}
+
+void operator delete(void* p) {
+	free(p);
 }
 
 void* occupa(int quanti) {
@@ -2506,8 +2534,7 @@ int salta_a(unsigned int indirizzo) {
 	int saltati = -1;
 	if (indirizzo >= mem_upper && indirizzo < max_mem_upper) {
 		saltati = indirizzo - mem_upper;
-		int liberabili = (indirizzo - allinea(mem_upper)) & 0xfffffffc;;
-		free((void*)mem_upper, liberabili);
+		free_interna((void*)mem_upper, saltati);
 		mem_upper = indirizzo;
 	}
 	return saltati;
@@ -2561,8 +2588,10 @@ void carica_modulo(module_t* mod) {
 				elf_ph->p_memsz - elf_ph->p_filesz);
 		elf_ph = (Elf32_Phdr*)((unsigned int)elf_ph + elf_h->e_phentsize);
 	}
-	//free((void*)mod->mod_start, mod->mod_end - mod->mod_start);
+	free_interna((void*)mod->mod_start, mod->mod_end - mod->mod_start);
 }
+
+void dummy() {}
 
 /* Check if MAGIC is valid and print the Multiboot information structure
    pointed by ADDR. */
@@ -2598,6 +2627,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	if (CHECK_FLAG (mbi->flags, 2))
 		printf ("cmdline = %s\n", mbi->cmdline);
 
+	printf("mem_upper = 0x%x\n", mem_upper);
 	if (CHECK_FLAG (mbi->flags, 3)) {
 
 		printf ("mods_count = %d, mods_addr = 0x%x\n",
@@ -2618,7 +2648,23 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		}
 
 	}
-	free((void*)4096, max_mem_lower);
+	free_interna((void*)4096, max_mem_lower - 4096);
+	unsigned int v;
+	void* a[1000];
+	v = 1000;
+	debug_malloc();
+	for (int i = 0; i < 1000; i++) {
+		dummy();
+		v = ( v * 14322 + 8567 ) % 2318;
+		a[i] = malloc(v);
+		if (v > 1000 && i >= 10 && a[i - 10]) {
+			free(a[i - 10]);
+			a[i - 10] = 0;
+		}
+	}
+	for (int i = 0; i < 1000; i++) {
+		free(a[i]);
+	}
 	debug_malloc();
 
 }
@@ -2636,6 +2682,19 @@ cls (void)
 
 	xpos = 0;
 	ypos = 0;
+}
+
+static void
+scroll()
+{
+	int i;
+
+	video = (unsigned char *) VIDEO;
+	for (i = COLUMNS * 2; i < COLUMNS * LINES * 2; i++) {
+		*(video + i - COLUMNS * 2) = *(video + i);
+	}
+	for (i = 0; i < COLUMNS * 2; i += 2)
+		*(video + COLUMNS * (LINES - 1) * 2 + i) = ' ';
 }
 
 /* Convert the integer D to a string and save the string in BUF. If
@@ -2693,8 +2752,10 @@ putchar (int c)
 newline:
 		xpos = 0;
 		ypos++;
-		if (ypos >= LINES)
-			ypos = 0;
+		if (ypos >= LINES) {
+			scroll();
+			ypos = LINES - 1;
+		}
 		return;
 	}
 
