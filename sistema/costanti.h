@@ -15,5 +15,6 @@
 #define G_PAGINA		0b10000000
 #define G_BYTE			0b00000000
 
+#define SIZE_PAGINA		4096
 #define SIZE_DESP		224
 #define SIZE_DESS		64

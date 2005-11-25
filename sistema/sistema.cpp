@@ -936,62 +936,7 @@ void *memset(void *dest, int c, size_t n)
 }
 
 
-// bitmap per l' allocazione dei descrittori della gdt
-//
-bm_t gdt_bitmap;
 
-// allocazione di un descrittore (ritorna l' indice in gdt)
-//
-int gdt_alloc_index()
-{
-        unsigned int pos;
-        if(!bm_alloc(&gdt_bitmap, &pos))
-                return -1;
-
-        return (int)pos;
-}
-
-// rilascio di un descrittore (tramite il suo indice)
-//
-void gdt_free_index(int i)
-{
-        bm_free(&gdt_bitmap, i);
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//                     GESTIONE (MINIMA) DELLA MEMORIA                      //
-//////////////////////////////////////////////////////////////////////////////
-
-extern unsigned io_end;			// fine del modulo di IO
-
-const int PAGE_SIZE = 4096;
-#define MEM_LOW io_end			// fine regione dedicata al
-					//  modulo di IO
-#define MEM_HIGH 0x02000000		// usa 32MB di ram
-
-// pagine allocabili
-#define FREE_PAGES ((MEM_HIGH - MEM_LOW) / PAGE_SIZE)
-
-bm_t page_bitmap;                       // mappa di bit delle pagine fisiche
-unsigned int *page_bitmap_buf;		// buffer per la mappa
-
-// alloca piu' pagine fisiche consecutive
-//
-void *mem_page_alloc(int n = 1)
-{
-       // unsigned int pos;
-       // if(!bm_alloc(&page_bitmap, &pos, n))
-       //         return 0;
-
-       // return (void *)(MEM_LOW + pos * PAGE_SIZE);
-}
-
-// rilascia piu' pagine fisiche consecutive
-//
-void mem_page_free(void *p, int n = 1)
-{
-       // bm_free(&page_bitmap, ((unsigned int)p - MEM_LOW) / PAGE_SIZE, n);
-}
 
 //////////////////////////////////////////////////////////////////////////////
 //                        SUPPORTO ALLA PAGINAZIONE                         //
@@ -1107,11 +1052,11 @@ inline bool pg_add(pdb_t pdb, unsigned int pa, unsigned int va, int flags)
 inline bool pg_add_region(pdb_t pdb, unsigned int pa,
 		unsigned int va, int n, int flags)
 {
-	for(int i = 0; i < n; ++i)
-		if(!pg_add(pdb, pa + i * PAGE_SIZE, va + i * PAGE_SIZE, flags))
-			return false;
+	//for(int i = 0; i < n; ++i)
+	//	if(!pg_add(pdb, pa + i * PAGE_SIZE, va + i * PAGE_SIZE, flags))
+	//		return false;
 
-	return true;
+	//return true;
 }
 
 // toglie da pdb la pagina all' indirizzo lineare va
@@ -1146,11 +1091,11 @@ inline bool pg_remove(pdb_t pdb, unsigned int va)
 //
 inline bool pg_remove_region(pdb_t pdb, unsigned int va, int n)
 {
-	for(int i = 0; i < n; ++i)
-		if(!pg_remove(pdb, va + i * PAGE_SIZE))
-			return false;
+	//for(int i = 0; i < n; ++i)
+	//	if(!pg_remove(pdb, va + i * PAGE_SIZE))
+	//		return false;
 
-	return true;
+	//return true;
 }
 
 // alloca pages pagine fisiche e le inserisce nello spazio logico individuato
@@ -1160,15 +1105,15 @@ inline bool pg_remove_region(pdb_t pdb, unsigned int va, int n)
 //
 bool pg_valloc(pdb_t pdb, unsigned int start, int pages, int flags)
 {
-	int i;
-	unsigned int va;
-	void *pa;
+	//int i;
+	//unsigned int va;
+	//void *pa;
 
-	pa = mem_page_alloc(pages);
-	if(!pa || !pg_add_region(pdb, (unsigned)pa, start, pages, flags))
-		return false;
+	//pa = mem_page_alloc(pages);
+	//if(!pa || !pg_add_region(pdb, (unsigned)pa, start, pages, flags))
+	//	return false;
 
-	return true;
+	//return true;
 }
 
 // dealloca pages pagine fisiche riferite dagli indirizzi logici successivi a
@@ -1182,14 +1127,14 @@ void pg_vfree(pdb_t pdb, unsigned int start, int pages)
 
 	// si dealloca una pagina per volta perche' le pagine potrebbero
 	//  non essere contigue
-	for(i = 0; i < pages; ++i)
-		mem_page_free((void *)pg_pa(pdb, (start + i * PAGE_SIZE)));
-
+//	for(i = 0; i < pages; ++i)
+//		mem_page_free((void *)pg_pa(pdb, (start + i * PAGE_SIZE)));
+//
 	// pdb non verra' piu' usato, dato che pg_vfree viene chiamata
 	//  solo al termine di un processo, comunque in generale e' necessario
 	//  aggiornare le tabelle delle pagine
 	//
-	pg_remove_region(pdb, start, pages);
+//	pg_remove_region(pdb, start, pages);
 }
 
 // inizializzazione della paginazione, inizialmente le tabelle delle pagine
@@ -1198,29 +1143,29 @@ void pg_vfree(pdb_t pdb, unsigned int start, int pages)
 //
 void pg_init(void)
 {
-	void *dir = mem_page_alloc();
+	//void *dir = mem_page_alloc();
 
-	if(!dir)
-		panic("Impossibile allocare il direttorio delle pagine");
+	//if(!dir)
+	//	panic("Impossibile allocare il direttorio delle pagine");
 
-	memset(dir, 0, PAGE_SIZE);
-	kernel_pdb = pg_pdb(dir);
+	//memset(dir, 0, PAGE_SIZE);
+	//kernel_pdb = pg_pdb(dir);
 
-	// inserimento della memoria fisica in memoria virtuale
-	//
-	if(!pg_add_region(kernel_pdb, 0, 0, MEM_HIGH / PAGE_SIZE, PG_WRITE))
-		panic("Memoria insufficiente");
+	//// inserimento della memoria fisica in memoria virtuale
+	////
+	//if(!pg_add_region(kernel_pdb, 0, 0, MEM_HIGH / PAGE_SIZE, PG_WRITE))
+	//	panic("Memoria insufficiente");
 
-	// caricamento di cr3
-	//
-	asm("movl %0, %%cr3" : : "r"(kernel_pdb));
+	//// caricamento di cr3
+	////
+	//asm("movl %0, %%cr3" : : "r"(kernel_pdb));
 
-	// abilitazione della paginazione (PSE = 0, PAE = 0, WP = 0)
-	//
-	asm("movl %0, %%cr4\n\t"
-		"movl %%cr0, %%eax\n\t"
-		"orl $0x80000000, %%eax\n\t"
-		"movl %%eax, %%cr0\n\t" : : "r"(0));
+	//// abilitazione della paginazione (PSE = 0, PAE = 0, WP = 0)
+	////
+	//asm("movl %0, %%cr4\n\t"
+	//	"movl %%cr0, %%eax\n\t"
+	//	"orl $0x80000000, %%eax\n\t"
+	//	"movl %%eax, %%cr0\n\t" : : "r"(0));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1277,27 +1222,18 @@ bool pg_new_pd(pdb_t *pdb)
 //
 void pg_delete_pd(pdb_t pdb)
 {
-	unsigned int va;
-	pde_t *pde;
+	//unsigned int va;
+	//pde_t *pde;
 
-	for(va = MEM_HIGH; va < 0x10000000; va += 1024 * PAGE_SIZE) {
-		pde = pg_pde_addr(pdb, va);
-		if(*pde & PG_P)
-			mem_page_free((void *)(*pde & 0xfffff000));
-	}
+	//for(va = MEM_HIGH; va < 0x10000000; va += 1024 * PAGE_SIZE) {
+	//	pde = pg_pde_addr(pdb, va);
+	//	if(*pde & PG_P)
+	//		mem_page_free((void *)(*pde & 0xfffff000));
+	//}
 
-	mem_page_free((void *)(pdb & 0xfffff000));
+	//mem_page_free((void *)(pdb & 0xfffff000));
 }
 
-// caricamento nello spazio di memoria individuato da kernel_pdb delle sezioni
-//  condivise da tutti i programmi utente (durante l' inizializzazione)
-//
-// il caricamento vero e proprio da floppy viene fatto dal bootloader, qui si
-//  inseriscono in kernel_pdb le zone di memoria virtuale interessate
-//
-void load_shared()
-{
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 //                             INIZIALIZZAZIONE                               //
@@ -1305,7 +1241,6 @@ void load_shared()
 
 // buffer usati per le bitmap
 //
-unsigned int *gdt_bm_buf;
 unsigned int *sem_bm_buf;
 
 // buffer statico per sem_bm (per l' oggetto, non per la bitmap)
@@ -1316,15 +1251,11 @@ bm_t sem_bm_mem;
 //
 void misc_init()
 {
-	//gdt_bm_buf = new unsigned int[BM_BUFSIZE(GDT_SIZE)];
 	sem_bm_buf = new unsigned int[BM_BUFSIZE(MAX_SEM)];
 
-	if(gdt_bm_buf == 0 || sem_bm_buf == 0)
+	if(sem_bm_buf == 0)
 		panic("Memoria insufficiente per le bitmap del nucleo\n.");
 
-	// bitmap della gdt
-        //bm_create(&gdt_bitmap, gdt_bm_buf, GDT_SIZE);
-        //bm_set(&gdt_bitmap, 0, FIRST_FREE >> 3);
 
         // bitmap dei semafori
         bm_create(&sem_bm_mem, sem_bm_buf, MAX_SEM);
@@ -1393,14 +1324,7 @@ void run_main(void)
 //
 void con_init(void);
 
-// caricamento del modulo di IO
-//
-extern "C" void load_io(void);
 
-// inizializzazione modulo di IO
-// la modalita' di accesso e' quella di main()
-//
-extern "C" void (*io_init)(void);
 
 // inizializzazione ad alto livello del sistema, chiamata da sistema.s
 // (entry point di sistema.cpp durante la fase di inizializzazione)
@@ -2410,20 +2334,17 @@ struct des_mem {
 // di memoria fisica libera
 des_mem* memlibera = 0;
 
-// restituisce il piu' piccolo multiplo di 4 maggiore
+// restituisce il piu' piccolo multiplo di 'a' maggiore
 // o uguale di valore
-unsigned int allinea(unsigned int valore)
+unsigned int allinea(unsigned int v, unsigned int a)
 {
-	const int a = sizeof(int);
-	return (valore % a == 0 ? 
-		valore :
-		((valore + a - 1) / a) * a);
+	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
 }
 
 // allocatore a lista first-fit, con strutture dati immerse
 void* malloc(unsigned int quanti) {
 
-	unsigned int dim = allinea(quanti);
+	unsigned int dim = allinea(quanti, sizeof(int));
 
 	des_mem *prec = 0, *scorri = memlibera;
 	while (scorri != 0 && scorri->dimensione < dim) {
@@ -2549,6 +2470,90 @@ int salta_a(unsigned int indirizzo) {
 }
 
 /////////////////////////////////////////////////////////////////////////
+// GESTIONE DELLE PAGINE FISICHE                                       //
+// //////////////////////////////////////////////////////////////////////
+#define PAGINA_LIBERA		0
+#define DIRETTORIO		1
+#define TABELLA			2
+#define TABELLA_CONDIVISA	3
+#define	PAGINA_VIRTUALE		4
+
+
+struct pagina_fisica {
+	short contenuto;
+	short indice;
+	unsigned int contatore;
+	union {
+		void* tabella;
+		pagina_fisica* prossima_libera;
+	} info;
+};
+
+pagina_fisica* pagine_fisiche;
+pagina_fisica* pagine_libere = 0;
+unsigned int prima_pagina;
+
+void init_pagine_fisiche() {
+
+	salta_a(allinea(mem_upper, sizeof(int)));
+	int dimensione = max_mem_upper - mem_upper;
+
+	if (dimensione <= 0)
+		panic("Non ci sono pagine libere");
+
+	unsigned int quante = dimensione / (SIZE_PAGINA + sizeof(pagina_fisica));
+
+	pagine_fisiche = (pagina_fisica*)occupa(sizeof(pagina_fisica) * quante);
+	salta_a(allinea(mem_upper, SIZE_PAGINA));
+	quante = (max_mem_upper - mem_upper) / SIZE_PAGINA;
+	prima_pagina = (unsigned int)occupa(quante * SIZE_PAGINA);
+	salta_a(max_mem_upper);
+
+	pagina_fisica* p = 0;
+	for (int i = quante - 1; i >= 0; i--) {
+		pagine_fisiche[i].contenuto = PAGINA_LIBERA;
+		pagine_fisiche[i].info.prossima_libera = p;
+		p = &pagine_fisiche[i];
+	}
+	pagine_libere = &pagine_fisiche[0];
+}
+
+pagina_fisica* alloca_pagina() {
+	pagina_fisica* p = pagine_libere;
+	if (pagine_libere != 0)
+		pagine_libere = pagine_libere->info.prossima_libera;
+	return p;
+}
+
+void rilascia_pagina(pagina_fisica* p) {
+	p->contenuto = PAGINA_LIBERA;
+	p->info.prossima_libera = pagine_libere;
+	pagine_libere = p;
+}
+
+unsigned int indirizzo(pagina_fisica* p) {
+	return prima_pagina + (p - pagine_fisiche) * SIZE_PAGINA;
+}
+
+pagina_fisica* struttura(unsigned int pagina) {
+	return &pagine_fisiche[(pagina - prima_pagina) / SIZE_PAGINA];
+}
+
+void debug_pagine_fisiche(int prima, int quante) {
+	for (int i = 0; i < quante; i++) {
+		pagina_fisica* p = &pagine_fisiche[prima + i];
+
+		printf("%d(%x<->%x): ", i + prima, p, indirizzo(p));
+		if (p->contenuto == PAGINA_LIBERA) {
+			printf("libera (prossima = %x)\n", p->info.prossima_libera);
+		} else {
+			printf("occupata\n");
+		}
+	}
+}
+
+
+/////////////////////////////////////////////////////////////////////////
 // ALLOCAZIONE DESCRITTORI DI PROCESSO                                 //
 // //////////////////////////////////////////////////////////////////////
 
@@ -2668,19 +2673,9 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		}
 
 	}
-	free_interna((void*)4096, max_mem_lower - 4096);
-
-	int j[200];
-	int v = 1000;
-	for (int i = 0; i < 200; i ++) {
-		v = (v * 2134 + 6975) % 4523;
-		j[i] = alloca_tss();
-		printf("alloca_tss() = %d\n", j[i]);
-		if (v > 1000 && i > 10 && j[i - 10] != -1) {
-			printf("rilascia_tss(%d)\n", j[i - 10]);
-			rilascia_tss(j[i - 10]);
-		}
-	}
+	free_interna((void*)SIZE_PAGINA, max_mem_lower - SIZE_PAGINA);
+	init_pagine_fisiche();
+	debug_pagine_fisiche(0, 15);
 }
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS. */
