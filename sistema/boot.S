@@ -568,6 +568,38 @@ _rilascia_tss:
 	leave
 	ret
 
+	.global _carica_cr3
+_carica_cr3:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movl 8(%ebp), %eax
+	movl %eax, %cr3
+	
+	popl %eax
+	leave
+	ret
+
+	.global _leggi_cr3
+_leggi_cr3:
+	movl %cr3, %eax
+	ret
+
+	.global _attiva_paginazione
+_attiva_paginazione:
+	pushl %eax
+
+	movl $0, %eax
+	movl %eax, %cr4
+	movl %cr0, %eax
+	orl $0x80000000, %eax
+	movl %eax, %cr0
+
+	popl %eax
+	ret
+
+
 	
 
 ##################################################################
