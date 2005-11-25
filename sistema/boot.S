@@ -519,6 +519,57 @@ _init_descrittore:
 	leave
 	ret
 
+	.global _alloca_tss
+_alloca_tss:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx
+	pushl %ecx
+	
+	movl $gdt, %ebx
+	movl $-1, %eax
+	movl $5, %ecx
+1:
+	cmpl $(5+MAX_PROCESSI), %ecx
+	jl 2f
+	jmp 3f
+2:
+	testb $PRES, 5(%ebx, %ecx, 8)
+	jnz 4f
+	orb $PRES, 5(%ebx, %ecx, 8)
+	movl %ecx, %eax
+	jmp 3f
+4:	
+	incl %ecx
+	jmp 1b
+3:
+	popl %ecx
+	popl %ebx
+	leave
+	ret
+
+	.global _rilascia_tss
+_rilascia_tss:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx
+	pushl %ecx
+	pushl %eax
+
+	movl 8(%ebp), %ecx
+	movl $gdt, %ebx
+	movb $PRES, %al
+	notb %al
+	andb %al, 5(%ebx, %ecx, 8)
+
+	popl %eax
+	popl %ecx
+	popl %ebx
+	leave
+	ret
+
+	
+
 ##################################################################
 # hardware gestito direttamente dal nucleo: 			 #
 #  PIC, timer, console, swap					 #

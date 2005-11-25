@@ -2385,6 +2385,8 @@ void zone_destroy(zone_t *zone)
 	delete zone;
 }
 
+
+
 ///////////////////////////////////////////////////////////////////////
 // ALLOCAZIONE DELLA MEMORIA FISICA                                  //
 // ////////////////////////////////////////////////////////////////////
@@ -2546,6 +2548,17 @@ int salta_a(unsigned int indirizzo) {
 	return saltati;
 }
 
+/////////////////////////////////////////////////////////////////////////
+// ALLOCAZIONE DESCRITTORI DI PROCESSO                                 //
+// //////////////////////////////////////////////////////////////////////
+
+extern "C" int alloca_tss();
+extern "C" void rilascia_tss(int indice);
+
+/////////////////////////////////////////////////////////////////////////
+// CARICAMENTO DEI MODULI                                              //
+// //////////////////////////////////////////////////////////////////////
+
 // copia le sezioni (.text, .data) del modulo descritto da *mod
 // agli indirizzi fisici di collegamento
 // (il modulo deve essere in formato ELF32)
@@ -2656,6 +2669,18 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	}
 	free_interna((void*)4096, max_mem_lower - 4096);
+
+	int j[200];
+	int v = 1000;
+	for (int i = 0; i < 200; i ++) {
+		v = (v * 2134 + 6975) % 4523;
+		j[i] = alloca_tss();
+		printf("alloca_tss() = %d\n", j[i]);
+		if (v > 1000 && i > 10 && j[i - 10] != -1) {
+			printf("rilascia_tss(%d)\n", j[i - 10]);
+			rilascia_tss(j[i - 10]);
+		}
+	}
 }
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS. */
