@@ -2385,21 +2385,31 @@ void zone_destroy(zone_t *zone)
 	delete zone;
 }
 
+///////////////////////////////////////////////////////////////////////
+// ALLOCAZIONE DELLA MEMORIA FISICA                                  //
+// ////////////////////////////////////////////////////////////////////
+
 // indirizzo fisico del primo byte non riferibile
 // in memoria inferiore e superiore
 unsigned int max_mem_lower;
 unsigned int max_mem_upper;
 
+// indirizzo fisico del primo byte non occupato
 extern unsigned int mem_upper;
 
 
+// descrittore di memoria fisica libera
 struct des_mem {
 	unsigned int dimensione;
 	des_mem* next;
 };
 
+// testa della lista di descrittori 
+// di memoria fisica libera
 des_mem* memlibera = 0;
 
+// restituisce il piu' piccolo multiplo di 4 maggiore
+// o uguale di valore
 unsigned int allinea(unsigned int valore)
 {
 	const int a = sizeof(int);
@@ -2425,11 +2435,6 @@ void* malloc(unsigned int quanti) {
 		if (scorri->dimensione - dim >= sizeof(des_mem) + sizeof(int)) {
 			des_mem* nuovo = (des_mem*)(p + dim);
 			nuovo->dimensione = scorri->dimensione - dim - sizeof(des_mem);
-			if ((int)nuovo->dimensione < 0) {
-				printf("scorri = 0x%x, dim = %d, nuovo = 0x%x\n",
-						scorri, dim, nuovo);
-				panic("errore");
-			}
 			scorri->dimensione = dim;
 			nuovo->next = scorri->next;
 			if (prec != 0) 
@@ -2521,6 +2526,7 @@ void operator delete(void* p) {
 	free(p);
 }
 
+// allocazione linerare, da usare durante la fase di inizializzazione
 void* occupa(int quanti) {
 	void* p = 0;
 	if (mem_upper + quanti <= max_mem_upper) {
@@ -2540,6 +2546,9 @@ int salta_a(unsigned int indirizzo) {
 	return saltati;
 }
 
+// copia le sezioni (.text, .data) del modulo descritto da *mod
+// agli indirizzi fisici di collegamento
+// (il modulo deve essere in formato ELF32)
 void carica_modulo(module_t* mod) {
 	Elf32_Ehdr* elf_h = (Elf32_Ehdr*)mod->mod_start;
 
@@ -2590,8 +2599,6 @@ void carica_modulo(module_t* mod) {
 	}
 	free_interna((void*)mod->mod_start, mod->mod_end - mod->mod_start);
 }
-
-void dummy() {}
 
 /* Check if MAGIC is valid and print the Multiboot information structure
    pointed by ADDR. */
@@ -2649,24 +2656,6 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	}
 	free_interna((void*)4096, max_mem_lower - 4096);
-	unsigned int v;
-	void* a[1000];
-	v = 1000;
-	debug_malloc();
-	for (int i = 0; i < 1000; i++) {
-		dummy();
-		v = ( v * 14322 + 8567 ) % 2318;
-		a[i] = malloc(v);
-		if (v > 1000 && i >= 10 && a[i - 10]) {
-			free(a[i - 10]);
-			a[i - 10] = 0;
-		}
-	}
-	for (int i = 0; i < 1000; i++) {
-		free(a[i]);
-	}
-	debug_malloc();
-
 }
 
 /* Clear the screen and initialize VIDEO, XPOS and YPOS. */
