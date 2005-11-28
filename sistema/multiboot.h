@@ -79,8 +79,8 @@
      /* The module structure. */
      typedef struct module
      {
-       unsigned long mod_start;
-       unsigned long mod_end;
+       void*         mod_start;
+       void*         mod_end;
        char*	     string;
        unsigned long reserved;
      } module_t;

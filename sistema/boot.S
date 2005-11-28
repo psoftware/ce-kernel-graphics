@@ -527,7 +527,7 @@ _alloca_tss:
 	pushl %ecx
 	
 	movl $gdt, %ebx
-	movl $-1, %eax
+	movl $0, %eax
 	movl $5, %ecx
 1:
 	cmpl $(5+MAX_PROCESSI), %ecx

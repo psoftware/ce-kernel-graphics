@@ -804,7 +804,7 @@ extern "C" void fill_io_gates(void);
 
 // eseguita in fase di inizializzazione ad interruzioni disabilitate
 //
-extern "C" void io_init(void)
+extern "C" void cmain(void)
 {
 	fill_io_gates();
 	term_init();
