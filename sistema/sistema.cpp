@@ -57,32 +57,50 @@
 // FUNZIONI PER LA MANIPOLAZIONE DEGLI INDIRIZZI //
 ///////////////////////////////////////////////////
 
+
+// purtroppo, lo standard C++ non prevede tipi
+// predefiniti che possano essere usati come
+// "indirizzi di memoria". I candidati sono "void*",
+// "char*" e "unsigned int", ma "char*" e "unsigned int"
+// costringono a continui reinterpet_cast, mentre
+// "void*" non puo' essere usato in espressioni aritmetiche.
+// Come compromesso, si e' deciso di usare "void*" come
+// tipo per gli indirizzi (per ridurre al minimo la 
+// necessita' dei cast) e di definire le seguenti
+// funzioni per svolgere le elementari funzioni arimetiche
+
+
+// somma v byte all'indirizzo a
 inline
 void* add(const void* a, unsigned int v) {
 	v += reinterpret_cast<unsigned int>(a);
 	return reinterpret_cast<void*>(v);
 };
 
+// sottrae v byte all'indirizzo a
 inline
 void* sub(const void* a, unsigned int v) {
 	unsigned int a1 = reinterpret_cast<unsigned int>(a) - v;
 	return reinterpret_cast<void*>(a1);
 }
 
+// calcola il numero di byte tra a1 (incluso)
+// e a2 (escluso)
 inline
 int distance(const void* a1, const void* a2) {
 	return reinterpret_cast<unsigned int>(a1) - 
 	       reinterpret_cast<unsigned int>(a2);
 }
 
+// converte v in un indirizzo
 inline
 void* addr(unsigned int v) {
 	return reinterpret_cast<void*>(v);
 }
 
-template <class T>
+// converte un indirizzo in un unsigned int
 inline
-unsigned int uint(T* v) {
+unsigned int uint(void* v) {
 	return reinterpret_cast<unsigned int>(v);
 }
 
@@ -279,20 +297,11 @@ void bm_free(bm_t *bm, unsigned int pos, int size = 1);
 //
 extern "C" void abort_p();
 
-// ritorna il descrittore del processo in esecuzione
-//
-extern "C" des_proc *cur_des(void);
-
 // ritorna il descrittore del processo id
 //
-extern "C" des_proc *des_p(short id);
-
-////////////////////////////////////////////////////////////////////////////////
-// Oggetti usati dalle chiamate di sistema
-//
-
-
-
+extern "C" des_proc *des_p(short id) {
+	return &array_desp[id - 5];
+}
 
 // Valori usati in io.cpp
 //
@@ -308,30 +317,6 @@ enum estern_id {
 
 
 
-// memcpy
-//
-void *memcpy(void *dest, const void *src, unsigned int n)
-{
-	char *dest_ptr = (char *)dest, *src_ptr = (char *)src;
-	int i;
-
-	for(i = 0; i < n; ++i)
-		*dest_ptr++ = *src_ptr++;
-
-	return dest;
-}
-
-// memset
-//
-void *memset(void *dest, int c, size_t n)
-{
-        size_t i;
-
-        for(i = 0; i < n; ++i)
-              ((char *)dest)[i] = (char)c;
-
-        return dest;
-}
 
 
 
@@ -341,23 +326,6 @@ void *memset(void *dest, int c, size_t n)
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// inizializzazione di componenti secondari
-//
-void misc_init()
-{
-	//sem_bm_buf = new unsigned int[BM_BUFSIZE(MAX_SEMAFORI)];
-
-	//if(sem_bm_buf == 0)
-	//	panic("Memoria insufficiente per le bitmap del nucleo\n.");
-
-
-        //// bitmap dei semafori
-        //bm_create(&sem_bm_mem, sem_bm_buf, MAX_SEMAFORI);
-        //sem_bm = &sem_bm_mem;
-
-        //// fpu
-        //asm("fninit");
-}
 
 // Descrittore del processo in cui verra' trasformato main. Nonostante nel
 //  momento in cui inizia l' esecuzione di main() non ci sia alcun processo
@@ -377,9 +345,6 @@ proc_elem main_proc = { ID_MAIN, PRIO_MAIN, 0 };
 // trasferimento dell' esecuzione a main, con passaggio a livello utente
 //
 extern "C" void call_main(void);
-
-#define MAIN_STACK_PAGES 4	// pagine per la pila di livello utente di main
-#define MAIN_SYSSTACK_PAGES 1	// pagine per la pila sistema di main
 
 // prepara l' esecuzione di main e chiama call_main
 //
@@ -419,41 +384,39 @@ void run_main(void)
 void con_init(void);
 
 
-
-// inizializzazione ad alto livello del sistema, chiamata da sistema.s
-// (entry point di sistema.cpp durante la fase di inizializzazione)
-//
-extern "C" void cpp_init(void)
-{
-	//con_init();		// rende possibile chiamare printk e panic
-
-	//printk("Inizializzazione del sistema in corso...\n\n");
-
-	//printk("Gestore della memoria.\n");
-	//mem_init();		// inizializzazione gest. memoria
-
-	//printk("Componenti secondarie.\n");
-	//misc_init();		// varie
-
-	//printk("Caricamento del modulo di IO.\n");
-	//load_io();		// caricamento modulo IO
-
-	//printk("Caricamento sezioni condivise.\n");
-	//load_shared();		// caricamento sez. condivise
-
-	//printk("Inizializzazione modulo di IO.\n");
-	//io_init();		// dopo il caricamento delle sez. condivise,
-	//			//  per farle usare ai processi esterni
-
-        //printk("\nEsecuzione di main\n");
-
-        //run_main();		// esecuzione di main a liv. utente
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////
 //                          FUNZIONI DI LIBRERIA                              //
 ////////////////////////////////////////////////////////////////////////////////
+
+// il nucleo non puo' essere collegato alla libreria standard del C/C++,
+// perche' questa e' stata scritta utilizzando le primitive del sistema
+// che stiamo usando (sia esso Windows o Unix). Tali primitive non
+// saranno disponibili quando il nostro nucleo andra' in esecuzione
+// Per ragioni di convenienza, ridefiniamo delle funzioni analoghe a quelle
+// fornite dalla libreria del C.
+
+// copia n byte da src a dest
+void *memcpy(void *dest, const void *src, unsigned int n)
+{
+	char *dest_ptr = (char *)dest, *src_ptr = (char *)src;
+	int i;
+
+	for(i = 0; i < n; ++i)
+		*dest_ptr++ = *src_ptr++;
+
+	return dest;
+}
+
+// scrive n byte pari a c, a partire da dest
+void *memset(void *dest, int c, size_t n)
+{
+        size_t i;
+
+        for(i = 0; i < n; ++i)
+              ((char *)dest)[i] = (char)c;
+
+        return dest;
+}
 
 typedef char *va_list;
 
@@ -465,6 +428,8 @@ typedef char *va_list;
 #define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
 #define va_end(ap)
 
+
+// restituisce la lunghezza della stringa s (che deve essere terminata da 0)
 int strlen(const char *s)
 {
 	int l = 0;
@@ -475,6 +440,7 @@ int strlen(const char *s)
 	return l;
 }
 
+// copia al piu' l caratteri dalla stringa src alla stringa dest
 char *strncpy(char *dest, const char *src, size_t l)
 {
 	size_t i;
@@ -488,6 +454,7 @@ char *strncpy(char *dest, const char *src, size_t l)
 static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 
+// converte l in stringa (notazione esadecimale)
 static void htostr(char *buf, unsigned long l)
 {
 	int i;
@@ -501,6 +468,7 @@ static void htostr(char *buf, unsigned long l)
 	}
 }
 
+// converte l in stringa (notazione decimale)
 static void itostr(char *buf, unsigned int len, long l)
 {
 	int i, div = 1000000000, v, w = 0;
@@ -534,6 +502,7 @@ static void itostr(char *buf, unsigned int len, long l)
 
 #define DEC_BUFSIZE 12
 
+// stampa formattata su stringa
 int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 {
 	int in = 0, out = 0, tmp;
@@ -577,6 +546,7 @@ end:
 	return out;
 }
 
+// stampa formattata su stringa (variadica)
 int snprintf(char *buf, size_t n, const char *fmt, ...)
 {
 	va_list ap;
@@ -867,8 +837,54 @@ void aggiungi_pe(proc_elem *p, estern_id interf)
 // ALLOCAZIONE DELLA MEMORIA FISICA                                  //
 // ////////////////////////////////////////////////////////////////////
 
+// la memoria fisica viene gestita in due fasi:
+// durante l'inizializzazione, si tiene traccia dell'indirizzo
+// dell'ultimo byte non "occupato",
+// tramite il puntatore mem_upper. Tale indirizzo viene
+// fatto avanzare mano a mano che si decide come utilizzare
+// la memoria fisica a disposizione:
+// 1) all'inizio, poiche' il sistema e' stato caricato
+// in memoria fisica dal bootstrap loader, il primo byte
+// non occupato e' quello successivo all'ultimo indirizzo
+// occupato dal sistema stesso (e' il linker, tramite
+// il simbolo predefinito "_end", che ci permette di 
+// conoscere, staticamente, questo indirizzo)
+// 2) di seguito al sistema, il boostrap loader ha 
+// caricato i moduli, e ha passato la lista dei
+// descrittori di moduli tramite il registro %ebx.
+// Scorrendo tale lista, facciamo avanzare il 
+// puntatore mem_upper oltre lo spazio ooccupato dai
+// moduli
+// 3) il modulo di io deve essere ricopiato all'indirizzo
+// a cui e' stato collegato (molto probabilmente
+// diverso dall'indirizzo a cui il bootloader lo ha
+// caricato, in quanto il bootloader non interpreta
+// il contenuto dei moduli). Nel ricopiarlo, viene
+// occupata ulteriore memoria fisica.
+// 4) di seguito al modulo io (ricopiato), viene
+//  allocato l'array di descrittori di pagine fisiche
+//  (la cui dimensione e' calcolata dinamicamente, 
+//  in base al numero di pagine fisiche rimanenti
+//  dopo le operazioni precedenti)
+// 5) tutta la memoria fisica restante, a partire
+// dal primo indirizzo multiplo di 4096, viene usata
+// per le pagine fisiche, destinate a contenere
+// descrittori, tabelle e pagine virtuali.
+//
+// Durante queste operazioni, si vengono a scoprire
+// regioni di memoria fisica non utilizzate 
+// (ad esempio, quando si fa avanzare mem_upper,
+// al passo 3, per portarsi all'inizio dell'indirizzo
+// di collegamento del modulo io). Queste regioni,
+// man mano che vengono scoperte, vengono aggiunte
+// allo heap di sistema. Nella seconda fase,
+// il sistema usa lo heap cosi' ottenuto per
+// allocare la memoria richiesta dall'operatore new
+// (ad es., per "new richiesta").
+
 // indirizzo fisico del primo byte non riferibile
 // in memoria inferiore e superiore
+// (rappresentano la memoria fisica installata sul sistema)
 void* max_mem_lower;
 void* max_mem_upper;
 
@@ -877,6 +893,8 @@ extern void* mem_upper;
 
 
 // descrittore di memoria fisica libera
+// descrive una regione non allocata dello heap
+// di sistema
 struct des_mem {
 	unsigned int dimensione;
 	des_mem* next;
@@ -1433,7 +1451,7 @@ extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
 	direttorio* pdirettorio;
 	char liv;
 
-	pdes_proc = &array_desp[esecuzione->identifier - 5];
+	pdes_proc = des_p(esecuzione->identifier);
 	liv = pdes_proc->liv;
 	pdirettorio = pdes_proc->cr3;
 
@@ -1744,7 +1762,7 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
         p->identifier = identifier;
         p->priority = prio;
 
-	pdes_proc = &array_desp[identifier - 5];
+	pdes_proc = des_p(identifier);
 	memset(pdes_proc, 0, sizeof(des_proc));
 
 	// pagina fisica per il direttorio del processo
@@ -1849,7 +1867,7 @@ extern "C" void c_terminate_p()
 		printf("E' possibile spegnere il calcolatore o riavviarlo con CTRL-ALT-CANC.\n");
 		asm("sti;1: hlt; jmp 1b");	// fine dell' elaborazione
 	}
-	des_proc* pdes_proc = &array_desp[esecuzione->identifier - 5];
+	des_proc* pdes_proc = des_p(esecuzione->identifier);
 
 	direttorio* pdirettorio = pdes_proc->cr3;
 	rilascia_tutto(pdirettorio, inizio_sistema_privato, fine_sistema_privato);
@@ -1882,7 +1900,7 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
         p->identifier = identifier;
         p->priority = prio;
 
-	pdes_proc = &array_desp[identifier - 5];
+	pdes_proc = des_p(identifier);
 	memset(pdes_proc, 0, sizeof(des_proc));
 
 	pdirettorio = alloca_direttorio();
