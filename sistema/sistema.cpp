@@ -1663,7 +1663,11 @@ errore:
 // PRIMITIVE                                                                    //
 //////////////////////////////////////////////////////////////////////////////////
 
-unsigned int* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv, bool residente) {
+// crea una pila all'indirizzo virtuale ind_virtuale nel direttorio pdirettorio,
+// di dimensione npag pagine, al livello liv
+// restituisce un puntatore alla primo byte oltre la fine della pila stessa
+// (0 in caso di fallimento)
+unsigned int* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	void* ind_fisico;
 	tabella_pagine* ptabella;
 	descrittore_tabella* pdes_tab;
@@ -1672,9 +1676,9 @@ unsigned int* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv, b
 	// pagine fisiche per la pila 
 	// e per la tabella delle pagine che dovra' mappare la pila
 	// nota: ind_fisico punta al primo byte della pagina 
-	ind_fisico = alloca_pagina_virtuale(residente ? PAGINA_RESIDENTE : PAGINA_VIRTUALE);
+	ind_fisico = alloca_pagina_virtuale(liv == LIV_SISTEMA ? PAGINA_RESIDENTE : PAGINA_VIRTUALE);
 	if (ind_fisico == 0) goto errore1;
-	ptabella = alloca_tabella(residente ? TABELLA_RESIDENTE : TABELLA);
+	ptabella = alloca_tabella(liv == LIV_UTENTE ? TABELLA_RESIDENTE : TABELLA);
 	if (ptabella == 0) goto errore2;
 
 	// aggiungiamo la tabella delle pagine
@@ -1780,16 +1784,16 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 	
 	// calcoliamo l'indirizzo virtuale della pagina contenente la
 	// pila sistema (ultima pagina dello spazio sistema privato)
-	virt_pila_sistema = allinea(sub(fine_sistema_privato, SIZE_PAGINA), SIZE_PAGINA);
+	virt_pila_sistema = sub(fine_sistema_privato, SIZE_PAGINA);
 
-	pila_sistema = crea_pila(pdirettorio, virt_pila_sistema, LIV_SISTEMA, true);
+	pila_sistema = crea_pila(pdirettorio, virt_pila_sistema, LIV_SISTEMA);
 	if (pila_sistema == 0) goto errore4;
 
 	// calcoliamo l'indirizzo virtuale della pagina contenente la
 	// pila utente (ultima pagina dello spazio utente privato)
 	virt_pila_utente = allinea(sub(fine_utente_privato, SIZE_PAGINA), SIZE_PAGINA);
 
-	pila_utente = crea_pila(pdirettorio, virt_pila_utente, LIV_UTENTE, false);
+	pila_utente = crea_pila(pdirettorio, virt_pila_utente, LIV_UTENTE);
 	if (pila_utente == 0) goto errore5;
 
 
@@ -1907,8 +1911,8 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 	if (pdirettorio == 0) goto errore3;
 	*pdirettorio = *direttorio_principale;
 
-	virt_pila_sistema = allinea(sub(fine_sistema_privato, SIZE_PAGINA), SIZE_PAGINA);
-	pila = crea_pila(pdirettorio, virt_pila_sistema, LIV_SISTEMA, true);
+	virt_pila_sistema = sub(fine_sistema_privato, SIZE_PAGINA);
+	pila = crea_pila(pdirettorio, virt_pila_sistema, LIV_SISTEMA);
 	if (pila == 0) goto errore4;
 
 	*--pila = a;			  // parametro
@@ -2288,24 +2292,22 @@ void primo_processo(int a) {
 // INIZIALIZZAZIONE                                                              //
 ///////////////////////////////////////////////////////////////////////////////////
 
-/* Check if MAGIC is valid and print the Multiboot information structure
-   pointed by ADDR. */
-	extern "C" void
+extern "C" void
 cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	entry_t io_entry;
-	short id; bool risu;
-	/* Clear the screen. */
+	des_proc* pdes_proc;
 	cls ();
 
-	/* Am I booted by a Multiboot-compliant boot loader? */
+	// controlliamo di essere stati caricati
+	// da un bootloader che rispetti lo standard multiboot
 	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-		printf ("Invalid magic number: 0x%x\n", magic);
+		printf ("Numero magico non valido: 0x%x\n", magic);
 		return;
 	}
 
-	printf ("flags = 0x%x\n", mbi->flags);
-
+	// vediamo se il boot loader ci ha passato l'informazione
+	// su quanta memoria fisica e' installata nel sistema
 	if (CHECK_FLAG (mbi->flags, 0)) {
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
@@ -2316,17 +2318,14 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	}
 	printf("Memoria fisica: %d (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
 	
+	// per come abbiamo organizzato il sistema
+	// non possiamo gestire piu' di 1GB di memoria fisica
 	if (max_mem_upper > fine_sistema_privato) {
 		max_mem_upper = fine_sistema_privato;
 		printf("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
 	}
 
-	if (CHECK_FLAG (mbi->flags, 1))
-		printf ("boot_device = 0x%x\n", mbi->boot_device);
-
-	if (CHECK_FLAG (mbi->flags, 2))
-		printf ("cmdline = %s\n", mbi->cmdline);
-
+	// ora calcoliamo lo spazio occupato dai moduli
 	if (CHECK_FLAG (mbi->flags, 3)) {
 
 		printf ("mods_count = %d, mods_addr = 0x%x\n",
@@ -2347,11 +2346,25 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		}
 
 	}
+
+	// quando abbiamo finito di usare la struttura dati passataci
+	// dal boot loadeer, possiamo assegnare allo heap la memoria
+	// fisica di indirizzo < 1MB. Lasciamo inutilizzata la prima pagina,
+	// in modo che l'indirizzo 0 non venga mai allocato e possa essere
+	// utilizzato per specificare un puntatore non valido
 	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
+
+	// il resto della memoria e' per le pagine fisiche
 	init_pagine_fisiche();
 
+	// inizializziamo la mappa di bit che serve
+	// a tenere traccia dei semafori allocati
 	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
 
+	// il direttorio principale viene utilizzato
+	// fino a quando non creiamo il primo processo.
+	// Poi, servira' come "modello" da cui creare i direttori
+	// dei nuovi processi.
 	direttorio_principale = alloca_direttorio();
 	if (direttorio_principale == 0)
 		panic("memoria insufficiente");
@@ -2384,7 +2397,23 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	}
 
 	carica_cr3(direttorio_principale);
+	// avendo predisposto il direttorio in modo che tutta
+	// la memoria fisica si trovi gli stessi indirizzi in 
+	// memoria virtuale, possiamo attivare la paginazione,
+	// sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
+
+	// il resto dell'inizializzazione avviene
+	// nel contesto di un processo fittizio
+	
+	esecuzione = new proc_elem;
+	esecuzione->identifier = alloca_tss();
+	esecuzione->priority = 1;
+	pdes_proc = des_p(esecuzione->identifier);
+	pdes_proc->cr3 = direttorio_principale;
+	pdes_proc->liv = LIV_SISTEMA;
+	
+	io_entry();
 
 	// tabelle condivise per lo spazio utente condiviso
 	for (void* ind = inizio_utente_condiviso;
@@ -2401,6 +2430,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		pdes_tab->US = 0;
 		pdes_tab->P = 1;
 	}
+
 			
 		
 	//debug_pagine_fisiche(0, 270);
@@ -2553,5 +2583,12 @@ string:
 }
 
 extern "C" void gestore_eccezioni(int tipo, unsigned errore) {
+	unsigned int cr2;
+
+	asm ("movl %%cr2, %0" : : "r" (cr2));
+
 	printf("Eccezione %d, errore %x\n", tipo, errore);
+	if (tipo == 14)
+		printf("Page fault all'indirizzo: 0x%x\n", cr2);
+	panic("STOP");
 }

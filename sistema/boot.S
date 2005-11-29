@@ -402,6 +402,14 @@ fine_carica_tss:
 .set tipo_fg, 0x44
 .set tipo_r, 0x45
 
+# per la console
+.set tipo_cr, 0x50
+.set tipo_cw, 0x51
+.set tipo_cs, 0x52
+.set tipo_cl, 0x53
+.set tipo_cu, 0x54
+.set tipo_ci, 0x55
+
 init_idt:
 	pushl %ebp
 	movl %esp, %ebp
@@ -453,6 +461,13 @@ init_idt:
 	carica_gate	tipo_fg	a_fill_gate	DPL_SISTEMA
 	carica_gate	tipo_r	_reboot		DPL_SISTEMA
 
+	# gestione console (di Checconi)
+	carica_gate	tipo_cr	a_con_read	DPL_SISTEMA
+	carica_gate	tipo_cw	a_con_write	DPL_SISTEMA
+	carica_gate	tipo_cs	a_con_save	DPL_SISTEMA
+	carica_gate	tipo_cl	a_con_load	DPL_SISTEMA
+	carica_gate	tipo_cu	a_con_update	DPL_SISTEMA
+	carica_gate	tipo_ci	a_con_init	DPL_SISTEMA
 	leave
 	ret
 
@@ -712,6 +727,61 @@ attiva_timer:
         popl %eax
 	leave
 	ret
+
+// console
+	.extern _c_con_read
+a_con_read:
+	salva_registri
+	copia_param 2 7
+	call _c_con_read
+	addl $8, %esp
+	carica_registri
+	iret
+
+	.extern _c_con_write
+a_con_write:
+	salva_registri
+	copia_param 2 7
+	call _c_con_write
+	addl $8, %esp
+	carica_registri
+	iret
+
+	.extern _c_con_save
+a_con_save:
+	salva_registri
+	copia_param 2 7
+	call _c_con_save
+	addl $8, %esp
+	carica_registri
+	iret
+
+	.extern _c_con_load
+a_con_load:
+	salva_registri
+	copia_param 2 7
+	call _c_con_load
+	addl $8, %esp
+	carica_registri
+	iret
+
+	.extern _c_con_update
+a_con_update:
+	salva_registri
+	copia_param 3 7
+	call _c_con_update
+	addl $12, %esp
+	carica_registri
+	iret
+
+	.extern _c_con_init
+a_con_init:
+	salva_registri
+	copia_param 1 7
+	call _c_con_init
+	addl $4, %esp
+	carica_registri
+	iret
 
 ################################################################
 # gestori delle eccezioni				       #
@@ -1032,9 +1102,9 @@ a_panic:
 
 a_fill_gate:
 	salva_registri
-	copia_param 4 7
+	copia_param 3 7
 	call _init_gate
-	addl $16, %esp
+	addl $12, %esp
 	carica_registri
 	iret
 
@@ -1045,9 +1115,9 @@ a_fill_gate:
 .global		_mem_upper
 _mem_upper:	 .long _end
 .global		 _esecuzione
-_esecuzione:	.long
+_esecuzione:	.long 0
 .global		_pronti
-_pronti:	.long
+_pronti:	.long 0
 .global		_array_dess
 _array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
 .global		_array_desp
