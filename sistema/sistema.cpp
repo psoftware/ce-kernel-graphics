@@ -285,8 +285,8 @@ void *memset(void *dest, int c, size_t n);
 //
 struct bm_t;
 
-bool bm_alloc(bm_t *bm, unsigned int *pos, int size = 1);
-void bm_free(bm_t *bm, unsigned int pos, int size = 1);
+bool bm_alloc(bm_t *bm, unsigned int& pos);
+void bm_free(bm_t *bm, unsigned int pos);
 
 // Funzioni di supporto
 //
@@ -319,11 +319,6 @@ enum estern_id {
 
 
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-//                             INIZIALIZZAZIONE                               //
-////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -1480,26 +1475,19 @@ struct bm_t {
 	unsigned int size;
 };
 
-inline unsigned int VALUE(bm_t *bm, unsigned int pos)
+inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
 {
 	return bm->vect[pos / 32] & (1UL << (pos % 32));
 }
 
-inline void SET(bm_t *bm, unsigned int pos)
+inline void bm_set(bm_t *bm, unsigned int pos)
 {
 	bm->vect[pos / 32] |= (1UL << (pos % 32));
 }
 
-inline void CLEAR(bm_t *bm, unsigned int pos)
+inline void bm_clear(bm_t *bm, unsigned int pos)
 {
 	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
-}
-
-// dimensione del vettore di interi che contiene la mappa di bit
-//
-inline const unsigned int BM_BUFSIZE(unsigned int bits)
-{
-	return (bits >> 2) + ((bits & 0x03) != 0);
 }
 
 // crea la mappa BM, usando BUFFER come vettore; SIZE e' il numero di bit
@@ -1507,60 +1495,32 @@ inline const unsigned int BM_BUFSIZE(unsigned int bits)
 //
 void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 {
-	int v_size = BM_BUFSIZE(size), i;
-
 	bm->vect = buffer;
 	bm->size = size;
 
-	for(i = 0; i < v_size; ++i)
+	for(int i = 0; i < size; ++i)
 		bm->vect[i] = 0;
 }
 
-// mettono a zero/uno le posizioni della mappa
-//
-void bm_set(bm_t *bm, unsigned int start, unsigned int end)
-{
-	int i;
 
-	for(i = start; i < end && i < bm->size; ++i)
-		SET(bm, i);
-}
-
-void bm_clear(bm_t *bm, unsigned int start, unsigned int end)
-{
-	int i;
-
-	for(i = start; i < end && i < bm->size; ++i)
-		CLEAR(bm, i);
-}
-
-bool bm_alloc(bm_t *bm, unsigned int *pos, int size)
+bool bm_alloc(bm_t *bm, unsigned int& pos)
 {
 	int i, l;
 
-	for(i = 0; i <= bm->size - size; ++i) {
-		if(VALUE(bm, i))
-			continue;
+	i = 0;
+	while(i <= bm->size && bm_isset(bm, i)) ++i;
 
-		for(l = 0; !VALUE(bm, i + l) && l < size; ++l)
-			;
+	if (i == bm->size)
+		return false;
 
-		if(l == size) {
-			*pos = i;
-			for(l = 0; l < size; ++l)
-				SET(bm, i + l);
-
-			return true;
-		}
-	}
-
-	return false;
+	bm_set(bm, i);
+	pos = i;
+	return true;
 }
 
-void bm_free(bm_t *bm, unsigned int pos, int size)
+void bm_free(bm_t *bm, unsigned int pos)
 {
-	for(int i = 0; i < size && pos + i < bm->size; ++i)
-		CLEAR(bm, pos + i);
+	bm_clear(bm, pos);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -2225,7 +2185,7 @@ extern "C" void c_sem_ini(int &index_des_s, int val, bool &risu)
 		return;
 	}
 
-	if(!bm_alloc(&sem_bm, &pos)) {
+	if(!bm_alloc(&sem_bm, pos)) {
 		risu = false;
 		return;
 	}
