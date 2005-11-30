@@ -186,7 +186,7 @@ qui:
      addl    $8, %esp
 
      pushl   $halt_message
-     call    _printf
+     call    _printk
 
 loop:   hlt
      jmp     loop
@@ -213,7 +213,7 @@ _backtrace:
 1:
 	pushl 4(%esi)
 	pushl $stringa_backtrace
-	call _printf
+	call _printk
 	addl $8, %esp
 	movl (%esi), %esi
 	jmp 3b

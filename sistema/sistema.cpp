@@ -16,40 +16,15 @@
         Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA. */
 
      
-     #include "multiboot.h"
      
      /* Macros. */
      
      /* Check if the bit BIT in FLAGS is set. */
      #define CHECK_FLAG(flags,bit)   ((flags) & (1 << (bit)))
      
-     /* Some screen stuff. */
-     /* The number of columns. */
-     #define COLUMNS                 80
-     /* The number of lines. */
-     #define LINES                   24
-     /* The attribute of an character. */
-     #define ATTRIBUTE               7
-     /* The video memory address. */
-     #define VIDEO                   0xB8000
-     
-     /* Variables. */
-     /* Save the X position. */
-     static int xpos;
-     /* Save the Y position. */
-     static int ypos;
-     /* Point to the video memory. */
-     static volatile unsigned char *video;
-     
-     /* Forward declarations. */
-     static void cls (void);
-     static void itoa (char *buf, int base, int d);
-     static void putchar (int c);
-     extern "C" void printf (const char *format, ...);
-     
-
 // sistema.cpp
 //
+#include "multiboot.h"
 #include "costanti.h"
 #include "elf.h"
 
@@ -969,7 +944,7 @@ void free_interna(void* indirizzo, unsigned int quanti) {
 		scorri = scorri->next;
 	}
 	if (scorri == indirizzo) {
-		printf("indirizzo = 0x%x\n", (void*)indirizzo);
+		printk("indirizzo = 0x%x\n", (void*)indirizzo);
 		panic("double free\n");
 	}
 
@@ -1014,14 +989,14 @@ void free(void* p) {
 void debug_malloc() {
 	des_mem* scorri = memlibera;
 	unsigned int tot = 0;
-	printf("--- MEMORIA LIBERA ---\n");
+	printk("--- MEMORIA LIBERA ---\n");
 	while (scorri != 0) {
-		printf("%d byte a 0x%x\n", scorri->dimensione, (void*)scorri);
+		printk("%d byte a 0x%x\n", scorri->dimensione, (void*)scorri);
 		tot += scorri->dimensione;
 		scorri = scorri->next;
 	}
-	printf("TOT: %d byte (%d KB)\n", tot, tot / 1024);
-	printf("----------------------\n");
+	printk("TOT: %d byte (%d KB)\n", tot, tot / 1024);
+	printk("----------------------\n");
 }
 
 void* operator new(unsigned int size) {
@@ -1227,13 +1202,13 @@ void debug_pagine_fisiche(int prima, int quante) {
 		pagina_fisica* p = &pagine_fisiche[prima + i];
 		char* tipo = 0;
 
-		printf("%d(%x<->%x): ", i + prima, p, indirizzo(p));
+		printk("%d(%x<->%x): ", i + prima, p, indirizzo(p));
 		switch (p->contenuto) {
 		case PAGINA_LIBERA:
-			printf("libera (prossima = %x)\n", p->prossima_libera);
+			printk("libera (prossima = %x)\n", p->prossima_libera);
 			break;
 		case DIRETTORIO:
-			printf("direttorio delle tabelle\n");
+			printk("direttorio delle tabelle\n");
 			break;
 		case TABELLA:
 			tipo = "";
@@ -1241,16 +1216,16 @@ void debug_pagine_fisiche(int prima, int quante) {
 			if (!tipo) tipo = "(residente)";
 		case TABELLA_CONDIVISA:
 			if (!tipo) tipo = "(condivisa)";
-			printf("tabella delle pagine %s\n", tipo);
+			printk("tabella delle pagine %s\n", tipo);
 			break;
 		case PAGINA_VIRTUALE:
 			tipo = "";
 		case PAGINA_RESIDENTE:
 			if (!tipo) tipo = "(residente)";
-			printf("pagina virtuale %s\n", tipo);
+			printk("pagina virtuale %s\n", tipo);
 			break;
 		default:
-			printf("contenuto sconosciuto: %d\n", p->contenuto);
+			printk("contenuto sconosciuto: %d\n", p->contenuto);
 			break;
 		}
 	}
@@ -1343,7 +1318,7 @@ extern "C" void rilascia_tss(int indice);
 extern "C" void backtrace();
 extern "C" void panic(const char *msg)
 {
-	printf("%s\n", msg);
+	printk("%s\n", msg);
 	backtrace();
 	asm("1: nop; jmp 1b");
 }
@@ -1544,7 +1519,7 @@ void* carica_modulo(module_t* mod)
 	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
 	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
 	{
-		printf("Formato del modulo '%s' non riconosciuto\n", mod->string);
+		printk("Formato del modulo '%s' non riconosciuto\n", mod->string);
 		goto errore;
 	}
 
@@ -1553,7 +1528,7 @@ void* carica_modulo(module_t* mod)
 	      elf_h->e_type	       == ET_EXEC     &&  // eseguibile
 	      elf_h->e_machine 	       == EM_386))	  // per Intel x86
 	{ 
-		printf("Il modulo '%s' non contiene un esegubile per Intel x86\n", 
+		printk("Il modulo '%s' non contiene un esegubile per Intel x86\n", 
 				mod->string);
 		goto errore;
 	}
@@ -1570,13 +1545,13 @@ void* carica_modulo(module_t* mod)
 		// ogni entrata della tabella specifica l'indirizzo a cui 
 		// va caricato il segmento...
 		if (salta_a(elf_ph->p_vaddr) < 0) {
-			printf("Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
+			printk("Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
 			goto errore;
 		}
 
 		// ... e lo spazio che deve occupare in memoria
 		if (occupa(elf_ph->p_memsz) == 0) {
-			printf("Memoria insufficiente per '%s'\n", mod->string);
+			printk("Memoria insufficiente per '%s'\n", mod->string);
 			goto errore;
 		}
 
@@ -1587,7 +1562,7 @@ void* carica_modulo(module_t* mod)
 		memcpy(elf_ph->p_vaddr,				// destinazione
 		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
 		       elf_ph->p_filesz);			// quanti byte copiare
-		printf("Copiata sezione di %d byte all'indirizzo 0x%x\n",
+		printk("Copiata sezione di %d byte all'indirizzo 0x%x\n",
 				elf_ph->p_filesz, elf_ph->p_vaddr);
 
 
@@ -1603,7 +1578,7 @@ void* carica_modulo(module_t* mod)
 		memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
 		       0,				        // valore da scrivere
 		       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
-		printf("azzerati ulteriori %d byte\n",
+		printk("azzerati ulteriori %d byte\n",
 				elf_ph->p_memsz - elf_ph->p_filesz);
 
 	        // possiamo passare alla prossima entrata della 
@@ -1827,8 +1802,8 @@ extern "C" void c_terminate_p()
 	//  riavviare il sistema con CTRL-ALT-CANC)
 	//
 	if(esecuzione->identifier == ID_MAIN) {
-		printf("\nTutti i processi sono terminati.\n");
-		printf("E' possibile spegnere il calcolatore o riavviarlo con CTRL-ALT-CANC.\n");
+		printk("\nTutti i processi sono terminati.\n");
+		printk("E' possibile spegnere il calcolatore o riavviarlo con CTRL-ALT-CANC.\n");
 		asm("sti;1: hlt; jmp 1b");	// fine dell' elaborazione
 	}
 	des_proc* pdes_proc = des_p(esecuzione->identifier);
@@ -2257,12 +2232,13 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	entry_t io_entry;
 	des_proc* pdes_proc;
-	cls ();
+
+	con_init();
 
 	// controlliamo di essere stati caricati
 	// da un bootloader che rispetti lo standard multiboot
 	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-		printf ("Numero magico non valido: 0x%x\n", magic);
+		printk ("Numero magico non valido: 0x%x\n", magic);
 		return;
 	}
 
@@ -2272,27 +2248,27 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
 	} else {
-		printf ("Quantita' di memoria sconosciuta, assumo 32MB\n");
+		printk ("Quantita' di memoria sconosciuta, assumo 32MB\n");
 		max_mem_lower = addr(639 * 1024);
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
-	printf("Memoria fisica: %d (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
+	printk("Memoria fisica: %d (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
 	
 	// per come abbiamo organizzato il sistema
 	// non possiamo gestire piu' di 1GB di memoria fisica
 	if (max_mem_upper > fine_sistema_privato) {
 		max_mem_upper = fine_sistema_privato;
-		printf("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
+		printk("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
 	}
 
 	// ora calcoliamo lo spazio occupato dai moduli
 	if (CHECK_FLAG (mbi->flags, 3)) {
 
-		printf ("mods_count = %d, mods_addr = 0x%x\n",
+		printk ("mods_count = %d, mods_addr = 0x%x\n",
 				mbi->mods_count, mbi->mods_addr);
 		module_t* mod = mbi->mods_addr;
 		for (int i = 0; i < mbi->mods_count; i++) {
-			printf (" mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
+			printk (" mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
 					mod->mod_start, mod->mod_end, mod->string);
 			if (salta_a(mod->mod_end) < 0) {
 				panic("Errore nel caricamento");
@@ -2396,159 +2372,13 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	//debug_pagine_fisiche(0, 270);
 }
 
-/* Clear the screen and initialize VIDEO, XPOS and YPOS. */
-	static void
-cls (void)
-{
-	int i;
-
-	video = (unsigned char *) VIDEO;
-
-	for (i = 0; i < COLUMNS * LINES * 2; i++)
-		*(video + i) = 0;
-
-	xpos = 0;
-	ypos = 0;
-}
-
-static void
-scroll()
-{
-	int i;
-
-	video = (unsigned char *) VIDEO;
-	for (i = COLUMNS * 2; i < COLUMNS * LINES * 2; i++) {
-		*(video + i - COLUMNS * 2) = *(video + i);
-	}
-	for (i = 0; i < COLUMNS * 2; i += 2)
-		*(video + COLUMNS * (LINES - 1) * 2 + i) = ' ';
-}
-
-/* Convert the integer D to a string and save the string in BUF. If
-   BASE is equal to 'd', interpret that D is decimal, and if BASE is
-   equal to 'x', interpret that D is hexadecimal. */
-	static void
-itoa (char *buf, int base, int d)
-{
-	char *p = buf;
-	char *p1, *p2;
-	unsigned long ud = d;
-	int divisor = 10;
-
-	/* If %d is specified and D is minus, put `-' in the head. */
-	if (base == 'd' && d < 0)
-	{
-		*p++ = '-';
-		buf++;
-		ud = -d;
-	}
-	else if (base == 'x')
-		divisor = 16;
-
-	/* Divide UD by DIVISOR until UD == 0. */
-	do
-	{
-		int remainder = ud % divisor;
-
-		*p++ = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
-	}
-	while (ud /= divisor);
-
-	/* Terminate BUF. */
-	*p = 0;
-
-	/* Reverse BUF. */
-	p1 = buf;
-	p2 = p - 1;
-	while (p1 < p2)
-	{
-		char tmp = *p1;
-		*p1 = *p2;
-		*p2 = tmp;
-		p1++;
-		p2--;
-	}
-}
-
-/* Put the character C on the screen. */
-	static void
-putchar (int c)
-{
-	if (c == '\n' || c == '\r')
-	{
-newline:
-		xpos = 0;
-		ypos++;
-		if (ypos >= LINES) {
-			scroll();
-			ypos = LINES - 1;
-		}
-		return;
-	}
-
-	*(video + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
-	*(video + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
-
-	xpos++;
-	if (xpos >= COLUMNS)
-		goto newline;
-}
-
-/* Format a string and print it on the screen, just like the libc
-   function printf. */
-	extern "C" void
-printf (const char *format, ...)
-{
-	char **arg = (char **) &format;
-	int c;
-	char buf[20];
-
-	arg++;
-
-	while ((c = *format++) != 0)
-	{
-		if (c != '%')
-			putchar (c);
-		else
-		{
-			char *p;
-
-			c = *format++;
-			switch (c)
-			{
-				case 'd':
-				case 'u':
-				case 'x':
-					itoa (buf, c, *((int *) arg++));
-					p = buf;
-					goto string;
-					break;
-
-				case 's':
-					p = *arg++;
-					if (! p)
-						p = "(null)";
-
-string:
-					while (*p)
-						putchar (*p++);
-					break;
-
-				default:
-					putchar (*((int *) arg++));
-					break;
-			}
-		}
-	}
-}
-
 extern "C" void gestore_eccezioni(int tipo, unsigned errore) {
 	unsigned int cr2;
 
 	asm ("movl %%cr2, %0" : : "r" (cr2));
 
-	printf("Eccezione %d, errore %x\n", tipo, errore);
+	printk("Eccezione %d, errore %x\n", tipo, errore);
 	if (tipo == 14)
-		printf("Page fault all'indirizzo: 0x%x\n", cr2);
+		printk("Page fault all'indirizzo: 0x%x\n", cr2);
 	panic("STOP");
 }
