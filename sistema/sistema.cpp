@@ -1,27 +1,3 @@
-/* kernel.c - the C part of the kernel */
-     /* Copyright (C) 1999  Free Software Foundation, Inc.
-     
-        This program is free software; you can redistribute it and/or modify
-        it under the terms of the GNU General Public License as published by
-        the Free Software Foundation; either version 2 of the License, or
-        (at your option) any later version.
-     
-        This program is distributed in the hope that it will be useful,
-        but WITHOUT ANY WARRANTY; without even the implied warranty of
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-        GNU General Public License for more details.
-     
-        You should have received a copy of the GNU General Public License
-        along with this program; if not, write to the Free Software
-        Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA. */
-
-     
-     
-     /* Macros. */
-     
-     /* Check if the bit BIT in FLAGS is set. */
-     #define CHECK_FLAG(flags,bit)   ((flags) & (1 << (bit)))
-     
 // sistema.cpp
 //
 #include "multiboot.h"
@@ -98,12 +74,6 @@ struct des_sem {
 	proc_elem *pointer;
 };
 
-// priorita' di base per i processi esterni. i processi interni devono
-//  avere priorita' minore
-// Usato in io.cpp
-//
-const int PRIO_ESTERN_BASE = 0x400;
-
 // livelli di privilegio (valori Intel)
 //
 const char LIV_SISTEMA = 0, LIV_UTENTE = 3;
@@ -119,7 +89,6 @@ extern proc_elem *pronti;
 // vettore dei descrittori di semaforo
 //
 extern des_sem array_dess[MAX_SEMAFORI];
-
 
 
 // manipolazione delle code di processi
@@ -143,19 +112,6 @@ extern "C" int printk(const char *fmt, ...);
 // specificata dai parametri
 //
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
-
-// priorita' del processo creato da begin_p (deve essere la piu' bassa)
-//
-const int PRIO_MAIN = 0;
-
-// priorita' del processo dummy (deve essere la stessa usata in utente.cpp)
-// Usata da utente.cpp
-//
-const int PRIO_DUMMY = 1;
-
-// identificatore del processo creato da begin_p
-//
-const int ID_MAIN = 5;
 
 struct direttorio;
 struct tabella_pagine;
@@ -245,32 +201,12 @@ richiesta *descrittore_timer;
 int processi = 0;
 
 ////////////////////////////////////////////////////////////////////////////////
-//      Dichiarazioni di tipi e funzioni usati dalle chiamate di sistema      //
+//      LIBRERIA                                                              //
 ////////////////////////////////////////////////////////////////////////////////
 
 // Tipi e funzioni di libreria
 //
 typedef unsigned int size_t;		// tipo usato per le dimensioni
-
-// imposta n bytes a c a partire dall' indirizzo dest
-//
-void *memset(void *dest, int c, size_t n);
-
-// allocatore a mappa di bit
-//
-struct bm_t;
-
-bool bm_alloc(bm_t *bm, unsigned int& pos);
-void bm_free(bm_t *bm, unsigned int pos);
-
-// Funzioni di supporto
-//
-
-// abort_p() serve per terminare un processo se richiede operazioni
-//  non corrette o avviene un  errore che non puo' essere notificato
-//  tramite parametri di ritorno
-//
-extern "C" void abort_p();
 
 // ritorna il descrittore del processo id
 //
@@ -287,30 +223,6 @@ enum estern_id {
 	com2_in,
 	com2_out
 };
-
-
-
-
-
-
-
-
-
-
-// Descrittore del processo in cui verra' trasformato main. Nonostante nel
-//  momento in cui inizia l' esecuzione di main() non ci sia alcun processo
-//  si predispongono una pila per il livello utente ed una per il livello
-//  sistema ed il direttorio delle pagine per permettere a main, eseguito
-//  a livello utente, di fare chiamate di sistema; per semplificare begin_p
-//  si creano fin dall' inizio il proc_elem ed il des_proc per main, per poter
-//  usare salva_stato per salvare lo stato di main quando ancora non
-//  e' un processo
-//
-des_proc main_des;
-
-// proc_elem per il processo creato da main
-//
-proc_elem main_proc = { ID_MAIN, PRIO_MAIN, 0 };
 
 // trasferimento dell' esecuzione a main, con passaggio a livello utente
 //
@@ -361,7 +273,7 @@ void con_init(void);
 // il nucleo non puo' essere collegato alla libreria standard del C/C++,
 // perche' questa e' stata scritta utilizzando le primitive del sistema
 // che stiamo usando (sia esso Windows o Unix). Tali primitive non
-// saranno disponibili quando il nostro nucleo andra' in esecuzione
+// saranno disponibili quando il nostro nucleo andra' in esecuzione.
 // Per ragioni di convenienza, ridefiniamo delle funzioni analoghe a quelle
 // fornite dalla libreria del C.
 
@@ -1715,16 +1627,6 @@ errore1:	risu = false;
 
 extern "C" void c_terminate_p()
 {
-	// quando main chiama terminate_p tutti gli altri processi sono
-	//  terminati, invece di riavviare direttamente si entra nello stato
-	//  di HALT, accettando eventuali interruzioni (per esempio per
-	//  riavviare il sistema con CTRL-ALT-CANC)
-	//
-	if(esecuzione->identifier == ID_MAIN) {
-		printk("\nTutti i processi sono terminati.\n");
-		printk("E' possibile spegnere il calcolatore o riavviarlo con CTRL-ALT-CANC.\n");
-		asm("sti;1: hlt; jmp 1b");	// fine dell' elaborazione
-	}
 	des_proc* pdes_proc = des_p(esecuzione->identifier);
 
 	direttorio* pdirettorio = pdes_proc->cr3;
@@ -2499,6 +2401,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	pdes_proc->cr3 = direttorio_principale;
 	pdes_proc->liv = LIV_SISTEMA;
 	
+	// TODO: io_entry deve restituire un bool per
+	// sapere se l'inizializzazione e' andata bene
 	io_entry();
 
 	// tabelle condivise per lo spazio utente condiviso
