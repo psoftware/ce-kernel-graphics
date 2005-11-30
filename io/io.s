@@ -479,30 +479,34 @@ _abilita_tastiera:
 # Costanti per i parametri attuali di _fill_gate
 # Devono coincidere con i valori specificati in sistema.s
 #
-.set IDT_DPL3, 0x6000
+.set IDT_DPL3, 0b01100000
 .set IDT_TYPE_TRAP, 0x0f00
 
 # Chiama _fill_gate con i parametri specificati
 #
 .macro fill_io_gate gate off
 	pushl $IDT_DPL3
-	pushl $IDT_TYPE_TRAP
 	pushl $\off
 	pushl $\gate
 	call _fill_gate
-	addl $16, %esp
+	addl $12, %esp
 .endm
 
 # Inizializzazione dei gate per le primitive di IO
 #
 	.global _fill_io_gates
 _fill_io_gates:
+	pushl %ebp
+	movl %esp, %ebp
+
 	fill_io_gate io_tipo_rsen a_readse_n
 	fill_io_gate io_tipo_rseln a_readse_ln
 	fill_io_gate io_tipo_wsen a_writese_n
 	fill_io_gate io_tipo_wse0 a_writese_0
 	fill_io_gate io_tipo_tr a_term_read_n
 	fill_io_gate io_tipo_tw a_term_write_n
+
+	leave
 	ret
 
 ################################################################################

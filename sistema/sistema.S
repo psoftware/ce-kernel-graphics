@@ -198,7 +198,7 @@ halt_message:
 # funzioni di utilita'						#
 #################################################################
 stringa_backtrace:
-	.asciz "0x%x\n"
+	.asciz "%x\n"
 	.global _backtrace
 _backtrace:
 	pushl %ebp

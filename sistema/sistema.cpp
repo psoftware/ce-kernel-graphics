@@ -421,6 +421,14 @@ char *strncpy(char *dest, const char *src, size_t l)
 	return dest;
 }
 
+bool str_equal(const char* first, const char* second) {
+
+	while (*first && *second && *first++ == *second++)
+		;
+
+	return (!*first && !*second);
+}
+
 static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 
@@ -894,6 +902,8 @@ int allinea(int v, unsigned int a) {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
 }
 
+void debug_malloc();
+
 // allocatore a lista first-fit, con strutture dati immerse
 // usato dal nucleo stesso per allocare proc_elem, richiesta, ...
 void* malloc(unsigned int quanti) {
@@ -905,6 +915,7 @@ void* malloc(unsigned int quanti) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
+	// assert(scorri == 0 || scorri->dimensione >= dim);
 
 	void* p = 0;
 	if (scorri != 0) {
@@ -943,10 +954,12 @@ void free_interna(void* indirizzo, unsigned int quanti) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
+	// assert(scorri == 0 || scorri >= indirizzo)
 	if (scorri == indirizzo) {
 		printk("indirizzo = 0x%x\n", (void*)indirizzo);
 		panic("double free\n");
 	}
+	// assert(scorri == 0 || scorri > indirizzo)
 
 	if (prec != 0 && add(prec + 1, prec->dimensione) == indirizzo) {
 		if (scorri != 0 && add(indirizzo, quanti) == scorri) {
@@ -991,7 +1004,7 @@ void debug_malloc() {
 	unsigned int tot = 0;
 	printk("--- MEMORIA LIBERA ---\n");
 	while (scorri != 0) {
-		printk("%d byte a 0x%x\n", scorri->dimensione, (void*)scorri);
+		printk("%d byte a %x\n", scorri->dimensione, (void*)scorri);
 		tot += scorri->dimensione;
 		scorri = scorri->next;
 	}
@@ -1232,7 +1245,7 @@ void debug_pagine_fisiche(int prima, int quante) {
 }
 
 /////////////////////////////////////////////////////////////////////////
-// MEMORIA VIRTUALE                                                    //
+// PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
 
 struct descrittore_tabella {
@@ -1472,8 +1485,9 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 {
 	bm->vect = buffer;
 	bm->size = size;
+	unsigned int vecsize = size / sizeof(int) + (size % sizeof(int) ? 1 : 0);
 
-	for(int i = 0; i < size; ++i)
+	for(int i = 0; i < vecsize; ++i)
 		bm->vect[i] = 0;
 }
 
@@ -1483,7 +1497,7 @@ bool bm_alloc(bm_t *bm, unsigned int& pos)
 	int i, l;
 
 	i = 0;
-	while(i <= bm->size && bm_isset(bm, i)) ++i;
+	while(i <= bm->size && bm_isset(bm, i)) i++;
 
 	if (i == bm->size)
 		return false;
@@ -1498,101 +1512,6 @@ void bm_free(bm_t *bm, unsigned int pos)
 	bm_clear(bm, pos);
 }
 
-/////////////////////////////////////////////////////////////////////////
-// CARICAMENTO DEI MODULI                                              //
-// //////////////////////////////////////////////////////////////////////
-
-// copia le sezioni (.text, .data) del modulo descritto da *mod
-// agli indirizzi fisici di collegamento
-// (il modulo deve essere in formato ELF32)
-// restituisce l'indirizzo dell'entry point
-void* carica_modulo(module_t* mod)
-{
-	Elf32_Phdr* elf_ph;
-
-	// leggiamo l'intestazione del file
-	Elf32_Ehdr* elf_h = static_cast<Elf32_Ehdr*>(mod->mod_start);
-
-	// i primi 4 byte devono contenere un valore prestabilito
-	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
-	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
-	{
-		printk("Formato del modulo '%s' non riconosciuto\n", mod->string);
-		goto errore;
-	}
-
-	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS32  &&  // 32 bit
-	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&  // little endian
-	      elf_h->e_type	       == ET_EXEC     &&  // eseguibile
-	      elf_h->e_machine 	       == EM_386))	  // per Intel x86
-	{ 
-		printk("Il modulo '%s' non contiene un esegubile per Intel x86\n", 
-				mod->string);
-		goto errore;
-	}
-
-	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	elf_ph = static_cast<Elf32_Phdr*>(add(mod->mod_start, elf_h->e_phoff));
-	for (int i = 0; i < elf_h->e_phnum; i++) {
-		
-		// ci interessano solo i segmenti di tipo PT_LOAD
-		// (corrispondenti alle sezioni .text e .data)
-		if (elf_ph->p_type != PT_LOAD)
-			continue;
-
-		// ogni entrata della tabella specifica l'indirizzo a cui 
-		// va caricato il segmento...
-		if (salta_a(elf_ph->p_vaddr) < 0) {
-			printk("Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
-			goto errore;
-		}
-
-		// ... e lo spazio che deve occupare in memoria
-		if (occupa(elf_ph->p_memsz) == 0) {
-			printk("Memoria insufficiente per '%s'\n", mod->string);
-			goto errore;
-		}
-
-		// ora possiamo copiare il contenuto del segmento di programma
-		// all'indirizzo di memoria precedentemente individuato;
-		// L'entrata corrente della tabella ci dice a che offset
-		// (dall'inizio del modulo) si trova il segmento
-		memcpy(elf_ph->p_vaddr,				// destinazione
-		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
-		       elf_ph->p_filesz);			// quanti byte copiare
-		printk("Copiata sezione di %d byte all'indirizzo 0x%x\n",
-				elf_ph->p_filesz, elf_ph->p_vaddr);
-
-
-		// la dimensione del segmento nel modulo (p_filesz) puo'
-		// essere diversa (piu' piccola) della dimensione che
-		// il segmento deve avere in memoria (p_memsz).
-		// Cio' accade perche' i dati globali che devono essere
-		// inizializzati con 0 non vengono memorizzati nel
-		// modulo. Di questi dati, il formato ELF32 (ma anche
-		// altri formati) specifica solo la dimensione complessiva.
-		// L'inizializzazione a 0 deve essere effettuata a tempo
-		// di caricamento
-		memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
-		       0,				        // valore da scrivere
-		       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
-		printk("azzerati ulteriori %d byte\n",
-				elf_ph->p_memsz - elf_ph->p_filesz);
-
-	        // possiamo passare alla prossima entrata della 
-		// tabella dei segmenti di programma
-		elf_ph = static_cast<Elf32_Phdr*>(add(elf_ph, elf_h->e_phentsize));
-	}
-	// una volta copiati i segmenti di programma all'indirizzo
-	// per cui erano stati collegati, il modulo non ci serve piu'
-	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-	return elf_h->e_entry;
-
-errore:
-	return 0;
-}
 
 //////////////////////////////////////////////////////////////////////////////////
 // PRIMITIVE                                                                    //
@@ -1892,7 +1811,7 @@ errore1:	risu = false;
 // utente vengono allocati dallo heap di sistema.
 
 // Lo heap utente e' diviso in "regioni" contigue, di dimensioni
-// variabili, alternativamente libere e occupate.
+// variabili, che possono essere libere o occupate.
 // Ogni descrittore di heap utente
 // descrive una regione dello heap virtuale.
 // Descrizione dei campi:
@@ -1901,21 +1820,6 @@ errore1:	risu = false;
 // - occupato: indica se la regione e' occupata (1)
 //             o libera (0)
 // - next: puntatore al prossimo descrittore di heap utente
-
-// I descrittori vengono mantenuti in una lista ordinata
-// tramite il campo start. Inoltre, devono essere sempre
-// valide le identita' (se des->next != 0): 
-// (1) des->start + des->dimensione == des->next->start
-// (per la contiguita' delle regioni)
-// (2) !des->occupato => des->next->occupato 
-// (ogni regione libera e' massima)
-// (3) des->dimensione % sizeof(int) == 0
-// (per motivi di efficienza)
-
-// se sizeof(int) >= 2,
-// l'identita' (3) permette di utilizzare il bit meno
-// significativo del campo dimensione per allocarvi
-// il campo occupato (per noi, sizeof(int) = 4)
 struct des_heap {
 	void* start;	
 	union {
@@ -1925,20 +1829,36 @@ struct des_heap {
 	des_heap* next;
 };
 
+// I descrittori vengono mantenuti in una lista ordinata
+// tramite il campo start. Inoltre, devono essere sempre
+// valide le identita' (se des->next != 0): 
+// (1) des->start + des->dimensione == des->next->start
+// (per la contiguita' delle regioni)
+// (2) (des->occupato == 0) => (des->next->occupato == 1)
+// (ogni regione libera e' massima)
+// (3) des->dimensione % sizeof(int) == 0
+// (per motivi di efficienza)
+
+// se sizeof(int) >= 2,
+// l'identita' (3) permette di utilizzare il bit meno
+// significativo del campo dimensione per allocarvi
+// il campo occupato (per noi, sizeof(int) = 4)
+// (vedere "union" nella struttura)
+
 // la testa della lista dei descrittori di heap
 // e' allocata staticamente.
 // Questo implica che la lista non e' mai vuota
 // (contiene almeno 'heap'), ma non che lo heap utente
-// non e' vuoto (heap->dimensione puo' essere 0)
+// non e' mai vuoto (heap->dimensione puo' essere 0)
 des_heap heap;  // testa della lista di descrittori di heap
 
 // accresci_heap tenta di aumentare le dimensioni 
-// dello heap utente almeno di dim byte.
-// Poiche' lo swap non e' stato ancora implementato,
+// dello heap utente di almeno "dim" byte.
+// "tail" deve puntare all'ultimo descrittore di
+// heap utente nella lista
+// XXX: Poiche' lo swap non e' stato ancora implementato,
 // la funzione deve anche allocare le corrispondenti
 // pagine fisiche
-// tail deve puntare all'ultimo descrittore di
-// heap utente nella lista
 des_heap* accresci_heap(des_heap* tail, int dim) {
 	
 	void *new_heap_end;
@@ -2216,12 +2136,227 @@ extern "C" void c_sem_signal(int sem)
 }
 
 typedef void (*entry_t)(void);
-entry_t io_init;
 
-void primo_processo(int a) {
-	io_init();
+/////////////////////////////////////////////////////////////////////////
+// CARICAMENTO DEI MODULI                                              //
+// //////////////////////////////////////////////////////////////////////
+
+Elf32_Ehdr* elf32_intestazione(void* start) {
+
+	Elf32_Ehdr* elf_h = static_cast<Elf32_Ehdr*>(start);
+
+	// i primi 4 byte devono contenere un valore prestabilito
+	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
+	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
+	{
+		printk("    Formato del modulo non riconosciuto\n");
+		return 0;
+	}
+
+	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS32  &&  // 32 bit
+	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&  // little endian
+	      elf_h->e_type	       == ET_EXEC     &&  // eseguibile
+	      elf_h->e_machine 	       == EM_386))	  // per Intel x86
+	{ 
+		printk("    Il modulo non contiene un esegubile per Intel x86\n");
+		return 0;
+	}
+
+	return elf_h;
 }
 
+// copia le sezioni (.text, .data) del modulo descritto da *mod
+// agli indirizzi fisici di collegamento
+// (il modulo deve essere in formato ELF32)
+// restituisce l'indirizzo dell'entry point
+void* carica_modulo_io(module_t* mod)
+{
+	Elf32_Phdr* elf_ph;
+
+	// leggiamo l'intestazione del file
+	Elf32_Ehdr* elf_h = elf32_intestazione(mod->mod_start);
+	if (elf_h == 0) return 0;
+
+
+	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
+	elf_ph = static_cast<Elf32_Phdr*>(add(mod->mod_start, elf_h->e_phoff));
+	for (int i = 0; i < elf_h->e_phnum; i++) {
+		
+		// ci interessano solo i segmenti di tipo PT_LOAD
+		// (corrispondenti alle sezioni .text e .data)
+		if (elf_ph->p_type != PT_LOAD)
+			continue;
+
+		// ogni entrata della tabella specifica l'indirizzo a cui 
+		// va caricato il segmento...
+		if (salta_a(elf_ph->p_vaddr) < 0) {
+			printk("    Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
+			return 0;
+		}
+
+		// ... e lo spazio che deve occupare in memoria
+		if (occupa(elf_ph->p_memsz) == 0) {
+			printk("    Memoria insufficiente per '%s'\n", mod->string);
+			return 0;
+		}
+
+		// ora possiamo copiare il contenuto del segmento di programma
+		// all'indirizzo di memoria precedentemente individuato;
+		// L'entrata corrente della tabella ci dice a che offset
+		// (dall'inizio del modulo) si trova il segmento
+		memcpy(elf_ph->p_vaddr,				// destinazione
+		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
+		       elf_ph->p_filesz);			// quanti byte copiare
+		printk("    Copiata sezione di %d byte all'indirizzo %x\n",
+				elf_ph->p_filesz, elf_ph->p_vaddr);
+
+
+		// la dimensione del segmento nel modulo (p_filesz) puo'
+		// essere diversa (piu' piccola) della dimensione che
+		// il segmento deve avere in memoria (p_memsz).
+		// Cio' accade perche' i dati globali che devono essere
+		// inizializzati con 0 non vengono memorizzati nel
+		// modulo. Di questi dati, il formato ELF32 (ma anche
+		// altri formati) specifica solo la dimensione complessiva.
+		// L'inizializzazione a 0 deve essere effettuata a tempo
+		// di caricamento
+		if (elf_ph->p_memsz > elf_ph->p_filesz) {
+			memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
+			       0,				        // valore da scrivere
+			       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
+			printk("    azzerati ulteriori %d byte\n",
+					elf_ph->p_memsz - elf_ph->p_filesz);
+		}
+
+	        // possiamo passare alla prossima entrata della 
+		// tabella dei segmenti di programma
+		elf_ph = static_cast<Elf32_Phdr*>(add(elf_ph, elf_h->e_phentsize));
+	}
+	// una volta copiati i segmenti di programma all'indirizzo
+	// per cui erano stati collegati, il modulo non ci serve piu'
+	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
+	return elf_h->e_entry;
+}
+
+void* carica_modulo_utente(module_t* mod)
+{
+	Elf32_Phdr* elf_ph;
+	descrittore_tabella* pdes_tab;
+	tabella_pagine* ptabella;
+	descrittore_pagina* pdes_pag;
+	void* ultimo_indirizzo = 0;
+
+	// leggiamo l'intestazione del file
+	Elf32_Ehdr* elf_h = elf32_intestazione(mod->mod_start);
+	if (elf_h == 0) return 0;
+	
+
+	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
+	elf_ph = static_cast<Elf32_Phdr*>(add(mod->mod_start, elf_h->e_phoff));
+	for (int i = 0; i < elf_h->e_phnum; i++) {
+
+		// un flag del descrittore ci dice
+		// se il segmento deve essere scrivibile
+		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);	
+				
+
+		// ci interessano solo i segmenti di tipo PT_LOAD
+		// (corrispondenti alle sezioni .text e .data)
+		if (elf_ph->p_type != PT_LOAD)
+			continue;
+		
+		if (elf_ph->p_vaddr < inizio_utente_condiviso ||
+		    add(elf_ph->p_vaddr, elf_ph->p_memsz) > fine_utente_condiviso) {
+			printk("    Sezione non caricabile nello spazio utente condiviso:\n");
+			printk("    indirizzo %x fuori dall'intervallo consentito\n", elf_ph->p_vaddr); 
+			return 0;
+		}
+
+		// mappiamo il segmento nello spazio utente condiviso 
+		// il segmento sara' in generale composto da piu' pagine.
+		// Per ogni pagina, dobbiamo allocare una pagina fisica,
+		// mapparla al posto giusto in memoria virtuale,
+		// copiare il contenuto della pagina dal file alla pagina
+		// fisica allocata
+	        unsigned int curr_offset = elf_ph->p_offset;
+		unsigned int last_offset = elf_ph->p_offset + elf_ph->p_filesz;
+		// l'indirizzo virtuale di partenza va allineato alla pagina
+		// precedente (secondo quanto specificato dal formato elf32)
+		unsigned int seg_start = uint(elf_ph->p_vaddr) & ~(SIZE_PAGINA - 1);
+		for (void* ind_virtuale  = addr(seg_start);
+			   ind_virtuale < add(elf_ph->p_vaddr, elf_ph->p_memsz);
+			   ind_virtuale = add(ind_virtuale, SIZE_PAGINA))
+		{
+			void *ind_fisico = alloca_pagina_virtuale();
+			if (ind_fisico == 0) {
+				printk("    Memoria insufficiente per caricare il modulo utente\n");
+				return 0;
+			}
+
+			// mappiamo la pagina fisica appena allocata all'indirizzo
+			// virtuale richiesto
+			pdes_tab = &direttorio_principale->entrate[indice_direttorio(ind_virtuale)];
+			// la tabella e' sicuramente presente (siamo nello spazio condiviso)
+			ptabella = tabella_puntata(pdes_tab);
+			pdes_pag = &ptabella->entrate[indice_tabella(ind_virtuale)];
+			pdes_pag->address = uint(ind_fisico) >> 12;
+			pdes_pag->global    = 0;
+			pdes_pag->D         = 0;
+			pdes_pag->A         = 0;
+			pdes_pag->PCD       = 0;
+			pdes_pag->PWT       = 0;
+			pdes_pag->US        = 1; // livello utente
+			pdes_pag->RW        = scrivibile;
+			pdes_pag->P	    = 1;
+
+			// ora copiamo il contenuto dal modulo alla pagina fisica
+			// (vale, pero', il solito discorso su filesz e memsz)
+			void* sorgente = add(mod->mod_start, curr_offset);
+			if (curr_offset + SIZE_PAGINA <= last_offset) {
+				memcpy(ind_fisico, sorgente, SIZE_PAGINA);
+			} else if (curr_offset < last_offset) {
+				unsigned int prima_parte = last_offset - curr_offset;
+				memcpy(ind_fisico, sorgente, prima_parte);
+				memset(add(ind_fisico, prima_parte), 0, SIZE_PAGINA - prima_parte);
+			} else {
+			 	memset(ind_fisico, 0, SIZE_PAGINA);
+			}
+			curr_offset += SIZE_PAGINA;
+		}
+		printk("    Mappata sezione %s, di %d byte, all'indirizzo %x\n",
+				(scrivibile ? "scrivile" : "sola lettura"), 
+				elf_ph->p_memsz,
+				elf_ph->p_vaddr);
+
+		// mano a mano che mappiamo i segmenti, teniamo traccia
+		// dell'indirizzo (virtuale) piu' grande a cui
+		// siamo arrivati. Da quell'indirizzo partira' lo heap
+		// utente
+		void* fine_seg = add(elf_ph->p_vaddr, elf_ph->p_memsz);
+		if (fine_seg > ultimo_indirizzo)
+			ultimo_indirizzo = fine_seg;
+
+
+	        // possiamo passare alla prossima entrata della 
+		// tabella dei segmenti di programma
+		elf_ph = static_cast<Elf32_Phdr*>(add(elf_ph, elf_h->e_phentsize));
+	}
+	// una volta copiati i segmenti di programma all'indirizzo
+	// per cui erano stati collegati, il modulo non ci serve piu'
+	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
+
+
+	// infine, inizializziamo lo heap utente
+	printk("    Heap utente a partire da %x\n", ultimo_indirizzo);
+	heap.start      = ultimo_indirizzo;
+	heap.dimensione = 0; // lo inizializziamo a 0:
+	                     // il vero spazio verra' allocato alla prima richiesta
+	heap.next       = 0;
+
+	return elf_h->e_entry;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////
 // INIZIALIZZAZIONE                                                              //
@@ -2230,9 +2365,12 @@ void primo_processo(int a) {
 extern "C" void
 cmain (unsigned long magic, multiboot_info_t* mbi)
 {
-	entry_t io_entry;
+	entry_t io_entry, user_entry;
+	module_t* user_mod;
 	des_proc* pdes_proc;
 
+	// inizializziamo per prima cosa la console, in modo
+	// da poter scrivere messaggi sullo schermo
 	con_init();
 
 	// controlliamo di essere stati caricati
@@ -2252,7 +2390,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_lower = addr(639 * 1024);
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
-	printk("Memoria fisica: %d (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
+	printk("Memoria fisica: %d byte (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
 	
 	// per come abbiamo organizzato il sistema
 	// non possiamo gestire piu' di 1GB di memoria fisica
@@ -2261,34 +2399,43 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		printk("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
 	}
 
-	// ora calcoliamo lo spazio occupato dai moduli
+	// controlliamo se il boot loader ha caricato dei moduli
 	if (CHECK_FLAG (mbi->flags, 3)) {
-
-		printk ("mods_count = %d, mods_addr = 0x%x\n",
-				mbi->mods_count, mbi->mods_addr);
+		// se si', calcoliamo prima lo spazio occupato
+		printk ("Numero moduli: %d\n", mbi->mods_count);
 		module_t* mod = mbi->mods_addr;
 		for (int i = 0; i < mbi->mods_count; i++) {
-			printk (" mod_start = 0x%x, mod_end = 0x%x, string = %s\n",
-					mod->mod_start, mod->mod_end, mod->string);
-			if (salta_a(mod->mod_end) < 0) {
-				panic("Errore nel caricamento");
+			printk ("Modulo #%d (%s): inizia a %x, finisce a %x\n",
+					i, mod->string, mod->mod_start, mod->mod_end);
+			if (salta_a(mod->mod_start) < 0 ||
+			    occupa(distance(mod->mod_end, mod->mod_start)) == 0) {
+				panic("Errore nel caricamento (lo spazio risulta occupato)");
 			}
 			mod++;
 		}
+
+		// quindi, ne interpretiamo il contenuto
 		mod = mbi->mods_addr;
 		for (int i = 0; i < mbi->mods_count; i++) {
-			io_entry = (entry_t)(carica_modulo(mod));
+			if (str_equal(mod->string, "/io")) {
+				printk("Sposto il modulo IO all'indirizzo di collegamento:\n");
+				io_entry = (entry_t)carica_modulo_io(mod);
+				if (io_entry == 0)
+					panic("Impossibile caricare il modulo di IO");
+			} else if (str_equal(mod->string, "/utente")) {
+				// il modulo utente non puo' essere caricato adesso,
+				// perche' prima bisogna inizializzare le pagine
+				// fisiche e la paginazione
+				user_mod = mod;
+			} else {
+				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
+				printk("Modulo '%s' non riconosciuto (eliminato)");
+			}
 			mod++;
 		}
 
 	}
 
-	// quando abbiamo finito di usare la struttura dati passataci
-	// dal boot loadeer, possiamo assegnare allo heap la memoria
-	// fisica di indirizzo < 1MB. Lasciamo inutilizzata la prima pagina,
-	// in modo che l'indirizzo 0 non venga mai allocato e possa essere
-	// utilizzato per specificare un puntatore non valido
-	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
 
 	// il resto della memoria e' per le pagine fisiche
 	init_pagine_fisiche();
@@ -2303,7 +2450,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// dei nuovi processi.
 	direttorio_principale = alloca_direttorio();
 	if (direttorio_principale == 0)
-		panic("memoria insufficiente");
+		panic("Impossibile allocare il direttorio principale");
 	memset(direttorio_principale, 0, SIZE_PAGINA);
 
 	// memoria fisica in memoria virtuale
@@ -2313,7 +2460,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		tabella_pagine* ptab;
 		if (pdes_tab->P == 0) {
 			ptab = alloca_tabella_condivisa();
-			if (ptab == 0) panic("memoria insufficiente\n");
+			if (ptab == 0) panic("Impossibile allocare le tabelle condivise");
 			pdes_tab->address = uint(ptab) >> 12;
 			pdes_tab->page_size = 0; // pagine di 4K
 			pdes_tab->reserved  = 0;
@@ -2341,9 +2488,12 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// il resto dell'inizializzazione avviene
 	// nel contesto di un processo fittizio
-	
 	esecuzione = new proc_elem;
+	if (esecuzione == 0)
+		panic("Memoria insufficiente a creare il primo processo");
 	esecuzione->identifier = alloca_tss();
+	if (esecuzione->identifier == 0)
+		panic("Non ci sono descrittori di processo");
 	esecuzione->priority = 1;
 	pdes_proc = des_p(esecuzione->identifier);
 	pdes_proc->cr3 = direttorio_principale;
@@ -2367,9 +2517,18 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		pdes_tab->P = 1;
 	}
 
+	// ora tutto e' pronto per il modulo utente
+	printk("Mappo il modulo UTENTE in memoria virtuale:\n");
+	user_entry = (entry_t)carica_modulo_utente(user_mod);
+	if (user_entry == 0)
+		panic("Impossibile mappare il modulo UTENTE");
 			
-		
-	//debug_pagine_fisiche(0, 270);
+	// quando abbiamo finito di usare la struttura dati passataci
+	// dal boot loader, possiamo assegnare allo heap la memoria
+	// fisica di indirizzo < 1MB. Lasciamo inutilizzata la prima pagina,
+	// in modo che l'indirizzo 0 non venga mai allocato e possa essere
+	// utilizzato per specificare un puntatore non valido
+	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
 }
 
 extern "C" void gestore_eccezioni(int tipo, unsigned errore) {

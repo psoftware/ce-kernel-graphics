@@ -1,4 +1,4 @@
-all: $(BUILDDIR)/io.bin
+all: io
 
 $(BUILDDIR)/io.bin: io_s.o io_cpp.o
 	ld -nostdlib io_s.o io_cpp.o --oformat binary -T $(BASEDIR)/lds/io.lds \
