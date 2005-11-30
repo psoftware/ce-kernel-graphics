@@ -2388,23 +2388,6 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
 
-	// il resto dell'inizializzazione avviene
-	// nel contesto di un processo fittizio
-	esecuzione = new proc_elem;
-	if (esecuzione == 0)
-		panic("Memoria insufficiente a creare il primo processo");
-	esecuzione->identifier = alloca_tss();
-	if (esecuzione->identifier == 0)
-		panic("Non ci sono descrittori di processo");
-	esecuzione->priority = 1;
-	pdes_proc = des_p(esecuzione->identifier);
-	pdes_proc->cr3 = direttorio_principale;
-	pdes_proc->liv = LIV_SISTEMA;
-	
-	// TODO: io_entry deve restituire un bool per
-	// sapere se l'inizializzazione e' andata bene
-	io_entry();
-
 	// tabelle condivise per lo spazio utente condiviso
 	for (void* ind = inizio_utente_condiviso;
 	     ind < fine_utente_condiviso;
@@ -2420,6 +2403,23 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		pdes_tab->US = 0;
 		pdes_tab->P = 1;
 	}
+
+	// il resto dell'inizializzazione avviene
+	// nel contesto di un processo fittizio
+	esecuzione = new proc_elem;
+	if (esecuzione == 0)
+		panic("Memoria insufficiente a creare il primo processo");
+	esecuzione->identifier = alloca_tss();
+	if (esecuzione->identifier == 0)
+		panic("Non ci sono descrittori di processo");
+	esecuzione->priority = 1;
+	pdes_proc = des_p(esecuzione->identifier);
+	pdes_proc->cr3 = direttorio_principale;
+	pdes_proc->liv = LIV_SISTEMA;
+
+	// TODO: io_entry deve restituire un bool per
+	// sapere se l'inizializzazione e' andata bene
+	io_entry();
 
 	// ora tutto e' pronto per il modulo utente
 	printk("Mappo il modulo UTENTE in memoria virtuale:\n");
