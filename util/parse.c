@@ -277,7 +277,7 @@ void rilascia_righe()
 	}
 }
 
-#define MAIN_HEAD "\nint main()\n{\n\tbool ris;\n\tactivate_p(dd, 0, 1, LIV_UTENTE, dummy, ris);\n"
+#define MAIN_HEAD "\nint main() \n{\n\tbool ris;\n\tactivate_p(dd, 0, 1, LIV_UTENTE, dummy, ris);\n"
 
 #if defined WIN || defined WIN_XP
 #define MAIN_TAIL "\tbegin_p();\n\n\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"

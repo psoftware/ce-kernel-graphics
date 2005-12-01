@@ -3,8 +3,8 @@
 
 #define SEL_CODICE_SISTEMA	8
 #define SEL_DATI_SISTEMA 	16
-#define SEL_CODICE_UTENTE	24
-#define SEL_DATI_UTENTE 	32
+#define SEL_CODICE_UTENTE	27
+#define SEL_DATI_UTENTE 	35
 #define	PRES			0b10000000
 #define NON_P			0b00000000
 #define DPL_SISTEMA		0b00000000
@@ -16,5 +16,5 @@
 #define G_BYTE			0b00000000
 
 #define SIZE_PAGINA		4096
-#define SIZE_DESP		224
+#define SIZE_DESP		216
 #define SIZE_DESS		64

@@ -132,53 +132,53 @@ struct tabella_pagine;
 //
 struct des_proc {
 //	short id;
-	unsigned int link;
+	unsigned int link;	// 0
 //	int punt_nucleo;
-	void*        esp0;
-	unsigned int ss0;
-	void*        esp1;
-	unsigned int ss1;
-	void*        esp2;
-	unsigned int ss2;
+	void*        esp0;	// 4
+	unsigned int ss0;	// 8
+	void*        esp1;	// 12
+	unsigned int ss1;	// 16
+	void*        esp2;	// 20
+	unsigned int ss2;	// 24
 
-	direttorio* cr3;
+	direttorio* cr3;	// 28
 
-	unsigned int eip;	// non utilizzato
-	unsigned int eflags;	// non utilizzato
+	unsigned int eip;	// 32, non utilizzato
+	unsigned int eflags;	// 36, non utilizzato
 
 //	int contesto[N_REG];
-	unsigned int eax;
-	unsigned int ecx;
-	unsigned int edx;
-	unsigned int ebx;
-	unsigned int esp;
-	unsigned int ebp;
-	unsigned int esi;
-	unsigned int edi;
+	unsigned int eax;	// 40
+	unsigned int ecx;	// 44
+	unsigned int edx;	// 48
+	unsigned int ebx;	// 52
+	unsigned int esp;	// 56
+	unsigned int ebp;	// 60
+	unsigned int esi;	// 64
+	unsigned int edi;	// 68
 
-	unsigned int es;
-	unsigned int cs; 	// char cpl;
-	unsigned int ss;
-	unsigned int ds;
-	unsigned int fs;
-	unsigned int gs;
-	unsigned int ldt;	// non utilizzato
+	unsigned int es;	// 72
+	unsigned int cs; 	// 76, char cpl;
+	unsigned int ss;	// 80
+	unsigned int ds;	// 84
+	unsigned int fs;	// 86
+	unsigned int gs;	// 90
+	unsigned int ldt;	// 94, non utilizzato
 
-	unsigned int io_map;
+	unsigned int io_map;	// 100, non utilizzato
 
 	struct {
-		unsigned int cr;
-		unsigned int sr;
-		unsigned int tr;
-		unsigned int ip;
-		unsigned int is;
-		unsigned int op;
-		unsigned int os;
-		char regs[80];
+		unsigned int cr;	// 104
+		unsigned int sr;	// 108
+		unsigned int tr;	// 112
+		unsigned int ip;	// 116
+		unsigned int is;	// 120
+		unsigned int op;	// 124
+		unsigned int os;	// 128
+		char regs[80];		// 132
 	} fpu;
 
-	char liv;
-};
+	char liv;		// 212
+}; // dimensione 212 + 1 + 3(allineamento) = 216
 //
 // vettore dei descrittori di processo
 //
@@ -1452,8 +1452,9 @@ unsigned int* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	// aggiornando l'opportuna entrata del direttorio
 	pdes_tab = &pdirettorio->entrate[indice_direttorio(ind_virtuale)];
 	pdes_tab->address	= uint(ptabella) >> 12;
+	pdes_tab->reserved	= 0;
 	pdes_tab->page_size	= 0; // pagine di 4KB
-	pdes_tab->US		= 0; // sistema
+	pdes_tab->US		= (liv == LIV_UTENTE ? 1 : 0);
 	pdes_tab->RW		= 1; // scrivibile
 	pdes_tab->P		= 1; // presente
 
@@ -1463,6 +1464,7 @@ unsigned int* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	// tabella delle pagine appena aggiunta al direttorio
 	pdes_pag = &ptabella->entrate[indice_tabella(ind_virtuale)];
 	pdes_pag->address	= uint(ind_fisico) >> 12;
+	pdes_pag->reserved	= 0;
 	pdes_pag->global	= 0;
 	pdes_pag->US		= (liv == LIV_UTENTE ? 1 : 0);
 	pdes_pag->RW		= 1;  
@@ -1502,6 +1504,8 @@ void rilascia_tutto(direttorio* pdir, void* start, void* end) {
 	}
 }
 
+void abort_p() {}
+
 extern "C" void
 c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 {
@@ -1518,10 +1522,10 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 	if (!verifica_area(&risu, sizeof(bool), true))
 		abort_p();
 
-	if (!verifica_area(&id, sizeof(short), true) ||
-			prio < PRIO_DUMMY || prio >= PRIO_ESTERN_BASE ||
-			!(liv == LIV_SISTEMA || liv == LIV_UTENTE))
-		goto errore1;
+	//if (!verifica_area(&id, sizeof(short), true) ||
+	//		prio < PRIO_DUMMY || prio >= PRIO_ESTERN_BASE ||
+	//		!(liv == LIV_SISTEMA || liv == LIV_UTENTE))
+	//	goto errore1;
 
 	p = new proc_elem;
         if (p == 0) goto errore1;
@@ -1571,7 +1575,7 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 	 					 // ESP (pila utente)
 	 *--pila_sistema = 0x00000200;		 // EFLAG
 	 *--pila_sistema = SEL_CODICE_UTENTE;	 // CS (codice utente)
-	 *--pila_sistema = uint(&f);		 // EIP (codice utente)
+	 *--pila_sistema = uint((void*)f);		 // EIP (codice utente)
 	// eseguendo una IRET da questa situazione, il processo
 	// passera' ad eseguire la prima istruzione
 	// della funzione f, usando come pila la pila utente
@@ -1675,7 +1679,7 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 	*--pila = 0xffffffff;		  // indirizzo ritorno?
 	*--pila = 0x00000200;  		  // EFLAG
 	*--pila = SEL_CODICE_SISTEMA;	  // CS (codice sistema)
-	*--pila = uint(&f);		  // EIP (codice sistema)
+	*--pila = uint((void*)f);		  // EIP (codice sistema)
 	// i processi esterni lavorano esclusivamente a livello
 	// sistema. Per questo motivo, prepariamo una sola pila
 	// (la pila sistema)
@@ -1811,6 +1815,7 @@ des_heap* accresci_heap(des_heap* tail, int dim) {
 		if (p == 0) goto errore3;  // oops, dobbiamo disfare tutto
 		memset(p, 0, SIZE_PAGINA);
 		pdes_pag->address = uint(p) >> 12;
+		pdes_pag->reserved = 0;
 		pdes_pag->global  = 0;
 		pdes_pag->US      = 1;
 		pdes_pag->RW      = 0;
@@ -1852,6 +1857,8 @@ errore1:
 	return 0;
 }
 
+void debug_heap();
+
 // cerca una regione di dimensione almeno pari a dim nello heap
 // utente e ne resituisce l'indirizzo del primo byte
 // (0 in caso di fallimento)
@@ -1882,7 +1889,6 @@ extern "C" void *c_mem_alloc(int dim)
 	// assert(scorri != 0 && !scorri->occupato && scorri->dimensione >= dim)
 		
 	p = scorri->start;
-	scorri->occupato = 1;
 
 	// se scorri->dimensione e' sufficientemente piu' grande
 	// di dim, e riusciamo ad allocare un nuovo descrittore di heap,
@@ -1892,13 +1898,15 @@ extern "C" void *c_mem_alloc(int dim)
 	    (nuovo = new des_heap) != 0)
 	{
 		// inseriamo nuovo nella lista, dopo scorri
-		nuovo->start = add(nuovo->start, dim); // rispettiamo (2)
+		nuovo->start = add(scorri->start, dim); // rispettiamo (2)
 		nuovo->dimensione = scorri->dimensione - dim;
 		scorri->dimensione = dim;
 		nuovo->next = scorri->next; 
 		scorri->next = nuovo;
-		nuovo->occupato = 0;  
+		nuovo->occupato = 0; 
 	} 
+	scorri->occupato = 1; // questo va fatto per ultimo, perche'
+	                      // modifica scorri->dimensione 
 	return p;
 }
 
@@ -1934,6 +1942,17 @@ extern "C" void c_mem_free(void *pv)
 		scorri->next = next->next;
 		delete next;
 	}
+}
+
+void debug_heap() {
+	des_heap* scorri = &heap;
+	printk("--- HEAP UTENTE ---\n");
+	while (scorri != 0) {
+		printk("%x (%d) %s\n", scorri->start, scorri->dimensione & ~3,
+				(scorri->occupato ? "*" : ""));
+		scorri = scorri->next;
+	}
+	printk("----------------------\n");
 }
 
 extern "C" void c_delay(int n)
@@ -2083,8 +2102,9 @@ void* carica_modulo_io(module_t* mod)
 
 
 	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	elf_ph = static_cast<Elf32_Phdr*>(add(mod->mod_start, elf_h->e_phoff));
+	void* header_start = add(mod->mod_start, elf_h->e_phoff);
 	for (int i = 0; i < elf_h->e_phnum; i++) {
+		elf_ph = static_cast<Elf32_Phdr*>(add(header_start, elf_h->e_phentsize * i));
 		
 		// ci interessano solo i segmenti di tipo PT_LOAD
 		// (corrispondenti alle sezioni .text e .data)
@@ -2131,10 +2151,6 @@ void* carica_modulo_io(module_t* mod)
 			printk("    azzerati ulteriori %d byte\n",
 					elf_ph->p_memsz - elf_ph->p_filesz);
 		}
-
-	        // possiamo passare alla prossima entrata della 
-		// tabella dei segmenti di programma
-		elf_ph = static_cast<Elf32_Phdr*>(add(elf_ph, elf_h->e_phentsize));
 	}
 	// una volta copiati i segmenti di programma all'indirizzo
 	// per cui erano stati collegati, il modulo non ci serve piu'
@@ -2156,19 +2172,26 @@ void* carica_modulo_utente(module_t* mod)
 	
 
 	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	elf_ph = static_cast<Elf32_Phdr*>(add(mod->mod_start, elf_h->e_phoff));
+	void* header_start = add(mod->mod_start, elf_h->e_phoff);
 	for (int i = 0; i < elf_h->e_phnum; i++) {
+		elf_ph = static_cast<Elf32_Phdr*>(add(header_start, elf_h->e_phentsize * i));
 
 		// un flag del descrittore ci dice
 		// se il segmento deve essere scrivibile
 		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);	
-				
+
+		unsigned int privilegio = 1; // livello utente
 
 		// ci interessano solo i segmenti di tipo PT_LOAD
 		// (corrispondenti alle sezioni .text e .data)
 		if (elf_ph->p_type != PT_LOAD)
 			continue;
-		
+
+		// il segmento che contiene l'entry point lo mappiamo a livello sistema
+		if (elf_h->e_entry >= elf_ph->p_vaddr && 
+		    elf_h->e_entry <  add(elf_ph->p_vaddr, elf_ph->p_memsz))
+		    	privilegio = 0;
+
 		if (elf_ph->p_vaddr < inizio_utente_condiviso ||
 		    add(elf_ph->p_vaddr, elf_ph->p_memsz) > fine_utente_condiviso) {
 			printk("    Sezione non caricabile nello spazio utente condiviso:\n");
@@ -2184,12 +2207,10 @@ void* carica_modulo_utente(module_t* mod)
 		// fisica allocata
 	        unsigned int curr_offset = elf_ph->p_offset;
 		unsigned int last_offset = elf_ph->p_offset + elf_ph->p_filesz;
-		// l'indirizzo virtuale di partenza va allineato alla pagina
-		// precedente (secondo quanto specificato dal formato elf32)
-		unsigned int seg_start = uint(elf_ph->p_vaddr) & ~(SIZE_PAGINA - 1);
-		for (void* ind_virtuale  = addr(seg_start);
-			   ind_virtuale < add(elf_ph->p_vaddr, elf_ph->p_memsz);
-			   ind_virtuale = add(ind_virtuale, SIZE_PAGINA))
+		ultimo_indirizzo = add(elf_ph->p_vaddr, elf_ph->p_memsz);
+		for (void* ind_virtuale = elf_ph->p_vaddr;
+		           ind_virtuale < ultimo_indirizzo;
+	                   ind_virtuale = add(ind_virtuale, SIZE_PAGINA))
 		{
 			void *ind_fisico = alloca_pagina_virtuale();
 			if (ind_fisico == 0) {
@@ -2204,19 +2225,29 @@ void* carica_modulo_utente(module_t* mod)
 			ptabella = tabella_puntata(pdes_tab);
 			pdes_pag = &ptabella->entrate[indice_tabella(ind_virtuale)];
 			pdes_pag->address = uint(ind_fisico) >> 12;
+			pdes_pag->reserved = 0;
 			pdes_pag->global    = 0;
 			pdes_pag->D         = 0;
 			pdes_pag->A         = 0;
 			pdes_pag->PCD       = 0;
 			pdes_pag->PWT       = 0;
-			pdes_pag->US        = 1; // livello utente
+			pdes_pag->US        = privilegio;
 			pdes_pag->RW        = scrivibile;
 			pdes_pag->P	    = 1;
 
 			// ora copiamo il contenuto dal modulo alla pagina fisica
-			// (vale, pero', il solito discorso su filesz e memsz)
 			void* sorgente = add(mod->mod_start, curr_offset);
-			if (curr_offset + SIZE_PAGINA <= last_offset) {
+			unsigned int displ = curr_offset % SIZE_PAGINA;
+			if (displ != 0) {
+				// siamo alla prima pagina da copiare, e non e' "intera"
+				memcpy(add(ind_fisico, displ), sorgente, SIZE_PAGINA - displ);
+				curr_offset += SIZE_PAGINA - displ;
+				// da ora in poi, curr_offset sara' allineato alla pagina
+				// (displ varra' sempre 0)
+				continue;
+			}
+
+			if(curr_offset + SIZE_PAGINA <= last_offset) {
 				memcpy(ind_fisico, sorgente, SIZE_PAGINA);
 			} else if (curr_offset < last_offset) {
 				unsigned int prima_parte = last_offset - curr_offset;
@@ -2227,23 +2258,12 @@ void* carica_modulo_utente(module_t* mod)
 			}
 			curr_offset += SIZE_PAGINA;
 		}
-		printk("    Mappata sezione %s, di %d byte, all'indirizzo %x\n",
-				(scrivibile ? "scrivile" : "sola lettura"), 
+		printk("    Sezione %s, %s, %d byte, indirizzo %x\n",
+				(scrivibile ? "scrivibile" : "sola lettura"), 
+				(privilegio ? "utente"     : "sistema"),
 				elf_ph->p_memsz,
 				elf_ph->p_vaddr);
 
-		// mano a mano che mappiamo i segmenti, teniamo traccia
-		// dell'indirizzo (virtuale) piu' grande a cui
-		// siamo arrivati. Da quell'indirizzo partira' lo heap
-		// utente
-		void* fine_seg = add(elf_ph->p_vaddr, elf_ph->p_memsz);
-		if (fine_seg > ultimo_indirizzo)
-			ultimo_indirizzo = fine_seg;
-
-
-	        // possiamo passare alla prossima entrata della 
-		// tabella dei segmenti di programma
-		elf_ph = static_cast<Elf32_Phdr*>(add(elf_ph, elf_h->e_phentsize));
 	}
 	// una volta copiati i segmenti di programma all'indirizzo
 	// per cui erano stati collegati, il modulo non ci serve piu'
@@ -2251,6 +2271,7 @@ void* carica_modulo_utente(module_t* mod)
 
 
 	// infine, inizializziamo lo heap utente
+	ultimo_indirizzo = allinea(ultimo_indirizzo, SIZE_PAGINA);
 	printk("    Heap utente a partire da %x\n", ultimo_indirizzo);
 	heap.start      = ultimo_indirizzo;
 	heap.dimensione = 0; // lo inizializziamo a 0:
@@ -2263,6 +2284,7 @@ void* carica_modulo_utente(module_t* mod)
 ///////////////////////////////////////////////////////////////////////////////////
 // INIZIALIZZAZIONE                                                              //
 ///////////////////////////////////////////////////////////////////////////////////
+extern "C" void salta_a_utente(unsigned int* pila, entry_t entry);
 
 extern "C" void
 cmain (unsigned long magic, multiboot_info_t* mbi)
@@ -2284,7 +2306,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// vediamo se il boot loader ci ha passato l'informazione
 	// su quanta memoria fisica e' installata nel sistema
-	if (CHECK_FLAG (mbi->flags, 0)) {
+	if (mbi->flags & 1) {
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
 	} else {
@@ -2302,7 +2324,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	}
 
 	// controlliamo se il boot loader ha caricato dei moduli
-	if (CHECK_FLAG (mbi->flags, 3)) {
+	if (mbi->flags & (1 << 3)) {
 		// se si', calcoliamo prima lo spazio occupato
 		printk ("Numero moduli: %d\n", mbi->mods_count);
 		module_t* mod = mbi->mods_addr;
@@ -2364,6 +2386,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 			ptab = alloca_tabella_condivisa();
 			if (ptab == 0) panic("Impossibile allocare le tabelle condivise");
 			pdes_tab->address = uint(ptab) >> 12;
+			pdes_tab->reserved = 0;
 			pdes_tab->page_size = 0; // pagine di 4K
 			pdes_tab->reserved  = 0;
 			pdes_tab->US = 0;	 // livello sistema;
@@ -2373,6 +2396,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		}
 		descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind)];
 		pdes_pag->address = uint(ind) >> 12;   // indirizzo virtuale == indirizzo fisico
+		pdes_pag->reserved = 0;
 		pdes_pag->global  = 1;
 		pdes_pag->US      = 0; // livello sistema;
 		pdes_pag->RW	  = 1; // scrivibile
@@ -2397,11 +2421,12 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 			&direttorio_principale->entrate[indice_direttorio(ind)];
 		tabella_pagine* ptab = alloca_tabella_condivisa();
 		memset(ptab, 0, SIZE_PAGINA);
-		pdes_tab->address = uint(ptab) >> 12;
-		pdes_tab->page_size = 0;
-		pdes_tab->reserved = 0;
-		pdes_tab->US = 0;
-		pdes_tab->P = 1;
+		pdes_tab->address	 = uint(ptab) >> 12;
+		pdes_tab->reserved	= 0;
+		pdes_tab->page_size	= 0;
+		pdes_tab->US		= 1;
+		pdes_tab->RW		= 1;
+		pdes_tab->P		= 1;
 	}
 
 	// il resto dell'inizializzazione avviene
@@ -2421,27 +2446,48 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// sapere se l'inizializzazione e' andata bene
 	io_entry();
 
-	// ora tutto e' pronto per il modulo utente
+	// ora tutto e' pronto per caricare il modulo utente
 	printk("Mappo il modulo UTENTE in memoria virtuale:\n");
 	user_entry = (entry_t)carica_modulo_utente(user_mod);
 	if (user_entry == 0)
 		panic("Impossibile mappare il modulo UTENTE");
-			
+	
 	// quando abbiamo finito di usare la struttura dati passataci
 	// dal boot loader, possiamo assegnare allo heap la memoria
 	// fisica di indirizzo < 1MB. Lasciamo inutilizzata la prima pagina,
 	// in modo che l'indirizzo 0 non venga mai allocato e possa essere
 	// utilizzato per specificare un puntatore non valido
 	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
+
+	user_entry();
+
 }
 
-extern "C" void gestore_eccezioni(int tipo, unsigned errore) {
-	unsigned int cr2;
+extern "C" unsigned int leggi_cr2();
 
-	asm ("movl %%cr2, %0" : : "r" (cr2));
+extern "C" void gestore_eccezioni(int tipo, unsigned errore,
+		unsigned eip, unsigned cs, short eflag) {
+
 
 	printk("Eccezione %d, errore %x\n", tipo, errore);
-	if (tipo == 14)
-		printk("Page fault all'indirizzo: 0x%x\n", cr2);
+	printk("eflag = %x, eip = %x, cs = %x\n", eflag, eip, cs);
+	if (tipo == 14) {
+		printk("Page fault all'indirizzo: %x\n", leggi_cr2());
+		if (errore & 1) 
+			printk("errore di protezione, ");
+		else 
+			printk("pagina non presente, ");
+		if (errore & 2)
+			printk("accesso in scrittura, ");
+		else
+			printk("accesso in lettura, ");
+		if (errore & 4) 
+			printk("livello utente");
+		else
+			printk("livello sistema");
+		if (errore & 8)
+			printk(", bit riservato");
+		printk("\n");
+	}
 	panic("STOP");
 }

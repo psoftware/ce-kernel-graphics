@@ -249,7 +249,7 @@ inspronti:
 
 .set CR3, 28
 
-.set FPU, 112
+.set FPU, 104
 
 # salva lo stato del processo corrente nel suo descrittore
 #
@@ -300,13 +300,15 @@ carica_stato:
         movl _esecuzione, %edx
 	movl $0, %ebx
         movw (%edx), %bx		# esecuzione->identifier in ebx
+	
+	movl %ebx, %ecx			
+	shll $3, %ecx			# trasformo indice->selettore
 
         leal gdt(, %ebx, 8), %eax       # ind. entrata della gdt relativa in eax
 	estrai_base			# ind. del TSS in %ebx
         andl $0xfffffdff, 4(%eax)       # bit busy del tss a zero
 
-	shll $3, %ebx			# trasformo indice->selettore
-       	ltr %bx				# nuovo valore in TR
+       	ltr %cx				# nuovo valore in TR
 
         frstor FPU(%ebx)
 
@@ -321,22 +323,22 @@ carica_stato:
 	movw ES(%ebx), %ax
 	movw %ax, %es
 
+	popl %ecx                       # toglie dalla pila l' ind. di ritorno
+
 	movl CR3(%ebx), %eax
 	movl %eax, %cr3			# il nucleo e' in esecuzione nella mem.
 					#  fisica in memoria virtuale, presente
      					#  in tutti i direttori agli stessi
 					#  indirizzi
 
+	movl ESP(%ebx), %esp            # nuovo punt. di pila...
+	pushl %ecx
+
+	movl ECX(%ebx), %ecx
 	movl EDI(%ebx), %edi
 	movl ESI(%ebx), %esi
 	movl EBP(%ebx), %ebp
 	movl EDX(%ebx), %edx
-	popl %ecx                       # toglie dalla pila l' ind. di ritorno
-	movl ESP(%ebx), %eax            # nuovo punt. di pila...
-	subl $4, %eax                   #
-	movl %ecx, (%eax)               # ..col vecchio ind. di ritorno
-	movl %eax, %esp
-	movl ECX(%ebx), %ecx
 	movl EAX(%ebx), %eax
 	movl EBX(%ebx), %ebx
 
@@ -613,9 +615,10 @@ _attiva_paginazione:
 
 	popl %eax
 	ret
-
-
-	
+	.global _leggi_cr2
+_leggi_cr2:
+	movl %cr2, %eax
+	ret
 
 ##################################################################
 # hardware gestito direttamente dal nucleo: 			 #
@@ -968,8 +971,9 @@ a_terminate_p:	# routine int $tipo_t
 
         .extern _c_begin_p
 a_begin_p:	# routine int $tipo_b
-	call salva_stato	# main ha gia' un descrittore
+	call salva_stato
         call _c_begin_p
+	pushl $DELAY
         call attiva_timer
         call carica_stato
 	iret

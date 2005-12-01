@@ -18,7 +18,7 @@ semaphore semaforo_1 value 1;
 process proc_pa_1 body pa(0), 10, LIV_UTENTE;
 process proc_pa_2 body pa(1), 10, LIV_UTENTE;
 process proc_pa_3 body pa(2), 10, LIV_UTENTE;
-process proc_pa_4 body pa(3), 10, LIV_UTENTE;
+process proc_pa_4 body pa(3), 10, LIV_UTENTE; 
 
 #define BUFSIZE 20
 
@@ -35,7 +35,6 @@ process_body pa(int a)
  	printf(a, " la stringa inizia per 'q'.\n\nAttenzione: quando tutti");
  	printf(a, " i processi sono terminati si puo' riavviare\npremendo");
 	printf(a, " CTRL-ALT-CANC.\n");
-
 	a_buf[0] = 0;
 	while(a_buf[0] != 'q') {
 		printf(a, "Attendo 5 secondi...\n");

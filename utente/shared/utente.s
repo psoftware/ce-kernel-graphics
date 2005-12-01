@@ -103,3 +103,4 @@ _term_write_n:
 	int $io_tipo_tw
 	ret
 
+	.global start, _start
