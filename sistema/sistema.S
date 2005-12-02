@@ -446,35 +446,35 @@ fine_carica_tss:
 	ret
 
 # Tipi delle primitive di sistema
-.set tipo_a, 0x30
-.set tipo_t, 0x31
-.set tipo_b, 0x32
-.set tipo_g, 0x33
-.set tipo_si, 0x34
-.set tipo_w, 0x35
-.set tipo_s, 0x36
-.set tipo_ma, 0x37
-.set tipo_mf, 0x38
-.set tipo_d, 0x39
+.set tipo_a, TIPO_A
+.set tipo_t, TIPO_T
+.set tipo_b, TIPO_B
+.set tipo_g, TIPO_G
+.set tipo_si, TIPO_SI
+.set tipo_w, TIPO_W
+.set tipo_s, TIPO_S
+.set tipo_ma, TIPO_MA
+.set tipo_mf, TIPO_MF
+.set tipo_d, TIPO_D
 
 # Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 # Devono corrispondere con i valori usati in io.s
 #
 
-.set tipo_ae, 0x40
-.set tipo_nw, 0x41
-.set tipo_va, 0x42
-.set tipo_p, 0x43
-.set tipo_fg, 0x44
-.set tipo_r, 0x45
+.set tipo_ae, TIPO_AE
+.set tipo_nwfi, TIPO_NWFI
+.set tipo_va, TIPO_VA
+.set tipo_p, TIPO_P
+.set tipo_fg, TIPO_FG
+.set tipo_r, TIPO_R
 
 # per la console
-.set tipo_cr, 0x50
-.set tipo_cw, 0x51
-.set tipo_cs, 0x52
-.set tipo_cl, 0x53
-.set tipo_cu, 0x54
-.set tipo_ci, 0x55
+.set tipo_cr, TIPO_CR
+.set tipo_cw, TIPO_CW
+.set tipo_cs, TIPO_CS
+.set tipo_cl, TIPO_CL
+.set tipo_cu, TIPO_CU
+.set tipo_ci, TIPO_CI
 
 # carica la idt
 # le prime 20 entrate sono definite dall'Intel, e corrispondono
@@ -484,59 +484,59 @@ init_idt:
 	movl %esp, %ebp
 	#		indice		routine			dpl
 	# gestori eccezioni:
-	carica_gate	0 	divide_error 	LIV_SISTEMA
-	carica_gate	1 	debug 		LIV_SISTEMA
-	carica_gate	2 	nmi 		LIV_SISTEMA
-	carica_gate	3 	breakpoint 	LIV_SISTEMA
-	carica_gate	4 	overflow 	LIV_SISTEMA
-	carica_gate	5 	bound_re 	LIV_SISTEMA
-	carica_gate	6 	invalid_opcode	LIV_SISTEMA
-	carica_gate	7 	dev_na 		LIV_SISTEMA
-	carica_gate	8 	double_fault 	LIV_SISTEMA
-	carica_gate	9 	coproc_so 	LIV_SISTEMA
-	carica_gate	10 	invalid_tss 	LIV_SISTEMA
-	carica_gate	11 	segm_fault 	LIV_SISTEMA
-	carica_gate	12 	stack_fault 	LIV_SISTEMA
-	carica_gate	13 	prot_fault 	LIV_SISTEMA
-	carica_gate	14 	page_fault 	LIV_SISTEMA
-	carica_gate	16 	fp_exc 		LIV_SISTEMA
-	carica_gate	17 	ac_exc 		LIV_SISTEMA
-	carica_gate	18 	mc_exc 		LIV_SISTEMA
-	carica_gate	19 	simd_exc 	LIV_SISTEMA
+	carica_gate	0 		divide_error 	LIV_SISTEMA
+	carica_gate	1 		debug 		LIV_SISTEMA
+	carica_gate	2 		nmi 		LIV_SISTEMA
+	carica_gate	3 		breakpoint 	LIV_SISTEMA
+	carica_gate	4 		overflow 	LIV_SISTEMA
+	carica_gate	5 		bound_re 	LIV_SISTEMA
+	carica_gate	6 		invalid_opcode	LIV_SISTEMA
+	carica_gate	7 		dev_na 		LIV_SISTEMA
+	carica_gate	8 		double_fault 	LIV_SISTEMA
+	carica_gate	9 		coproc_so 	LIV_SISTEMA
+	carica_gate	10 		invalid_tss 	LIV_SISTEMA
+	carica_gate	11 		segm_fault 	LIV_SISTEMA
+	carica_gate	12 		stack_fault 	LIV_SISTEMA
+	carica_gate	13 		prot_fault 	LIV_SISTEMA
+	carica_gate	14 		page_fault 	LIV_SISTEMA
+	carica_gate	16 		fp_exc 		LIV_SISTEMA
+	carica_gate	17 		ac_exc 		LIV_SISTEMA
+	carica_gate	18 		mc_exc 		LIV_SISTEMA
+	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
 	# driver/handler
-	carica_gate	0x20	driver_t	LIV_SISTEMA
-	carica_gate	0x21	handler_KBD	LIV_SISTEMA
-	carica_gate	0x23	handler_COM2	LIV_SISTEMA
-	carica_gate	0x24	handler_COM1	LIV_SISTEMA
+	carica_gate	0x20		driver_t	LIV_SISTEMA
+	carica_gate	0x21		handler_KBD	LIV_SISTEMA
+	carica_gate	0x23		handler_COM2	LIV_SISTEMA
+	carica_gate	0x24		handler_COM1	LIV_SISTEMA
 
 	# primitive utente
-	carica_gate	tipo_a	a_activate_p	LIV_UTENTE
-	carica_gate	tipo_t	a_terminate_p	LIV_UTENTE
-	carica_gate	tipo_b	a_begin_p	LIV_UTENTE
-	carica_gate	tipo_g	a_give_num	LIV_UTENTE
-	carica_gate	tipo_si	a_sem_ini	LIV_UTENTE
-	carica_gate	tipo_w	a_sem_wait	LIV_UTENTE
-	carica_gate	tipo_s	a_sem_signal	LIV_UTENTE
-	carica_gate	tipo_ma	a_mem_alloc	LIV_UTENTE
-	carica_gate	tipo_mf	a_mem_free	LIV_UTENTE
-	carica_gate	tipo_d	a_delay		LIV_UTENTE
+	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
+	carica_gate	tipo_t		a_terminate_p	LIV_UTENTE
+	carica_gate	tipo_b		a_begin_p	LIV_UTENTE
+	carica_gate	tipo_g		a_give_num	LIV_UTENTE
+	carica_gate	tipo_si		a_sem_ini	LIV_UTENTE
+	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
+	carica_gate	tipo_s		a_sem_signal	LIV_UTENTE
+	carica_gate	tipo_ma		a_mem_alloc	LIV_UTENTE
+	carica_gate	tipo_mf		a_mem_free	LIV_UTENTE
+	carica_gate	tipo_d		a_delay		LIV_UTENTE
 
 	# primitive per il livello I/O
-	carica_gate	tipo_ae	a_activate_pe	LIV_SISTEMA
-	carica_gate	tipo_nw	a_nwfi		LIV_SISTEMA
-	carica_gate	tipo_va	a_verifica_area	LIV_SISTEMA
-	carica_gate	tipo_p	a_panic		LIV_SISTEMA
-	carica_gate	tipo_fg	a_fill_gate	LIV_SISTEMA
-	carica_gate	tipo_r	_reboot		LIV_SISTEMA
+	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
+	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
+	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
+	carica_gate	tipo_p		a_panic		LIV_SISTEMA
+	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
+	carica_gate	tipo_r		_reboot		LIV_SISTEMA
 
 	# gestione console (di Checconi)
-	carica_gate	tipo_cr	a_con_read	LIV_SISTEMA
-	carica_gate	tipo_cw	a_con_write	LIV_SISTEMA
-	carica_gate	tipo_cs	a_con_save	LIV_SISTEMA
-	carica_gate	tipo_cl	a_con_load	LIV_SISTEMA
-	carica_gate	tipo_cu	a_con_update	LIV_SISTEMA
-	carica_gate	tipo_ci	a_con_init	LIV_SISTEMA
+	carica_gate	tipo_cr		a_con_read	LIV_SISTEMA
+	carica_gate	tipo_cw		a_con_write	LIV_SISTEMA
+	carica_gate	tipo_cs		a_con_save	LIV_SISTEMA
+	carica_gate	tipo_cl		a_con_load	LIV_SISTEMA
+	carica_gate	tipo_cu		a_con_update	LIV_SISTEMA
+	carica_gate	tipo_ci		a_con_init	LIV_SISTEMA
 	leave
 	ret
 
@@ -826,6 +826,11 @@ _attiva_timer:
         popl %eax
 	leave
 	ret
+
+	.global _salta_a_main
+_salta_a_main:
+	call carica_stato
+	iret
 
 # console
 	.extern _c_con_read

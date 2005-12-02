@@ -104,3 +104,6 @@ _term_write_n:
 	ret
 
 	.global start, _start
+start:
+_start:
+	jmp _main

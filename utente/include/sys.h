@@ -90,7 +90,7 @@ extern "C" void term_read_n(int term, char vetti[], int &quanti);
 //
 extern "C" void term_write_n(int term, char vetti[], int quanti);
 
-extern "C" int main() __attribute__ ((section(".init")));
+extern "C" int main();
 
 // Costanti
 //

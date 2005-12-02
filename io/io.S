@@ -9,37 +9,37 @@
 # Tipi delle interruzioni delle chiamate di sistema usate
 # Devono coincidere con quelli usati in sistema.s e utente.s
 #
-.set tipo_t, 0x31
-.set tipo_si, 0x34
-.set tipo_w, 0x35
-.set tipo_s, 0x36
+.set tipo_t, TIPO_T
+.set tipo_si, TIPO_SI
+.set tipo_w, TIPO_W
+.set tipo_s, TIPO_S
 
 # Tipi delle interruzioni usate per interfacciarsi al modulo
 #  sistema
 # Devono coincidere con quelli usati in sistema.s
 #
-.set tipo_ae, 0x40
-.set tipo_nwfi, 0x41
-.set tipo_va, 0x42
-.set tipo_p, 0x43
-.set tipo_fg, 0x44
-.set tipo_r, 0x45
-.set tipo_cr, 0x50
-.set tipo_cw, 0x51
-.set tipo_cs, 0x52
-.set tipo_cl, 0x53
-.set tipo_cu, 0x54
-.set tipo_ci, 0x55
+.set tipo_ae, TIPO_AE
+.set tipo_nwfi, TIPO_NWFI
+.set tipo_va, TIPO_VA
+.set tipo_p, TIPO_P
+.set tipo_fg, TIPO_FG
+.set tipo_r, TIPO_R
+.set tipo_cr, TIPO_CR
+.set tipo_cw, TIPO_CW
+.set tipo_cs, TIPO_CS
+.set tipo_cl, TIPO_CL
+.set tipo_cu, TIPO_CU
+.set tipo_ci, TIPO_CI
 
 # Tipi delle interruzioni usate dalle primitive di IO
 # Devono coincidere con quelli usati in utente.s
 #
-.set io_tipo_rsen, 0x60
-.set io_tipo_rseln, 0x61
-.set io_tipo_wsen, 0x62
-.set io_tipo_wse0, 0x63
-.set io_tipo_tr, 0x64
-.set io_tipo_tw, 0x65
+.set io_tipo_rsen, IO_TIPO_RSEN
+.set io_tipo_rseln, IO_TIPO_RSELN
+.set io_tipo_wsen, IO_TIPO_WSEN
+.set io_tipo_wse0, IO_TIPO_WSE0
+.set io_tipo_tr, IO_TIPO_TR
+.set io_tipo_tw, IO_TIPO_TW
 
 
 ################################################################################
