@@ -74,10 +74,6 @@ struct des_sem {
 	proc_elem *pointer;
 };
 
-// livelli di privilegio (valori Intel)
-//
-const char LIV_SISTEMA = 0, LIV_UTENTE = 3;
-
 // processo in esecuzione
 //
 extern proc_elem *esecuzione;
@@ -95,6 +91,9 @@ extern des_sem array_dess[MAX_SEMAFORI];
 //
 extern void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
 extern void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
+
+// timer
+extern "C" void attiva_timer(unsigned long delay);
 
 // schedulatore
 //
@@ -1971,6 +1970,7 @@ extern "C" void c_delay(int n)
 
 extern "C" void c_begin_p()
 {
+	attiva_timer(DELAY);
         inserimento_coda(pronti, esecuzione);
         schedulatore();
 }

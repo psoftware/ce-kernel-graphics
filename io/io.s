@@ -1,5 +1,6 @@
 # io.s
 #
+#include "costanti.h"
 
 ################################################################################
 ##                                 COSTANTI                                   ##
@@ -476,16 +477,10 @@ _abilita_tastiera:
 	outb %al, $OCW1M
 	ret
 
-# Costanti per i parametri attuali di _fill_gate
-# Devono coincidere con i valori specificati in sistema.s
-#
-.set IDT_DPL3, 0b01100000
-.set IDT_TYPE_TRAP, 0x0f00
-
 # Chiama _fill_gate con i parametri specificati
 #
 .macro fill_io_gate gate off
-	pushl $IDT_DPL3
+	pushl $LIV_UTENTE
 	pushl $\off
 	pushl $\gate
 	call _fill_gate

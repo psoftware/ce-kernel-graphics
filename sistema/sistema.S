@@ -1,57 +1,16 @@
-/* boot.S - bootstrap the kernel */
-     /* Copyright (C) 1999, 2001  Free Software Foundation, Inc.
-     
-        This program is free software; you can redistribute it and/or modify
-        it under the terms of the GNU General Public License as published by
-        the Free Software Foundation; either version 2 of the License, or
-        (at your option) any later version.
-     
-        This program is distributed in the hope that it will be useful,
-        but WITHOUT ANY WARRANTY; without even the implied warranty of
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-        GNU General Public License for more details.
-     
-        You should have received a copy of the GNU General Public License
-        along with this program; if not, write to the Free Software
-        Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA. */
-     
-#define ASM     1
+# sistema.s
+
+#define ASM 1
 #include "multiboot.h"
 #include "costanti.h"
 
-.macro copia_param n_long offset
 
-        movl $\offset, %ecx
-        movl 4(%esp, %ecx, 4), %eax     # cs in eax
-        testl $3, %eax			# verifica del livello di privilegio
-					#  del chiamante
-        jz 1f                           # copia da pila sistema (cpl = 0)
-
-        movl 12(%esp, %ecx, 4), %eax    # vecchio esp (della pila utente)
-					#  in eax
-        leal 4(%eax), %esi		# indirizzo del primo parametro in
-					#  esi
-        jmp 2f
-
-1:
-        leal 16(%esp, %ecx, 4), %esi	# indirizzo del primo parametro in esi
-2:
-        movl $\n_long, %eax		# creazione in pila dello spazio per
-        shll $2, %eax			#  la copia dei parametri
-        subl %eax, %esp
-        leal (%esp), %edi		# indirizzo della destinazione del
-					#  primo parametro in edi
-
-        movl $\n_long, %ecx
-        cld
-        rep
-           movsl			# copia dei parametri
-
-.endm
+###############################################################
+# MACRO                                                       #
+###############################################################
+# definiamo delle macro che verranno utilizzate piu' avanti
 
 # salvataggio dei registri in pila
-# Replicato in io.s
-#
 .macro salva_registri
 
 	pushl %eax
@@ -65,8 +24,6 @@
 .endm
 
 # caricamento dei registri dalla pila (duale rispetto a salva_registri)
-# Replicato in io.s
-#
 .macro carica_registri
 
 	popl %ebp
@@ -81,7 +38,6 @@
 
 # salvataggio dei registri in pila per chiamate di sistema che ritornano
 #  un valore in eax, che non viene salvato
-#
 .macro salva_reg_rit
 
 	pushl %ecx
@@ -96,7 +52,6 @@
 
 # ripristino dei registri (tutti meno eax) dalla pila (duale rispetto a
 #  salva_reg_rit)
-#
 .macro carica_reg_rit
 
 	popl %ebp
@@ -108,15 +63,67 @@
 
 .endm
 
+# copia i parametri dalla pila utente (o sistema) 
+# alla pila sistema, da usare nelle a_primitive
+# n_long: numero di parole lunghe da copiare
+# n_reg: numero di registri salvati in cima alla pila
+#        (questa informazione e' necessaria, in 
+#         quanto copia_param verra' chiamata dopo
+#         il salvataggio dei registri in pila, e tale
+#         numero varia da primitiva a primitiva)
+.macro copia_param n_long n_reg
+
+        movl $\n_reg, %ecx
+        movw 4(%esp, %ecx, 4), %ax      # CS in AX
+        andb $0b00000011, %al	        # CPL del chiamante in AL
+	cmpb $LIV_SISTEMA, %al		# se sistema, non c'e' stato cambio pila
+        je 1f                           # copia da pila sistema 
+        movl 12(%esp, %ecx, 4), %eax    # vecchio ESP (della pila utente) in EAX
+        leal 4(%eax), %esi		# indirizzo del primo parametro in ESI
+        jmp 2f
+1:	leal 16(%esp, %ecx, 4), %esi	# indirizzo del primo parametro in ESI
+2:	movl $\n_long, %eax		# creazione in pila dello spazio per
+        shll $2, %eax			#  la copia dei parametri
+        subl %eax, %esp
+        leal (%esp), %edi		# indirizzo della destinazione del
+					#  primo parametro in EDI
+        movl $\n_long, %ecx
+        cld
+        rep movsl			# copia dei parametri
+
+.endm
+
+
+# Carica un gate della IDT
+# num: indice (a partire da 0) in IDT del gate da caricare
+# routine: indirizzo della routine da associare al gate
+# dpl: dpl del gate (LIV_SISTEMA o LIV_UTENTE)
+# NOTA: la macro si limita a chiamare la routine _init_gate
+#       con gli stessi parametri. Verra' utilizzata per
+#       motivi puramente estetici
 .macro carica_gate num routine dpl
+
 	pushl $\dpl
 	pushl $\routine
 	pushl $\num
 	call _init_gate
 	addl $12, %esp
+
 .endm
 
+# Carica un descrittore della GDT
+# num: indice (a partire da 0) in GDT del descrittore da caricare
+# base: base del segmento
+# limite: campo limite (su 20 bit)
+# pres: bit di presenza (usare le costanti PRES e NON_P)
+# dpl: dpl del segmento (usare le costanti LIV_SISTEMA o LIV_UTENTE)
+# tipo: tipo del gate (usare le costanti SEG_CODICE, SEG_DATI o SEG_TSS)
+# gran: granularita' (usare le costanti G_PAGINA o G_BYTE)
+# NOTA: la macro si limita a chiamare la routine _init_descrittore
+#       con gli stessi parametri. Verra' utilizzata per
+#       motivi puramente estetici
 .macro carica_descr num base limite pres dpl tipo gran
+
 	pushl $\gran
 	pushl $\tipo
 	pushl $\dpl
@@ -126,21 +133,58 @@
 	pushl $\num
 	call  _init_descrittore
 	addl $28, %esp
+
 .endm
 
+# Estrae la base del segmento da un descrittore.
+# Si aspetta l'indirizzo del descrittore in %eax,
+# lascia la base del segmento in %ebx
+# NOTA: il formato dei descrittori di segmento dei 
+#       processori Intel x86, per motivi di compatibilita'
+#       con i processori Intel 286 (che erano a 16 bit),
+#       e' piu' complicato di quello visto a lezione.
+#       In particolare, i byte che compongono il campo base
+#       non sono consecutivi
 .macro estrai_base 
-        movb 7(%eax), %bh
-        movb 4(%eax), %bl
-        shll $16, %ebx
-	movw 2(%eax), %bx
+
+        movb 7(%eax), %bh	# bit 31:24 della base in %bh
+        movb 4(%eax), %bl	# bit 23:16 della base in %bl
+        shll $16, %ebx		# bit 31:16 nella parte alta di %ebx
+	movw 2(%eax), %bx	# bit 15:0 nella parte basse di %ebx
+	
 .endm
 
+
+##########################################################################
+# AVVIO                                                                  #
+##########################################################################
+# Il bootstrap loader attiva il modo protetto (per poter accedere agli
+# indirizzi di memoria principale superiori a 1MB) e carica il sistema,
+# assieme agli eventuali moduli, in memoria. Quindi, salta alla prima
+# istruzione del sistema. Il bootstrap loader puo' anche passare
+# delle informazioni al sistema (tramite i registri e la memoria).
+#
+# In questo sistema, usiamo lo standard multiboot, che definisce il 
+# formato che il file contentente il sistema deve rispettare, e
+# il formato delle informazioni passate dal bootstrap loader al sistema.
+# Il formato del file contenente il sistema deve essere quello di un
+# normale file eseguibile, ma, nei primi 2*4K byte, deve contenere 
+# la struttura multiboot_header, definita piu' avanti. 
+# Il boot loader, prima di saltare alla prima istruzione del sistema
+# (l'entry point specificato nel file eseguibile) lascia nel registro
+# %eax un valore di riconoscimento, e in %ebx l'indirizzo di una struttura
+# dati, contentente varie informazioni (in particolare, la quantita'
+# di memoria principale installata nel sistema, il dispositivo da cui
+# e' stato eseguito il bootstrap, e l'indirizzo di memoria in cui sono
+# stati caricati gli eventuali moduli)
      .text
 
      .globl  start, _start
-start:
+start:				# entry point
 _start:
-     jmp     multiboot_entry
+     jmp     multiboot_entry	# scavalchiamo la struttra richiesta
+     				# dal bootstrap loader, che deve
+				# trovarsi verso l'inizio del file
 
      .align  4
 multiboot_header:
@@ -177,12 +221,13 @@ qui:
      lidt    idt_pointer		# carichiamo la nuova IDT
 	
      pushl   $0				# resettiamo EFLAG
-     popf				# N.B.: interrupt ancora disabilitati
+     popf				# N.B.: interrupt disabilitati
 
      call    init_8259			# init. controllore interruz.
-     pushl   %ebx			# parametri passati
-     pushl   %eax			# dal boot loader
-     call    _cmain
+     pushl   %ebx			# parametri passati dal loader
+     pushl   %eax			
+     call    _cmain			# il resto dell'inizializzazione
+     					# e' scritto in C++
      addl    $8, %esp
 
      pushl   $halt_message
@@ -197,6 +242,9 @@ halt_message:
 #################################################################
 # funzioni di utilita'						#
 #################################################################
+
+# stampa sulla console gli lo stack degli indirizzi di ritorno
+# attualmente in pila (utile per il debugging)
 stringa_backtrace:
 	.asciz "%x\n"
 	.global _backtrace
@@ -233,6 +281,8 @@ inspronti:
         movl %eax, _pronti
 	ret
 
+# offset, all'interno della struttura des_proc, dei campi
+# destinati a contere i registri del processore
 .set EAX, 40
 .set ECX, 44
 .set EDX, 48
@@ -306,7 +356,7 @@ carica_stato:
 
         leal gdt(, %ebx, 8), %eax       # ind. entrata della gdt relativa in eax
 	estrai_base			# ind. del TSS in %ebx
-        andl $0xfffffdff, 4(%eax)       # bit busy del tss a zero
+        andl $0xfffffdff, 4(%eax)       # bit busy del TSS a zero
 
        	ltr %cx				# nuovo valore in TR
 
@@ -325,14 +375,14 @@ carica_stato:
 
 	popl %ecx                       # toglie dalla pila l' ind. di ritorno
 
-	movl CR3(%ebx), %eax
-	movl %eax, %cr3			# il nucleo e' in esecuzione nella mem.
-					#  fisica in memoria virtuale, presente
-     					#  in tutti i direttori agli stessi
-					#  indirizzi
+	movl CR3(%ebx), %eax		# cambio di direttorio
+	movl %eax, %cr3			# NOTA: siamo sicuri della continuita'
+					# dell'indirizzamento, in quanto il sistema
+					# e' mappato agli stessi indirizzi in tutti
+					# gli spazi di memoria
 
 	movl ESP(%ebx), %esp            # nuovo punt. di pila...
-	pushl %ecx
+	pushl %ecx			# salvataggio ind. di ritorno nella nuova pila
 
 	movl ECX(%ebx), %ecx
 	movl EDI(%ebx), %edi
@@ -344,6 +394,19 @@ carica_stato:
 
 	ret
 
+# carica la gdt
+# Utilizziamo il modello di memoria flat: usiamo solo 4 segmenti 
+# sovrapposti, grandi quanto tutto lo spazio di indirizzamento linerare (4GB)
+# Due segmenti (indici 1 e 2) servono per il livello di privilegio sistema
+# e due (indici 3 e 4) per il livello di privilegio utente.
+# Il segmento di indice 0 deve essere nullo.
+# A partire dal descrittore di indice 5, carichiamo i descrittori di segmento TSS,
+# ognuno associato alla corrispondente struttura des_proc nell'array array_desp.
+# Prepariamo staticamente un descrittore per ognuno dei MAX_PROCESSI possibili,
+# anche se ne verranno utilizzati di meno. Usiamo il bit P di presenza nel descittore
+# per specificare quali descrittori sono effettivamente utilizzati.
+# Inizialmente, tutti i bit di presenza sono 0, e passeranno ad 1 quando verrano
+# invocate le primitive activate_p e activate_pe
 init_gdt:
 	pushl %ebp
 	movl %esp, %ebp
@@ -352,10 +415,10 @@ init_gdt:
 
 			#indice	base	limite	P	DPL		TIPO		G
 	carica_descr	0	0	0	NON_P	0		0		0
-	carica_descr	1	0	0xfffff	PRES	DPL_SISTEMA	SEG_CODICE	G_PAGINA
-	carica_descr	2	0	0xfffff	PRES	DPL_SISTEMA	SEG_DATI	G_PAGINA
-	carica_descr	3	0	0xfffff	PRES	DPL_UTENTE	SEG_CODICE	G_PAGINA
-	carica_descr	4	0	0xfffff	PRES	DPL_UTENTE	SEG_DATI	G_PAGINA
+	carica_descr	1	0	0xfffff	PRES	LIV_SISTEMA	SEG_CODICE	G_PAGINA
+	carica_descr	2	0	0xfffff	PRES	LIV_SISTEMA	SEG_DATI	G_PAGINA
+	carica_descr	3	0	0xfffff	PRES	LIV_UTENTE	SEG_CODICE	G_PAGINA
+	carica_descr	4	0	0xfffff	PRES	LIV_UTENTE	SEG_DATI	G_PAGINA
 
 	movl $_array_desp, %ebx
 	movl $5, %ecx
@@ -366,7 +429,7 @@ ciclo_tss:
 carica_tss:
 	pushl $G_BYTE
 	pushl $SEG_TSS
-	pushl $DPL_SISTEMA
+	pushl $LIV_SISTEMA
 	pushl $NON_P
 	pushl $(SIZE_DESP-1)
 	pushl %ebx
@@ -382,6 +445,7 @@ fine_carica_tss:
 	leave
 	ret
 
+# Tipi delle primitive di sistema
 .set tipo_a, 0x30
 .set tipo_t, 0x31
 .set tipo_b, 0x32
@@ -412,67 +476,72 @@ fine_carica_tss:
 .set tipo_cu, 0x54
 .set tipo_ci, 0x55
 
+# carica la idt
+# le prime 20 entrate sono definite dall'Intel, e corrispondono
+# alle possibili eccezioni. 
 init_idt:
 	pushl %ebp
 	movl %esp, %ebp
 	#		indice		routine			dpl
 	# gestori eccezioni:
-	carica_gate	0 	divide_error 	DPL_SISTEMA
-	carica_gate	1 	debug 		DPL_SISTEMA
-	carica_gate	2 	nmi 		DPL_SISTEMA
-	carica_gate	3 	breakpoint 	DPL_SISTEMA
-	carica_gate	4 	overflow 	DPL_SISTEMA
-	carica_gate	5 	bound_re 	DPL_SISTEMA
-	carica_gate	6 	invalid_opcode	DPL_SISTEMA
-	carica_gate	7 	dev_na 		DPL_SISTEMA
-	carica_gate	8 	double_fault 	DPL_SISTEMA
-	carica_gate	9 	coproc_so 	DPL_SISTEMA
-	carica_gate	10 	invalid_tss 	DPL_SISTEMA
-	carica_gate	11 	segm_fault 	DPL_SISTEMA
-	carica_gate	12 	stack_fault 	DPL_SISTEMA
-	carica_gate	13 	prot_fault 	DPL_SISTEMA
-	carica_gate	14 	page_fault 	DPL_SISTEMA
-	carica_gate	16 	fp_exc 		DPL_SISTEMA
-	carica_gate	17 	ac_exc 		DPL_SISTEMA
-	carica_gate	18 	mc_exc 		DPL_SISTEMA
-	carica_gate	19 	simd_exc 	DPL_SISTEMA
+	carica_gate	0 	divide_error 	LIV_SISTEMA
+	carica_gate	1 	debug 		LIV_SISTEMA
+	carica_gate	2 	nmi 		LIV_SISTEMA
+	carica_gate	3 	breakpoint 	LIV_SISTEMA
+	carica_gate	4 	overflow 	LIV_SISTEMA
+	carica_gate	5 	bound_re 	LIV_SISTEMA
+	carica_gate	6 	invalid_opcode	LIV_SISTEMA
+	carica_gate	7 	dev_na 		LIV_SISTEMA
+	carica_gate	8 	double_fault 	LIV_SISTEMA
+	carica_gate	9 	coproc_so 	LIV_SISTEMA
+	carica_gate	10 	invalid_tss 	LIV_SISTEMA
+	carica_gate	11 	segm_fault 	LIV_SISTEMA
+	carica_gate	12 	stack_fault 	LIV_SISTEMA
+	carica_gate	13 	prot_fault 	LIV_SISTEMA
+	carica_gate	14 	page_fault 	LIV_SISTEMA
+	carica_gate	16 	fp_exc 		LIV_SISTEMA
+	carica_gate	17 	ac_exc 		LIV_SISTEMA
+	carica_gate	18 	mc_exc 		LIV_SISTEMA
+	carica_gate	19 	simd_exc 	LIV_SISTEMA
 
 	# driver/handler
-	carica_gate	0x20	driver_t	DPL_SISTEMA
-	carica_gate	0x21	handler_KBD	DPL_SISTEMA
-	carica_gate	0x23	handler_COM2	DPL_SISTEMA
-	carica_gate	0x24	handler_COM1	DPL_SISTEMA
+	carica_gate	0x20	driver_t	LIV_SISTEMA
+	carica_gate	0x21	handler_KBD	LIV_SISTEMA
+	carica_gate	0x23	handler_COM2	LIV_SISTEMA
+	carica_gate	0x24	handler_COM1	LIV_SISTEMA
 
 	# primitive utente
-	carica_gate	tipo_a	a_activate_p	DPL_UTENTE
-	carica_gate	tipo_t	a_terminate_p	DPL_UTENTE
-	carica_gate	tipo_b	a_begin_p	DPL_UTENTE
-	carica_gate	tipo_g	a_give_num	DPL_UTENTE
-	carica_gate	tipo_si	a_sem_ini	DPL_UTENTE
-	carica_gate	tipo_w	a_sem_wait	DPL_UTENTE
-	carica_gate	tipo_s	a_sem_signal	DPL_UTENTE
-	carica_gate	tipo_ma	a_mem_alloc	DPL_UTENTE
-	carica_gate	tipo_mf	a_mem_free	DPL_UTENTE
-	carica_gate	tipo_d	a_delay		DPL_UTENTE
+	carica_gate	tipo_a	a_activate_p	LIV_UTENTE
+	carica_gate	tipo_t	a_terminate_p	LIV_UTENTE
+	carica_gate	tipo_b	a_begin_p	LIV_UTENTE
+	carica_gate	tipo_g	a_give_num	LIV_UTENTE
+	carica_gate	tipo_si	a_sem_ini	LIV_UTENTE
+	carica_gate	tipo_w	a_sem_wait	LIV_UTENTE
+	carica_gate	tipo_s	a_sem_signal	LIV_UTENTE
+	carica_gate	tipo_ma	a_mem_alloc	LIV_UTENTE
+	carica_gate	tipo_mf	a_mem_free	LIV_UTENTE
+	carica_gate	tipo_d	a_delay		LIV_UTENTE
 
 	# primitive per il livello I/O
-	carica_gate	tipo_ae	a_activate_pe	DPL_SISTEMA
-	carica_gate	tipo_nw	a_nwfi		DPL_SISTEMA
-	carica_gate	tipo_va	a_verifica_area	DPL_SISTEMA
-	carica_gate	tipo_p	a_panic		DPL_SISTEMA
-	carica_gate	tipo_fg	a_fill_gate	DPL_SISTEMA
-	carica_gate	tipo_r	_reboot		DPL_SISTEMA
+	carica_gate	tipo_ae	a_activate_pe	LIV_SISTEMA
+	carica_gate	tipo_nw	a_nwfi		LIV_SISTEMA
+	carica_gate	tipo_va	a_verifica_area	LIV_SISTEMA
+	carica_gate	tipo_p	a_panic		LIV_SISTEMA
+	carica_gate	tipo_fg	a_fill_gate	LIV_SISTEMA
+	carica_gate	tipo_r	_reboot		LIV_SISTEMA
 
 	# gestione console (di Checconi)
-	carica_gate	tipo_cr	a_con_read	DPL_SISTEMA
-	carica_gate	tipo_cw	a_con_write	DPL_SISTEMA
-	carica_gate	tipo_cs	a_con_save	DPL_SISTEMA
-	carica_gate	tipo_cl	a_con_load	DPL_SISTEMA
-	carica_gate	tipo_cu	a_con_update	DPL_SISTEMA
-	carica_gate	tipo_ci	a_con_init	DPL_SISTEMA
+	carica_gate	tipo_cr	a_con_read	LIV_SISTEMA
+	carica_gate	tipo_cw	a_con_write	LIV_SISTEMA
+	carica_gate	tipo_cs	a_con_save	LIV_SISTEMA
+	carica_gate	tipo_cl	a_con_load	LIV_SISTEMA
+	carica_gate	tipo_cu	a_con_update	LIV_SISTEMA
+	carica_gate	tipo_ci	a_con_init	LIV_SISTEMA
 	leave
 	ret
 
+# carica un gate nella IDT
+# parametri: (vedere la macro carica_gate)
 .global _init_gate
 _init_gate:
 	pushl %ebp
@@ -491,7 +560,11 @@ _init_gate:
 
 	movw $0, %ax
 	movb $0b10001110, %ah 	        # byte di accesso
-	orb 16(%ebp), %ah		# modificato dal param 3
+					# (presente, 32bit, tipo interrupt)
+	movb 16(%ebp), %al		# DPL
+	shlb $5, %al			# posizione del DPL nel byte di accesso
+	orb  %al, %ah			# byte di accesso con DPL in %ah
+	movb $0, %al			# la parte bassa deve essere 0
 	movl %eax, 4(%ebx, %ecx, 8)	# 16 bit piu' sign. dell'offset
 					# e byte di accesso
 
@@ -501,6 +574,8 @@ _init_gate:
 	leave
 	ret
 
+# carica un descrittore di segmento in GDT
+# parametri: (vedere la macro carica_descr)
 .global _init_descrittore
 _init_descrittore:
 	pushl %ebp
@@ -518,8 +593,9 @@ _init_descrittore:
 	movw 12(%ebp), %ax		# bit 15:00 base -> %ax
 	movw %ax, 2(%ebx, %ecx, 8)	# -> 2a parola descr.
 	movb 14(%ebp), %al		# bit 23:16 base -> %al
-	movb 20(%ebp), %ah		# bit di presenza
-	orb  24(%ebp), %ah		# dpl
+	orb  24(%ebp), %ah		# DPL
+	shlb $5, %ah			# posizione del DPL nel byte di accesso
+	orb  20(%ebp), %ah		# bit di presenza
 	orb  28(%ebp), %ah		# tipo
 	movw %ax, 4(%ebx, %ecx, 8)	# -> 3a parola descr.
 	movb 15(%ebp), %dh		# bit 31:24 base -> %dh
@@ -536,6 +612,11 @@ _init_descrittore:
 	leave
 	ret
 
+# trova un desctrittore di segmento TSS non ancora
+# utilizzato, e ne restituisce l'indice in %eax
+# (0 se tutti occupati)
+# lo stato occupato/libero del descrittore e' dato
+# dal valore del suo bit di presenza
 	.global _alloca_tss
 _alloca_tss:
 	pushl %ebp
@@ -565,6 +646,9 @@ _alloca_tss:
 	leave
 	ret
 
+# rende nuovamente libero un descrittore di segmento TSS
+# precedentemente occupato
+# parametri: indice in GDT del descrittore da rilasciare
 	.global _rilascia_tss
 _rilascia_tss:
 	pushl %ebp
@@ -585,6 +669,8 @@ _rilascia_tss:
 	leave
 	ret
 
+# carica il registro cr3
+# parametri: indirizzo fisico del nuovo direttorio
 	.global _carica_cr3
 _carica_cr3:
 	pushl %ebp
@@ -598,11 +684,13 @@ _carica_cr3:
 	leave
 	ret
 
+# restituisce in %eax il contenuto di cr3
 	.global _leggi_cr3
 _leggi_cr3:
 	movl %cr3, %eax
 	ret
 
+# attiva la paginazione
 	.global _attiva_paginazione
 _attiva_paginazione:
 	pushl %eax
@@ -615,6 +703,8 @@ _attiva_paginazione:
 
 	popl %eax
 	ret
+
+# restituisce in %eax il contenuto di cr2
 	.global _leggi_cr2
 _leggi_cr2:
 	movl %cr2, %eax
@@ -669,6 +759,11 @@ _outputb:
 .set OCW1S, 0xa1
 .set OCW3S, 0xa0
 
+# inizializza il controllore delle interruzioni
+# la base del controllore va cambiata rispetto a quella
+# impostata dal BIOS, in quanto, in modo protetto, esistono
+# piu' tipi di eccezioni che in modo reale, e la base impostata
+# dal BIOS va a collidere con alcune di queste
 init_8259:
 	pushl %ebp
 	movl %esp, %ebp
@@ -709,9 +804,10 @@ init_8259:
 .set CTR_LSB, 0x40
 .set CTR_MSB, 0x40
 
-.set DELAY, 59659		# 1193180*0.05, per avere un periodo di 50ms
-
-attiva_timer:
+# attiva il timer di sistema
+# parametri: il valore da caricare nel registro CTR del timer
+	.global _attiva_timer
+_attiva_timer:
 	pushl %ebp
 	movl %esp, %ebp
         pushl %eax
@@ -731,7 +827,7 @@ attiva_timer:
 	leave
 	ret
 
-// console
+# console
 	.extern _c_con_read
 a_con_read:
 	salva_registri
@@ -789,6 +885,16 @@ a_con_init:
 ################################################################
 # gestori delle eccezioni				       #
 ################################################################
+# alcune eccezioni lasciano in pila un ulteriore parola lunga
+# (il cui significato dipende dal tipo di eccezione)
+# Per uniforimita', facciamo eseguire una pushl $0 come
+# prima istruzione di tutte le eccezioni che non prevedono
+# questa ulteriore parola lunga.
+# Inoltre, il trattamento di tutte le eccezioni e' simile:
+# stampare un avviso sulla console e interrompere il processo
+# che ha causato l'eccezione. Per questo motivo, ogni gestore
+# mette in pila il numero corrispondente al suo tipo di eccezione
+# e salta al codice comune per tutti.
 divide_error:
 	pushl $0
 	pushl $0
@@ -881,8 +987,10 @@ simd_exc:
 comm_exc:
 	call _gestore_eccezioni
 	addl $8, %esp
-	#call carica_stato
+	call _c_terminate_p
+	call carica_stato
 	iret
+
 ########################################################
 # handler/driver                                       #
 ########################################################
@@ -973,8 +1081,6 @@ a_terminate_p:	# routine int $tipo_t
 a_begin_p:	# routine int $tipo_b
 	call salva_stato
         call _c_begin_p
-	pushl $DELAY
-        call attiva_timer
         call carica_stato
 	iret
 
