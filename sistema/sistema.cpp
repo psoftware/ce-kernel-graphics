@@ -686,54 +686,40 @@ void aggiungi_pe(proc_elem *p, estern_id interf)
 // ALLOCAZIONE DELLA MEMORIA FISICA                                  //
 // ////////////////////////////////////////////////////////////////////
 
-// la memoria fisica viene gestita in due fasi:
-// durante l'inizializzazione, si tiene traccia dell'indirizzo
-// dell'ultimo byte non "occupato",
-// tramite il puntatore mem_upper. Tale indirizzo viene
-// fatto avanzare mano a mano che si decide come utilizzare
-// la memoria fisica a disposizione:
-// 1) all'inizio, poiche' il sistema e' stato caricato
-// in memoria fisica dal bootstrap loader, il primo byte
-// non occupato e' quello successivo all'ultimo indirizzo
-// occupato dal sistema stesso (e' il linker, tramite
-// il simbolo predefinito "_end", che ci permette di 
-// conoscere, staticamente, questo indirizzo)
-// 2) di seguito al sistema, il boostrap loader ha 
-// caricato i moduli, e ha passato la lista dei
-// descrittori di moduli tramite il registro %ebx.
-// Scorrendo tale lista, facciamo avanzare il 
-// puntatore mem_upper oltre lo spazio ooccupato dai
-// moduli
-// 3) il modulo di io deve essere ricopiato all'indirizzo
-// a cui e' stato collegato (molto probabilmente
-// diverso dall'indirizzo a cui il bootloader lo ha
-// caricato, in quanto il bootloader non interpreta
-// il contenuto dei moduli). Nel ricopiarlo, viene
-// occupata ulteriore memoria fisica.
-// 4) di seguito al modulo io (ricopiato), viene
-//  allocato l'array di descrittori di pagine fisiche
-//  (la cui dimensione e' calcolata dinamicamente, 
-//  in base al numero di pagine fisiche rimanenti
-//  dopo le operazioni precedenti)
-// 5) tutta la memoria fisica restante, a partire
-// dal primo indirizzo multiplo di 4096, viene usata
-// per le pagine fisiche, destinate a contenere
+// La memoria fisica viene gestita in due fasi: durante l'inizializzazione, si
+// tiene traccia dell'indirizzo dell'ultimo byte non "occupato", tramite il
+// puntatore mem_upper. Tale indirizzo viene fatto avanzare mano a mano che si
+// decide come utilizzare la memoria fisica a disposizione:
+// 1) all'inizio, poiche' il sistema e' stato caricato in memoria fisica dal
+// bootstrap loader, il primo byte non occupato e' quello successivo all'ultimo
+// indirizzo occupato dal sistema stesso (e' il linker, tramite il simbolo
+// predefinito "_end", che ci permette di conoscere, staticamente, questo
+// indirizzo)
+// 2) di seguito al sistema, il boostrap loader ha caricato i moduli, e ha
+// passato la lista dei descrittori di moduli tramite il registro %ebx.
+// Scorrendo tale lista, facciamo avanzare il puntatore mem_upper oltre lo
+// spazio ooccupato dai moduli 
+// 3) il modulo di io deve essere ricopiato all'indirizzo a cui e' stato
+// collegato (molto probabilmente diverso dall'indirizzo a cui il bootloader lo
+// ha caricato, in quanto il bootloader non interpreta il contenuto dei
+// moduli). Nel ricopiarlo, viene occupata ulteriore memoria fisica.  
+// 4) di seguito al modulo io (ricopiato), viene allocato l'array di
+// descrittori di pagine fisiche (la cui dimensione e' calcolata dinamicamente,
+// in base al numero di pagine fisiche rimanenti dopo le operazioni precedenti)
+// 5) tutta la memoria fisica restante, a partire dal primo indirizzo multiplo
+// di 4096, viene usata per le pagine fisiche, destinate a contenere
 // descrittori, tabelle e pagine virtuali.
 //
-// Durante queste operazioni, si vengono a scoprire
-// regioni di memoria fisica non utilizzate 
-// (ad esempio, quando si fa avanzare mem_upper,
-// al passo 3, per portarsi all'inizio dell'indirizzo
-// di collegamento del modulo io). Queste regioni,
-// man mano che vengono scoperte, vengono aggiunte
-// allo heap di sistema. Nella seconda fase,
-// il sistema usa lo heap cosi' ottenuto per
-// allocare la memoria richiesta dall'operatore new
-// (ad es., per "new richiesta").
+// Durante queste operazioni, si vengono a scoprire regioni di memoria fisica
+// non utilizzate (ad esempio, quando si fa avanzare mem_upper, al passo 3, per
+// portarsi all'inizio dell'indirizzo di collegamento del modulo io). Queste
+// regioni, man mano che vengono scoperte, vengono aggiunte allo heap di
+// sistema. Nella seconda fase, il sistema usa lo heap cosi' ottenuto per
+// allocare la memoria richiesta dall'operatore new (ad es., per "new
+// richiesta").
 
-// indirizzo fisico del primo byte non riferibile
-// in memoria inferiore e superiore
-// (rappresentano la memoria fisica installata sul sistema)
+// indirizzo fisico del primo byte non riferibile in memoria inferiore e
+// superiore (rappresentano la memoria fisica installata sul sistema)
 void* max_mem_lower;
 void* max_mem_upper;
 
@@ -741,21 +727,18 @@ void* max_mem_upper;
 extern void* mem_upper;
 
 
-// descrittore di memoria fisica libera
-// descrive una regione non allocata dello heap
-// di sistema
+// descrittore di memoria fisica libera descrive una regione non allocata dello
+// heap di sistema
 struct des_mem {
 	unsigned int dimensione;
 	des_mem* next;
 };
 
-// testa della lista di descrittori 
-// di memoria fisica libera
+// testa della lista di descrittori di memoria fisica libera
 des_mem* memlibera = 0;
 
-// restituisce un valore dello stesso tipo T di v,
-// uguale al piu' piccolo multiplo di a maggiore
-// o uguale a v
+// restituisce un valore dello stesso tipo T di v, uguale al piu' piccolo
+// multiplo di a maggiore o uguale a v
 template <class T>
 inline
 T allinea(T v, unsigned int a)
@@ -764,9 +747,8 @@ T allinea(T v, unsigned int a)
 	return reinterpret_cast<T>(v1 % a == 0 ? v1 : ((v1 + a - 1) / a) * a);
 }
 
-// se T e' int dobbiamo specializzare il template,
-// perche' reinterpret_cast<unsigned int> non e' valido
-// su un int
+// se T e' int dobbiamo specializzare il template, perche'
+// reinterpret_cast<unsigned int> non e' valido su un int
 template <>
 inline
 int allinea(int v, unsigned int a) {
@@ -775,8 +757,8 @@ int allinea(int v, unsigned int a) {
 
 void debug_malloc();
 
-// allocatore a lista first-fit, con strutture dati immerse
-// usato dal nucleo stesso per allocare proc_elem, richiesta, ...
+// allocatore a lista first-fit, con strutture dati immerse usato dal nucleo
+// stesso per allocare proc_elem, richiesta, ...
 void* malloc(unsigned int quanti) {
 
 	unsigned int dim = allinea(quanti, sizeof(int));
@@ -813,9 +795,8 @@ void* malloc(unsigned int quanti) {
 }
 
 
-// free_interna puo' essere usata anche in fase
-// di inizializzazione, per definire le zone di memoria
-// fisica che verranno utilizzate dall'allocatore
+// free_interna puo' essere usata anche in fase di inizializzazione, per
+// definire le zone di memoria fisica che verranno utilizzate dall'allocatore
 void free_interna(void* indirizzo, unsigned int quanti) {
 
 	if (quanti == 0) return;
@@ -899,14 +880,12 @@ void operator delete[](void* p) {
 	free(p);
 }
 
-// allocazione linerare, da usare durante la fase di inizializzazione.
-// Si mantiene un puntatore (mem_upper) all'ultimo byte non occupato.
-// Tale puntatore puo' solo avanzare, tramite le funzioni 'occupa'
-// e 'salta_a', e non puo' superare la massima memoria fisica
-// contenuta nel sistema (max_mem_upper)
-// Se il puntatore viene fatto avanzare tramite
-// la funzione 'salta_a', i byte "saltati" vengono dati
-// all'allocatore a lista
+// allocazione linerare, da usare durante la fase di inizializzazione.  Si
+// mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
+// puntatore puo' solo avanzare, tramite le funzioni 'occupa' e 'salta_a', e
+// non puo' superare la massima memoria fisica contenuta nel sistema
+// (max_mem_upper) Se il puntatore viene fatto avanzare tramite la funzione
+// 'salta_a', i byte "saltati" vengono dati all'allocatore a lista
 void* occupa(unsigned int quanti) {
 	void* p = 0;
 	void* appoggio = add(mem_upper, quanti);
@@ -1041,20 +1020,19 @@ extern "C" void attiva_paginazione();
 #define	PAGINA_VIRTUALE		5
 #define PAGINA_RESIDENTE	6
 
-// La maggior parte della memoria principale del sistema viene
-// utilizzata per implementare le "pagine fisiche".
-// Le pagine fisiche vengono usate per contenere direttori, tabelle
-// delle pagine o pagine virtuali.
-// Per ogni pagina fisica, esiste un "descrittore di pagina fisica", che contiene:
+// La maggior parte della memoria principale del sistema viene utilizzata per
+// implementare le "pagine fisiche".  Le pagine fisiche vengono usate per
+// contenere direttori, tabelle delle pagine o pagine virtuali.  Per ogni
+// pagina fisica, esiste un "descrittore di pagina fisica", che contiene:
 // - un campo "contenuto", che puo'assumere uno dei valori sopra elencati
 // - il contatore degli accessi (per il rimpiazzamento LRU o LFU)
 // - l'indirizzo della tabella delle pagine che mappa la pagina 
 //   fisica in memoria virtuale
 // - l'indice della corrispondente entrata all'interno di tale
 //   tabella delle pagine
-// Inoltre, se la pagina e' libera, il descrittore di pagina fisica
-// contiene anche l'indirizzo del descrittore della prossima pagina fisica
-// libera (0 se non ve ne sono)
+// Inoltre, se la pagina e' libera, il descrittore di pagina fisica contiene
+// anche l'indirizzo del descrittore della prossima pagina fisica libera (0 se
+// non ve ne sono)
 struct des_pf {
 	short contenuto;
 	short indice;
@@ -1076,24 +1054,22 @@ des_pf* pagine_libere = 0;
 // indirizzo fisico della prima pagina fisica
 pagina_fisica* prima_pagina;
 
-// restituisce l'indirizzo fisico della pagina fisica
-// associata al descrittore passato come argomento
+// restituisce l'indirizzo fisico della pagina fisica associata al descrittore
+// passato come argomento
 pagina_fisica* indirizzo(des_pf* p) {
 	return static_cast<pagina_fisica*>(add(prima_pagina, (p - pagine_fisiche) * SIZE_PAGINA));
 }
 
-// dato l'indirizzo di una pagina fisica, restituisce
-// un puntatore al descrittore associato
+// dato l'indirizzo di una pagina fisica, restituisce un puntatore al
+// descrittore associato
 des_pf* struttura(pagina_fisica* pagina) {
 	return &pagine_fisiche[distance(pagina, prima_pagina) / SIZE_PAGINA];
 }
 
-// init_pagine_fisiche viene chiamata in fase di inizalizzazione.
-// Tutta la memoria non ancora occupata viene usata per le pagine
-// fisiche. 
-// La funzione si preoccupa anche di allocare lo spazio
-// per i descrittori di pagina fisica, e di inizializzarli
-// in modo che tutte le pagine fisiche risultino libere
+// init_pagine_fisiche viene chiamata in fase di inizalizzazione.  Tutta la
+// memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
+// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
+// e di inizializzarli in modo che tutte le pagine fisiche risultino libere
 void init_pagine_fisiche() {
 
 	// allineamo mem_upper, per motivi di prestazioni
@@ -1433,11 +1409,10 @@ void bm_free(bm_t *bm, unsigned int pos)
 // CREAZIONE PROCESSI                                                           //
 //////////////////////////////////////////////////////////////////////////////////
 
-// crea una pila (di dim. pari a 1 pagina)
-// all'indirizzo virtuale ind_virtuale nel direttorio pdirettorio,
-// di dimensione npag pagine, al livello liv
-// restituisce un puntatore alla primo byte oltre la fine della pila stessa
-// (0 in caso di fallimento)
+// crea una pila (di dim. pari a 1 pagina) all'indirizzo virtuale ind_virtuale
+// nel direttorio pdirettorio, di dimensione npag pagine, al livello liv
+// restituisce un puntatore alla primo byte oltre la fine della pila stessa (0
+// in caso di fallimento)
 pagina* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	pagina* ind_fisico;
 	tabella_pagine* ptabella;
@@ -1445,16 +1420,15 @@ pagina* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	descrittore_pagina*  pdes_pag;
 	des_pf*	     ppf;
 
-	// pagine fisiche per la pila 
-	// e per la tabella delle pagine che dovra' mappare la pila
+	// pagine fisiche per la pila e per la tabella delle pagine che dovra'
+	// mappare la pila
 	// nota: ind_fisico punta al primo byte della pagina 
 	ind_fisico = alloca_pagina_virtuale(liv == LIV_SISTEMA ? PAGINA_RESIDENTE : PAGINA_VIRTUALE);
 	if (ind_fisico == 0) goto errore1;
 	ptabella = alloca_tabella(liv == LIV_UTENTE ? TABELLA_RESIDENTE : TABELLA_PRIVATA);
 	if (ptabella == 0) goto errore2;
 
-	// aggiungiamo la tabella delle pagine
-	// (di indirizzo fisico ptabella)
+	// aggiungiamo la tabella delle pagine (di indirizzo fisico ptabella)
 	// aggiornando l'opportuna entrata del direttorio
 	pdes_tab = &pdirettorio->entrate[indice_direttorio(ind_virtuale)];
 	pdes_tab->address	= uint(ptabella) >> 12;
@@ -1469,10 +1443,9 @@ pagina* crea_pila(direttorio* pdirettorio, void* ind_virtuale, char liv) {
 	ppf->dir	= pdirettorio;
 	ppf->indice	= indice_direttorio(ind_virtuale);
 
-	// mappiamo la pagina virtuale ind_virtuale
-	// (di indirizzo fisico ind_fisico)
-	// aggiornando l'opportuna entrata della
-	// tabella delle pagine appena aggiunta al direttorio
+	// mappiamo la pagina virtuale ind_virtuale (di indirizzo fisico
+	// ind_fisico) aggiornando l'opportuna entrata della tabella delle
+	// pagine appena aggiunta al direttorio
 	pdes_pag = &ptabella->entrate[indice_tabella(ind_virtuale)];
 	pdes_pag->address	= uint(ind_fisico) >> 12;
 	pdes_pag->reserved	= 0;
@@ -1498,9 +1471,8 @@ errore1:	return 0;
 
 }
 
-// rilascia tutte le pagine fisiche (e le relative tabelle)
-// mappate dall'indirizzo virtuale start (incluso)
-// all'indirizzo virtuale end (escluso)
+// rilascia tutte le pagine fisiche (e le relative tabelle) mappate
+// dall'indirizzo virtuale start (incluso) all'indirizzo virtuale end (escluso)
 // (si suppone che start e end siano allineati alla pagina)
 void rilascia_tutto(direttorio* pdir, void* start, void* end) {
 	for (int i = indice_direttorio(start);
@@ -1549,17 +1521,14 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	pdirettorio = alloca_direttorio();
 	if (pdirettorio == 0) goto errore3;
 
-	// il direttorio viene inizialmente copiato
-	// dal direttorio principale
-	// (in questo modo, il nuovo processo acquisisce 
-	// automaticamente gli spazi virtuali condivisi,
-	// sia a livello utente che a livello sistema,
-	// tramite condivisione delle relative tabelle
-	// delle pagine)
+	// il direttorio viene inizialmente copiato dal direttorio principale
+	// (in questo modo, il nuovo processo acquisisce automaticamente gli
+	// spazi virtuali condivisi, sia a livello utente che a livello
+	// sistema, tramite condivisione delle relative tabelle delle pagine)
 	*pdirettorio = *direttorio_principale;
 	
-	// calcoliamo l'indirizzo virtuale della pagina contenente la
-	// pila sistema (ultima pagina dello spazio sistema privato)
+	// calcoliamo l'indirizzo virtuale della pagina contenente la pila
+	// sistema (ultima pagina dello spazio sistema privato)
 	virt_pila_sistema = sub(fine_sistema_privato, SIZE_PAGINA);
 
 	pila_sistema = crea_pila(pdirettorio, virt_pila_sistema, LIV_SISTEMA);
@@ -1574,9 +1543,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		if (pila_utente == 0) goto errore5;
 
 
-		// pila_sistema punta alla prima doppia parola dopo la fine della pila sistema
-		// Simuliamo una serie di PUSHL, per creare la situazione
-		// richiesta dall'istruzione IRET:
+		// pila_sistema punta alla prima doppia parola dopo la fine
+		// della pila sistema Simuliamo una serie di PUSHL, per creare
+		// la situazione richiesta dall'istruzione IRET:
 		 pila_sistema->parole_lunghe[1019] = uint((void*)f);	// EIP (codice utente)
 		 pila_sistema->parole_lunghe[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
 		 pila_sistema->parole_lunghe[1021] = 0x00000200;	// EFLAG
@@ -1585,28 +1554,25 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 									// ESP (pila utente)
 		 pila_sistema->parole_lunghe[1023] = SEL_DATI_UTENTE;	// SS (pila utente)
 		// eseguendo una IRET da questa situazione, il processo
-		// passera' ad eseguire la prima istruzione
-		// della funzione f, usando come pila la pila utente
-		// (al suo indirizzo virtuale)
+		// passera' ad eseguire la prima istruzione della funzione f,
+		// usando come pila la pila utente (al suo indirizzo virtuale)
 
-		// dobbiamo ora fare in modo che la pila
-		// utente si trovi nella situazione in cui 
-		// si troverebbe dopo una CALL alla funzione f,
-		// con parametro a:
+		// dobbiamo ora fare in modo che la pila utente si trovi nella
+		// situazione in cui si troverebbe dopo una CALL alla funzione
+		// f, con parametro a:
 		pila_utente->parole_lunghe[1022] = 0xffffffff;	// ind. di ritorno?
 		pila_utente->parole_lunghe[1023] = a;		// parametro del proc.
 
 		// infine, inizializziamo il descrittore di processo
 
-		// indirizzo del bottom della pila sistema,
-		// che verra' usato dal meccanismo delle interruzioni
+		// indirizzo del bottom della pila sistema, che verra' usato
+		// dal meccanismo delle interruzioni
 		pdes_proc->esp0 = add(virt_pila_sistema, SIZE_PAGINA);
 		pdes_proc->ss0  = SEL_DATI_SISTEMA;
 
-		// inizialmente, il processo si trova a livello sistema,
-		// come se avesse eseguito una istruzione INT,
-		// con la pila sistema che contiene le 5 parole lunghe
-		// preparate precedentemente
+		// inizialmente, il processo si trova a livello sistema, come
+		// se avesse eseguito una istruzione INT, con la pila sistema
+		// che contiene le 5 parole lunghe preparate precedentemente
 		pdes_proc->esp = uint(virt_pila_sistema) + SIZE_PAGINA - 5 * sizeof(int);
 		pdes_proc->ss  = SEL_DATI_SISTEMA;
 
@@ -1626,8 +1592,8 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pila_sistema->parole_lunghe[1022] = 0xffffffff;		  // indirizzo ritorno?
 		pila_sistema->parole_lunghe[1023] = a;			  // parametro
 		// i processi esterni lavorano esclusivamente a livello
-		// sistema. Per questo motivo, prepariamo una sola pila
-		// (la pila sistema)
+		// sistema. Per questo motivo, prepariamo una sola pila (la
+		// pila sistema)
 
 		pdes_proc->esp = uint(virt_pila_sistema) + SIZE_PAGINA - 5 * sizeof(int);
 		pdes_proc->ss  = SEL_DATI_SISTEMA;
@@ -1720,19 +1686,16 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 	}
 }
 
-// Lo heap utente e' gestito tramite un allocatore a lista, come
-// lo heap di sistema, ma le strutture dati non sono immerse
-// nello heap stesso (diversamente dallo heap di sistema).
-// Infatti, la memoria allocata dallo heap utente e' virtuale e,
-// se il sistema vi scrivesse le proprie strutture dati, potrebbe
-// causare page fault. Per questo motivo, i descrittori di heap
+// Lo heap utente e' gestito tramite un allocatore a lista, come lo heap di
+// sistema, ma le strutture dati non sono immerse nello heap stesso
+// (diversamente dallo heap di sistema).  Infatti, la memoria allocata dallo
+// heap utente e' virtuale e, se il sistema vi scrivesse le proprie strutture
+// dati, potrebbe causare page fault. Per questo motivo, i descrittori di heap
 // utente vengono allocati dallo heap di sistema.
 
-// Lo heap utente e' diviso in "regioni" contigue, di dimensioni
-// variabili, che possono essere libere o occupate.
-// Ogni descrittore di heap utente
-// descrive una regione dello heap virtuale.
-// Descrizione dei campi:
+// Lo heap utente e' diviso in "regioni" contigue, di dimensioni variabili, che
+// possono essere libere o occupate.  Ogni descrittore di heap utente descrive
+// una regione dello heap virtuale.  Descrizione dei campi:
 // - start: indirizzo del primo byte della regione
 // - dimensione: dimensione in byte della regione
 // - occupato: indica se la regione e' occupata (1)
@@ -1747,36 +1710,29 @@ struct des_heap {
 	des_heap* next;
 };
 
-// I descrittori vengono mantenuti in una lista ordinata
-// tramite il campo start. Inoltre, devono essere sempre
-// valide le identita' (se des->next != 0): 
-// (1) des->start + des->dimensione == des->next->start
-// (per la contiguita' delle regioni)
-// (2) (des->occupato == 0) => (des->next->occupato == 1)
-// (ogni regione libera e' massima)
-// (3) des->dimensione % sizeof(int) == 0
-// (per motivi di efficienza)
+// I descrittori vengono mantenuti in una lista ordinata tramite il campo
+// start. Inoltre, devono essere sempre valide le identita' (se des->next !=
+// 0): 
+// (1) des->start + des->dimensione == des->next->start (per la contiguita'
+// delle regioni)
+// (2) (des->occupato == 0) => (des->next->occupato == 1) (ogni regione libera
+// e' massima)
+// (3) des->dimensione % sizeof(int) == 0 (per motivi di efficienza)
 
-// se sizeof(int) >= 2,
-// l'identita' (3) permette di utilizzare il bit meno
-// significativo del campo dimensione per allocarvi
-// il campo occupato (per noi, sizeof(int) = 4)
-// (vedere "union" nella struttura)
+// se sizeof(int) >= 2, l'identita' (3) permette di utilizzare il bit meno
+// significativo del campo dimensione per allocarvi il campo occupato (per noi,
+// sizeof(int) = 4) (vedere "union" nella struttura)
 
-// la testa della lista dei descrittori di heap
-// e' allocata staticamente.
-// Questo implica che la lista non e' mai vuota
-// (contiene almeno 'heap'), ma non che lo heap utente
-// non e' mai vuoto (heap->dimensione puo' essere 0)
+// la testa della lista dei descrittori di heap e' allocata staticamente.
+// Questo implica che la lista non e' mai vuota (contiene almeno 'heap'), ma
+// non che lo heap utente non e' mai vuoto (heap->dimensione puo' essere 0)
 des_heap heap;  // testa della lista di descrittori di heap
 
-// accresci_heap tenta di aumentare le dimensioni 
-// dello heap utente di almeno "dim" byte.
-// "tail" deve puntare all'ultimo descrittore di
-// heap utente nella lista
-// TODO: Poiche' lo swap non e' stato ancora implementato,
-// la funzione deve anche allocare le corrispondenti
-// pagine fisiche
+// accresci_heap tenta di aumentare le dimensioni dello heap utente di almeno
+// "dim" byte.  "tail" deve puntare all'ultimo descrittore di heap utente nella
+// lista
+// TODO: Poiche' lo swap non e' stato ancora implementato, la funzione deve
+// anche allocare le corrispondenti pagine fisiche
 des_heap* accresci_heap(des_heap* tail, int dim) {
 	
 	void *new_heap_end;
@@ -1787,30 +1743,27 @@ des_heap* accresci_heap(des_heap* tail, int dim) {
 	pagina *ind_fisico;
 	des_heap* new_des = 0;
 
-	// indirizzo virtuale dell'ultimo byte
-	// non appartenente allo heap
+	// indirizzo virtuale dell'ultimo byte non appartenente allo heap
 	void *heap_end = add(tail->start, tail->dimensione);
 
 	
-	// se la regione descritta da tail non e'
-	// occupata, dobbiamo accrescere quella
-	// e non creare un nuovo descrittore
-	// (per rispettare (2))
+	// se la regione descritta da tail non e' occupata, dobbiamo accrescere
+	// quella e non creare un nuovo descrittore (per rispettare (2))
 	if (!tail->occupato)
 		dim -= tail->dimensione;
 	else {
 		new_des = new des_heap;
-		// se non riusciamo ad allocare
-		// il descrittore, non possiamo proseguire
+		// se non riusciamo ad allocare il descrittore, non possiamo
+		// proseguire
 		if (new_des == 0) goto errore1;
 	}
 	
 	// lo heap si accresce a multipli di pagina
 	dim = allinea(dim, SIZE_PAGINA);
 
-	// lo heap non puo' crescere oltre 'fine_utente_condiviso'
-	// (perche' abbiamo preallocato le tabelle condivise
-	// solo fino a quell'indirizzo)
+	// lo heap non puo' crescere oltre 'fine_utente_condiviso' (perche'
+	// abbiamo preallocato le tabelle condivise solo fino a
+	// quell'indirizzo)
 	if (distance(fine_utente_condiviso, heap_end) < dim)
 		goto errore2;
 
@@ -1844,8 +1797,8 @@ des_heap* accresci_heap(des_heap* tail, int dim) {
 		ppf->indice		= indice_tabella(curr_end);
 	}
 
-	// se arriviamo fin qui, non possiamo piu' fallire
-	// aggiorniamo quindi la lista dello heap
+	// se arriviamo fin qui, non possiamo piu' fallire. Aggiorniamo quindi
+	// la lista dello heap
 	if (!tail->occupato) {
 		tail->dimensione += dim;
 		return tail;
@@ -1877,9 +1830,8 @@ errore1:
 
 void debug_heap();
 
-// cerca una regione di dimensione almeno pari a dim nello heap
-// utente e ne resituisce l'indirizzo del primo byte
-// (0 in caso di fallimento)
+// cerca una regione di dimensione almeno pari a dim nello heap utente e ne
+// resituisce l'indirizzo del primo byte (0 in caso di fallimento)
 extern "C" void *c_mem_alloc(int dim)
 {
 	des_heap* nuovo;
@@ -1901,17 +1853,17 @@ extern "C" void *c_mem_alloc(int dim)
 	    (scorri = accresci_heap(prec, dim)) == 0)	// e non riusciamo neanche a crearla
 	    	return 0;				// l'allocazione fallisce
 	// NOTA: la chiamata a accresci_heap rispetta sicuramente il vincolo
-	// sul primo parametro, in quanto sappiamo che scorri == prec-> next == 0
-	// (cioe', prec punta alla coda della lista)
+	// sul primo parametro, in quanto sappiamo che scorri == prec-> next ==
+	// 0 (cioe', prec punta alla coda della lista)
 
 	// assert(scorri != 0 && !scorri->occupato && scorri->dimensione >= dim)
 		
 	p = scorri->start;
 
-	// se scorri->dimensione e' sufficientemente piu' grande
-	// di dim, e riusciamo ad allocare un nuovo descrittore di heap,
-	// non occupiamo tutta la regione, ma la dividiamo in due
-	// parti: una di dimensione pari a dim, occupata, e il resto libero
+	// se scorri->dimensione e' sufficientemente piu' grande di dim, e
+	// riusciamo ad allocare un nuovo descrittore di heap, non occupiamo
+	// tutta la regione, ma la dividiamo in due parti: una di dimensione
+	// pari a dim, occupata, e il resto libero
 	if (scorri->dimensione - dim >= sizeof(des_heap) &&
 	    (nuovo = new des_heap) != 0)
 	{
@@ -1929,8 +1881,8 @@ extern "C" void *c_mem_alloc(int dim)
 }
 
 // libera la regione dello heap il cui indirizzo di partenza e' pv
-// nota: se pv e' 0, o pv non e' l'indirizzo di partenza di nessuna regione, 
-//       oppure se tale regione e' gia' libera, non si esegue alcuna azione
+// nota: se pv e' 0, o pv non e' l'indirizzo di partenza di nessuna regione,
+// oppure se tale regione e' gia' libera, non si esegue alcuna azione
 extern "C" void c_mem_free(void *pv)
 {
 	if (pv == 0) return;
@@ -2102,10 +2054,9 @@ Elf32_Ehdr* elf32_intestazione(void* start) {
 	return elf_h;
 }
 
-// copia le sezioni (.text, .data) del modulo descritto da *mod
-// agli indirizzi fisici di collegamento
-// (il modulo deve essere in formato ELF32)
-// restituisce l'indirizzo dell'entry point
+// copia le sezioni (.text, .data) del modulo descritto da *mod agli indirizzi
+// fisici di collegamento (il modulo deve essere in formato ELF32) restituisce
+// l'indirizzo dell'entry point
 void* carica_modulo_io(module_t* mod)
 {
 	Elf32_Phdr* elf_ph;
@@ -2125,8 +2076,8 @@ void* carica_modulo_io(module_t* mod)
 		if (elf_ph->p_type != PT_LOAD)
 			continue;
 
-		// ogni entrata della tabella specifica l'indirizzo a cui 
-		// va caricato il segmento...
+		// ogni entrata della tabella specifica l'indirizzo a cui va
+		// caricato il segmento...
 		if (salta_a(elf_ph->p_vaddr) < 0) {
 			printk("    Indirizzo richiesto da '%s' gia' occupato\n", mod->string);
 			return 0;
@@ -2149,15 +2100,14 @@ void* carica_modulo_io(module_t* mod)
 				elf_ph->p_filesz, elf_ph->p_vaddr);
 
 
-		// la dimensione del segmento nel modulo (p_filesz) puo'
-		// essere diversa (piu' piccola) della dimensione che
-		// il segmento deve avere in memoria (p_memsz).
-		// Cio' accade perche' i dati globali che devono essere
-		// inizializzati con 0 non vengono memorizzati nel
-		// modulo. Di questi dati, il formato ELF32 (ma anche
-		// altri formati) specifica solo la dimensione complessiva.
-		// L'inizializzazione a 0 deve essere effettuata a tempo
-		// di caricamento
+		// la dimensione del segmento nel modulo (p_filesz) puo' essere
+		// diversa (piu' piccola) della dimensione che il segmento deve
+		// avere in memoria (p_memsz).  Cio' accade perche' i dati
+		// globali che devono essere inizializzati con 0 non vengono
+		// memorizzati nel modulo. Di questi dati, il formato ELF32 (ma
+		// anche altri formati) specifica solo la dimensione
+		// complessiva.  L'inizializzazione a 0 deve essere effettuata
+		// a tempo di caricamento
 		if (elf_ph->p_memsz > elf_ph->p_filesz) {
 			memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
 			       0,				        // valore da scrivere
@@ -2166,8 +2116,8 @@ void* carica_modulo_io(module_t* mod)
 					elf_ph->p_memsz - elf_ph->p_filesz);
 		}
 	}
-	// una volta copiati i segmenti di programma all'indirizzo
-	// per cui erano stati collegati, il modulo non ci serve piu'
+	// una volta copiati i segmenti di programma all'indirizzo per cui
+	// erano stati collegati, il modulo non ci serve piu'
 	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
 	return elf_h->e_entry;
 }
@@ -2190,8 +2140,8 @@ void* carica_modulo_utente(module_t* mod)
 	for (int i = 0; i < elf_h->e_phnum; i++) {
 		elf_ph = static_cast<Elf32_Phdr*>(add(header_start, elf_h->e_phentsize * i));
 
-		// un flag del descrittore ci dice
-		// se il segmento deve essere scrivibile
+		// un flag del descrittore ci dice se il segmento deve essere
+		// scrivibile
 		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);	
 
 		// ci interessano solo i segmenti di tipo PT_LOAD
@@ -2206,12 +2156,11 @@ void* carica_modulo_utente(module_t* mod)
 			return 0;
 		}
 
-		// mappiamo il segmento nello spazio utente condiviso 
-		// il segmento sara' in generale composto da piu' pagine.
-		// Per ogni pagina, dobbiamo allocare una pagina fisica,
-		// mapparla al posto giusto in memoria virtuale,
-		// copiare il contenuto della pagina dal file alla pagina
-		// fisica allocata
+		// mappiamo il segmento nello spazio utente condiviso il
+		// segmento sara' in generale composto da piu' pagine.  Per
+		// ogni pagina, dobbiamo allocare una pagina fisica, mapparla
+		// al posto giusto in memoria virtuale, copiare il contenuto
+		// della pagina dal file alla pagina fisica allocata
 	        unsigned int curr_offset = elf_ph->p_offset;
 		unsigned int last_offset = elf_ph->p_offset + elf_ph->p_filesz;
 		ultimo_indirizzo = add(elf_ph->p_vaddr, elf_ph->p_memsz);
@@ -2225,8 +2174,8 @@ void* carica_modulo_utente(module_t* mod)
 				return 0;
 			}
 
-			// mappiamo la pagina fisica appena allocata all'indirizzo
-			// virtuale richiesto
+			// mappiamo la pagina fisica appena allocata
+			// all'indirizzo virtuale richiesto
 			pdes_tab = &direttorio_principale->entrate[indice_direttorio(ind_virtuale)];
 			// la tabella e' sicuramente presente (siamo nello spazio condiviso)
 			ptabella = tabella_puntata(pdes_tab);
@@ -2254,8 +2203,8 @@ void* carica_modulo_utente(module_t* mod)
 				// siamo alla prima pagina da copiare, e non e' "intera"
 				memcpy(add(ind_fisico, displ), sorgente, SIZE_PAGINA - displ);
 				curr_offset += SIZE_PAGINA - displ;
-				// da ora in poi, curr_offset sara' allineato alla pagina
-				// (displ varra' sempre 0)
+				// da ora in poi, curr_offset sara' allineato
+				// alla pagina (displ varra' sempre 0)
 				continue;
 			}
 
@@ -2276,8 +2225,8 @@ void* carica_modulo_utente(module_t* mod)
 				elf_ph->p_vaddr);
 
 	}
-	// una volta copiati i segmenti di programma all'indirizzo
-	// per cui erano stati collegati, il modulo non ci serve piu'
+	// una volta copiati i segmenti di programma all'indirizzo per cui
+	// erano stati collegati, il modulo non ci serve piu'
 	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
 
 
@@ -2306,8 +2255,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	module_t* user_mod;
 	des_proc* pdes_proc;
 
-	// inizializziamo per prima cosa la console, in modo
-	// da poter scrivere messaggi sullo schermo
+	// inizializziamo per prima cosa la console, in modo da poter scrivere
+	// messaggi sullo schermo
 	con_init();
 
 	// controlliamo di essere stati caricati
@@ -2317,8 +2266,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		return;
 	}
 
-	// vediamo se il boot loader ci ha passato l'informazione
-	// su quanta memoria fisica e' installata nel sistema
+	// vediamo se il boot loader ci ha passato l'informazione su quanta
+	// memoria fisica e' installata nel sistema
 	if (mbi->flags & 1) {
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
@@ -2329,8 +2278,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	}
 	printk("Memoria fisica: %d byte (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
 	
-	// per come abbiamo organizzato il sistema
-	// non possiamo gestire piu' di 1GB di memoria fisica
+	// per come abbiamo organizzato il sistema non possiamo gestire piu' di
+	// 1GB di memoria fisica
 	if (max_mem_upper > fine_sistema_privato) {
 		max_mem_upper = fine_sistema_privato;
 		printk("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
@@ -2360,9 +2309,9 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 				if (io_entry == 0)
 					panic("Impossibile caricare il modulo di IO");
 			} else if (str_equal(mod->string, "/utente")) {
-				// il modulo utente non puo' essere caricato adesso,
-				// perche' prima bisogna inizializzare le pagine
-				// fisiche e la paginazione
+				// il modulo utente non puo' essere caricato
+				// adesso, perche' prima bisogna inizializzare
+				// le pagine fisiche e la paginazione
 				user_mod = mod;
 			} else {
 				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
@@ -2377,14 +2326,13 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// il resto della memoria e' per le pagine fisiche
 	init_pagine_fisiche();
 
-	// inizializziamo la mappa di bit che serve
-	// a tenere traccia dei semafori allocati
+	// inizializziamo la mappa di bit che serve a tenere traccia dei
+	// semafori allocati
 	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
 
-	// il direttorio principale viene utilizzato
-	// fino a quando non creiamo il primo processo.
-	// Poi, servira' come "modello" da cui creare i direttori
-	// dei nuovi processi.
+	// il direttorio principale viene utilizzato fino a quando non creiamo
+	// il primo processo.  Poi, servira' come "modello" da cui creare i
+	// direttori dei nuovi processi.
 	direttorio_principale = alloca_direttorio();
 	if (direttorio_principale == 0)
 		panic("Impossibile allocare il direttorio principale");
@@ -2420,10 +2368,9 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	}
 
 	carica_cr3(direttorio_principale);
-	// avendo predisposto il direttorio in modo che tutta
-	// la memoria fisica si trovi gli stessi indirizzi in 
-	// memoria virtuale, possiamo attivare la paginazione,
-	// sicuri che avremo continuita' di indirizzamento
+	// avendo predisposto il direttorio in modo che tutta la memoria fisica
+	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
+	// la paginazione, sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
 
 	// tabelle condivise per lo spazio utente condiviso
@@ -2449,11 +2396,11 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	if (user_entry == 0)
 		panic("Impossibile mappare il modulo UTENTE");
 	
-	// quando abbiamo finito di usare la struttura dati passataci
-	// dal boot loader, possiamo assegnare allo heap la memoria
-	// fisica di indirizzo < 1MB. Lasciamo inutilizzata la prima pagina,
-	// in modo che l'indirizzo 0 non venga mai allocato e possa essere
-	// utilizzato per specificare un puntatore non valido
+	// quando abbiamo finito di usare la struttura dati passataci dal boot
+	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
+	// < 1MB. Lasciamo inutilizzata la prima pagina, in modo che
+	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
+	// specificare un puntatore non valido
 	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
 
 	esecuzione = crea_processo(user_entry, 0, -1, LIV_UTENTE);
