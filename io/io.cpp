@@ -1,14 +1,10 @@
 // io.cpp
 //
-
+#include "costanti.h"
 ////////////////////////////////////////////////////////////////////////////////
-//                                 COSTANTI                                   //
+//COSTANTI                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Livelli di privilegio dei processi
-// Devono coincidere con i valori in sistema.cpp
-//
-const char LIV_UTENTE = 3, LIV_SISTEMA = 0;
 
 // Interruzione hardware a priorita' minore 
 //
@@ -31,8 +27,16 @@ enum estern_id {
 	com1_in,
 	com1_out,
 	com2_in,
-	com2_out
+	com2_out,
+	ata0,
+	ata1
 };
+
+typedef char* ind_b;		// indirizzo di un byte (una porta)
+typedef short* ind_w;		// indirizzo di una parola
+typedef int* ind_l;		// indirizzo di una parola lunga
+typedef unsigned int ind_fisico;// locazione di memoria fisica (per il DMA)
+typedef unsigned int size_t;
 
 ////////////////////////////////////////////////////////////////////////////////
 //                        CHIAMATE DI SISTEMA USATE                           //
@@ -50,10 +54,11 @@ extern "C" void sem_signal(int sem);
 extern "C" void activate_pe(void f(int), int a, int prio, char liv,
 	short &identifier, estern_id interf, bool &risu);
 
-enum controllore { master, slave };
+enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
 
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
+extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void panic(const char *msg);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void reboot(void);
@@ -81,8 +86,6 @@ extern "C" void con_init(con_status *cs);
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef char *ind_b;	// indirizzo di una porta
-typedef unsigned int size_t;
 
 // protezione dalla concorrenza con le interruzioni
 //
@@ -94,6 +97,18 @@ extern "C" void inputb(ind_b reg, char &a);
 
 // uscita di un byte su una porta di IO
 extern "C" void outputb(char a, ind_b reg);
+
+// ingresso di una word da una porta di IO
+extern "C" void inputw(ind_b reg, short &a);
+
+// uscita di una word su una porta di IO
+extern "C" void outputw(short a, ind_b reg);
+
+// ingresso di una stringa di word da un buffer di IO
+extern "C" void inputbuffw(ind_b reg, short *a,short n);
+
+// uscita di una stringa di word su un buffer di IO
+extern "C" void outputbuffw(short *a, ind_b reg,short n);
 
 void *memcpy(void *dest, const void *src, unsigned int n);
 void *memset(void *dest, int c, size_t n);
@@ -262,7 +277,9 @@ void startse_out(des_se *p_des, char vetto[], int quanti, funz op)
 	p_des->punt = vetto;
 	p_des->funzione = op;
 	go_outputse(p_des->indreg.iIER);
-//	kickse_out(p_des);	// usare solo per la seriale di Bochs
+#ifdef BOCHS
+	kickse_out(p_des);
+#endif
 }
 
 extern "C" void c_writese_n(int serial, char vetto[], int quanti)
@@ -795,6 +812,480 @@ void term_init(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+//GESTIONE DELL'HARD DISK               	      //
+////////////////////////////////////////////////////////////////////////////////
+
+#define STRICT_ATA
+
+#define HD_MAX_TX 256
+
+#define	HD_NONE 0x00		//Maschere per i biti fondamentali dei registri
+#define HD_STS_ERR 0x01
+#define HD_STS_DRQ 0x08
+#define HD_STS_DRDY 0x40
+#define HD_STS_BSY 0x80
+#define HD_DRV_MASTER 0
+#define HD_DRV_SLAVE 1
+
+const int A=2;
+
+enum hd_cmd {			// Comandi per i controllori degli hard disk
+	NONE=0x00,
+	IDENTIFY=0xEC,
+	SET_FEATURES=0xEF,
+	SET_MULT_MODE=0xC6,
+	WRITE_SECT=0x30,
+	READ_SECT=0x20,
+	HD_SEEK=0x70,
+	DIAGN=0x90
+};
+
+struct interfata_reg {
+	union {				// Command Block Register
+		ind_b iCMD;
+		ind_b iSTS;
+	}; //iCMD_iSTS;
+	ind_b iDATA;
+	union {
+		ind_b iFEATURES;
+		ind_b iERROR;
+	}; //iFEATURES_iERROR
+	ind_b iSTCOUNT;
+	ind_b iSECT_N;
+	ind_b iCYL_L_N;
+	ind_b iCYL_H_N;
+	union {
+		ind_b iHD_N;
+		ind_b iDRV_HD;
+	}; //iHD_N_iDRV_HD
+	union {				// Control Block Register
+		ind_b iALT_STS;		
+		ind_b iDEV_CTRL;
+	}; //iALT_STS_iDEV_CTRL
+};
+
+struct geometria {			// Struttura 3-D di un disco
+	unsigned short cil;	
+	unsigned short test;
+	unsigned short sett;
+	unsigned int tot_sett;		// Utile in LBA
+};
+
+struct drive {				// Drive su un canale ATA
+	bool presente;
+	bool dma;
+	geometria geom;
+};
+
+struct des_ata {		// Descrittore operazione per i controller ATA
+	interfata_reg indreg;
+	drive disco[2];		// Ogni controller ATA gestisce 2 drive
+	hd_cmd comando;
+	char errore;
+	char cont;
+	ind_w punt;	
+	int mutex;
+	int sincr;
+};
+
+extern "C" des_ata hd[A];	// 2 controller ATA
+
+const estern_id hd_id[2]={ata0,ata1};
+
+//Funzioni di utilita' per la gestione del disco
+//
+inline bool hd_drq(char &s) {		// Test di Data ReQuest
+	return s&HD_STS_DRQ;
+}
+
+inline bool hd_errore(char &s) {	// Test di un eventuale errore (generico)
+	return s&HD_STS_ERR;
+}
+
+inline bool hd_drdy(char &s) {		// Test di Drive ReaDY
+	return s&HD_STS_DRDY;
+}
+
+// Attende una particolare configurazione di bit nel registro di stato del
+//  controller; tipicamente deve resettarsi BuSY
+//  
+char aspetta_STS(des_ata *p_des,char bit,bool &ris) {
+	char stato,test;
+	short timeout=D_TIMEOUT;		// Previsto un timeout
+	do {
+		inputb(p_des->indreg.iALT_STS,stato);
+		if (bit==HD_STS_DRDY || bit==HD_STS_DRQ)
+			test=(~stato);
+		else
+			test=stato;
+		test&=bit;
+		timeout--;
+		if (timeout<0) {
+			ris=false;		// Scaduto il timeout!
+			return stato;
+		}
+	} while (test!=0);
+	ris=true;
+	return stato;
+}
+
+// Invia un comando al controller con la temporizzazione corretta
+// 
+inline bool invia_cmd(des_ata *p_des,hd_cmd com) {
+#ifdef STRICT_ATA
+	bool ris=true;
+	aspetta_STS(p_des,HD_STS_DRDY,ris);
+	if (!ris)
+		return false;
+#endif
+	p_des->comando=com;
+	outputb(com,p_des->indreg.iCMD);
+	return true;
+}
+
+// Legge il buffer di uscita del controller se questo contiene dati
+// 
+void leggi_sett_buff(des_ata *p_des,short vetti[],char &stato) {
+	if (!hd_drq(stato))		
+		// DRQ _deve_ essere settato!
+		panic("\nErrore Grave: DRQ non e' settato!");
+	inputbuffw(p_des->indreg.iDATA,vetti,H_BLK_SIZE);
+	//for (int i=0;i<H_BLK_SIZE;i++) //<=== Forma equivalente (debugging)
+	//	inputw(p_des->indreg.iDATA,vetti[i]);
+}
+
+// Scrive il buffer di ingresso del controller se questo aspetta dati
+// 
+void scrivi_sett_buff(des_ata *p_des,short vetti[],char &stato) {
+	if (!hd_drq(stato))		
+		// DRQ _deve_ essere settato!
+		panic("\nErrore Grave: DRQ non e' settato!");
+	outputbuffw(vetti,p_des->indreg.iDATA,H_BLK_SIZE);
+	//for (int i=0;i<H_BLK_SIZE;i++) //<=== Forma equivalente (debugging)
+	//	outputw(vetti[i],p_des->indreg.iDATA);
+}
+
+//Funzioni per l'ingresso/uscita dati e processo estern0
+//
+extern "C" void go_inouthd(ind_b i_dev_ctl);
+
+extern "C" void halt_inouthd(ind_b i_dev_ctl);
+
+extern "C" bool test_canale(ind_b st,ind_b stc,ind_b stn);
+
+extern "C" int leggi_signature(ind_b stc,ind_b stn,ind_b cyl,ind_b cyh);
+
+extern "C" void umask_hd(ind_b h);
+
+extern "C" void mask_hd(ind_b h);
+
+extern "C" bool drive_reset(ind_b dvctrl,ind_b st);
+
+extern "C" void set_drive(short ms,ind_b i_drv_hd);
+
+extern "C" void get_drive(ind_b i_drv_hd,short &ms);
+
+extern "C" void setup_addr_hd(des_ata *p,unsigned int primo);	
+
+// Trasferimento dati in PIO Mode
+//
+
+// Avvio delle operazioni di lettura da hard dik
+// 
+void starthd_in(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	{
+	p_des->punt=vetti;
+#ifdef STRICT_ATA
+	bool ris;
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// aspetta "drive not BuSY"
+#endif
+	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
+#ifdef STRICT_ATA
+	char stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!!
+	if (!hd_drdy(stato) || hd_errore(stato))
+			panic("Errore nell'inizializzazione della lettura!");
+#endif
+	setup_addr_hd(p_des,primo); 
+	outputb(quanti,p_des->indreg.iSTCOUNT);
+	// Abilita le interruzioni per il controller-drive selezionato
+	go_inouthd(p_des->indreg.iDEV_CTRL);	
+	invia_cmd(p_des,READ_SECT);
+	umask_hd(p_des->indreg.iSTS);
+}
+
+// Avvio delle operazioni di scrittura su hard disk
+//
+void starthd_out(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	
+{	char stato;				
+	bool ris;
+	p_des->punt=vetti;
+#ifdef STRICT_ATA
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
+#endif
+	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
+#ifdef STRICT_ATA
+	stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!
+	if (!hd_drdy(stato) || hd_errore(stato))
+			panic("Errore nell'inizializzazione della scrittura!");
+#endif
+	setup_addr_hd(p_des,primo); 
+	outputb(quanti,p_des->indreg.iSTCOUNT);
+	//Abilita le interruzioni per il controller-drive selezionato
+	go_inouthd(p_des->indreg.iDEV_CTRL);		
+	invia_cmd(p_des,WRITE_SECT);	// Asimmetria con la lettura, bisogna
+#ifdef STRICT_ATA			//  scrivere il primo blocco
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
+#endif
+	// Aspetta DRQ, previsto dal protocollo di comunicazione
+	stato=aspetta_STS(p_des,HD_STS_DRQ,ris);
+	inputb(p_des->indreg.iSTS,stato);
+	scrivi_sett_buff(p_des,p_des->punt,stato);
+	p_des->punt+=H_BLK_SIZE;	// Solo dopo quest'operazione e' sicuro
+	umask_hd(p_des->indreg.iSTS);	//  abilitare l'hd ad interrompere
+}
+
+// Primitiva di lettura da hard disk: legge quanti blocchi (max 256, char!)
+//  a partire da primo depositandoli in vetti; il controller usato e ind_ata,
+//  il drive e' drv. Riporta un fallimento in errore
+//  
+extern "C" void c_readhd_n(short ind_ata,short drv,short vetti[],unsigned int primo,unsigned char &quanti,char &errore)
+{
+	des_ata *p_des;
+
+	p_des = &hd[ind_ata];
+
+	// Controllo sulla protezione
+	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
+		return;
+	if (!verifica_area(&quanti,sizeof(int),true) || !verifica_area(vetti,quanti,true) || !verifica_area(&errore,sizeof(char),true))
+		return;
+
+	// Controllo sulla selezione di un drive presente
+	if (p_des->disco[drv].presente==false) {
+		errore=D_ERR_PRESENCE;
+		return;
+	}
+
+	// Controllo sull'indirizzamento
+	if (primo>p_des->disco[drv].geom.tot_sett)
+		errore=D_ERR_BOUNDS;
+	else {		
+		sem_wait(p_des->mutex);
+		p_des->errore=HD_NONE;		// Reset degli errori precedenti 
+		p_des->disco[drv].dma=false;	// Trasferimento in PIO Mode
+		// Abilitazione del controller all'operazione
+		starthd_in(p_des,drv,vetti,primo,quanti);
+		sem_wait(p_des->sincr);
+		quanti=p_des->cont;
+		errore=p_des->errore;
+		sem_signal(p_des->mutex);
+	}
+}
+
+// Primitiva di scrittura su hard disk: scrive quanti blocchi (max 256, char!)
+//  a partire da primo prelevandoli da vetti; il controller usato e' ind_ata,
+//  il drive e' drv. Riporta un fallimento in errore
+//  
+extern "C" void c_writehd_n(short ind_ata,short drv,short vetti[],unsigned int primo,unsigned char &quanti,char &errore)
+{
+	des_ata *p_des;
+
+	p_des = &hd[ind_ata];
+
+	// Controllo sulla protezione
+	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
+		return;
+	if (!verifica_area(&quanti,sizeof(int),true) || !verifica_area(vetti,quanti,true) || !verifica_area(&errore,sizeof(char),true))
+		return;
+
+	// Controllo sulla selezione di un drive presente
+	if (p_des->disco[drv].presente==false) {
+		errore=D_ERR_PRESENCE;
+		return;
+	}
+	// Controllo sull'indirizzamento
+	if (primo>p_des->disco[drv].geom.tot_sett)
+		errore=D_ERR_BOUNDS;
+	else {
+		sem_wait(p_des->mutex);
+		p_des->errore=HD_NONE;		// Reset degli errori precedenti
+		p_des->disco[drv].dma=false;	//Trasferimento in PIO Mode
+		starthd_out(p_des,drv,vetti,primo,quanti);
+		sem_wait(p_des->sincr);
+		quanti=p_des->cont;
+		errore=p_des->errore;
+		sem_signal(p_des->mutex);
+	}
+}
+
+// Processo esterno per l'hard disk, valido sia per l'ingresso che per 
+//  l'uscita
+//
+void estern_hd(int h)
+{
+	des_ata *p_des;
+	char stato;
+	short drv;
+	hd_cmd curr_cmd;
+	bool fine;
+
+	p_des = &hd[h];		// In base al parametro si sceglie un controller
+
+	for(;;) {
+		curr_cmd=p_des->comando;	// Gestione delle interruzioni
+		p_des->comando=NONE;		//  non richieste
+		if (curr_cmd!=NONE) {
+			get_drive(p_des->indreg.iDRV_HD,drv);
+#ifdef STRICT_ATA
+			bool ris;
+			stato=aspetta_STS(p_des,HD_STS_BSY,ris);
+#endif	/* STRICT_ATA */
+			fine=false;
+			inputb(p_des->indreg.iSTS,stato);
+			if (!hd_errore(stato) && (curr_cmd==READ_SECT || curr_cmd==WRITE_SECT)) {
+				if (curr_cmd==WRITE_SECT) {
+					inputb(p_des->indreg.iSTCOUNT,p_des->cont);
+					if (p_des->cont==0)
+						fine=true;
+					else {
+						scrivi_sett_buff(p_des,p_des->punt,stato);
+						p_des->comando=WRITE_SECT;
+					}
+				}
+				else {		// Comando di READ_SECT
+					leggi_sett_buff(p_des,p_des->punt,stato);
+					inputb(p_des->indreg.iSTCOUNT,p_des->cont);
+					if (p_des->cont==0)
+						fine=true;
+					else
+						p_des->comando=READ_SECT;
+				}
+				p_des->punt+=H_BLK_SIZE;
+			}
+			else {
+				inputb(p_des->indreg.iERROR,p_des->errore);
+				fine=true;
+			}
+			if (fine==true) {
+				mask_hd(p_des->indreg.iSTS);
+				//Disabilita le interruzioni dal controller
+				halt_inouthd(p_des->indreg.iDEV_CTRL);	
+				if (curr_cmd!=IDENTIFY && curr_cmd!=DIAGN)
+					sem_signal(p_des->sincr);
+			}	
+		}
+		nwfi(slave); 	// Controller ATA = Slave PIC (entrambi, 14 e 15)
+	}
+}
+
+const int ATA1_IRQ=15;
+
+// Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
+// 
+void hd_init() {
+	char stato=0;
+	bool test;
+	int init_time=D_TIMEOUT;
+	short st_sett[H_BLK_SIZE];
+	short id;
+	bool r,r1,r2;
+	int hd_base_prio=PRIO_ESTERN_BASE+IRQ_MAX-ATA1_IRQ;
+	short canali=0;
+	
+	des_ata *p_des;
+	for (int i=0;i<A;i++) {				// Per ogni controller
+		p_des=&hd[i];
+		// Disabilita le interruzioni
+		halt_inouthd(p_des->indreg.iDEV_CTRL);	
+	}
+	for (int i=0;i<A;i++) {			// Per ogni controller
+		p_des=&hd[i];
+		short drv=HD_DRV_MASTER;
+		set_drive(drv,p_des->indreg.iDRV_HD);	//LBA e drive drv
+		// Procedura diversificata una volta effettuato il test()
+		if (test_canale(p_des->indreg.iSTS,p_des->indreg.iSTCOUNT,p_des->indreg.iSECT_N)) {
+#ifndef BOCHS		// In sistemi reali e' necessario inviare questo comando
+			set_drive(HD_DRV_MASTER,p_des->indreg.iDRV_HD);
+			invia_cmd(p_des,DIAGN);		// Diagnostica dei drive
+			do
+				inputb(p_des->indreg.iSTS,stato);
+			while (stato&HD_STS_BSY);	// Polling
+			inputb(p_des->indreg.iERROR,stato);
+			do
+				inputb(p_des->indreg.iSTS,stato);
+			while (!stato&HD_STS_DRDY);	// Polling
+#endif		// Diagnostica terminata
+
+			for (int d=0;d<2;d++) {		// Per ogni drive
+				set_drive(drv,p_des->indreg.iDRV_HD);
+				p_des->disco[d].dma=false;
+#ifdef BOCHS		// BOCHS ha bisogno del reset dei controller
+				if (!drive_reset(p_des->indreg.iDEV_CTRL,p_des->indreg.iSTS)) {
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+				else
+					p_des->disco[d].presente=true;
+#endif		// A questo punto in entrambi i casi e' disponibile la signature
+				if (leggi_signature(p_des->indreg.iSTCOUNT,p_des->indreg.iSECT_N,p_des->indreg.iCYL_L_N,p_des->indreg.iCYL_H_N)!=0) {
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+				else
+					p_des->disco[d].presente=true;
+		
+		//Riconoscimento della geometria e dei parametri del disco
+				if (!invia_cmd(p_des,IDENTIFY)) {	
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+#ifdef STRICT_ATA
+				bool ris;
+				aspetta_STS(p_des,HD_STS_BSY,ris);
+#endif
+				inputb(p_des->indreg.iSTS,stato);
+				leggi_sett_buff(p_des,st_sett,stato);
+				// Inizializzazione della geometria
+				p_des->disco[d].geom.cil=st_sett[1];		
+				p_des->disco[d].geom.test=st_sett[3];
+				p_des->disco[d].geom.sett=st_sett[6];
+				p_des->disco[d].geom.tot_sett=(st_sett[58]<<16)+st_sett[57];
+				drv=HD_DRV_SLAVE;
+			}
+			mask_hd(p_des->indreg.iSTS);
+			sem_ini(p_des->mutex, 1, r1);
+			sem_ini(p_des->sincr, 0, r2);
+			if(!r1 || !r2)
+				panic("\nImpossibile allocare i semafori per l' IO");
+			activate_pe(estern_hd,i,hd_base_prio-i,LIV_SISTEMA,id,hd_id[i],r);
+			if(!r)
+				panic("\nImpossibile creare un processo esterno dell'hard disk");
+		}
+		else
+			p_des->disco[0].presente=p_des->disco[1].presente=false;
+		p_des->comando=NONE;
+	}
+}
+
+// Funzione di utilita' perche' l'utente possa conoscere se interessato,
+//  le dimensioni e la struttura dei suoi hard disk
+//  
+extern "C" void c_geometria(int interf,short drv,unsigned short &c,unsigned short &t,unsigned short &s,int &ts,char &err) {
+	if (hd[interf].disco[drv].presente==true) {
+		c=hd[interf].disco[drv].geom.cil;
+		t=hd[interf].disco[drv].geom.test;
+		s=hd[interf].disco[drv].geom.sett;
+		ts=hd[interf].disco[drv].geom.tot_sett;
+		err=D_ERR_NONE;
+	}
+	else
+		err=D_ERR_PRESENCE;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 //                 INIZIALIZZAZIONE DEL SOTTOSISTEMA DI I/O                   //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -809,6 +1300,7 @@ extern "C" void cmain(void)
 	fill_io_gates();
 	term_init();
 	com_init();
+	hd_init();
 }
 
 // Replicata in sistema.cpp
@@ -835,4 +1327,3 @@ void *memset(void *dest, int c, size_t n)
 
         return dest;
 }
-

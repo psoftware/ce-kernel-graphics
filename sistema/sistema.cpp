@@ -1654,7 +1654,6 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 	} else {
 		risu = false;
 	}
-	printk("ticks: %d\n", ticks);
 }
 
 
