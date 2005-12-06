@@ -58,6 +58,8 @@ unsigned int uint(void* v) {
 //////////////////////////////////////////////////////////////////////////////
 //                             STRUTTURE DATI                               //
 //////////////////////////////////////////////////////////////////////////////
+//
+unsigned volatile long ticks;
 
 // elemento di una coda di processi
 //
@@ -91,6 +93,9 @@ extern des_sem array_dess[MAX_SEMAFORI];
 //
 extern void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
 extern void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
+
+// controllore interruzioni
+extern "C" void init_8259();
 
 // timer
 extern "C" void attiva_timer(unsigned long delay);
@@ -1302,6 +1307,8 @@ extern "C" void c_driver_t(void)
 {
 	richiesta *p;
 
+	ticks++;
+
 	if(descrittore_timer != 0)
 		descrittore_timer->d_attesa--;
 
@@ -1647,6 +1654,7 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 	} else {
 		risu = false;
 	}
+	printk("ticks: %d\n", ticks);
 }
 
 
@@ -1941,8 +1949,8 @@ extern "C" void c_delay(int n)
 
 extern "C" void c_begin_p()
 {
-	io_entry(0);
 	attiva_timer(DELAY);
+	io_entry(0);
         inserimento_coda(pronti, esecuzione);
         schedulatore();
 }
@@ -2408,6 +2416,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		panic("Impossibile creare il processo main");
 	id_main = esecuzione->identifier;
 	processi = 1;
+	init_8259();
 	salta_a_main();
 }
 

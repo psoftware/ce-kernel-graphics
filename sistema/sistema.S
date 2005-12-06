@@ -223,7 +223,6 @@ qui:
      pushl   $0				# resettiamo EFLAG
      popf				# N.B.: interrupt disabilitati
 
-     call    init_8259			# init. controllore interruz.
      pushl   %ebx			# parametri passati dal loader
      pushl   %eax			
      call    _cmain			# il resto dell'inizializzazione
@@ -758,41 +757,51 @@ _outputb:
 .set ICW4S, 0xa1
 .set OCW1S, 0xa1
 .set OCW3S, 0xa0
+.set OCW2M, 0x20
+.set OCW3M, 0x20
+.set OCW2S, 0xa0
+.set OCW3S, 0xa0
 
-# inizializza il controllore delle interruzioni
-# la base del controllore va cambiata rispetto a quella
-# impostata dal BIOS, in quanto, in modo protetto, esistono
-# piu' tipi di eccezioni che in modo reale, e la base impostata
-# dal BIOS va a collidere con alcune di queste
-init_8259:
+.set EOI, 0x20
+.set READ_ISR, 0x0b
+
+
+# inizializza il controllore delle interruzioni la base del controllore va
+# cambiata rispetto a quella impostata dal BIOS, in quanto, in modo protetto,
+# esistono piu' tipi di eccezioni che in modo reale, e la base impostata dal
+# BIOS va a collidere con alcune di queste.
+	.global _init_8259
+_init_8259:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
 
-	movb $0x11, %al
+	# master
+	movb $0x11, %al		# cascata
 	outb %al, $ICW1M
-	movb $0x20, %al
+	movb $0x20, %al		# nuova base
 	outb %al, $ICW2M
-	movb $0x04, %al
+	movb $0x04, %al		# slave connesso a IR2
 	outb %al, $ICW3M
-	movb $0x01, %al
+	movb $0x01, %al		# modo annidato
 	outb %al, $ICW4M
 	movb $0b11111011, %al	# maschera tutte le interruzioni, tranne quelle
 	outb %al, $OCW1M	#  provenienti dallo slave
 	movb $0x48, %al
-	outb %al, $OCW3M
+	outb %al, $OCW3M	# fully nested
 
-	movb $0x11, %al
+	# slave
+	movb $0x11, %al		# cascata
 	outb %al, $ICW1S
-	movb $0x28, %al
+	movb $0x28, %al		# nuova base
 	outb %al, $ICW2S
-	movb $0x02, %al
+	movb $0x02, %al		# id. dello slave
 	outb %al, $ICW3S
-	movb $0x01, %al
+	movb $0x01, %al		# modo annidato
 	outb %al, $ICW4S
 	movb $0b11111111, %al	# maschera tutte le interruzioni
 	outb %al, $OCW1S
-	movb $0x48, %al
+	movb $0x48, %al		# fully nested
 	outb %al, $OCW3S
 
 	popl %eax
@@ -826,6 +835,7 @@ _attiva_timer:
         popl %eax
 	leave
 	ret
+
 
 	.global _salta_a_main
 _salta_a_main:
@@ -1063,6 +1073,7 @@ handler_COM2:
 	iret
 
 
+
 ########################################################
 # a_primitive                                          #
 ########################################################
@@ -1171,13 +1182,6 @@ a_activate_pe:
 	carica_registri
 	iret
 
-.set EOI, 0x20
-.set READ_ISR, 0x0b
-
-.set OCW2M, 0x20
-.set OCW3M, 0x20
-.set OCW2S, 0xa0
-.set OCW3S, 0xa0
 
 	.extern _c_nwfi
 a_nwfi:		# routine int $tipo_nwfi
