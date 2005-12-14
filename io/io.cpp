@@ -1,6 +1,7 @@
 // io.cpp
 //
 #include "costanti.h"
+#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
 //COSTANTI                                   //
 ////////////////////////////////////////////////////////////////////////////////
@@ -1056,8 +1057,9 @@ extern "C" void c_readhd_n(short ind_ata,short drv,short vetti[],unsigned int pr
 	// Controllo sulla protezione
 	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
 		return;
-	if (!verifica_area(&quanti,sizeof(int),true) || !verifica_area(vetti,quanti,true) || !verifica_area(&errore,sizeof(char),true))
-		return;
+	//if (!verifica_area(&quanti,sizeof(int),true) ||
+	//!verifica_area(vetti,quanti,true) ||
+	//!verifica_area(&errore,sizeof(char),true)) return;
 
 	// Controllo sulla selezione di un drive presente
 	if (p_des->disco[drv].presente==false) {
@@ -1094,8 +1096,9 @@ extern "C" void c_writehd_n(short ind_ata,short drv,short vetti[],unsigned int p
 	// Controllo sulla protezione
 	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
 		return;
-	if (!verifica_area(&quanti,sizeof(int),true) || !verifica_area(vetti,quanti,true) || !verifica_area(&errore,sizeof(char),true))
-		return;
+	//if (!verifica_area(&quanti,sizeof(int),true) ||
+	//!verifica_area(vetti,quanti,true) ||
+	//!verifica_area(&errore,sizeof(char),true)) return;
 
 	// Controllo sulla selezione di un drive presente
 	if (p_des->disco[drv].presente==false) {

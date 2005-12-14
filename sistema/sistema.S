@@ -250,10 +250,14 @@ stringa_backtrace:
 _backtrace:
 	pushl %ebp
 	movl %esp, %ebp
+	subl $4, %esp
 	pushl %esi
 
+	movl $5, -4(%ebp)
 	movl %ebp, %esi
 3:
+	cmpl $0, -4(%ebp)
+	je 2f
 	cmpl $0, %esi
 	je 2f
 	jmp 1f
@@ -263,8 +267,10 @@ _backtrace:
 	call _printk
 	addl $8, %esp
 	movl (%esi), %esi
+	decl -4(%ebp)
 	jmp 3b
 2:
+	popl %ecx
 	popl %esi
 	leave
 	ret
@@ -475,6 +481,9 @@ fine_carica_tss:
 .set tipo_cu, TIPO_CU
 .set tipo_ci, TIPO_CI
 
+.set io_tipo_rhdn, IO_TIPO_RHDN
+.set io_tipo_whdn, IO_TIPO_WHDN
+
 # carica la idt
 # le prime 20 entrate sono definite dall'Intel, e corrispondono
 # alle possibili eccezioni. 
@@ -508,6 +517,8 @@ init_idt:
 	carica_gate	0x21		handler_KBD	LIV_SISTEMA
 	carica_gate	0x23		handler_COM2	LIV_SISTEMA
 	carica_gate	0x24		handler_COM1	LIV_SISTEMA
+	carica_gate	0x2E 		handler_HD0 	LIV_SISTEMA
+	carica_gate	0x2F 		handler_HD1 	LIV_SISTEMA
 
 	# primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
@@ -707,6 +718,19 @@ _attiva_paginazione:
 	.global _leggi_cr2
 _leggi_cr2:
 	movl %cr2, %eax
+	ret
+
+	.global _invalida_entrata_TLB
+_invalida_entrata_TLB:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movl 8(%ebp), %eax
+	invlpg (%eax)
+	
+	popl %eax
+	leave
 	ret
 
 ##################################################################
@@ -976,8 +1000,18 @@ prot_fault:
 	jmp comm_exc
 
 page_fault:
-	pushl $14
-	jmp comm_exc
+	salva_registri
+	movl 32(%esp), %eax
+	movl 28(%esp), %ebx
+	pushl %eax
+	pushl %ebx
+	movl %cr2, %eax
+	pushl %eax
+	call _c_page_fault
+	addl $12, %esp
+	carica_registri
+	addl $4, %esp
+	iret
 
 fp_exc:
 	pushl $0
@@ -1005,6 +1039,34 @@ comm_exc:
 	call _c_terminate_p
 	call carica_stato
 	iret
+
+########################################################
+# primitive richiamate dal nucleo stesso (page fault)  #
+########################################################
+	.global _sem_wait
+_sem_wait:
+	int $tipo_w
+	ret
+
+	.global _sem_signal
+_sem_signal:
+	int $tipo_s
+	ret
+
+	.global _terminate_p
+_terminate_p:
+	int $tipo_t
+	ret
+
+	.global _readhd_n
+_readhd_n:
+	int $io_tipo_rhdn
+	ret
+
+	.global _writehd_n
+_writehd_n:
+	int $io_tipo_whdn
+	ret
 
 ########################################################
 # handler/driver                                       #
@@ -1072,6 +1134,26 @@ handler_COM2:
 	call carica_stato
 	iret
 
+	.extern _ata
+handler_HD0:
+	call salva_stato
+	call inspronti
+
+	movl _ata, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_HD1:
+	call salva_stato
+	call inspronti
+
+	movl _ata+4, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
 
 
 ########################################################
@@ -1187,8 +1269,8 @@ a_activate_pe:
 a_nwfi:		# routine int $tipo_nwfi
 	call salva_stato
 
-	testl $1, 4(%esp)
-	jz m_ack
+	cmpl $1, 16(%esp)
+	jne m_ack
 
 	movb $EOI, %al		# ack al controllore slave
 	outb %al, $OCW2S
@@ -1217,6 +1299,7 @@ a_verifica_area:
 
 	.extern _panic
 a_panic:
+	copia_param 1 0
 	call _panic			# panic blocca il sistema
 
 a_fill_gate:
@@ -1233,6 +1316,9 @@ a_fill_gate:
 .data
 .global		_mem_upper
 _mem_upper:	 .long _end
+.global		_fine_codice_sistema
+_fine_codice_sistema:
+		.long _etext
 .global		 _esecuzione
 _esecuzione:	.long 0
 .global		_pronti
