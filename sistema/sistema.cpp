@@ -703,21 +703,22 @@ void aggiungi_pe(proc_elem *p, estern_id interf)
 struct bm_t {
 	unsigned int *vect;
 	unsigned int size;
+	unsigned int vecsize;
 };
 
 inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
 {
-	return bm->vect[pos / 32] & (1UL << (pos % 32));
+	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
 }
 
 inline void bm_set(bm_t *bm, unsigned int pos)
 {
-	bm->vect[pos / 32] |= (1UL << (pos % 32));
+	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
 }
 
 inline void bm_clear(bm_t *bm, unsigned int pos)
 {
-	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
+	bm->vect[pos / 32] |= (1UL << (pos % 32));
 }
 
 // crea la mappa BM, usando BUFFER come vettore; SIZE e' il numero di bit
@@ -727,26 +728,28 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 {
 	bm->vect = buffer;
 	bm->size = size;
-	unsigned int vecsize = size / (sizeof(int) * 8) + (size % (sizeof(int) * 8) ? 1 : 0);
+	bm->vecsize = ceild(size, sizeof(unsigned int) * 8);
 
-	for(int i = 0; i < vecsize; ++i)
-		bm->vect[i] = 0;
+	for (int i = 0; i < bm->vecsize; ++i)
+		bm->vect[i] = 0xffffffff;
 }
 
 
-bool bm_alloc(bm_t *bm, unsigned int& pos)
-{
-	int i, l;
+extern "C" int trova_bit(unsigned int v);
 
-	i = 0;
-	while(i <= bm->size && bm_isset(bm, i)) i++;
+bool bm_alloc(bm_t *bm, unsigned int& pos) {
 
-	if (i == bm->size)
-		return false;
+	int i = 0;
+	bool risu = true;
 
-	bm_set(bm, i);
-	pos = i;
-	return true;
+	while (i < bm->vecsize && !bm->vect[i]) i++;
+	if (i < bm->vecsize) {
+		pos = trova_bit(bm->vect[i]);
+		bm->vect[i] &= ~(1UL << pos);
+		pos += sizeof(unsigned int) * 8 * i;
+	} else 
+		risu = false;
+	return risu;
 }
 
 void bm_free(bm_t *bm, unsigned int pos)

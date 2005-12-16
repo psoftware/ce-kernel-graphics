@@ -732,6 +732,12 @@ _invalida_entrata_TLB:
 	popl %eax
 	leave
 	ret
+	
+	.global _trova_bit
+_trova_bit:
+	bsfl 4(%esp), %eax
+	ret
+	
 
 ##################################################################
 # hardware gestito direttamente dal nucleo: 			 #

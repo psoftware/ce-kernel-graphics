@@ -100,17 +100,17 @@ struct bm_t {
 
 inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
 {
-	return bm->vect[pos / 32] & (1UL << (pos % 32));
+	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
 }
 
 inline void bm_set(bm_t *bm, unsigned int pos)
 {
-	bm->vect[pos / 32] |= (1UL << (pos % 32));
+	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
 }
 
 inline void bm_clear(bm_t *bm, unsigned int pos)
 {
-	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
+	bm->vect[pos / 32] |= (1UL << (pos % 32));
 }
 
 void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
@@ -120,7 +120,7 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 	unsigned int vecsize = size / sizeof(int) + (size % sizeof(int) ? 1 : 0);
 
 	for(int i = 0; i < vecsize; ++i)
-		bm->vect[i] = 0;
+		bm->vect[i] = 0xffffffff;
 }
 
 
