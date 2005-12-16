@@ -2262,63 +2262,6 @@ struct des_heap {
 // non che lo heap utente non e' mai vuoto (heap->dimensione puo' essere 0)
 des_heap heap;  // testa della lista di descrittori di heap
 
-// accresci_heap tenta di aumentare le dimensioni dello heap utente di almeno
-// "dim" byte.  "tail" deve puntare all'ultimo descrittore di heap utente nella
-// lista
-des_heap* accresci_heap(des_heap* tail, int dim) {
-	
-	void *new_heap_end;
-	descrittore_tabella* pdes_tab;
-	descrittore_pagina*  pdes_pag;
-	tabella_pagine* ptab;
-	void *curr_end;
-	pagina *ind_fisico;
-	des_heap* new_des = 0;
-
-	// indirizzo virtuale dell'ultimo byte non appartenente allo heap
-	void *heap_end = add(tail->start, tail->dimensione);
-
-	
-	// se la regione descritta da tail non e' occupata, dobbiamo accrescere
-	// quella e non creare un nuovo descrittore (per rispettare (2))
-	if (!tail->occupato)
-		dim -= tail->dimensione;
-	else {
-		new_des = new des_heap;
-		// se non riusciamo ad allocare il descrittore, non possiamo
-		// proseguire
-		if (new_des == 0) goto errore1;
-	}
-	
-	// lo heap si accresce a multipli di pagina
-	dim = allinea(dim, SIZE_PAGINA);
-
-	// lo heap non puo' crescere oltre 'fine_utente_condiviso' (perche'
-	// abbiamo preallocato le tabelle condivise solo fino a
-	// quell'indirizzo)
-	if (distance(fine_utente_condiviso, heap_end) < dim)
-		goto errore2;
-
-	new_heap_end = add(heap_end, dim);
-
-	// Aggiorniamo la lista dello heap
-	if (!tail->occupato) {
-		tail->dimensione += dim;
-		return tail;
-	} else {
-		new_des->start = heap_end;
-		new_des->dimensione = dim;
-		new_des->occupato = 0;
-		new_des->next = 0;
-		tail->next = new_des;
-		return new_des;
-	}
-
-errore2:
-	delete new_des;
-errore1:
-	return 0;
-}
 
 void debug_heap();
 
@@ -2341,12 +2284,8 @@ extern "C" void *c_mem_alloc(int dim)
 	}
 	// assert(prec != 0) // perche' la lista e' sicuramente non vuota
 
-	if (scorri == 0 && 				// se non abbiamo trovato la regione
-	    (scorri = accresci_heap(prec, dim)) == 0)	// e non riusciamo neanche a crearla
+	if (scorri == 0) 				// se non abbiamo trovato la regione
 	    	return 0;				// l'allocazione fallisce
-	// NOTA: la chiamata a accresci_heap rispetta sicuramente il vincolo
-	// sul primo parametro, in quanto sappiamo che scorri == prec-> next ==
-	// 0 (cioe', prec punta alla coda della lista)
 
 	// assert(scorri != 0 && !scorri->occupato && scorri->dimensione >= dim)
 		
@@ -2386,7 +2325,9 @@ extern "C" void c_mem_free(void *pv)
 	}
 	if (scorri == 0) return;
 	// assert(scorri != 0 && scorri->occupato && pv == scorri->start);
-	scorri->occupato = 0;
+	
+	scorri->occupato = 0;	// questo va fatto per primo, in modo
+				// che scorri->dimensione sia valido
 	if (!prec->occupato) {
 		// assert(prec->start + prec->dimensione == pv) // relazione (1)
 		// dobbiamo riunire la regione con la precedente, per rispettare (2)
