@@ -1,4 +1,0 @@
-#!/bin/sh
-
-echo -e "BASEDIR=`pwd`\n" | cat - util/makefile.templ > makefile
-

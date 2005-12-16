@@ -10,7 +10,7 @@
 
 #define DEF_PRIO	20
 
-FILE *input, *output;		/* ingresso e uscita del parser */
+FILE *input,*output;	        	/* uscita del parser */
 char look;			/* carattere sotto esame */
 
 int riga, colonna, pos;		/* posizione corrente */
@@ -287,30 +287,23 @@ void rilascia_righe()
 
 void scrivi_utente()
 {
-	FILE *u;
 	struct file_elem *ep;
 	int i;
 
-	u = fopen("../shared/utente.cpp", "w");
-	if(!u)
-		errore("impossibile aprire utente.cpp");
-
 	for(i = 0; intest_utente[i]; ++i)
-		fprintf(u, "%s\n", intest_utente[i]);
+		fprintf(output, "%s\n", intest_utente[i]);
 
 	for(ep = utente[0]; ep; ep = ep->succ)
-		fprintf(u, "%s", ep->testo);
+		fprintf(output, "%s", ep->testo);
 
-	fprintf(u, "%s", MAIN_HEAD);
+	fprintf(output, "%s", MAIN_HEAD);
 	for(ep = utente[1]; ep; ep = ep->succ)
-		fprintf(u, "%s", ep->testo);
+		fprintf(output, "%s", ep->testo);
 
-	fprintf(u, "%s", MAIN_TAIL);
-
-	fclose(u);
+	fprintf(output, "%s", MAIN_TAIL);
 }
 
-#define GLOB_FMT "short %s;\nextern void %s(int);\n"
+#define GLOB_FMT "short %s;\n"
 #define PROC_FMT "\tactivate_p(%s, %d, %d, %s, %s, ris);\n\n"
 
 #define MAX_INT_LEN 12
@@ -321,7 +314,7 @@ void agg_proc(const char *nome_proc, const char *corpo_proc, int par_att,
 	int dim1, dim2, dim;
 	char *buf;
 
-	dim1 = strlen(GLOB_FMT) + strlen(nome_proc) + strlen(corpo_proc);
+	dim1 = strlen(GLOB_FMT) + strlen(nome_proc);
 	dim2 = strlen(PROC_FMT) + strlen(nome_proc) + strlen(corpo_proc) +
 		MAX_INT_LEN * 2 + strlen("LIV_SISTEMA");
 
@@ -336,14 +329,14 @@ void agg_proc(const char *nome_proc, const char *corpo_proc, int par_att,
 		liv == 3? "LIV_UTENTE": "LIV_SISTEMA", nome_proc);
 	agg_riga(MAIN, buf);
 
-	sprintf(buf, GLOB_FMT, nome_proc, corpo_proc);
+	sprintf(buf, GLOB_FMT, nome_proc);
 	agg_riga(GLOB, buf);
 #else
 	snprintf(buf, dim, PROC_FMT, corpo_proc, par_att, prio,
 		liv == 3? "LIV_UTENTE": "LIV_SISTEMA", nome_proc);
 	agg_riga(MAIN, buf);
 
-	snprintf(buf, dim, GLOB_FMT, nome_proc, corpo_proc);
+	snprintf(buf, dim, GLOB_FMT, nome_proc);
 	agg_riga(GLOB, buf);
 #endif
 
@@ -502,35 +495,10 @@ void semaphore()
 	agg_sem(nome_sem, valore);
 }
 
-#define LUN_FNAME 512
-char inname[LUN_FNAME];
-char outname[LUN_FNAME];
-char objname[LUN_FNAME];
-
-void imposta_nomi()
+void parse_file(const char* inname, FILE* output)
 {
-	char *p;
-	int l;
-
-	if(p = strstr(inname, ".in"))
-		l = p - inname;
-	else
-		l = LUN_FNAME;
-
-	l = l < LUN_FNAME - 5 ? l: LUN_FNAME - 5;
-	memset(outname, 0, LUN_FNAME);
-	memset(objname, 0, LUN_FNAME);
-	strncpy(outname, inname, l);
-	strncat(outname, ".cpp", LUN_FNAME);
-
-	strncpy(objname, inname, l);
-	strncat(objname, ".o", LUN_FNAME);
-}
-
-void parse_file()
-{
-	if(!(input = fopen(inname, "r")) || !(output = fopen(outname, "w")))
-		errore("impossibile aprire i file di ingresso e uscita");
+	if(!(input = fopen(inname, "r")))
+		errore("impossibile aprire il file di ingresso");
 
 	riga = colonna = pos = 0;
 	leggi_car();
@@ -555,96 +523,54 @@ void parse_file()
 	}
 
 	fclose(input);
-	fclose(output);
 }
-
-FILE *script;
 
 #define LUN_OGGETTI 4096
 char oggetti[LUN_OGGETTI];
 
-#if defined WIN
-#define SCRIPT_HEAD "rem Script per la compilazione dei programmi utente\n"
-#define SCRIPT_NAME "gen_uten.bat"
-#endif
 
-#if defined WIN_XP
-#define SCRIPT_HEAD "rem Script per la compilazione per Windows XP (Passo 2)\ncd ..\\utente\\prog\n"
-#define SCRIPT_NAME "../../xp/passo2.bat"
-#endif
-
-#if !defined WIN && !defined WIN_XP
-#define SCRIPT_HEAD "#!/bin/sh\n"
-#define SCRIPT_NAME "gen_uten.sh"
-#endif
-
-#define SCRIPT_TAIL_FMT_BASE "\nld -r -nostdlib -o prog.o %s\n"
-
-#ifndef WIN_XP
-#define SCRIPT_TAIL_FMT SCRIPT_TAIL_FMT_BASE
-#else
-#define SCRIPT_TAIL_FMT SCRIPT_TAIL_FMT_BASE "cd ..\\..\\xp\n"
-#endif
-
-void apri_script()
+int main(int argc, char* argv[])
 {
-	if(!(script = fopen(SCRIPT_NAME, "w")))
-		errore("impossibile aprire "SCRIPT_NAME);
+	int i;
+	const char* outname = "utente.cpp";
 
-	fprintf(script, "%s", SCRIPT_HEAD);
-}
-
-void chiudi_script()
-{
-	fprintf(script, SCRIPT_TAIL_FMT, oggetti);
-	fclose(script);
-}
-
-#if defined WIN || defined WIN_XP
-#define COMP_FMT "gcc -I../include -c %s -o %s\n"
-#else
-#define COMP_FMT "g++ -I../include -fleading-underscore -fno-exceptions -c %s -o %s\n"
-#endif
-
-void agg_script()
-{
-	fprintf(script, COMP_FMT, outname, objname);
-	strncat(oggetti, objname, LUN_OGGETTI);
-	strncat(oggetti, " ", LUN_OGGETTI);
-}
-
-int main()
-{
-	FILE *nomi;
-
-	if(!(nomi = fopen("sorgenti.lst", "r")))
-		errore("impossibile aprire sorgenti.lst");
-
-	apri_script();
-
-	while(!feof(nomi)) {
-		fgets(inname, LUN_FNAME, nomi);
-		if(inname[strlen(inname) - 1] == '\n')
-			inname[strlen(inname) - 1] = 0;
-	
-		if(strlen(inname) > 0 && inname[0] != '#') {
-			imposta_nomi();
-			parse_file();
-			agg_script();
-		}
+	if (argc < 2) {
+		fprintf(stderr, "Utilizzo: %s <file1.in> ...\n", argv[0]);
+		return EXIT_FAILURE;
 	}
 
-	chiudi_script();
+	if (strcmp(argv[1], "-o") == 0) {
+		if (argc < 3) {
+			fprintf(stderr, "l'opzione '-o' richiede un nome di file");
+			return EXIT_FAILURE;
+		}
+		outname = argv[2];
+		argc -= 2;
+		argv += 2;
+	}
+
+	if (argc < 2) {
+		fprintf(stderr, "Utilizzo: %s <file1.in> ...\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+
+
+	output = fopen(outname, "w");
+
+	if (!output) {
+		perror(outname);
+		return EXIT_FAILURE;
+	}
+
+	for (i = 1; i < argc; i++)
+			parse_file(argv[i], output);
+
 
 	scrivi_utente();
 	rilascia_righe();
 
-	fclose(nomi);
+	fclose(output);
 
-#ifdef WIN
-	system("gen_uten.bat");
-#endif
-
-	return 0;
+	return EXIT_SUCCESS;
 }
 

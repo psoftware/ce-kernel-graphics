@@ -4,8 +4,6 @@
 
 
 static const char *intest_utente[] = {
-	"#include \"sys.h\"",
-	"",
 	"short dummy;",
 	"void dd(int i)",
 	"{",

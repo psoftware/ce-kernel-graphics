@@ -1,27 +1,33 @@
-all: fd0.img
-
 MAKE=make
+SWAPSIZE=9000
 
 BUILDDIR=$(BASEDIR)/build
 
-CXXFLAGS=-fleading-underscore -fno-exceptions
+CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti
 
-fd0.img:
-	cd util ; $(MAKE)
-	cd bochs ; $(MAKE)
-	cd boot ; $(MAKE)
-	cd io ; $(MAKE)
-	cd sistema ; $(MAKE)
-	cd utente ; $(MAKE)
-	cd $(BUILDDIR) ; ./embed ; ./costr
+all: sistema io utente util swap
+
+sistema:
+	$(MAKE) -C sistema
+
+io:
+	$(MAKE) -C io
+
+utente: util
+	$(MAKE) -C utente
+
+util:
+	$(MAKE) -C util
+
+swap: util utente
+	$(BUILDDIR)/createimg $(SWAPSIZE) utente/utente
+	
 
 clean:
-	cd util ; $(MAKE) clean
-	cd bochs ; $(MAKE) clean
-	cd boot ; $(MAKE) clean
-	cd io ; $(MAKE) clean
-	cd sistema ; $(MAKE) clean
-	cd utente ; $(MAKE) clean
+	$(MAKE) -C sistema clean
+	$(MAKE) -C io      clean
+	$(MAKE) -C utente  clean
+	$(MAKE) -C util    clean
 	rm -f $(BUILDDIR)/*
 
 export BASEDIR BUILDDIR CXXFLAGS MAKE
