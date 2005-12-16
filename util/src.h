@@ -4,7 +4,7 @@
 
 
 static const char *intest_utente[] = {
-	"short dummy;",
+	"short dummy __attribute__ (( section (\"RESIDENT\") ));",
 	"void dd(int i)",
 	"{",
 	"\tint lavoro;",

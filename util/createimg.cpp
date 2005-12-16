@@ -271,7 +271,6 @@ int main(int argc, char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
 		uint da_leggere = elf_ph->p_filesz + (elf_ph->p_offset - start_off);
-		int preload = 0;
 		for (uint  ind_virtuale = uint(elf_ph->p_vaddr);
 		           ind_virtuale < uint(elf_ph->p_vaddr) + elf_ph->p_memsz;
 	                   ind_virtuale += SIZE_PAGINA)
@@ -314,14 +313,61 @@ int main(int argc, char* argv[]) {
 			}
 			pdes_pag->RW = scrivibile;
 			pdes_pag->US = 1;
-			if (scrivibile && preload < 2) {
-				pdes_pag->preload = 1;
-				preload++;
-			}
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 
 	}
+	// abbiamo finito con i segmenti
+	delete[] buf;
+	// ora settiamo il bit preload per tutte le pagine che devono contenere
+	// la sezione RESIDENT
+
+	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
+	buf = new char[elf_h->e_shnum * elf_h->e_shentsize];
+	if ( fseek(exe, elf_h->e_shoff, SEEK_SET) < 0 ||
+	     fread(buf, elf_h->e_shentsize, elf_h->e_shnum, exe) < elf_h->e_shnum)
+	{
+		fprintf(stderr, "Fine prematura del file ELF\n");
+		exit(EXIT_FAILURE);
+	}
+	// dobbiamo cariare anche la sezione contenente la tabella delle 
+	// stringhe
+	Elf32_Shdr* elf_strtab = (Elf32_Shdr*)(buf + elf_h->e_shentsize * elf_h->e_shstrndx);
+	char* strtab = new char[elf_strtab->sh_size];
+	if ( fseek(exe, elf_strtab->sh_offset, SEEK_SET) < 0 ||
+	     fread(strtab, elf_strtab->sh_size, 1, exe) < 1)
+	{
+		fprintf(stderr, "Errore nella lettura della tabella delle stringhe\n");
+		exit(EXIT_FAILURE);
+	}
+	// cerchiamo la nostra sezione
+	for (int i = 1; i < elf_h->e_shnum; i++) {
+		Elf32_Shdr* elf_sh = (Elf32_Shdr*)(buf + elf_h->e_shentsize * i);
+
+		if (strcmp("RESIDENT", strtab + elf_sh->sh_name) != 0)
+			continue;
+
+		// trovata. Ora, settiamo i bit preload
+		for (uint ind_virtuale = a2i(elf_sh->sh_addr);
+			  ind_virtuale < a2i(elf_sh->sh_addr) + elf_sh->sh_size;
+			  ind_virtuale += SIZE_PAGINA)
+		{
+			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
+			if (pdes_tab->address == 0) {
+				fprintf(stderr, "Errore interno");
+				exit(EXIT_FAILURE);
+			} else {
+				leggi_blocco(img, pdes_tab->address, &tab);
+			}
+
+			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
+			pdes_pag->preload = 1;
+			scrivi_blocco(img, pdes_tab->address, &tab);
+		}
+	}			
+
+	
+	// infine, le tabelle condivise per lo heap
 	for (int i = indice_direttorio(last_address) + 1;
 		 i < indice_direttorio(a2i(fine_utente_privato));
 		 i++)

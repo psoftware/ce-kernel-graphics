@@ -1524,7 +1524,7 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 	if (pdes_pag->azzera == 1) {
 		unsigned int blocco;
 		if (! bm_alloc(&block_bm, blocco) ) {
-			printk("spazio nello swap insufficiente");
+			printk("spazio nello swap insufficiente\n");
 			return false;
 		}
 		pdes_pag->address = blocco;
@@ -1542,7 +1542,7 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 {
 	if (pdes_tab->azzera == 1) {
 		if (! bm_alloc(&block_bm, struttura(pfis(ptab))->blocco)) {
-			printk("spazio nello swap insufficiente");
+			printk("spazio nello swap insufficiente\n");
 			return false;
 		}
 
@@ -1663,7 +1663,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	return;
 
 error:
-	printk("page fault non risolubile");
+	printk("page fault non risolubile\n");
 	// anche in caso di errore dobbiamo rilasciare il semaforo di mutua 
 	// esclusione, pena il blocco di tutta la memoria virtuale
 	sem_signal(pf_mutex);
@@ -2074,8 +2074,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	if (pila_sistema == 0) goto errore4;
 
 	if (liv == LIV_UTENTE) {
-		pila_utente = crea_pila_utente(pdirettorio, fine_utente_privato, 64);
-		if (pila_utente == 0) goto errore5;
 
 		pila_sistema->parole_lunghe[1019] = uint((void*)f);	// EIP (codice utente)
 		pila_sistema->parole_lunghe[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
@@ -2086,6 +2084,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// eseguendo una IRET da questa situazione, il processo
 		// passera' ad eseguire la prima istruzione della funzione f,
 		// usando come pila la pila utente (al suo indirizzo virtuale)
+
+		pila_utente = crea_pila_utente(pdirettorio, fine_utente_privato, 64);
+		if (pila_utente == 0) goto errore5;
 
 		// dobbiamo ora fare in modo che la pila utente si trovi nella
 		// situazione in cui si troverebbe dopo una CALL alla funzione
@@ -2284,8 +2285,8 @@ extern "C" void *c_mem_alloc(int dim)
 	}
 	// assert(prec != 0) // perche' la lista e' sicuramente non vuota
 
-	if (scorri == 0) 				// se non abbiamo trovato la regione
-	    	return 0;				// l'allocazione fallisce
+	if (scorri == 0)     // se non abbiamo trovato la regione
+	    	return 0;    // l'allocazione fallisce
 
 	// assert(scorri != 0 && !scorri->occupato && scorri->dimensione >= dim)
 		
@@ -2759,7 +2760,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 					panic("Impossibile caricare il modulo di IO");
 			} else {
 				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-				printk("Modulo '%s' non riconosciuto (eliminato)");
+				printk("Modulo '%s' non riconosciuto (eliminato)\n");
 			}
 			mod++;
 		}

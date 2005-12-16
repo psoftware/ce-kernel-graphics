@@ -277,7 +277,7 @@ void rilascia_righe()
 	}
 }
 
-#define MAIN_HEAD "\nint main() \n{\n\tbool ris;\n\tactivate_p(dd, 0, 1, LIV_UTENTE, dummy, ris);\n"
+#define MAIN_HEAD "\nbool ris __attribute__ (( section (\"RESIDENT\") ));\nint main() \n{\tactivate_p(dd, 0, 1, LIV_UTENTE, dummy, ris);\n"
 
 #if defined WIN || defined WIN_XP
 #define MAIN_TAIL "\tbegin_p();\n\n\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"
@@ -303,7 +303,7 @@ void scrivi_utente()
 	fprintf(output, "%s", MAIN_TAIL);
 }
 
-#define GLOB_FMT "short %s;\n"
+#define GLOB_FMT "short %s __attribute__ (( section (\"RESIDENT\") ));\n"
 #define PROC_FMT "\tactivate_p(%s, %d, %d, %s, %s, ris);\n\n"
 
 #define MAX_INT_LEN 12
