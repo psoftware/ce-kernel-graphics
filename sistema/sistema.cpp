@@ -1089,14 +1089,6 @@ pagina* pagina_puntata(descrittore_pagina* pdes_pag) {
 
 direttorio* direttorio_principale;
 
-#define inizio_sistema_condiviso  addr(0x00000000)
-#define fine_sistema_condiviso    inizio_sistema_privato
-#define inizio_sistema_privato    addr(0x40000000)
-#define fine_sistema_privato      inizio_utente_condiviso
-#define inizio_utente_condiviso   addr(0x80000000)
-#define fine_utente_condiviso     inizio_utente_privato
-#define inizio_utente_privato     addr(0xc0000000)
-#define fine_utente_privato       addr(0xfffff000)
 
 extern "C" void carica_cr3(direttorio* dir);
 extern "C" direttorio* leggi_cr3();
@@ -2648,124 +2640,6 @@ void* carica_modulo_io(module_t* mod)
 	return elf_h->e_entry;
 }
 
-void* carica_modulo_utente(module_t* mod)
-{
-	Elf32_Phdr* elf_ph;
-	descrittore_tabella* pdes_tab;
-	tabella_pagine* ptabella;
-	descrittore_pagina* pdes_pag;
-	void* ultimo_indirizzo = 0;
-
-	// leggiamo l'intestazione del file
-	Elf32_Ehdr* elf_h = elf32_intestazione(mod->mod_start);
-	if (elf_h == 0) return 0;
-	
-
-	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	void* header_start = add(mod->mod_start, elf_h->e_phoff);
-	for (int i = 0; i < elf_h->e_phnum; i++) {
-		elf_ph = static_cast<Elf32_Phdr*>(add(header_start, elf_h->e_phentsize * i));
-
-		// un flag del descrittore ci dice se il segmento deve essere
-		// scrivibile
-		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);	
-
-		// ci interessano solo i segmenti di tipo PT_LOAD
-		// (corrispondenti alle sezioni .text e .data)
-		if (elf_ph->p_type != PT_LOAD)
-			continue;
-
-		if (elf_ph->p_vaddr < inizio_utente_condiviso ||
-		    add(elf_ph->p_vaddr, elf_ph->p_memsz) > fine_utente_condiviso) {
-			printk("    Sezione non caricabile nello spazio utente condiviso:\n");
-			printk("    indirizzo %x fuori dall'intervallo consentito\n", elf_ph->p_vaddr); 
-			return 0;
-		}
-
-		// mappiamo il segmento nello spazio utente condiviso il
-		// segmento sara' in generale composto da piu' pagine.  Per
-		// ogni pagina, dobbiamo allocare una pagina fisica, mapparla
-		// al posto giusto in memoria virtuale, copiare il contenuto
-		// della pagina dal file alla pagina fisica allocata
-		ultimo_indirizzo = add(elf_ph->p_vaddr, elf_ph->p_memsz);
-		for (void* ind_virtuale = elf_ph->p_vaddr;
-		           ind_virtuale < ultimo_indirizzo;
-	                   ind_virtuale = add(ind_virtuale, SIZE_PAGINA))
-		{
-			pagina *ind_fisico = alloca_pagina_virtuale();
-			if (ind_fisico == 0) {
-				printk("    Memoria insufficiente per caricare il modulo utente\n");
-				return 0;
-			}
-
-			// mappiamo la pagina fisica appena allocata
-			// all'indirizzo virtuale richiesto
-			pdes_tab = &direttorio_principale->entrate[indice_direttorio(ind_virtuale)];
-			// la tabella e' sicuramente presente (siamo nello spazio condiviso)
-			ptabella = tabella_puntata(pdes_tab);
-			pdes_pag = collega_pagina(ptabella, ind_fisico, ind_virtuale);
-			pdes_pag->US = 1;
-			pdes_pag->RW = scrivibile;
-		}
-		memcpy(elf_ph->p_vaddr,				// destinazione
-		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
-		       elf_ph->p_filesz);			// quanti byte copiare
-		printk("    Copiata sezione di %d byte all'indirizzo %x\n",
-				elf_ph->p_filesz, elf_ph->p_vaddr);
-		if (elf_ph->p_memsz > elf_ph->p_filesz) {
-			memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
-			       0,				        // valore da scrivere
-			       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
-			printk("    azzerati ulteriori %d byte\n",
-					elf_ph->p_memsz - elf_ph->p_filesz);
-		}
-
-		/// ora copiamo il contenuto dal modulo agli indirizzi virtuali
-		//	void* sorgente = add(mod->mod_start, curr_offset);
-		//	unsigned int displ = curr_offset % SIZE_PAGINA;
-		//	if (displ != 0) {
-		//		// siamo alla prima pagina da copiare, e non e' "intera"
-		//		printk("copio %d byte da %x a %x\n", SIZE_PAGINA - displ,
-		//			sorgente, add(ind_fisico, displ));
-		//		memcpy(add(ind_fisico, displ), sorgente, SIZE_PAGINA - displ);
-		//		curr_offset += SIZE_PAGINA - displ;
-		//		// da ora in poi, curr_offset sara' allineato
-		//		// alla pagina (displ varra' sempre 0)
-		//		continue;
-		//	}
-
-		//	if(curr_offset + SIZE_PAGINA <= last_offset) {
-		//		memcpy(ind_fisico, sorgente, SIZE_PAGINA);
-		//	} else if (curr_offset < last_offset) {
-		//		unsigned int prima_parte = last_offset - curr_offset;
-		//		memcpy(ind_fisico, sorgente, prima_parte);
-		//		memset(add(ind_fisico, prima_parte), 0, SIZE_PAGINA - prima_parte);
-		//	} else {
-		//	 	memset(ind_fisico, 0, SIZE_PAGINA);
-		//	}
-		//	curr_offset += SIZE_PAGINA;
-		//}
-		//printk("    Sezione %s, %d byte, indirizzo %x\n",
-		//		(scrivibile ? "scrivibile" : "sola lettura"), 
-		//		elf_ph->p_memsz,
-		//		elf_ph->p_vaddr);
-
-	}
-	// una volta copiati i segmenti di programma all'indirizzo per cui
-	// erano stati collegati, il modulo non ci serve piu'
-	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-
-
-	// infine, inizializziamo lo heap utente
-	ultimo_indirizzo = allinea(ultimo_indirizzo, SIZE_PAGINA);
-	printk("    Heap utente a partire da %x\n", ultimo_indirizzo);
-	heap.start      = ultimo_indirizzo;
-	heap.dimensione = 0; // lo inizializziamo a 0:
-	                     // il vero spazio verra' allocato alla prima richiesta
-	heap.next       = 0;
-
-	return elf_h->e_entry;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////
 // INIZIALIZZAZIONE                                                              //
@@ -2780,6 +2654,7 @@ struct superblock_t {
 	int		blocks;
 	unsigned int	directory;
 	void		(*entry_point)(int);
+	void*		end;
 };
 
 char read_buf[SIZE_PAGINA * 8];
@@ -2811,10 +2686,11 @@ void main_proc(int a) {
 
 	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
 	superblock_t *s = reinterpret_cast<superblock_t*>(read_buf);
-	printk("    bm_start: %d\n", s->bm_start);
-	printk("    blocks: %d\n", s->blocks);
-	printk("    directory: %d\n", s->directory);
+	printk("    bm_start   : %d\n", s->bm_start);
+	printk("    blocks     : %d\n", s->blocks);
+	printk("    directory  : %d\n", s->directory);
 	printk("    entry point: %x\n", s->entry_point);
+	printk("    end        : %x\n", s->end);
 	unsigned int pages = ceild(s->blocks, SIZE_PAGINA * 8);
 	unsigned int *buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
 	if (buf == 0) 
@@ -2827,8 +2703,9 @@ void main_proc(int a) {
 	leggi_swap(tmp, s->directory, sizeof(direttorio), "il direttorio principale");
 	// tabelle condivise per lo spazio utente condiviso
 	printk("Creo o leggo le tabelle condivise\n");
+	void* last_address;
 	for (void* ind = inizio_utente_condiviso;
-	           ind < fine_utente_condiviso;
+	     	   ind < fine_utente_condiviso;
 	           ind = add(ind, SIZE_PAGINA * 1024))
 	{
 		descrittore_tabella
@@ -2840,6 +2717,8 @@ void main_proc(int a) {
 
 		if (pdes_tab1->azzera == 0 && pdes_tab1->address == 0)
 			continue;
+
+		last_address = add(ind, SIZE_PAGINA * 1024);
 
 		ptab = alloca_tabella_condivisa();
 		if (ptab == 0)
@@ -2861,6 +2740,10 @@ void main_proc(int a) {
 		}
 
 	}
+	heap.start = allinea(s->end, sizeof(int));
+	heap.dimensione = distance(last_address, heap.start);
+	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
+			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 	delete tmp;
 	proc_elem* m = crea_processo(s->entry_point, 0, 0, LIV_UTENTE);
 	if (m == 0)
@@ -2933,11 +2816,6 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 				io_entry = (entry_t)carica_modulo_io(mod);
 				if (io_entry == 0)
 					panic("Impossibile caricare il modulo di IO");
-			} else if (str_equal(mod->string, "/utente")) {
-				// il modulo utente non puo' essere caricato
-				// adesso, perche' prima bisogna inizializzare
-				// le pagine fisiche e la paginazione
-				user_mod = mod;
 			} else {
 				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
 				printk("Modulo '%s' non riconosciuto (eliminato)");
@@ -2998,15 +2876,6 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// la paginazione, sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
 
-
-	if (user_mod != 0) {
-		// ora tutto e' pronto per caricare il modulo utente
-		printk("Mappo il modulo UTENTE in memoria virtuale:\n");
-		user_entry = (entry_t)carica_modulo_utente(user_mod);
-		if (user_entry == 0)
-			panic("Impossibile mappare il modulo UTENTE");
-	}
-	
 	// quando abbiamo finito di usare la struttura dati passataci dal boot
 	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
 	// < 1MB. Lasciamo inutilizzata la prima pagina, in modo che

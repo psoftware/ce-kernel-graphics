@@ -11,26 +11,6 @@ typedef unsigned int uint;
 
 const uint UPB = SIZE_PAGINA / sizeof(uint);
 
-inline
-void* add(const void* a, unsigned int v) {
-	v += reinterpret_cast<unsigned int>(a);
-	return reinterpret_cast<void*>(v);
-};
-
-// sottrae v byte all'indirizzo a
-inline
-void* sub(const void* a, unsigned int v) {
-	unsigned int a1 = reinterpret_cast<unsigned int>(a) - v;
-	return reinterpret_cast<void*>(a1);
-}
-
-// calcola il numero di byte tra a1 (incluso)
-// e a2 (escluso)
-inline
-int distance(const void* a1, const void* a2) {
-	return reinterpret_cast<unsigned int>(a1) - 
-	       reinterpret_cast<unsigned int>(a2);
-}
 
 // converte v in un indirizzo
 inline
@@ -150,6 +130,7 @@ struct superblock_t {
 	int	blocks;
 	block_t	directory;
 	void*   entry_point;
+	void*   end;
 } superblock;
 
 bool elf32_check(Elf32_Ehdr* elf_h) {
@@ -267,6 +248,7 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "Fine prematura del file ELF\n");
 		exit(EXIT_FAILURE);
 	}
+	uint last_address = 0;
 	for (int i = 0; i < elf_h->e_phnum; i++) {
 		Elf32_Phdr* elf_ph = (Elf32_Phdr*)(buf + elf_h->e_phentsize * i);
 
@@ -279,6 +261,9 @@ int main(int argc, char* argv[]) {
 		// un flag del descrittore ci dice se il segmento deve essere
 		// scrivibile
 		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);
+
+		if (a2i(elf_ph->p_vaddr) + elf_ph->p_memsz > last_address) 
+			last_address = a2i(elf_ph->p_vaddr) + elf_ph->p_memsz;
 
 		uint start_off = elf_ph->p_offset & ~(SIZE_PAGINA - 1);
 		if ( fseek(exe, start_off, SEEK_SET) < 0) {
@@ -337,6 +322,18 @@ int main(int argc, char* argv[]) {
 		}
 
 	}
+	for (int i = indice_direttorio(last_address) + 1;
+		 i < indice_direttorio(a2i(fine_utente_privato));
+		 i++)
+	{
+		descrittore_pagina* pdes_pag = &main_dir.entrate[i];
+		pdes_pag->address = 0;
+		pdes_pag->azzera = 1;
+		pdes_pag->US	 = 1;
+		pdes_pag->RW	 = 1;
+	}
+		
+	superblock.end = addr(last_address);
 	if ( fseek(img, 0, SEEK_SET) < 0 ||
 	     fwrite(&superblock, sizeof(superblock), 1, img) < 0 ||
 	     fseek(img, SIZE_PAGINA, SEEK_SET) < 0 ||

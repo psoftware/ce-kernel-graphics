@@ -737,6 +737,14 @@ _invalida_entrata_TLB:
 _trova_bit:
 	bsfl 4(%esp), %eax
 	ret
+
+	.global _check_bit_A
+_check_bit_A:
+	movl 4(%esp), %eax
+	btrl $5, (%eax)
+	movl 8(%esp), %eax
+	rcrl %eax
+	ret
 	
 
 ##################################################################

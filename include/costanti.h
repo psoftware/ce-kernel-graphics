@@ -62,3 +62,12 @@
 #define D_ERR_NONE 0x00
 #define D_ERR_BOUNDS 0xFF
 #define D_ERR_PRESENCE 0xFE
+
+#define inizio_sistema_condiviso  addr(0x00000000)
+#define fine_sistema_condiviso    inizio_sistema_privato
+#define inizio_sistema_privato    addr(0x40000000)
+#define fine_sistema_privato      inizio_utente_condiviso
+#define inizio_utente_condiviso   addr(0x80000000)
+#define fine_utente_condiviso     inizio_utente_privato
+#define inizio_utente_privato     addr(0xc0000000)
+#define fine_utente_privato       addr(0xfffff000)
