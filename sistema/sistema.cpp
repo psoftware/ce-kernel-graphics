@@ -2016,7 +2016,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 			goto error;
 		
 		// e collegarla al direttorio
-		collega_tabella(pdir, ptab, indice_tabella(indirizzo_virtuale));
+		collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
 	} else {
 		// la tabella e' presente
 		ptab = tabella_puntata(pdes_tab);
