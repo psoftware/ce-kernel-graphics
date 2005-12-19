@@ -37,6 +37,7 @@
 #define TIPO_P			0x43
 #define TIPO_FG			0x44
 #define TIPO_R			0x45
+#define TIPO_ND			0x46
 #define TIPO_CR			0x50
 #define TIPO_CW			0x51
 #define TIPO_CS			0x52

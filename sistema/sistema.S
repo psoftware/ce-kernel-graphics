@@ -472,6 +472,7 @@ fine_carica_tss:
 .set tipo_p, TIPO_P
 .set tipo_fg, TIPO_FG
 .set tipo_r, TIPO_R
+.set tipo_nd, TIPO_ND
 
 # per la console
 .set tipo_cr, TIPO_CR
@@ -539,6 +540,7 @@ init_idt:
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_r		_reboot		LIV_SISTEMA
+	carica_gate	tipo_nd		a_ndelay	LIV_SISTEMA
 
 	# gestione console (di Checconi)
 	carica_gate	tipo_cr		a_con_read	LIV_SISTEMA
@@ -871,6 +873,36 @@ _attiva_timer:
 	outb %al, $OCW1M
 
         popl %eax
+	leave
+	ret
+
+	.global _calibra_tsc
+_calibra_tsc:
+	pushl %ebp
+	movl %esp, %ebp
+	subl $8, %esp
+	pushl %ecx
+	pushl %edx
+
+	cpuid
+	rdtsc
+	movl %eax, -4(%ebp)
+1:	movl _ticks, %ecx
+	cmpl $0, %ecx
+	je 1b
+	movl %ecx, -8(%ebp)
+2:	movl _ticks, %ecx
+	subl -8(%ebp), %ecx
+	cmpl $20, %ecx
+	jbe 2b
+	cpuid
+	rdtsc
+	subl %eax, -4(%ebp)
+
+	movl -4(%ebp), %eax
+	
+	popl %edx
+	popl %ecx
 	leave
 	ret
 
@@ -1324,10 +1356,35 @@ a_fill_gate:
 	carica_registri
 	iret
 
+a_ndelay:
+	pushl %eax
+	pushl %edx
+	pushl %ebx
+	pushl %ecx
+	movl _clocks_per_nsec, %eax
+	mull 32(%esp)
+	movl %eax, %ecx
+	rdtsc
+	movl %eax, %ebx
+1:	rdtsc
+	subl %ebx, %eax
+	cmpl %ecx, %eax
+	jbe 1b
+	popl %ecx
+	popl %ebx
+	popl %edx
+	popl %eax
+	iret
+
 ###############################################################
 # sezione dati: tabelle e stack				      #
 ###############################################################
 .data
+.global		_ticks
+_ticks:		.long 0
+.global		_clocks_per_nsec
+_clocks_per_nsec:
+		.long 1
 .global		_mem_upper
 _mem_upper:	 .long _end
 .global		_fine_codice_sistema

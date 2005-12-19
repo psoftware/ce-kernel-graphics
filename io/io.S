@@ -13,6 +13,7 @@
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
 .set tipo_s, TIPO_S
+.set tipo_nd, TIPO_ND
 
 # Tipi delle interruzioni usate per interfacciarsi al modulo
 #  sistema
@@ -31,10 +32,6 @@
 .set tipo_cu, TIPO_CU
 .set tipo_ci, TIPO_CI
 
-# Tipi di interruzioni usate per lo swap in/out di un'area
-#  di memoria su dsco
-#
-.set io_tipo_swp, 0x5F
 
 # Tipi delle interruzioni usate dalle primitive di IO
 # Devono coincidere con quelli usati in utente.s
@@ -149,41 +146,6 @@ _com:	.long	0x03f8		# com[0].indreg.iRBR
 	.long	0		# com[1].funzione
 	.long	0		# com[1].stato
 
-# Descrittori dei Controllori DMA (Registri comuni)
-#
-
-	.global _cdma
-_cdma:	.long	0x0008		#cdma[0].iCMD_STS
-	.long	0x000B		#cdma[0].iMODER
-	.long	0x0009		#cdma[0].iREQREG
-	.long	0x000F		#cdma[0].iMASK_REG
-	.long	0x000A		#cdma[0].iMASK
-	.long	0x00D0		#cdma[1].iCMD_STS
-	.long	0x00D6		#cdma[1].iMODER
-	.long	0x00D2		#cdma[1].iREQREG
-	.long	0x00DE		#cdma[1].iMASK_REG
-	.long	0x00D4		#cdma[1].iMASK
-
-# Descrittore del Floppy Disk
-#
-
-	.global _fd
-_fd:	.long	0x03F2		#fd.indreg.iDOR
-	.long	0x03F4		#fd.indreg.iM_STS_D_RATE
-	.long	0x03F5		#fd.indreg.iDATA
-	.long	0x03F7		#fd.indreg.iDIR_CCR
-	.long	0x0081		#fd.dmareg.iPAGE
-	.long	0x0004		#fd.dmareg.iMAR
-	.long	0x0005		#fd.dmareg.iTCR
-	.long	0x000C		#fd.dmareg.iCLEAR_FF
-	.long	0		#fd.drive[0].{motore,presente,errore} (byte!)
-	.long	0		#fd.drive[0].traccia
-	.long	0		#fd.drive[1].{motore,presente,errore} (byte!)
-	.long	0		#fd.drive[1].traccia
-	.long	0		#fd.curr_cmd
-	.long	0		#fd.curr_drv
-	.long	0		#fd.mutex
-	.long	0		#fd.sincr
 
 # Descrittore Hard Disk
 #
@@ -332,6 +294,11 @@ _con_update:
 	.global _con_init
 _con_init:
 	int $tipo_ci
+	ret
+
+	.global _ndelay
+_ndelay:
+	int $tipo_nd
 	ret
  
 ################################################################################
@@ -820,6 +787,10 @@ shd_sl:	movb $0xF0,%al
 shd_ms:	movb $0xE0,%al
 ms_out:	movl 16(%esp),%edx
 	outb %al,%dx
+
+	pushl $400
+	call _ndelay
+	addl $4, %esp
 
 	popl %edx
 	popl %eax

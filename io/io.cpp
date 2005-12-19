@@ -63,6 +63,7 @@ extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void panic(const char *msg);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void reboot(void);
+extern "C" void ndelay(unsigned int nano_sec);
 
 //
 // Chiamate per l' IO da console
@@ -912,7 +913,7 @@ inline bool hd_drdy(char &s) {		// Test di Drive ReaDY
 //  
 char aspetta_STS(des_ata *p_des,char bit,bool &ris) {
 	char stato,test;
-	short timeout=D_TIMEOUT;		// Previsto un timeout
+	short timeout=D_TIMEOUT * 1000;		// Previsto un timeout
 	do {
 		inputb(p_des->indreg.iALT_STS,stato);
 		if (bit==HD_STS_DRDY || bit==HD_STS_DRQ)
@@ -941,6 +942,7 @@ inline bool invia_cmd(des_ata *p_des,hd_cmd com) {
 #endif
 	p_des->comando=com;
 	outputb(com,p_des->indreg.iCMD);
+	ndelay(400);
 	return true;
 }
 
@@ -995,16 +997,12 @@ extern "C" void setup_addr_hd(des_ata *p,unsigned int primo);
 // 
 void starthd_in(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	{
 	p_des->punt=vetti;
-#ifdef STRICT_ATA
 	bool ris;
 	aspetta_STS(p_des,HD_STS_BSY,ris);	// aspetta "drive not BuSY"
-#endif
 	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
-#ifdef STRICT_ATA
 	char stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!!
 	if (!hd_drdy(stato) || hd_errore(stato))
 			panic("Errore nell'inizializzazione della lettura!");
-#endif
 	setup_addr_hd(p_des,primo); 
 	outputb(quanti,p_des->indreg.iSTCOUNT);
 	// Abilita le interruzioni per il controller-drive selezionato
@@ -1019,23 +1017,17 @@ void starthd_out(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsig
 {	char stato;				
 	bool ris;
 	p_des->punt=vetti;
-#ifdef STRICT_ATA
 	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
-#endif
 	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
-#ifdef STRICT_ATA
 	stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!
 	if (!hd_drdy(stato) || hd_errore(stato))
 			panic("Errore nell'inizializzazione della scrittura!");
-#endif
 	setup_addr_hd(p_des,primo); 
 	outputb(quanti,p_des->indreg.iSTCOUNT);
 	//Abilita le interruzioni per il controller-drive selezionato
 	go_inouthd(p_des->indreg.iDEV_CTRL);		
 	invia_cmd(p_des,WRITE_SECT);	// Asimmetria con la lettura, bisogna
-#ifdef STRICT_ATA			//  scrivere il primo blocco
 	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
-#endif
 	// Aspetta DRQ, previsto dal protocollo di comunicazione
 	stato=aspetta_STS(p_des,HD_STS_DRQ,ris);
 	inputb(p_des->indreg.iSTS,stato);
@@ -1138,10 +1130,8 @@ void estern_hd(int h)
 		p_des->comando=NONE;		//  non richieste
 		if (curr_cmd!=NONE) {
 			get_drive(p_des->indreg.iDRV_HD,drv);
-#ifdef STRICT_ATA
 			bool ris;
 			stato=aspetta_STS(p_des,HD_STS_BSY,ris);
-#endif	/* STRICT_ATA */
 			fine=false;
 			inputb(p_des->indreg.iSTS,stato);
 			if (!hd_errore(stato) && (curr_cmd==READ_SECT || curr_cmd==WRITE_SECT)) {
@@ -1204,6 +1194,7 @@ void hd_init() {
 		p_des=&hd[i];
 		short drv=HD_DRV_MASTER;
 		set_drive(drv,p_des->indreg.iDRV_HD);	//LBA e drive drv
+		ndelay(400);
 		// Procedura diversificata una volta effettuato il test()
 		if (test_canale(p_des->indreg.iSTS,p_des->indreg.iSTCOUNT,p_des->indreg.iSECT_N)) {
 #ifndef BOCHS		// In sistemi reali e' necessario inviare questo comando
@@ -1220,6 +1211,7 @@ void hd_init() {
 
 			for (int d=0;d<2;d++) {		// Per ogni drive
 				set_drive(drv,p_des->indreg.iDRV_HD);
+				ndelay(400);
 				p_des->disco[d].dma=false;
 #ifdef BOCHS		// BOCHS ha bisogno del reset dei controller
 				if (!drive_reset(p_des->indreg.iDEV_CTRL,p_des->indreg.iSTS)) {
@@ -1244,10 +1236,8 @@ void hd_init() {
 					drv=HD_DRV_SLAVE;
 					continue;
 				}
-#ifdef STRICT_ATA
 				bool ris;
 				aspetta_STS(p_des,HD_STS_BSY,ris);
-#endif
 				inputb(p_des->indreg.iSTS,stato);
 				leggi_sett_buff(p_des,st_sett,stato);
 				// Inizializzazione della geometria
