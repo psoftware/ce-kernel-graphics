@@ -4,7 +4,7 @@ START_IO=        0x00200000
 START_UTENTE=	 0x80000000
 SWAPSIZE=10000
 
-CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti
+CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude
 
 all: build/sistema \
@@ -27,14 +27,14 @@ sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	gcc $(CPPFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
 sistema/sist_cpp.o: sistema/sistema.cpp include/multiboot.h include/elf.h include/costanti.h
-	g++ -g -O2 $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
+	g++ $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
 io/io_s.o: io/io.S include/costanti.h
-	gcc -g $(CPPFLAGS) -c io/io.S -o io/io_s.o
+	gcc $(CPPFLAGS) -c io/io.S -o io/io_s.o
 
 io/io_cpp.o: io/io.cpp include/costanti.h
-	g++ -g  $(CPPFLAGS) $(CXXFLAGS) -c io/io.cpp -o io/io_cpp.o
+	g++ $(CPPFLAGS) $(CXXFLAGS) -c io/io.cpp -o io/io_cpp.o
 
 # compilazione di utente.s e utente.cpp
 utente/uten_s.o: utente/utente.s

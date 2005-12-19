@@ -1787,7 +1787,7 @@ bool leggi_blocco(unsigned int blocco, void* dest) {
 	unsigned char da_leggere = 8;
 	char errore;
 
-	readhd_n(0, 0, dest, blocco * 8, da_leggere, errore);
+	readhd_n(0, 1, dest, blocco * 8, da_leggere, errore);
 	if (da_leggere != 0 || errore != 0) { 
 		printk("Impossibile leggere il blocco %d\n", blocco);
 		printk("letti %d settori su 8, errore = %d\n", 8 - da_leggere, errore);
@@ -1800,7 +1800,7 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 	unsigned char da_scrivere = 8;
 	char errore;
 
-	writehd_n(0, 0, dest, blocco * 8, da_scrivere, errore);
+	writehd_n(0, 1, dest, blocco * 8, da_scrivere, errore);
 	if (da_scrivere != 0 || errore != 0) { 
 		printk("Impossibile scrivere il blocco %d\n", blocco);
 		printk("scritti %d settori su 8, errore = %d\n", 8 - da_scrivere, errore);
@@ -2095,10 +2095,12 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 {
 	if (pdes_tab->azzera == 1) {
-		if (! bm_alloc(&block_bm, struttura(pfis(ptab))->blocco)) {
+		unsigned int blocco;
+		if (! bm_alloc(&block_bm, blocco)) {
 			printk("spazio nello swap insufficiente\n");
 			return false;
 		}
+		pdes_tab->address = blocco;
 
 		for (int i = 0; i < 1024; i++) {
 			descrittore_pagina* pdes_pag = &ptab->entrate[i];
@@ -3073,7 +3075,7 @@ void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* m
 	
 	totale = da_leggere = ceild(bytes, 512);
 	printk("Leggo: %s (%d settori, primo: %d)\n", msg, totale, block * 8);
-	readhd_n(0, 0, buf, block * 8, da_leggere, errore);
+	readhd_n(0, 1, buf, block * 8, da_leggere, errore);
 	if (da_leggere != 0 || errore != 0) { 
 		printk("letti %d settori su %d, errore = %d\n", totale - da_leggere, totale, errore);
 		printk("Impossibile leggere %s\n", msg);

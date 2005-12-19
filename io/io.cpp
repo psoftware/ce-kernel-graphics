@@ -913,7 +913,7 @@ inline bool hd_drdy(char &s) {		// Test di Drive ReaDY
 //  
 char aspetta_STS(des_ata *p_des,char bit,bool &ris) {
 	char stato,test;
-	short timeout=D_TIMEOUT * 1000;		// Previsto un timeout
+	int timeout=D_TIMEOUT * 1000;		// Previsto un timeout
 	do {
 		inputb(p_des->indreg.iALT_STS,stato);
 		if (bit==HD_STS_DRDY || bit==HD_STS_DRQ)
@@ -997,6 +997,7 @@ extern "C" void setup_addr_hd(des_ata *p,unsigned int primo);
 // 
 void starthd_in(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	{
 	p_des->punt=vetti;
+	p_des->cont=quanti;
 	bool ris;
 	aspetta_STS(p_des,HD_STS_BSY,ris);	// aspetta "drive not BuSY"
 	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
@@ -1017,6 +1018,7 @@ void starthd_out(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsig
 {	char stato;				
 	bool ris;
 	p_des->punt=vetti;
+	p_des->cont=quanti;
 	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
 	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
 	stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!
@@ -1136,7 +1138,7 @@ void estern_hd(int h)
 			inputb(p_des->indreg.iSTS,stato);
 			if (!hd_errore(stato) && (curr_cmd==READ_SECT || curr_cmd==WRITE_SECT)) {
 				if (curr_cmd==WRITE_SECT) {
-					inputb(p_des->indreg.iSTCOUNT,p_des->cont);
+					p_des->cont--;
 					if (p_des->cont==0)
 						fine=true;
 					else {
@@ -1146,7 +1148,7 @@ void estern_hd(int h)
 				}
 				else {		// Comando di READ_SECT
 					leggi_sett_buff(p_des,p_des->punt,stato);
-					inputb(p_des->indreg.iSTCOUNT,p_des->cont);
+					p_des->cont--;
 					if (p_des->cont==0)
 						fine=true;
 					else
