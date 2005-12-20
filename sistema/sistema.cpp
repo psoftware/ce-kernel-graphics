@@ -4,27 +4,18 @@
 #include "costanti.h"
 #include "elf.h"
 
-extern "C" void terminate_p();
-extern "C" void sem_wait(int);
-extern "C" void sem_signal(int);
-extern unsigned long ticks;
-extern unsigned long clocks_per_nsec;
 
 ///////////////////////////////////////////////////
 // FUNZIONI PER LA MANIPOLAZIONE DEGLI INDIRIZZI //
 ///////////////////////////////////////////////////
 
-
-// purtroppo, lo standard C++ non prevede tipi
-// predefiniti che possano essere usati come
-// "indirizzi di memoria". I candidati sono "void*",
-// "char*" e "unsigned int", ma "char*" e "unsigned int"
-// costringono a continui reinterpet_cast, mentre
-// "void*" non puo' essere usato in espressioni aritmetiche.
-// Come compromesso, si e' deciso di usare "void*" come
-// tipo per gli indirizzi (per ridurre al minimo la 
-// necessita' dei cast) e di definire le seguenti
-// funzioni per svolgere le elementari funzioni arimetiche
+// purtroppo, lo standard C++ non prevede tipi predefiniti che possano essere 
+// usati come "indirizzi di memoria". I candidati sono "void*", "char*" e 
+// "unsigned int", ma "char*" e "unsigned int" costringono a continui 
+// reinterpet_cast, mentre "void*" non puo' essere usato in espressioni 
+// aritmetiche. Come compromesso, si e' deciso di usare "void*" come
+// tipo per gli indirizzi (per ridurre al minimo la necessita' dei cast) e di 
+// definire le seguenti funzioni per svolgere le elementari funzioni arimetiche
 
 
 // somma v byte all'indirizzo a
@@ -62,6 +53,19 @@ unsigned int uint(void* v) {
 }
 
 // funzioni di utilita'
+// allocazione a mappa di bit
+struct bm_t {
+	unsigned int *vect;
+	unsigned int size;
+	unsigned int vecsize;
+};
+void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size);
+bool bm_alloc(bm_t *bm, unsigned int& pos);
+void bm_free(bm_t *bm, unsigned int pos);
+/////
+
+
+// funzioni di utilita'
 
 // restituisce il minimo naturale maggiore o uguale a v/q
 unsigned int ceild(unsigned int v, unsigned int q) {
@@ -86,708 +90,16 @@ int allinea(int v, unsigned int a) {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//                             STRUTTURE DATI                               //
-//////////////////////////////////////////////////////////////////////////////
-//
-// elemento di una coda di processi
-//
-struct proc_elem {
-	short identifier;
-	int priority;
-	proc_elem *puntatore;
-};
-
-// descrittore di semaforo
-//
-struct des_sem {
-	int counter;
-	proc_elem *pointer;
-};
-
-// processo in esecuzione
-//
-extern proc_elem *esecuzione;
-
-// coda dei processi pronti
-//
-extern proc_elem *pronti;
-
-// vettore dei descrittori di semaforo
-//
-extern des_sem array_dess[MAX_SEMAFORI];
-
-
-// manipolazione delle code di processi
-//
-extern void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
-extern void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
-
-// controllore interruzioni
-extern "C" void init_8259();
-
-// timer
-extern "C" void attiva_timer(unsigned long delay);
-
-// schedulatore
-//
-extern "C" void schedulatore(void);
-
-// stampa msg a schermo e blocca il sistema
-//
-extern "C" void panic(const char *msg);
-
-extern "C" void abort_p();
-
-// stampa a schermo formattata
-//
+// copia n byte da src a dst [vedi avanti]
+void *memcpy(void *dest, const void *src, unsigned int n);
+// copia c nei primi n byte della zona di memoria puntata da dest
+void *memset(void *dest, int c, unsigned int n);
+// restituisce true se le due stringe first e second sono uguali
+bool str_equal(const char* first, const char* second);
+// stampa formattata sulla console (simile a printf della lib. del C)
 extern "C" int printk(const char *fmt, ...);
-
-// verifica i diritti del processo in esecuzione sull' area di memoria
-// specificata dai parametri
-//
-extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
-
-extern "C" void invalida_entrata_TLB(void* ind_virtuale);
-
-struct direttorio;
-struct tabella_pagine;
-struct pagina;
-
-// descrittore di processo
-// NOTA: la commutazione di contesto e' gestita quasi interamente via
-//  software (del supporto hw viene usato solo tr, quindi sarebbe sufficiente
-//  mantenere corrispondenza tra descrittore e tss solo fino alla pila
-//  sistema). Le informazioni contenute nel tss sono in corrispondenza
-//  con quelle della struttura des_proc del testo, ma era necessario mantenere
-//  il puntatore alla pila sistema nella forma corretta (quando viene
-//  introdotta des_proc non e' ancora stata presentata la segmentazione e
-//  punt_nucleo e' su una doppia parola, senza selettore); per il resto si
-//  e' mantenuta, con alcune aggiunte, la forma standard del tss anche se
-//  non era necessario (alcuni campi non vengono salvati).
-//
-// La struttura interna e' usata in sistema.s
-//
-struct des_proc {			// offset:
-//	short id;
-	unsigned int link;		// 0
-//	int punt_nucleo;
-	void*        esp0;		// 4
-	unsigned int ss0;		// 8
-	void*        esp1;		// 12
-	unsigned int ss1;		// 16
-	void*        esp2;		// 20
-	unsigned int ss2;		// 24
-
-	direttorio* cr3;		// 28
-
-	unsigned int eip;		// 32, non utilizzato
-	unsigned int eflags;		// 36, non utilizzato
-
-//	int contesto[N_REG];
-	unsigned int eax;		// 40
-	unsigned int ecx;		// 44
-	unsigned int edx;		// 48
-	unsigned int ebx;		// 52
-	unsigned int esp;		// 56
-	unsigned int ebp;		// 60
-	unsigned int esi;		// 64
-	unsigned int edi;		// 68
-
-	unsigned int es;		// 72
-	unsigned int cs; 		// 76, char cpl;
-	unsigned int ss;		// 80
-	unsigned int ds;		// 84
-	unsigned int fs;		// 86
-	unsigned int gs;		// 90
-	unsigned int ldt;		// 94, non utilizzato
-
-	unsigned int io_map;		// 100, non utilizzato
-
-	struct {
-		unsigned int cr;	// 104
-		unsigned int sr;	// 108
-		unsigned int tr;	// 112
-		unsigned int ip;	// 116
-		unsigned int is;	// 120
-		unsigned int op;	// 124
-		unsigned int os;	// 128
-		char regs[80];		// 132
-	} fpu;
-
-	char liv;			// 212
-}; // dimensione 212 + 1 + 3(allineamento) = 216
-//
-// vettore dei descrittori di processo
-//
-extern des_proc array_desp[MAX_PROCESSI];
-
-// richiesta al timer
-//
-struct richiesta {
-	int d_attesa;
-	richiesta *p_rich;
-	proc_elem *pp;
-};
-
-// coda delle richieste al timer
-//
-richiesta *descrittore_timer;
-
-// numero di processi attivi
-//
-int processi = 0;
-
-// Valori usati in io.cpp
-//
-enum estern_id {
-	tastiera,
-	com1_in,
-	com1_out,
-	com2_in,
-	com2_out,
-	ata0,
-	ata1
-};
-
-// inizializzazione della console
-//
-void con_init(void);
-
-// ritorna il descrittore del processo id
-//
-extern "C" des_proc *des_p(short id) {
-	return &array_desp[id - 5];
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//                          FUNZIONI DI LIBRERIA                              //
-////////////////////////////////////////////////////////////////////////////////
-
-// il nucleo non puo' essere collegato alla libreria standard del C/C++,
-// perche' questa e' stata scritta utilizzando le primitive del sistema
-// che stiamo usando (sia esso Windows o Unix). Tali primitive non
-// saranno disponibili quando il nostro nucleo andra' in esecuzione.
-// Per ragioni di convenienza, ridefiniamo delle funzioni analoghe a quelle
-// fornite dalla libreria del C.
-
-// copia n byte da src a dest
-void *memcpy(void *dest, const void *src, unsigned int n)
-{
-	char       *dest_ptr = static_cast<char*>(dest);
-	const char *src_ptr  = static_cast<const char*>(src);
-
-	for (int i = 0; i < n; i++)
-		dest_ptr[i] = src_ptr[i];
-
-	return dest;
-}
-
-// scrive n byte pari a c, a partire da dest
-void *memset(void *dest, int c, unsigned int n)
-{
-	char *dest_ptr = static_cast<char*>(dest);
-
-        for (int i = 0; i < n; i++)
-              dest_ptr[i] = static_cast<char>(c);
-
-        return dest;
-}
-
-typedef char *va_list;
-
-// Versione semplificata delle macro per manipolare le liste di parametri
-//  di lunghezza variabile; funziona solo se gli argomenti sono di
-//  dimensione multipla di 4, ma e' sufficiente per le esigenze di printk.
-//
-#define va_start(ap, last_req) (ap = (char *)&(last_req) + sizeof(last_req))
-#define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
-#define va_end(ap)
-
-
-// restituisce la lunghezza della stringa s (che deve essere terminata da 0)
-int strlen(const char *s)
-{
-	int l = 0;
-
-	while (*s++)
-		++l;
-
-	return l;
-}
-
-// copia al piu' l caratteri dalla stringa src alla stringa dest
-char *strncpy(char *dest, const char *src, unsigned int l)
-{
-
-	for (int i = 0; i < l && src[i]; ++i)
-		dest[i] = src[i];
-
-	return dest;
-}
-
-// restituisce true se le stringhe puntate da first e second
-// sono uguali
-bool str_equal(const char* first, const char* second) {
-
-	while (*first && *second && *first++ == *second++)
-		;
-
-	return (!*first && !*second);
-}
-
-static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
-	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-
-// converte l in stringa (notazione esadecimale)
-static void htostr(char *buf, unsigned long l)
-{
-
-	buf[0] = '0';
-	buf[1] = 'x';
-
-	for (int i = 9; i > 1; --i) {
-		buf[i] = hex_map[l % 16];
-		l /= 16;
-	}
-}
-
-// converte l in stringa (notazione decimale)
-static void itostr(char *buf, unsigned int len, long l)
-{
-	int i, div = 1000000000, v, w = 0;
-
-	if (l == (-2147483647 - 1)) {
- 		strncpy(buf, "-2147483648", 12);
- 		return;
-   	} else if (l < 0) {
-		buf[0] = '-';
-		l = -l;
-		i = 1;
-	} else if (l == 0) {
-		buf[0] = '0';
-		buf[1] = 0;
-		return;
-	} else
-		i = 0;
-
-	while (i < len - 1 && div != 0) {
-		if ((v = l / div) || w) {
-			buf[i++] = '0' + (char)v;
-			w = 1;
-		}
-
-		l %= div;
-		div /= 10;
-	}
-
-	buf[i] = 0;
-}
-
-#define DEC_BUFSIZE 12
-
-// stampa formattata su stringa
-int vsnprintf(char *str, unsigned int size, const char *fmt, va_list ap)
-{
-	int in = 0, out = 0, tmp;
-	char *aux, buf[DEC_BUFSIZE];
-
-	while (out < size - 1 && fmt[in]) {
-		switch(fmt[in]) {
-			case '%':
-				switch(fmt[++in]) {
-					case 'd':
-						tmp = va_arg(ap, int);
-						itostr(buf, DEC_BUFSIZE, tmp);
-						if(strlen(buf) >
-								size - out - 1)
-							goto end;
-						for(aux = buf; *aux; ++aux)
-							str[out++] = *aux;
-						break;
-					case 'x':
-						tmp = va_arg(ap, int);
-						if(out > size - 11)
-							goto end;
-						htostr(&str[out], tmp);
-						out += 10;
-						break;
-					case 's':
-						aux = va_arg(ap, char *);
-						while(out < size - 1 && *aux)
-							str[out++] = *aux++;
-						break;	
-				}
-				++in;
-				break;
-			default:
-				str[out++] = fmt[in++];
-		}
-	}
-end:
-	str[out++] = 0;
-
-	return out;
-}
-
-// stampa formattata su stringa (variadica)
-int snprintf(char *buf, unsigned int n, const char *fmt, ...)
-{
-	va_list ap;
-	int l;
-
-	va_start(ap, fmt);
-	l = vsnprintf(buf, n, fmt, ap);
-	va_end(ap);
-
-	return l;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//                               IO DA CONSOLE                              //
-//////////////////////////////////////////////////////////////////////////////
-
-typedef char *ind_b;	// indirizzo di una porta
-
-// ingresso di un byte da una porta di IO
-extern "C" void inputb(ind_b reg, char &a);
-
-// uscita di un byte su una porta di IO
-extern "C" void outputb(char a, ind_b reg);
-
-const int CON_BUF_SIZE = 0x0fa0;
-
-struct con_status {
-	unsigned char buffer[CON_BUF_SIZE];
-	short x, y;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-//                           GESTIONE DEL VIDEO                               //
-////////////////////////////////////////////////////////////////////////////////
-
-unsigned char *VIDEO_MEM_BASE = (unsigned char *)0x000b8000;
-const int VIDEO_MEM_SIZE = 0x00000fa0;
-
-const short CUR_HIGH = 0x0e;
-const short CUR_LOW = 0x0f;
-
-const ind_b ADD_P = (ind_b)0x03d4;
-const ind_b DAT_P = (ind_b)0x03d5;
-
-const int COL_NUM = 80;
-const int ROW_NUM = 25;
-
-const unsigned char COL_BLACK = 0x00;
-const unsigned char COL_WHITE = 0x07;
-
-const unsigned char COL_BRIGHT = 0x08;
-
-struct con_pos {
-	unsigned char *base;
-	unsigned char *ptr;
-	short x, y;
-} curr_pos;
-
-unsigned char con_attr = COL_WHITE | (COL_BLACK << 4);
-
-inline void PUT(con_pos *cp, char ch)
-{
-	*cp->ptr++ = ch;
-	*cp->ptr++ = con_attr;
-}
-
-inline void gotoxy(con_pos *cp, int nx, int ny)
-{
-	int new_pos = nx + ny * COL_NUM;
-
-	if(cp == &curr_pos) {
-		outputb(CUR_HIGH, ADD_P);
-		outputb((char)(new_pos >> 8), DAT_P);
-		outputb(CUR_LOW, ADD_P);
-		outputb((char)(new_pos&0xff), DAT_P);
-	}
-
-	cp->ptr = cp->base + new_pos * 2;
-
-	cp->x = nx;
-	cp->y = ny;
-}
-
-inline void scroll_up(con_pos *cp)
-{
-	cp->ptr = cp->base;
-
-	while(cp->ptr < cp->base + VIDEO_MEM_SIZE - COL_NUM * 2) {
-		*cp->ptr = *(cp->ptr + COL_NUM * 2);
-		++cp->ptr;
-	}
-
-	for(; cp->ptr < cp->base + VIDEO_MEM_SIZE;) {
-		*cp->ptr++ = ' ';
-		*cp->ptr++ = con_attr;
-	}
-
-	gotoxy(cp, 0, ROW_NUM - 1);
-}
-
-
-inline void put_char(con_pos *cp, char ch)
-{
-	switch(ch) {
-		case '\n':
-			if(cp->y < ROW_NUM - 1)
-				gotoxy(cp, 0, cp->y + 1);
-			else
-				scroll_up(cp);
-			break;
-		case '\b':
-			if(cp->x > 0) {
-				cp->ptr -= 2;
-				PUT(cp, ' ');
-				gotoxy(cp, cp->x - 1, cp->y);
-			}
-			break;
-		default:
-			if(ch < 31 || ch < 0)
-				return;
-
-			if(cp->x < COL_NUM) {
-				PUT(cp, ch);
-				gotoxy(cp, cp->x + 1, cp->y);
-			} else {
-				if(cp->y == ROW_NUM - 1) {
-					scroll_up(cp);
-					PUT(cp, ch);
-					gotoxy(cp, 1, cp->y);
-				} else {
-					PUT(cp, ch);
-					gotoxy(cp, 1, cp->y + 1);
-				}
-			}
-	}
-}
-
-void con_init(void)
-{
-	curr_pos.base = curr_pos.ptr = VIDEO_MEM_BASE;
-
-	while(curr_pos.ptr < VIDEO_MEM_BASE + VIDEO_MEM_SIZE)
-		PUT(&curr_pos, ' ');
-
-	gotoxy(&curr_pos, 0, 0);
-}
-
-//////////////////////////////////////////////////////////////////////////////
-
-// NOTA: non vengono fatti controlli sui parametri perche' queste routine
-//  sono disponibili solo su gate con DPL 0. Deve essere il modulo di IO
-//  (l' unico che le utilizza) a verificare i diritti dell' eventuale
-//  chiamante.
-//
-
-// registri dell' interfaccia della tastiera
-#define KBD_RBR		((ind_b)0x60)
-#define KBD_PORT_B	((ind_b)0x61)
-#define KBD_STR		((ind_b)0x64)
-
-extern "C" void c_con_read(char &ch, bool &risu)
-{
-	char code, val;
-
-	inputb(KBD_STR, val);
-	if(val&0x01 == 0) {
-		risu = false;
-		return;
-	}
-
-	inputb(KBD_RBR, code);
-	inputb(KBD_PORT_B, val);
-	outputb(val|0x80, KBD_PORT_B);
-	outputb(val, KBD_PORT_B);
-
-	ch = code;
-	risu = true;
-}
-
-extern "C" void c_con_write(const char *vett, int quanti)
-{
-	int i;
-
-	for(i = 0; i < quanti; ++i)
-		put_char(&curr_pos, vett[i]);
-}
-
-extern "C" void c_con_save(con_status *cs)
-{
-	memcpy(cs->buffer, VIDEO_MEM_BASE, VIDEO_MEM_SIZE);
-	cs->x = curr_pos.x;
-	cs->y = curr_pos.y;
-}
-
-extern "C" void c_con_load(const con_status *cs)
-{
-	memcpy(VIDEO_MEM_BASE, cs->buffer, VIDEO_MEM_SIZE);
-	gotoxy(&curr_pos, cs->x, cs->y);
-}
-
-extern "C" void c_con_update(con_status *cs, const char *vett, int quanti)
-{
-	con_pos cp;
-	int i;
-
-	cp.base = cs->buffer;
-	cp.ptr = cs->buffer + 2 * (cs->x + cs->y * COL_NUM);
-	cp.x = cs->x;
-	cp.y = cs->y;
-
-	for(i = 0; i < quanti; ++i)
-		put_char(&cp, vett[i]);
-
-	cs->x = cp.x;
-	cs->y = cp.y;
-}
-
-extern "C" void c_con_init(con_status *cs)
-{
-	int i;
-
-	cs->x = cs->y = 0;
-
-	for(i = 0; i < VIDEO_MEM_SIZE; i += 2) {
-		cs->buffer[i] = ' ';
-		cs->buffer[i + 1] = con_attr;
-	}
-}
-
-extern "C" int printk(const char *fmt, ...)
-{
-	va_list ap;
-	char buf[1024];
-	int l;
-
-	va_start(ap, fmt);
-	l = vsnprintf(buf, 1024, fmt, ap);
-	va_end(ap);
-
-	c_con_write(buf, strlen(buf));
-
-	return l;
-}
-
-// Registrazione processi esterni
-//
-
-const int S = 2;
-const int A = 2;
-
-proc_elem *pe_tast;
-proc_elem *in_com[S], *out_com[S];
-proc_elem *ata[A];
-
-void aggiungi_pe(proc_elem *p, estern_id interf)
-{
-	switch(interf) {
-		case tastiera:
-			pe_tast= p;
-			break;
-		case com1_in:
-			in_com[0] = p;
-			break;
-		case com1_out:
-			out_com[0] = p;
-			break;
-		case com2_in:
-			in_com[1] = p;
-			break;
-		case com2_out:
-			out_com[1] = p;
-			break;
-		case ata0:
-			ata[0]=p;
-			break;
-		case ata1:
-			ata[1]=p;
-			break;
-		default:
-			; // activate_pe chiamata con parametri scorretti
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Allocatore a mappa di bit
-////////////////////////////////////////////////////////////////////////////////
-
-struct bm_t {
-	unsigned int *vect;
-	unsigned int size;
-	unsigned int vecsize;
-};
-
-inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
-{
-	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
-}
-
-inline void bm_set(bm_t *bm, unsigned int pos)
-{
-	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
-}
-
-inline void bm_clear(bm_t *bm, unsigned int pos)
-{
-	bm->vect[pos / 32] |= (1UL << (pos % 32));
-}
-
-// crea la mappa BM, usando BUFFER come vettore; SIZE e' il numero di bit
-//  nella mappa
-//
-void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
-{
-	bm->vect = buffer;
-	bm->size = size;
-	bm->vecsize = ceild(size, sizeof(unsigned int) * 8);
-
-	for (int i = 0; i < bm->vecsize; ++i)
-		bm->vect[i] = 0xffffffff;
-}
-
-
-// usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
-// efficiente il primo bit a 1 in v
-extern "C" int trova_bit(unsigned int v);
-
-bool bm_alloc(bm_t *bm, unsigned int& pos) {
-
-	int i = 0;
-	bool risu = true;
-
-	while (i < bm->vecsize && !bm->vect[i]) i++;
-	if (i < bm->vecsize) {
-		pos = trova_bit(bm->vect[i]);
-		bm->vect[i] &= ~(1UL << pos);
-		pos += sizeof(unsigned int) * 8 * i;
-	} else 
-		risu = false;
-	return risu;
-}
-
-void bm_free(bm_t *bm, unsigned int pos)
-{
-	bm_clear(bm, pos);
-}
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
+// stampa mgs su console, quindi blocca il sistema
+extern "C" void panic(const char *msg);
 
 ///////////////////////////////////////////////////////////////////////
 // ALLOCAZIONE DELLA MEMORIA FISICA                                  //
@@ -1105,20 +417,6 @@ void free_interna(void* indirizzo, unsigned int quanti) {
 			memlibera = nuovo;
 	}
 }
-
-void debug_malloc() {
-	des_mem* scorri = memlibera;
-	unsigned int tot = 0;
-	printk("--- MEMORIA LIBERA ---\n");
-	while (scorri != 0) {
-		printk("%x (%d)\n", scorri, scorri->dimensione);
-		tot += scorri->dimensione;
-		scorri = scorri->next;
-	}
-	printk("TOT: %d byte (%d KB)\n", tot, tot / 1024);
-	printk("----------------------\n");
-}
-
 
 // ridefinizione degli operatori new e delete, in modo che utilizzino le 
 // funzioni malloc e free definite precedentemente
@@ -1623,45 +921,6 @@ void rilascia(pagina* d) {
 	rilascia_pagina(struttura(pfis(d)));
 }
 
-
-void debug_pagine_fisiche(int prima, int quante) {
-	for (int i = 0; i < quante; i++) {
-		des_pf* p = &pagine_fisiche[prima + i];
-		char* tipo = 0;
-
-		printk("%d(%x<->%x): ", i + prima, p, indirizzo(p));
-		switch (p->contenuto) {
-		case PAGINA_LIBERA:
-			printk("libera (prossima = %x)\n", p->prossima_libera);
-			break;
-		case DIRETTORIO:
-			printk("direttorio delle tabelle\n");
-			break;
-		case TABELLA_PRIVATA:
-			printk("tabella delle pagine, mappata da %x[%d]\n",
-					p->dir, p->indice);
-			break;
-		case TABELLA_RESIDENTE:
-			if (!tipo) tipo = "residente";
-		case TABELLA_CONDIVISA:
-			if (!tipo) tipo = "condivisa";
-			printk("tabella delle pagine %s\n", tipo);
-			break;
-		case PAGINA_VIRTUALE:
-			tipo = "";
-		case PAGINA_RESIDENTE:
-			if (!tipo) tipo = " (residente)";
-			printk("pagina virtuale%s, mappata a %x da %x\n",
-					tipo, p->indirizzo_virtuale, p->tabella);
-			break;
-		default:
-			printk("contenuto sconosciuto: %d\n", p->contenuto);
-			break;
-		}
-	}
-}
-
-
 // funzioni che aggiornano sia le strutture dati della paginazione che
 // quelle relative alla gestione delle pagine fisiche
 
@@ -1833,13 +1092,32 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 // tutte le entrate di una tabella, si controlla il campo "quante" del relativo 
 // descrittore di pagina fisica. Tale campo contiene il numero di entrate con 
 // bit P uguale a 1 nella tabella, e viene aggiornato ogni volta che si 
-// aggiunge/rimuove una pagina alla tabella. Il controllo delle entrate viene 
-// eseguito se e solo se "quante" e' maggiore di zero. In questo modo, e' 
-// possibile evitare di controllare le 1024 entrate di una tabella che si sa 
-// essere vuota. Senza questa ottimizzazione, la routine del timer puo' quasi 
-// saturare la CPU (soprattutto negli emulatori), visto che questo sistema 
-// contiene molte tabelle vuote (si pensi che tutte le 256 tabelle dello spazio 
-// utente condiviso vengono preallocate, anche se non utilizzate)
+// aggiunge/rimuove una pagina alla tabella [vedi collega_pagina e 
+// scollega_pagina].  Il controllo delle entrate viene eseguito se e solo se 
+// "quante" e' maggiore di zero. In questo modo, e' possibile evitare di 
+// controllare le 1024 entrate di una tabella che si sa essere vuota. Senza 
+// questa ottimizzazione, la routine del timer puo' quasi saturare la CPU 
+// (soprattutto negli emulatori), visto che questo sistema contiene molte 
+// tabelle vuote (si pensi che tutte le 256 tabelle dello spazio utente 
+// condiviso vengono preallocate, anche se non utilizzate)
+// NOTA 4: l'aggiornamento di tipo LRU e' in realta' una approssimazione, per 
+// una serie di motivi: (i) nel vero LRU, due pagine non possono avere lo 
+// stesso contatore (gli accessi sono sequenziali, quindi necessariamente una 
+// sara' stata acceduta prima dell'altra). In questo sistema, pero', gli 
+// accessi che intervengono tra due campionamenti sono considerati tutti uguali 
+// (avranno tutti un "1" nella stessa posizione del contatore). (ii) Nel vero 
+// LRU conta solo l'ordinamento dato dall'ultimo accesso ad ogni pagina. In 
+// questo sistema, pero', la pagina da rimpiazzare viene scelta in base al 
+// valore dell'intero contatore. Per quanto detto al punto (i), pero', piu' 
+// pagine potranno avere il primo bit a "1" contando da sinistra 
+// (corrispondente all'ultimo accesso) nella stessa posizione, quindi la scelta 
+// sara' influenzata dagli altri bit a "1" nel contatore, cioe' dagli accessi 
+// precedenti l'ultimo. (iii) Infine, nel vero LRU, tutte le pagine presenti in 
+// memoria sono ordinate. Pero', il contatore ha una dimensione necessariamente 
+// finita (32 bit in questo sistema). Tutte le pagine che non sono accedute da 
+// piu' di 32 intervalli di timer (1.6 sec in questo sistema) avranno il 
+// contatore a 0, e saranno quindi indifferenti dal punto di vista del 
+// rimpiazzamento.
 void aggiorna_statistiche()
 {
 	des_pf *ppf1, *ppf2;
@@ -1927,7 +1205,7 @@ void aggiorna_statistiche()
 // delle pagine condivise (per lo spazio utente condiviso). Per proteggere 
 // l'accesso a tali strutture, e' necessario che la routine di trasferimento 
 // venga eseguita in mutua esclusione (semaforo pf_mutex). Inoltre, le tabelle 
-// delle pagine condivise vengono accedute anche al di fuori della mutua 
+// e le pagine condivise vengono accedute anche al di fuori della mutua 
 // esclusione (ad esempio, P2 potrebbe accedere ad una pagina condivisa, 
 // presente): per evitare problemi anche in questi casi, bisogna fare 
 // attenzione all'ordine con cui si manipolano i descrittori di pagina in tali 
@@ -1939,6 +1217,8 @@ void aggiorna_statistiche()
 
 // semaforo di mutua esclusione per la gestione dei page fault
 int pf_mutex;
+extern "C" void sem_wait(int);
+extern "C" void sem_signal(int);
 
 // il microprogramma di gestione delle eccezioni di page fault lascia in cima 
 // alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
@@ -1969,12 +1249,10 @@ tabella_pagine* rimpiazzamento_tabella();
 pagina* 	rimpiazzamento_pagina();
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag);
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
+extern "C" void abort_p();
 
 void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 {
-	direttorio* pdir;
-	tabella_pagine* ptab;
-	descrittore_tabella* pdes_tab;
 	descrittore_pagina* pdes_pag;
 	pagina* pag;
 	
@@ -1985,11 +1263,11 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	// tramite un indirizzo virtuale uguale al loro indirizzo fisico (in 
 	// virtu' del fatto che la memoria fisica e' stata mappata in memoria 
 	// virtuale)
-	pdir = leggi_cr3(); // direttorio del processo
+	direttorio* pdir = leggi_cr3(); // direttorio del processo
 
 	// ricaviamo per prima cosa il descrittore di pagina interessato dal 
 	// fault
-	pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
+	descrittore_tabella* pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
 
 	// se l'accesso era in scrittura e (tutte le pagine puntate da) la 
 	// tabella e' di sola lettura, il processo ha commesso un errore e va 
@@ -1999,6 +1277,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 		goto error; // Dijkstra se ne faccia una ragione
 	}
 	
+	tabella_pagine* ptab;
 	if (pdes_tab->P == 0) {
 		// la tabella e' assente
 		
@@ -2049,6 +1328,8 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 		pag = alloca_pagina_virtuale();
 		if (pag == 0) 
 			pag = rimpiazzamento_pagina();
+			// FIXME: che succede se viene scelta proprio la 
+			// tabella allocata poco prima?
 		
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
 		// schedulato un altro processo e, quindi, gli interrupt 
@@ -2147,6 +1428,9 @@ pagina* rimpiazzamento_pagina()
 	return &indirizzo(ppf)->pag;
 }
 
+// funzioni usate da rimpiazzamento
+extern "C" void invalida_entrata_TLB(void* ind_virtuale);
+
 // routine di rimpiazzamento vera e propria.
 // libera una pagina fisica rimuovendo e (eventualmente) copiando nello swap 
 // una tabella privata o una pagina virtuale
@@ -2229,159 +1513,95 @@ error:
 	panic("Impossibile rimpiazzare pagine");
 }
 
-	
-		
-	
-
-/////////////////////////////////////////////////////////////////////////
-// ALLOCAZIONE DESCRITTORI DI PROCESSO                                 //
-// //////////////////////////////////////////////////////////////////////
-
-extern "C" int alloca_tss();
-extern "C" void rilascia_tss(int indice);
-
-//////////////////////////////////////////////////////////////////////////////
-//                         FUNZIONI AD USO INTERNO                          //
-//////////////////////////////////////////////////////////////////////////////
-
-// stampa MSG su schermo e termina le elaborazioni del sistema
-//
-extern "C" void backtrace();
-extern "C" void panic(const char *msg)
-{
-	printk("%s\n", msg);
-	backtrace();
-	asm("1: nop; jmp 1b");
-}
-
-// inserisce P_ELEM in P_CODA, mantenendola ordinata per priorita' decrescente
-//
-void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem)
-{
-	proc_elem *pp, *prevp;
-
-	pp = p_coda;
-	prevp = 0;
-	while(pp && pp->priority >= p_elem->priority) {
-		prevp = pp;
-		pp = pp->puntatore;
-	}
-
-	if(!prevp)
-		p_coda = p_elem;
-	else
-		prevp->puntatore = p_elem;
-
-	p_elem->puntatore = pp;
-}
-
-// rimuove il primo elemento da P_CODA e lo mette in P_ELEM
-//
-void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem)
-{
-	p_elem = p_coda;
-
-	if(p_coda)
-		p_coda = p_coda->puntatore;
-}
-
-// scheduler a priorita'
-//
-extern "C" void schedulatore(void)
-{
-	rimozione_coda(pronti, esecuzione);
-}
-
-// inserisce P nella coda delle richieste al timer
-//
-void inserimento_coda_timer(richiesta *p)
-{
-	richiesta *r, *precedente;
-	bool ins;
-
-	r = descrittore_timer;
-	precedente = 0;
-	ins = false;
-
-	while(r != 0 && !ins)
-		if(p->d_attesa > r->d_attesa) {
-			p->d_attesa -= r->d_attesa;
-			precedente = r;
-			r = r->p_rich;
-		} else
-			ins = true;
-
-	p->p_rich = r;
-	if(precedente != 0)
-		precedente->p_rich = p;
-	else
-		descrittore_timer = p;
-
-	if(r != 0)
-		r->d_attesa -= p->d_attesa;
-}
-
-// driver del timer
-//
-extern "C" void c_driver_t(void)
-{
-	richiesta *p;
-
-	ticks++;
-
-	if(descrittore_timer != 0)
-		descrittore_timer->d_attesa--;
-
-	while(descrittore_timer != 0 && descrittore_timer->d_attesa == 0) {
-		inserimento_coda(pronti, descrittore_timer->pp);
-		p = descrittore_timer;
-		descrittore_timer = descrittore_timer->p_rich;
-		delete p;
-	}
-
-	aggiorna_statistiche();
-
-	schedulatore();
-}
-
-// verifica i permessi del processo sui parametri passati (problema del
-//  Cavallo di Troia)
-
-// Questa versione di verifica_area presuppone che la memoria
-// non sia virtuale
-
-extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
-{
-	des_proc *pdes_proc;
-	direttorio* pdirettorio;
-	char liv;
-
-	pdes_proc = des_p(esecuzione->identifier);
-	liv = pdes_proc->liv;
-	pdirettorio = pdes_proc->cr3;
-
-	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
-		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
-		if (pdes_tab->P == 0)  // XXX: page fault esclusi
-			return false;
-		tabella_pagine *ptab = tabella_puntata(pdes_tab);
-		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
-		if (pdes_pag->P == 0)  // XXX: page fault esclusi
-			return false;
-		if (liv == LIV_UTENTE && pdes_pag->US == 0)
-			return false;
-		if (write && pdes_pag->RW == 0)
-			return false;
-	}
-	return true;
-}
-
 //////////////////////////////////////////////////////////////////////////////////
 // CREAZIONE PROCESSI                                                           //
 //////////////////////////////////////////////////////////////////////////////////
+
+// descrittore di processo
+struct des_proc {			// offset:
+//	short id;
+	unsigned int link;		// 0
+//	int punt_nucleo;
+	void*        esp0;		// 4
+	unsigned int ss0;		// 8
+	void*        esp1;		// 12
+	unsigned int ss1;		// 16
+	void*        esp2;		// 20
+	unsigned int ss2;		// 24
+
+	direttorio* cr3;		// 28
+
+	unsigned int eip;		// 32, non utilizzato
+	unsigned int eflags;		// 36, non utilizzato
+
+//	int contesto[N_REG];
+	unsigned int eax;		// 40
+	unsigned int ecx;		// 44
+	unsigned int edx;		// 48
+	unsigned int ebx;		// 52
+	unsigned int esp;		// 56
+	unsigned int ebp;		// 60
+	unsigned int esi;		// 64
+	unsigned int edi;		// 68
+
+	unsigned int es;		// 72
+	unsigned int cs; 		// 76, char cpl;
+	unsigned int ss;		// 80
+	unsigned int ds;		// 84
+	unsigned int fs;		// 86
+	unsigned int gs;		// 90
+	unsigned int ldt;		// 94, non utilizzato
+
+	unsigned int io_map;		// 100, non utilizzato
+
+	struct {
+		unsigned int cr;	// 104
+		unsigned int sr;	// 108
+		unsigned int tr;	// 112
+		unsigned int ip;	// 116
+		unsigned int is;	// 120
+		unsigned int op;	// 124
+		unsigned int os;	// 128
+		char regs[80];		// 132
+	} fpu;
+
+	char liv;			// 212
+}; // dimensione 212 + 1 + 3(allineamento) = 216
+
+// vettore dei descrittori di processo
+extern des_proc array_desp[MAX_PROCESSI];
+
+// numero di processi attivi
+int processi = 0;
+
+// elemento di una coda di processi
+struct proc_elem {
+	short identifier;
+	int priority;
+	proc_elem *puntatore;
+};
+
+// manipolazione delle code di processi
+void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
+void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
+
+// processo in esecuzione
+extern proc_elem *esecuzione;
+
+// coda dei processi pronti
+extern proc_elem *pronti;
+
+// funzioni usate da crea_processo
 pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine);
 pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale);
 void rilascia_tutto(direttorio* pdir, void* start, void* end);
+extern "C" int alloca_tss();
+extern "C" void rilascia_tss(int indice);
+
+// ritorna il descrittore del processo id
+extern "C" des_proc *des_p(short id) {
+	return &array_desp[id - 5];
+}
 
 proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 {
@@ -2624,6 +1844,14 @@ entry_t io_entry = 0;
 extern "C" void salta_a_main();
 volatile short id_main = 0;
 
+// schedulatore
+extern "C" void schedulatore(void);
+
+// verifica i diritti del processo in esecuzione sull' area di memoria
+// specificata dai parametri
+extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
+
+
 extern "C" void
 c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 {
@@ -2647,6 +1875,7 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 void shutdown() {
 	asm("sti: 1: nop; jmp 1b" : : );
 }
+extern "C" void terminate_p();
 
 extern "C" void c_terminate_p()
 {
@@ -2666,7 +1895,54 @@ extern "C" void c_terminate_p()
 	schedulatore();
 }
 
-void aggiungi_pe(proc_elem *p, estern_id interf);
+// Registrazione processi esterni
+
+const int S = 2;
+const int A = 2;
+
+proc_elem *pe_tast;
+proc_elem *in_com[S], *out_com[S];
+proc_elem *ata[A];
+
+// Valori usati in io.cpp
+enum estern_id {
+	tastiera,
+	com1_in,
+	com1_out,
+	com2_in,
+	com2_out,
+	ata0,
+	ata1
+};
+
+void aggiungi_pe(proc_elem *p, estern_id interf)
+{
+	switch(interf) {
+		case tastiera:
+			pe_tast= p;
+			break;
+		case com1_in:
+			in_com[0] = p;
+			break;
+		case com1_out:
+			out_com[0] = p;
+			break;
+		case com2_in:
+			in_com[1] = p;
+			break;
+		case com2_out:
+			out_com[1] = p;
+			break;
+		case ata0:
+			ata[0]=p;
+			break;
+		case ata1:
+			ata[1]=p;
+			break;
+		default:
+			; // activate_pe chiamata con parametri scorretti
+	}
+}
 
 extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 	short &identifier, estern_id interf, bool &risu)
@@ -2811,31 +2087,6 @@ extern "C" void c_mem_free(void *pv)
 	}
 }
 
-void debug_heap() {
-	des_heap* scorri = &heap;
-	printk("--- HEAP UTENTE ---\n");
-	while (scorri != 0) {
-		printk("%x (%d) %s\n", scorri->start, scorri->dimensione & ~3,
-				(scorri->occupato ? "*" : ""));
-		scorri = scorri->next;
-	}
-	printk("----------------------\n");
-}
-
-extern "C" void c_delay(int n)
-{
-	richiesta *p;
-
-	p = new richiesta;
-	p->d_attesa = n;
-	p->pp = esecuzione;
-
-	inserimento_coda_timer(p);
-	schedulatore();
-}
-
-
-
 extern "C" void c_begin_p()
 {
 	//attiva_timer(DELAY);
@@ -2854,6 +2105,18 @@ extern "C" void c_give_num(int &lav)
         lav = processi - 1;
 }
 
+
+// descrittore di semaforo
+struct des_sem {
+	int counter;
+	proc_elem *pointer;
+};
+
+
+// vettore dei descrittori di semaforo
+extern des_sem array_dess[MAX_SEMAFORI];
+
+// bitmap per l'allocazione dei semafori
 unsigned int sem_buf[MAX_SEMAFORI / sizeof(int) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
@@ -3084,6 +2347,10 @@ void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* m
 }
 
 extern "C" unsigned long  calibra_tsc();
+// timer
+extern "C" void attiva_timer(unsigned long delay);
+extern unsigned long ticks;
+extern unsigned long clocks_per_nsec;
 
 void main_proc(int a) {
 
@@ -3164,6 +2431,10 @@ void main_proc(int a) {
 }
 
 	
+// inizializzazione della console
+void con_init(void);
+// controllore interruzioni
+extern "C" void init_8259();
 
 extern "C" void
 cmain (unsigned long magic, multiboot_info_t* mbi)
@@ -3310,4 +2581,638 @@ extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 	printk("Eccezione %d, errore %x\n", tipo, errore);
 	printk("eflag = %x, eip = %x, cs = %x\n", eflag, eip, cs);
 	abort_p();
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//                         FUNZIONI AD USO INTERNO                          //
+//////////////////////////////////////////////////////////////////////////////
+
+// stampa MSG su schermo e termina le elaborazioni del sistema
+//
+extern "C" void backtrace();
+extern "C" void panic(const char *msg)
+{
+	printk("%s\n", msg);
+	backtrace();
+	asm("1: nop; jmp 1b");
+}
+
+// inserisce P_ELEM in P_CODA, mantenendola ordinata per priorita' decrescente
+//
+void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem)
+{
+	proc_elem *pp, *prevp;
+
+	pp = p_coda;
+	prevp = 0;
+	while(pp && pp->priority >= p_elem->priority) {
+		prevp = pp;
+		pp = pp->puntatore;
+	}
+
+	if(!prevp)
+		p_coda = p_elem;
+	else
+		prevp->puntatore = p_elem;
+
+	p_elem->puntatore = pp;
+}
+
+// rimuove il primo elemento da P_CODA e lo mette in P_ELEM
+//
+void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem)
+{
+	p_elem = p_coda;
+
+	if(p_coda)
+		p_coda = p_coda->puntatore;
+}
+
+// scheduler a priorita'
+//
+extern "C" void schedulatore(void)
+{
+	rimozione_coda(pronti, esecuzione);
+}
+
+// richiesta al timer
+//
+struct richiesta {
+	int d_attesa;
+	richiesta *p_rich;
+	proc_elem *pp;
+};
+
+// coda delle richieste al timer
+//
+richiesta *descrittore_timer;
+
+// inserisce P nella coda delle richieste al timer
+//
+void inserimento_coda_timer(richiesta *p)
+{
+	richiesta *r, *precedente;
+	bool ins;
+
+	r = descrittore_timer;
+	precedente = 0;
+	ins = false;
+
+	while(r != 0 && !ins)
+		if(p->d_attesa > r->d_attesa) {
+			p->d_attesa -= r->d_attesa;
+			precedente = r;
+			r = r->p_rich;
+		} else
+			ins = true;
+
+	p->p_rich = r;
+	if(precedente != 0)
+		precedente->p_rich = p;
+	else
+		descrittore_timer = p;
+
+	if(r != 0)
+		r->d_attesa -= p->d_attesa;
+}
+
+extern "C" void c_delay(int n)
+{
+	richiesta *p;
+
+	p = new richiesta;
+	p->d_attesa = n;
+	p->pp = esecuzione;
+
+	inserimento_coda_timer(p);
+	schedulatore();
+}
+
+// driver del timer
+//
+extern "C" void c_driver_t(void)
+{
+	richiesta *p;
+
+	ticks++;
+
+	if(descrittore_timer != 0)
+		descrittore_timer->d_attesa--;
+
+	while(descrittore_timer != 0 && descrittore_timer->d_attesa == 0) {
+		inserimento_coda(pronti, descrittore_timer->pp);
+		p = descrittore_timer;
+		descrittore_timer = descrittore_timer->p_rich;
+		delete p;
+	}
+
+	aggiorna_statistiche();
+
+	schedulatore();
+}
+
+// verifica i permessi del processo sui parametri passati (problema del
+//  Cavallo di Troia)
+
+// Questa versione di verifica_area presuppone che la memoria
+// non sia virtuale
+
+extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
+{
+	des_proc *pdes_proc;
+	direttorio* pdirettorio;
+	char liv;
+
+	pdes_proc = des_p(esecuzione->identifier);
+	liv = pdes_proc->liv;
+	pdirettorio = pdes_proc->cr3;
+
+	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
+		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
+		if (pdes_tab->P == 0)  // XXX: page fault esclusi
+			return false;
+		tabella_pagine *ptab = tabella_puntata(pdes_tab);
+		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
+		if (pdes_pag->P == 0)  // XXX: page fault esclusi
+			return false;
+		if (liv == LIV_UTENTE && pdes_pag->US == 0)
+			return false;
+		if (write && pdes_pag->RW == 0)
+			return false;
+	}
+	return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                          FUNZIONI DI LIBRERIA                              //
+////////////////////////////////////////////////////////////////////////////////
+
+// il nucleo non puo' essere collegato alla libreria standard del C/C++,
+// perche' questa e' stata scritta utilizzando le primitive del sistema
+// che stiamo usando (sia esso Windows o Unix). Tali primitive non
+// saranno disponibili quando il nostro nucleo andra' in esecuzione.
+// Per ragioni di convenienza, ridefiniamo delle funzioni analoghe a quelle
+// fornite dalla libreria del C.
+
+// copia n byte da src a dest
+void *memcpy(void *dest, const void *src, unsigned int n)
+{
+	char       *dest_ptr = static_cast<char*>(dest);
+	const char *src_ptr  = static_cast<const char*>(src);
+
+	for (int i = 0; i < n; i++)
+		dest_ptr[i] = src_ptr[i];
+
+	return dest;
+}
+
+// scrive n byte pari a c, a partire da dest
+void *memset(void *dest, int c, unsigned int n)
+{
+	char *dest_ptr = static_cast<char*>(dest);
+
+        for (int i = 0; i < n; i++)
+              dest_ptr[i] = static_cast<char>(c);
+
+        return dest;
+}
+
+typedef char *va_list;
+
+// Versione semplificata delle macro per manipolare le liste di parametri
+//  di lunghezza variabile; funziona solo se gli argomenti sono di
+//  dimensione multipla di 4, ma e' sufficiente per le esigenze di printk.
+//
+#define va_start(ap, last_req) (ap = (char *)&(last_req) + sizeof(last_req))
+#define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
+#define va_end(ap)
+
+
+// restituisce la lunghezza della stringa s (che deve essere terminata da 0)
+int strlen(const char *s)
+{
+	int l = 0;
+
+	while (*s++)
+		++l;
+
+	return l;
+}
+
+// copia al piu' l caratteri dalla stringa src alla stringa dest
+char *strncpy(char *dest, const char *src, unsigned int l)
+{
+
+	for (int i = 0; i < l && src[i]; ++i)
+		dest[i] = src[i];
+
+	return dest;
+}
+
+// restituisce true se le stringhe puntate da first e second
+// sono uguali
+bool str_equal(const char* first, const char* second) {
+
+	while (*first && *second && *first++ == *second++)
+		;
+
+	return (!*first && !*second);
+}
+
+static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
+	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+
+// converte l in stringa (notazione esadecimale)
+static void htostr(char *buf, unsigned long l)
+{
+
+	buf[0] = '0';
+	buf[1] = 'x';
+
+	for (int i = 9; i > 1; --i) {
+		buf[i] = hex_map[l % 16];
+		l /= 16;
+	}
+}
+
+// converte l in stringa (notazione decimale)
+static void itostr(char *buf, unsigned int len, long l)
+{
+	int i, div = 1000000000, v, w = 0;
+
+	if (l == (-2147483647 - 1)) {
+ 		strncpy(buf, "-2147483648", 12);
+ 		return;
+   	} else if (l < 0) {
+		buf[0] = '-';
+		l = -l;
+		i = 1;
+	} else if (l == 0) {
+		buf[0] = '0';
+		buf[1] = 0;
+		return;
+	} else
+		i = 0;
+
+	while (i < len - 1 && div != 0) {
+		if ((v = l / div) || w) {
+			buf[i++] = '0' + (char)v;
+			w = 1;
+		}
+
+		l %= div;
+		div /= 10;
+	}
+
+	buf[i] = 0;
+}
+
+#define DEC_BUFSIZE 12
+
+// stampa formattata su stringa
+int vsnprintf(char *str, unsigned int size, const char *fmt, va_list ap)
+{
+	int in = 0, out = 0, tmp;
+	char *aux, buf[DEC_BUFSIZE];
+
+	while (out < size - 1 && fmt[in]) {
+		switch(fmt[in]) {
+			case '%':
+				switch(fmt[++in]) {
+					case 'd':
+						tmp = va_arg(ap, int);
+						itostr(buf, DEC_BUFSIZE, tmp);
+						if(strlen(buf) >
+								size - out - 1)
+							goto end;
+						for(aux = buf; *aux; ++aux)
+							str[out++] = *aux;
+						break;
+					case 'x':
+						tmp = va_arg(ap, int);
+						if(out > size - 11)
+							goto end;
+						htostr(&str[out], tmp);
+						out += 10;
+						break;
+					case 's':
+						aux = va_arg(ap, char *);
+						while(out < size - 1 && *aux)
+							str[out++] = *aux++;
+						break;	
+				}
+				++in;
+				break;
+			default:
+				str[out++] = fmt[in++];
+		}
+	}
+end:
+	str[out++] = 0;
+
+	return out;
+}
+
+// stampa formattata su stringa (variadica)
+int snprintf(char *buf, unsigned int n, const char *fmt, ...)
+{
+	va_list ap;
+	int l;
+
+	va_start(ap, fmt);
+	l = vsnprintf(buf, n, fmt, ap);
+	va_end(ap);
+
+	return l;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//                               IO DA CONSOLE                              //
+//////////////////////////////////////////////////////////////////////////////
+
+typedef char *ind_b;	// indirizzo di una porta
+
+// ingresso di un byte da una porta di IO
+extern "C" void inputb(ind_b reg, char &a);
+
+// uscita di un byte su una porta di IO
+extern "C" void outputb(char a, ind_b reg);
+
+const int CON_BUF_SIZE = 0x0fa0;
+
+struct con_status {
+	unsigned char buffer[CON_BUF_SIZE];
+	short x, y;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+//                           GESTIONE DEL VIDEO                               //
+////////////////////////////////////////////////////////////////////////////////
+
+unsigned char *VIDEO_MEM_BASE = (unsigned char *)0x000b8000;
+const int VIDEO_MEM_SIZE = 0x00000fa0;
+
+const short CUR_HIGH = 0x0e;
+const short CUR_LOW = 0x0f;
+
+const ind_b ADD_P = (ind_b)0x03d4;
+const ind_b DAT_P = (ind_b)0x03d5;
+
+const int COL_NUM = 80;
+const int ROW_NUM = 25;
+
+const unsigned char COL_BLACK = 0x00;
+const unsigned char COL_WHITE = 0x07;
+
+const unsigned char COL_BRIGHT = 0x08;
+
+struct con_pos {
+	unsigned char *base;
+	unsigned char *ptr;
+	short x, y;
+} curr_pos;
+
+unsigned char con_attr = COL_WHITE | (COL_BLACK << 4);
+
+inline void PUT(con_pos *cp, char ch)
+{
+	*cp->ptr++ = ch;
+	*cp->ptr++ = con_attr;
+}
+
+inline void gotoxy(con_pos *cp, int nx, int ny)
+{
+	int new_pos = nx + ny * COL_NUM;
+
+	if(cp == &curr_pos) {
+		outputb(CUR_HIGH, ADD_P);
+		outputb((char)(new_pos >> 8), DAT_P);
+		outputb(CUR_LOW, ADD_P);
+		outputb((char)(new_pos&0xff), DAT_P);
+	}
+
+	cp->ptr = cp->base + new_pos * 2;
+
+	cp->x = nx;
+	cp->y = ny;
+}
+
+inline void scroll_up(con_pos *cp)
+{
+	cp->ptr = cp->base;
+
+	while(cp->ptr < cp->base + VIDEO_MEM_SIZE - COL_NUM * 2) {
+		*cp->ptr = *(cp->ptr + COL_NUM * 2);
+		++cp->ptr;
+	}
+
+	for(; cp->ptr < cp->base + VIDEO_MEM_SIZE;) {
+		*cp->ptr++ = ' ';
+		*cp->ptr++ = con_attr;
+	}
+
+	gotoxy(cp, 0, ROW_NUM - 1);
+}
+
+
+inline void put_char(con_pos *cp, char ch)
+{
+	switch(ch) {
+		case '\n':
+			if(cp->y < ROW_NUM - 1)
+				gotoxy(cp, 0, cp->y + 1);
+			else
+				scroll_up(cp);
+			break;
+		case '\b':
+			if(cp->x > 0) {
+				cp->ptr -= 2;
+				PUT(cp, ' ');
+				gotoxy(cp, cp->x - 1, cp->y);
+			}
+			break;
+		default:
+			if(ch < 31 || ch < 0)
+				return;
+
+			if(cp->x < COL_NUM) {
+				PUT(cp, ch);
+				gotoxy(cp, cp->x + 1, cp->y);
+			} else {
+				if(cp->y == ROW_NUM - 1) {
+					scroll_up(cp);
+					PUT(cp, ch);
+					gotoxy(cp, 1, cp->y);
+				} else {
+					PUT(cp, ch);
+					gotoxy(cp, 1, cp->y + 1);
+				}
+			}
+	}
+}
+
+void con_init(void)
+{
+	curr_pos.base = curr_pos.ptr = VIDEO_MEM_BASE;
+
+	while(curr_pos.ptr < VIDEO_MEM_BASE + VIDEO_MEM_SIZE)
+		PUT(&curr_pos, ' ');
+
+	gotoxy(&curr_pos, 0, 0);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+// NOTA: non vengono fatti controlli sui parametri perche' queste routine
+//  sono disponibili solo su gate con DPL 0. Deve essere il modulo di IO
+//  (l' unico che le utilizza) a verificare i diritti dell' eventuale
+//  chiamante.
+//
+
+// registri dell' interfaccia della tastiera
+#define KBD_RBR		((ind_b)0x60)
+#define KBD_PORT_B	((ind_b)0x61)
+#define KBD_STR		((ind_b)0x64)
+
+extern "C" void c_con_read(char &ch, bool &risu)
+{
+	char code, val;
+
+	inputb(KBD_STR, val);
+	if(val&0x01 == 0) {
+		risu = false;
+		return;
+	}
+
+	inputb(KBD_RBR, code);
+	inputb(KBD_PORT_B, val);
+	outputb(val|0x80, KBD_PORT_B);
+	outputb(val, KBD_PORT_B);
+
+	ch = code;
+	risu = true;
+}
+
+extern "C" void c_con_write(const char *vett, int quanti)
+{
+	int i;
+
+	for(i = 0; i < quanti; ++i)
+		put_char(&curr_pos, vett[i]);
+}
+
+extern "C" void c_con_save(con_status *cs)
+{
+	memcpy(cs->buffer, VIDEO_MEM_BASE, VIDEO_MEM_SIZE);
+	cs->x = curr_pos.x;
+	cs->y = curr_pos.y;
+}
+
+extern "C" void c_con_load(const con_status *cs)
+{
+	memcpy(VIDEO_MEM_BASE, cs->buffer, VIDEO_MEM_SIZE);
+	gotoxy(&curr_pos, cs->x, cs->y);
+}
+
+extern "C" void c_con_update(con_status *cs, const char *vett, int quanti)
+{
+	con_pos cp;
+	int i;
+
+	cp.base = cs->buffer;
+	cp.ptr = cs->buffer + 2 * (cs->x + cs->y * COL_NUM);
+	cp.x = cs->x;
+	cp.y = cs->y;
+
+	for(i = 0; i < quanti; ++i)
+		put_char(&cp, vett[i]);
+
+	cs->x = cp.x;
+	cs->y = cp.y;
+}
+
+extern "C" void c_con_init(con_status *cs)
+{
+	int i;
+
+	cs->x = cs->y = 0;
+
+	for(i = 0; i < VIDEO_MEM_SIZE; i += 2) {
+		cs->buffer[i] = ' ';
+		cs->buffer[i + 1] = con_attr;
+	}
+}
+
+extern "C" int printk(const char *fmt, ...)
+{
+	va_list ap;
+	char buf[1024];
+	int l;
+
+	va_start(ap, fmt);
+	l = vsnprintf(buf, 1024, fmt, ap);
+	va_end(ap);
+
+	c_con_write(buf, strlen(buf));
+
+	return l;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Allocatore a mappa di bit
+////////////////////////////////////////////////////////////////////////////////
+
+
+inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
+{
+	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
+}
+
+inline void bm_set(bm_t *bm, unsigned int pos)
+{
+	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
+}
+
+inline void bm_clear(bm_t *bm, unsigned int pos)
+{
+	bm->vect[pos / 32] |= (1UL << (pos % 32));
+}
+
+// crea la mappa BM, usando BUFFER come vettore; SIZE e' il numero di bit
+//  nella mappa
+//
+void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
+{
+	bm->vect = buffer;
+	bm->size = size;
+	bm->vecsize = ceild(size, sizeof(unsigned int) * 8);
+
+	for (int i = 0; i < bm->vecsize; ++i)
+		bm->vect[i] = 0xffffffff;
+}
+
+
+// usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
+// efficiente il primo bit a 1 in v
+extern "C" int trova_bit(unsigned int v);
+
+bool bm_alloc(bm_t *bm, unsigned int& pos) {
+
+	int i = 0;
+	bool risu = true;
+
+	while (i < bm->vecsize && !bm->vect[i]) i++;
+	if (i < bm->vecsize) {
+		pos = trova_bit(bm->vect[i]);
+		bm->vect[i] &= ~(1UL << pos);
+		pos += sizeof(unsigned int) * 8 * i;
+	} else 
+		risu = false;
+	return risu;
+}
+
+void bm_free(bm_t *bm, unsigned int pos)
+{
+	bm_clear(bm, pos);
 }
