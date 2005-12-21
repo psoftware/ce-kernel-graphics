@@ -320,7 +320,7 @@ int main(int argc, char* argv[]) {
 	// abbiamo finito con i segmenti
 	delete[] buf;
 	// ora settiamo il bit preload per tutte le pagine che devono contenere
-	// la sezione RESIDENT
+	// la sezione RESIDENT e MAIN
 
 	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
 	buf = new char[elf_h->e_shnum * elf_h->e_shentsize];

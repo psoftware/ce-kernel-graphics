@@ -201,7 +201,7 @@ multiboot_header:
 
 multiboot_entry:
 
-     movl    $(stack + STACK_SIZE), %esp # inizializziamo lo stack
+     movl    $(_stack + STACK_SIZE), %esp # inizializziamo lo stack
      call    init_gdt
      lgdt    gdt_pointer		# carichiamo la nuova GDT
 
@@ -518,7 +518,7 @@ init_idt:
 	carica_gate	0x21		handler_KBD	LIV_SISTEMA
 	carica_gate	0x23		handler_COM2	LIV_SISTEMA
 	carica_gate	0x24		handler_COM1	LIV_SISTEMA
-	carica_gate	0x2E 		handler_HD0 	LIV_SISTEMA
+	carica_gate	0x2E 		driver_hd 	LIV_SISTEMA
 	carica_gate	0x2F 		handler_HD1 	LIV_SISTEMA
 
 	# primitive utente
@@ -549,6 +549,11 @@ init_idt:
 	carica_gate	tipo_cl		a_con_load	LIV_SISTEMA
 	carica_gate	tipo_cu		a_con_update	LIV_SISTEMA
 	carica_gate	tipo_ci		a_con_init	LIV_SISTEMA
+
+	# gestione HD (Faggioli)
+	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
+	carica_gate	io_tipo_whdn	a_writehd_n	LIV_SISTEMA
+
 	leave
 	ret
 
@@ -783,6 +788,49 @@ _outputb:
 	popl %eax
 	ret
 
+# Ingresso di un buffer continuo da un buffer di IO di word
+#
+	.global _inputbuffw
+_inputbuffw:
+	pushl %eax
+	pushl %edx
+	pushl %edi
+	pushl %ecx
+	
+	movl 20(%esp), %edx
+	movl 24(%esp), %edi
+	movl 28(%esp),%ecx
+	cld
+	rep
+	insw
+	
+	popl %ecx
+	popl %edi
+	popl %edx
+	popl %eax
+	ret
+
+# Uscita di un buffer continuo su una buffer di IO di word
+#
+	.global _outputbuffw
+_outputbuffw:
+	pushl %eax
+	pushl %edx
+	pushl %esi
+	pushl %ecx
+	
+	movl 24(%esp), %edx
+	movl 20(%esp), %esi
+	movl 28(%esp),%ecx
+	cld
+	rep
+	outsw
+	
+	popl %ecx
+	popl %esi
+	popl %edx
+	popl %eax
+	ret
 
 # PIC
 .set ICW1M, 0x20
@@ -887,6 +935,7 @@ _calibra_tsc:
 	cpuid
 	rdtsc
 	movl %eax, -4(%ebp)
+	sti
 1:	movl _ticks, %ecx
 	cmpl $0, %ecx
 	je 1b
@@ -895,6 +944,7 @@ _calibra_tsc:
 	subl -8(%ebp), %ecx
 	cmpl $20, %ecx
 	jbe 2b
+	cli
 	cpuid
 	rdtsc
 	subl %eax, -4(%ebp)
@@ -906,10 +956,29 @@ _calibra_tsc:
 	leave
 	ret
 
+	.global _trasforma_in_processo
+_trasforma_in_processo:
+	popl %eax
+	pushl $0x00000200 #eflag, IF=1
+	pushl $SEL_CODICE_SISTEMA
+	pushl %eax #eip
+	call salva_stato
+	call carica_stato
+	iret
 
 	.global _salta_a_main
 _salta_a_main:
-	call carica_stato
+	movw $SEL_DATI_UTENTE, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	popl %eax
+	popl %eax
+	popl %ebx
+	pushl $SEL_DATI_UTENTE
+	pushl %ebx
+	pushl $0x00000200
+	pushl $SEL_CODICE_UTENTE
+	pushl %eax
 	iret
 
 # console
@@ -1127,6 +1196,24 @@ driver_t:
 	call carica_stato
 	iret
 
+	.extern _c_driver_hd
+driver_hd:
+	call salva_stato
+	call inspronti
+	call _c_driver_hd
+	movb $EOI, %al		# ack al controllore slave
+	outb %al, $OCW2S
+	movb $READ_ISR, %al	# lettura di ISR dello slave
+	outb %al, $OCW3S
+	inb $OCW3S, %al
+	testb $0xff, %al
+	jnz 1f
+	movb $EOI, %al
+	outb %al, $OCW2M
+1:	call carica_stato
+	iret
+	
+
 	.extern _pe_tast
 handler_KBD:
 	call salva_stato
@@ -1175,17 +1262,6 @@ handler_COM2:
 1:
 	movl _in_com + 4, %eax
 2:
-	movl %eax, _esecuzione
-
-	call carica_stato
-	iret
-
-	.extern _ata
-handler_HD0:
-	call salva_stato
-	call inspronti
-
-	movl _ata, %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1361,7 +1437,7 @@ a_ndelay:
 	pushl %edx
 	pushl %ebx
 	pushl %ecx
-	movl _clocks_per_nsec, %eax
+	movl _clocks_per_usec, %eax
 	mull 32(%esp)
 	movl %eax, %ecx
 	rdtsc
@@ -1376,14 +1452,316 @@ a_ndelay:
 	popl %eax
 	iret
 
+# SWAP
+# Funzioni di utilita' per la gestione degli hard disk
+#
+
+	.global a_readhd_n
+	.extern _c_readhd_n
+a_readhd_n:
+	salva_registri
+	copia_param 6 7
+	call _c_readhd_n
+	addl $24, %esp
+	carica_registri
+	iret
+
+	.global a_writehd_n
+	.extern _c_writehd_n
+a_writehd_n:
+	salva_registri
+	copia_param 6 7
+	call _c_writehd_n
+	addl $24, %esp
+	carica_registri
+	iret
+# Esegue un probing del canale ATA specificato tentando di capire se
+#  ad esso sono collegati nessuno, uno o piu` dispositivi
+#
+	.global _test_canale
+_test_canale:
+	pushl %ebx
+	pushl %edx
+	movw 12(%esp),%dx
+	movw 0xFFFF,%bx
+chcyc1:	inb %dx,%al
+	cmpb $0xFF,%al
+	je chfl1
+	inb %dx,%al
+	testb $0x80,%al
+	jz chprb1
+	decw %bx
+	jnz chcyc1
+chprb1:	movb $0x55,%al
+	movw 16(%esp),%dx 
+	outb %al,%dx
+	movb $0xAA,%al
+	movw 20(%esp),%dx
+	outb %al,%dx
+	movw 16(%esp),%dx
+	outb %al,%dx
+	movb $0x55,%al
+	movw 20(%esp),%dx
+	outb %al,%dx
+	movw 16(%esp),%dx
+	outb %al,%dx
+	movb $0xAA,%al
+	movw 20(%esp),%dx
+	outb %al,%dx
+	movw 16(%esp),%dx
+	inb %dx,%al
+	movb %al,%ah
+	movw 20(%esp),%dx
+	inb %dx,%al
+	cmpw $0x55AA,%ax
+	jne chfl1
+chnfl1:	
+	movl $1,%eax
+	jmp chret1
+chfl1:	
+	movl $0,%eax
+chret1:	popl %edx
+	popl %ebx
+	ret
+
+# Assmendo che il canale sia "attivo" cerca di capire se il dispositivo
+#  indirizzato e` un ATA (hard disk) o ATAPI (chrom)
+#
+	.global _leggi_signature
+_leggi_signature:
+	pushl %edx
+	movw 8(%esp),%dx
+	inb %dx,%al
+	cmpb $0x01,%al
+	jne sgerr
+	movw 12(%esp),%dx
+	inb %dx,%al
+	cmpb $0x01,%al
+	jne sgerr
+	movw 16(%esp),%dx
+	inb %dx,%al
+	cmpb $0x00,%al
+	je sgata1
+	cmpb $0x14,%al
+	je sgpi1
+	jmp sgerr
+sgata1:	movw 20(%esp),%dx
+	inb %dx,%al
+	cmpb $0x00,%al
+	jne sgerr
+	jmp sgata
+sgpi1:	movw 20(%esp),%dx
+	inb %dx,%al
+	cmpb $0xEB,%al
+	jne sgerr
+	jmp sgpi
+sgata:	
+	movl $0,%eax
+	jmp sgret
+sgpi:	
+	movl $1,%eax
+	jmp sgret
+sgerr:	
+	movl $-1,%eax
+sgret:	
+	popl %edx
+	ret
+
+	.global _drive_reset
+_drive_reset:
+	pushl %edx
+	movw 8(%esp),%dx
+	movb $0x0E,%al
+	outb %al,%dx
+	movw 12(%esp),%dx
+	inb %dx,%al
+	testb $0x80,%al
+	jz rserr
+	movw 8(%esp),%dx
+	movb $0x02,%al
+	outb %al,%dx
+	movl $1,%eax
+	jmp rsret
+rserr:	movl $0,%eax
+rsret:	popl %edx
+	ret
+
+# Abilita il controller ATA specificato a generare richieste di interruzione
+#  utili sia per l'ingresso che per l'uscita
+#
+	.global _go_inouthd
+_go_inouthd:
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp), %edx		# ind. di DEV_CTL in edx
+	movb $0x08,%al
+	outb %al, %dx			# abilitazione dell' interfaccia a
+					# generare interruzioni
+	popl %edx
+	popl %eax
+	ret
+
+# Disabilita il controller ATA specificato a generare richeste di interruzione
+#  NB. Su un PC (non su Bochs) questa stassa procedura produrra` una richiesta
+#  di interruzione!
+#
+	.global _halt_inouthd
+_halt_inouthd:
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp), %edx		# ind. di DEV_CTL in edx
+	movb $0x0A,%al
+	outb %al, %dx			# disabilitazione della generazione
+					# di interruzioni
+	popl %edx
+	popl %eax
+	ret
+
+# Indica al controllore quale drive deve essere selezionato
+#
+	.global _set_drive
+_set_drive:
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp),%eax
+	cmpl $0,%eax
+	je shd_ms
+shd_sl:	movb $0xF0,%al
+	jmp ms_out
+shd_ms:	movb $0xE0,%al
+ms_out:	movl 16(%esp),%edx
+	outb %al,%dx
+
+	#pushl $400
+	#call _ndelay
+	#addl $4, %esp
+
+	popl %edx
+	popl %eax
+	ret
+
+# Legge lo stato attuale del controllore per capire quale drive e` attivo
+#
+	.global _get_drive
+_get_drive:
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp),%edx
+	inb %dx,%al
+	
+	testb $0x10,%al
+	jz ghd_ms
+ghd_sl:	movl $1,%eax
+	jmp ms_ret
+ghd_ms:	movl $0,%eax
+ms_ret:	movl 16(%esp),%edx
+	movl %eax,(%edx)
+
+	popl %edx
+	popl %eax
+	ret
+	
+# Indirizzi dei registri del controller ata
+#
+
+.set HD_STS_1, 0x01F7
+.set HD_STS_2, 0x0177
+.set HD_SECT_N, 0x01f3
+.set HD_CYL_L_N, 0x01f4
+.set HD_CYL_H_N, 0x01f5
+.set HD_N, 0x01f6
+
+# Maschere dei bit fndamentali
+#
+.set HD_STS_DRDY, 0x40
+
+# Disabilita il controllore di interruzioni ad inoltrare richieste provenienti
+#  da uno dei due controller ATA, Slave PIC, linee 14 o 15
+#
+	.global _mask_hd
+_mask_hd:
+	pushl %eax
+	movl 8(%esp),%eax
+	cmpl $0x01F7,%eax
+	je msk0
+	cmpl $0x0177,%eax
+	je msk1			# capisce qual'e` il canale
+	jmp m_end
+msk0:	inb $OCW1S,%al
+	orb $0b01000000,%al	# linea 14
+	outb %al,$OCW1S	
+	jmp m_end
+msk1:	inb $OCW1S,%al
+	orb $0b10000000,%al	# linea 15
+	outb %al,$OCW1S
+m_end:	popl %eax
+	ret
+
+# Abilita il controllore di interruzione ad inoltrere le richieste provenienti
+#  da uno dei due controller ATA, Slave PIC, linee 14 o 15
+#
+	.global _umask_hd
+_umask_hd:
+	pushl %eax
+	movl 8(%esp),%eax
+	cmpl $0x01F7,%eax
+	je umsk0
+	cmpl $0x0177,%eax
+	je umsk1		# Capisce qual'e` il canale
+	jmp um_end
+umsk0:	inb $OCW1S,%al
+	andb $0b10111111,%al	# linea 14
+	outb %al,$OCW1S	
+	jmp um_end
+umsk1:	inb $OCW1S,%al
+	andb $0b01111111,%al	# linea 15
+	outb %al,$OCW1S
+um_end:	popl %eax
+	ret
+	
+# Scompone correttamente il blocco iniziale di una operazione su hard disk
+# e lo scrive nei registri opportuni
+#
+	.global _setup_addr_hd
+_setup_addr_hd:
+	pushl %eax
+	pushl %edx
+	pushl %edi
+	
+	movl 20(%esp),%eax
+	movl 16(%esp),%edi	# accede al descrittore per comodita`
+	movl 16(%edi),%edx
+	outb %al,%dx		# caricato iSECT_N
+	movl 20(%edi),%edx
+	movb %ah,%al
+	outb %al,%dx		# caricato cyl_LSB
+	shrl $16,%eax
+	movl 24(%edi),%edx
+	outb %al,%dx		# caricato cyl_MSB
+	movl 28(%edi),%edx
+	inb %dx,%al		# iDRV_HD in %al
+	andb $0xF0,%al		# maschera per l'indirizzo in DRV_HD
+	andb $0x0F,%ah		# maschera per i 4 bit +sing di primo
+	orb %ah,%al
+	outb %al,%dx		# caricato iDRV_HD
+	
+	popl %edi
+	popl %edx
+	popl %eax
+	ret
+
 ###############################################################
 # sezione dati: tabelle e stack				      #
 ###############################################################
 .data
 .global		_ticks
 _ticks:		.long 0
-.global		_clocks_per_nsec
-_clocks_per_nsec:
+.global		_clocks_per_usec
+_clocks_per_usec:
 		.long 1
 .global		_mem_upper
 _mem_upper:	 .long _end
@@ -1398,6 +1776,58 @@ _pronti:	.long 0
 _array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
 .global		_array_desp
 _array_desp:	.space SIZE_DESP * MAX_PROCESSI
+# Descrittore Hard Disk
+	.global _hd
+_hd:	.long	0x01f7		#hd[0].indreg.iCMD_iSTS
+	.long	0x01f0		#hd[0].indreg.iDATA
+	.long	0x01f1		#hd[0].indreg.iFEATURES_iERROR
+	.long 	0x01f2		#hd[0].indreg.iSTCONT
+	.long	0x01f3		#hd[0].indreg.iSECT_N
+	.long	0x01f4		#hd[0].indreg.iCYL_L_N
+	.long	0x01f5		#hd[0].indreg.iCYL_H_N
+	.long	0x01f6		#hd[0].indreg.iHD_N_iDRV_HD
+	.long	0x03f6		#hd[0].indreg.iALT_STS_iDEV_CTRL
+	.long	0		#hd[0].disco[0].{presente,dma} (sono byte!)
+	.word	0		#hd[0].disco[0].geom.cil
+	.word	0		#hd[0].disco[0].geom.test
+	.long	0		#hd[0].disco[0].geom.sett
+	.long	0		#hd[0].disco[0].geom.tot_sett
+	.long	0		#hd[0].disco[1].{presente,dma} (sono byte!)
+	.word	0		#hd[0].disco[1].geom.cil
+	.word	0		#hd[0].disco[1].geom.test
+	.long	0		#hd[0].disco[1].geom.sett
+	.long	0		#hd[0].disco[1].geom.tot_sett
+	.long	0		#hd[0].comando
+				#hd[0].errore (byte!)
+	.long	0		#hd[0].cont (byte!)
+	.long	0		#hd[0].punt
+	.long	0		#hd[0].mutex
+	.long	0		#hd[0].sincr
+	.long	0x0177		#hd[1].indreg.iCMD_iSTS
+	.long	0x0170		#hd[1].indreg.iDATA
+	.long	0x0171		#hd[1].indreg.iFEATURES_iERROR
+	.long 	0x0172		#hd[1].indreg.iSTCONT
+	.long	0x0173		#hd[1].indreg.iSECT_N
+	.long	0x0174		#hd[1].indreg.iCYL_L_N
+	.long	0x0175		#hd[1].indreg.iCYL_H_N
+	.long	0x0176		#hd[1].indreg.iHD_N_iDRV_HD
+	.long	0x0376		#hd[1].indreg.iALT_STS_iDEV_CTRL
+	.long	0		#hd[1].disco[0].{presente,dma} (sono byte!)
+	.word	0		#hd[1].disco[0].geom.cil
+	.word	0		#hd[1].disco[0].geom.test
+	.long	0		#hd[1].disco[0].geom.sett
+	.long	0		#hd[1].disco[0].geom.tot_sett
+	.long	0		#hd[1].disco[1].{presente,dma} (sono byte!)
+	.word	0		#hd[1].disco[1].geom.cil
+	.word	0		#hd[1].disco[1].geom.test
+	.long	0		#hd[1].disco[1].geom.sett
+	.long	0		#hd[1].disco[1].geom.tot_sett
+	.long	0		#hd[1].comando
+				#hd[1].errore (byte!)
+	.long	0		#hd[1].cont (byte!)
+	.long	0		#hd[1].punt
+	.long	0		#hd[1].mutex
+	.long	0		#hd[1].sincr
 	
 	# puntatori alle tabelle GDT e IDT
 	# nel formato richiesto dalle istruzioni LGDT e LIDT
@@ -1420,5 +1850,6 @@ idt:
 	# verra' riempita a tempo di esecuzione
 	.space 8 * 256, 0
 
-stack:
+	.global _stack
+_stack:
 	.space STACK_SIZE, 0

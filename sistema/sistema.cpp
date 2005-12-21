@@ -1854,7 +1854,6 @@ void rilascia_tutto(direttorio* pdir, void* start, void* end) {
 
 typedef void (*entry_t)(int);
 entry_t io_entry = 0;
-extern "C" void salta_a_main();
 volatile short id_main = 0;
 
 // schedulatore
@@ -2100,21 +2099,19 @@ extern "C" void c_mem_free(void *pv)
 	}
 }
 
+extern "C" void attiva_timer(unsigned long delay);
+
 extern "C" void c_begin_p()
 {
-	//attiva_timer(DELAY);
-	//io_entry(0);
+	io_entry(0);
+	esecuzione->priority = -2;
+	processi--;
         inserimento_coda(pronti, esecuzione);
         schedulatore();
 }
 
-// nel testo non si controlla la locazione di lav
-//
 extern "C" void c_give_num(int &lav)
 {
-	if(!verifica_area(&lav, sizeof(int), true))
-		abort_p();
-
         lav = processi - 1;
 }
 
@@ -2137,8 +2134,8 @@ extern "C" void c_sem_ini(int &index_des_s, int val, bool &risu)
 {
 	unsigned int pos;
 
-	if (id_main != 0 && esecuzione->identifier != id_main)
-		panic("sem_ini non chiamata da main");
+	//if (id_main != 0 && esecuzione->identifier != id_main)
+	//	panic("sem_ini non chiamata da main");
 
 	if(!bm_alloc(&sem_bm, pos)) {
 		risu = false;
@@ -2151,9 +2148,6 @@ extern "C" void c_sem_ini(int &index_des_s, int val, bool &risu)
 }
 
 // nel testo non si controlla il parametro sem (se > MAX_SEM crea problemi)
-// NOTA: la terminazione del processo puo' sembrare brutale, ma non c'e'
-//  mezzo di segnalare l' errore.
-//
 extern "C" void c_sem_wait(int sem)
 {
 	des_sem *s;
@@ -2173,7 +2167,6 @@ extern "C" void c_sem_wait(int sem)
 }
 
 // vedi sopra
-//
 extern "C" void c_sem_signal(int sem)
 {
 	des_sem *s;
@@ -2322,271 +2315,6 @@ void* carica_modulo_io(module_t* mod)
 }
 
 
-///////////////////////////////////////////////////////////////////////////////////
-// INIZIALIZZAZIONE                                                              //
-///////////////////////////////////////////////////////////////////////////////////
-//
-
-extern "C" void salta_a_main();
-
-struct superblock_t {
-	char		bootstrap[512];
-	unsigned int	bm_start;
-	int		blocks;
-	unsigned int	directory;
-	void		(*entry_point)(int);
-	void*		end;
-};
-
-char read_buf[SIZE_PAGINA * 8];
-
-void dummy(int a) {
-	for(;;);
-}
-
-
-void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* msg) {
-	unsigned char totale, da_leggere;
-	char errore;
-	
-	totale = da_leggere = ceild(bytes, 512);
-	printk("Leggo: %s (%d settori, primo: %d)\n", msg, totale, block * 8);
-	readhd_n(0, 1, buf, block * 8, da_leggere, errore);
-	if (da_leggere != 0 || errore != 0) { 
-		printk("letti %d settori su %d, errore = %d\n", totale - da_leggere, totale, errore);
-		printk("Impossibile leggere %s\n", msg);
-		panic("Fatal error");
-	}
-}
-
-extern "C" unsigned long  calibra_tsc();
-// timer
-extern "C" void attiva_timer(unsigned long delay);
-extern unsigned long ticks;
-extern unsigned long clocks_per_nsec;
-
-void main_proc(int a) {
-
-	attiva_timer(DELAY);
-	unsigned long clocks_per_sec = calibra_tsc();
-	clocks_per_nsec = ceild(clocks_per_sec, 1000000000UL);
-	printk("cpn: %d\n", clocks_per_nsec);
-	io_entry(0);
-
-	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
-	superblock_t *s = reinterpret_cast<superblock_t*>(read_buf);
-	printk("    bm_start   : %d\n", s->bm_start);
-	printk("    blocks     : %d\n", s->blocks);
-	printk("    directory  : %d\n", s->directory);
-	printk("    entry point: %x\n", s->entry_point);
-	printk("    end        : %x\n", s->end);
-	unsigned int pages = ceild(s->blocks, SIZE_PAGINA * 8);
-	unsigned int *buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
-	if (buf == 0) 
-		panic("Impossibile allocare la bitmap dei blocchi");
-	bm_create(&block_bm, buf, s->blocks);
-	leggi_swap(buf, s->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
-	direttorio* tmp = new direttorio;
-	if (tmp == 0)
-		panic("memoria insufficiente");
-	leggi_swap(tmp, s->directory, sizeof(direttorio), "il direttorio principale");
-	// tabelle condivise per lo spazio utente condiviso
-	printk("Creo o leggo le tabelle condivise\n");
-	void* last_address;
-	for (void* ind = inizio_utente_condiviso;
-	     	   ind < fine_utente_condiviso;
-	           ind = add(ind, SIZE_PAGINA * 1024))
-	{
-		descrittore_tabella
-			*pdes_tab1 = &tmp->entrate[indice_direttorio(ind)],
-			*pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
-		tabella_pagine* ptab;
-		
-		*pdes_tab2 = *pdes_tab1;
-
-		if (pdes_tab1->azzera == 0 && pdes_tab1->address == 0)
-			continue;
-
-		last_address = add(ind, SIZE_PAGINA * 1024);
-
-		ptab = alloca_tabella_condivisa();
-		if (ptab == 0)
-			panic("Impossibile allocare tabella condivisa\n");
-		if (! carica_tabella(pdes_tab2, ptab) )
-			panic("Impossibile caricare tabella condivisa");
-		pdes_tab2->address	= uint(ptab) >> 12;
-		pdes_tab2->P		= 1;
-		for (int i = 0; i < 1024; i++) {
-			descrittore_pagina* pdes_pag = &ptab->entrate[i];
-			if (pdes_pag->preload == 1) {
-				pagina* pag = alloca_pagina_residente();
-				if (pag == 0) 
-					panic("Impossibile allocare pagina residente");
-				if (! carica_pagina(pdes_pag, pag) ) 
-					panic("Impossibile caricare pagina residente");
-				collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
-			}
-		}
-
-	}
-	heap.start = allinea(s->end, sizeof(int));
-	heap.dimensione = distance(last_address, heap.start);
-	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
-			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
-	delete tmp;
-	proc_elem* m = crea_processo(s->entry_point, 0, 0, LIV_UTENTE);
-	if (m == 0)
-		panic("Impossibile creare il processo main");
-	processi++;
-	inserimento_coda(pronti, m);
-	id_main = m->identifier;
-	terminate_p();
-}
-
-	
-// inizializzazione della console
-void con_init(void);
-// controllore interruzioni
-extern "C" void init_8259();
-
-extern "C" void
-cmain (unsigned long magic, multiboot_info_t* mbi)
-{
-	entry_t user_entry;
-	module_t* user_mod = 0;
-	des_proc* pdes_proc;
-
-	// inizializziamo per prima cosa la console, in modo da poter scrivere
-	// messaggi sullo schermo
-	con_init();
-
-	// controlliamo di essere stati caricati
-	// da un bootloader che rispetti lo standard multiboot
-	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-		printk ("Numero magico non valido: 0x%x\n", magic);
-		return;
-	}
-
-	// vediamo se il boot loader ci ha passato l'informazione su quanta
-	// memoria fisica e' installata nel sistema
-	if (mbi->flags & 1) {
-		max_mem_lower = addr(mbi->mem_lower * 1024);
-		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
-	} else {
-		printk ("Quantita' di memoria sconosciuta, assumo 32MB\n");
-		max_mem_lower = addr(639 * 1024);
-		max_mem_upper = addr(32 * 1024 * 1024);
-	}
-	printk("Memoria fisica: %d byte (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
-	
-	// per come abbiamo organizzato il sistema non possiamo gestire piu' di
-	// 1GB di memoria fisica
-	if (max_mem_upper > fine_sistema_privato) {
-		max_mem_upper = fine_sistema_privato;
-		printk("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
-	}
-
-	// controlliamo se il boot loader ha caricato dei moduli
-	if (mbi->flags & (1 << 3)) {
-		// se si', calcoliamo prima lo spazio occupato
-		printk ("Numero moduli: %d\n", mbi->mods_count);
-		module_t* mod = mbi->mods_addr;
-		for (int i = 0; i < mbi->mods_count; i++) {
-			printk ("Modulo #%d (%s): inizia a %x, finisce a %x\n",
-					i, mod->string, mod->mod_start, mod->mod_end);
-			if (salta_a(mod->mod_start) < 0 ||
-			    occupa(distance(mod->mod_end, mod->mod_start)) == 0) {
-				panic("Errore nel caricamento (lo spazio risulta occupato)");
-			}
-			mod++;
-		}
-
-		// quindi, ne interpretiamo il contenuto
-		mod = mbi->mods_addr;
-		for (int i = 0; i < mbi->mods_count; i++) {
-			if (str_equal(mod->string, "/io")) {
-				printk("Sposto il modulo IO all'indirizzo di collegamento:\n");
-				io_entry = (entry_t)carica_modulo_io(mod);
-				if (io_entry == 0)
-					panic("Impossibile caricare il modulo di IO");
-			} else {
-				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-				printk("Modulo '%s' non riconosciuto (eliminato)\n");
-			}
-			mod++;
-		}
-
-	}
-
-
-	// il resto della memoria e' per le pagine fisiche
-	init_pagine_fisiche();
-
-	// inizializziamo la mappa di bit che serve a tenere traccia dei
-	// semafori allocati
-	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
-
-	// il direttorio principale viene utilizzato fino a quando non creiamo
-	// il primo processo.  Poi, servira' come "modello" da cui creare i
-	// direttori dei nuovi processi.
-	direttorio_principale = alloca_direttorio();
-	if (direttorio_principale == 0)
-		panic("Impossibile allocare il direttorio principale");
-	memset(direttorio_principale, 0, SIZE_PAGINA);
-
-	// memoria fisica in memoria virtuale
-	for (void* ind = addr(0); ind < max_mem_upper; ind = add(ind, SIZE_PAGINA)) {
-		descrittore_tabella* pdes_tab =
-			&direttorio_principale->entrate[indice_direttorio(ind)];
-		tabella_pagine* ptab;
-		if (pdes_tab->P == 0) {
-			ptab = alloca_tabella_residente();
-			if (ptab == 0) panic("Impossibile allocare le tabelle condivise");
-			pdes_tab->address   = uint(ptab) >> 12;
-			pdes_tab->D	    = 0;
-			pdes_tab->pgsz      = 0; // pagine di 4K
-			pdes_tab->D	    = 0;
-			pdes_tab->US	    = 0; // livello sistema;
-			pdes_tab->RW	    = 1; // scrivibile
-			pdes_tab->P 	    = 1; // presente
-		} else {
-			ptab = tabella_puntata(pdes_tab);
-		}
-		descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind)];
-		pdes_pag->address = uint(ind) >> 12;   // indirizzo virtuale == indirizzo fisico
-		pdes_tab->pgsz    = 0;
-		pdes_pag->global  = 1;
-		pdes_pag->US      = 0; // livello sistema;
-		pdes_pag->RW	  = 1; // scrivibile
-		pdes_pag->PCD     = 0;
-		pdes_pag->PWT     = 0;
-		pdes_pag->P       = 1;
-	}
-
-	carica_cr3(direttorio_principale);
-	// avendo predisposto il direttorio in modo che tutta la memoria fisica
-	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
-	// la paginazione, sicuri che avremo continuita' di indirizzamento
-	attiva_paginazione();
-
-	// quando abbiamo finito di usare la struttura dati passataci dal boot
-	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
-	// < 1MB. Lasciamo inutilizzata la prima pagina, in modo che
-	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
-	// specificare un puntatore non valido
-	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
-
-	esecuzione = crea_processo(dummy, 0, -1, LIV_SISTEMA);
-	inserimento_coda(pronti, esecuzione);
-	esecuzione = crea_processo(main_proc, 0, 2, LIV_SISTEMA);
-	bool risu;
-	c_sem_ini(pf_mutex, 1, risu);
-	if (!risu)
-		panic("Impossibile allocare il semaforo per i page fault");
-	processi = 2;
-	init_8259();
-	salta_a_main();
-}
 
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 		unsigned eip, unsigned cs, short eflag)
@@ -2700,6 +2428,8 @@ extern "C" void c_delay(int n)
 	inserimento_coda_timer(p);
 	schedulatore();
 }
+
+extern unsigned long ticks;
 
 // driver del timer
 //
@@ -2931,7 +2661,6 @@ int snprintf(char *buf, unsigned int n, const char *fmt, ...)
 {
 	va_list ap;
 	int l;
-
 	va_start(ap, fmt);
 	l = vsnprintf(buf, n, fmt, ap);
 	va_end(ap);
@@ -3228,4 +2957,752 @@ bool bm_alloc(bm_t *bm, unsigned int& pos) {
 void bm_free(bm_t *bm, unsigned int pos)
 {
 	bm_clear(bm, pos);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+// DRIVER SWAP                                                                      
+///////////////////////////////////////////////////////////////////////////////////////
+// ingresso di una stringa di word da un buffer di IO
+extern "C" void inputbuffw(ind_b reg, short *a,short n);
+
+// uscita di una stringa di word su un buffer di IO
+extern "C" void outputbuffw(short *a, ind_b reg,short n);
+
+#define STRICT_ATA
+
+#define HD_MAX_TX 256
+
+#define	HD_NONE 0x00		//Maschere per i biti fondamentali dei registri
+#define HD_STS_ERR 0x01
+#define HD_STS_DRQ 0x08
+#define HD_STS_DRDY 0x40
+#define HD_STS_BSY 0x80
+#define HD_DRV_MASTER 0
+#define HD_DRV_SLAVE 1
+enum hd_cmd {			// Comandi per i controllori degli hard disk
+	NONE=0x00,
+	IDENTIFY=0xEC,
+	SET_FEATURES=0xEF,
+	SET_MULT_MODE=0xC6,
+	WRITE_SECT=0x30,
+	READ_SECT=0x20,
+	HD_SEEK=0x70,
+	DIAGN=0x90
+};
+
+struct interfata_reg {
+	union {				// Command Block Register
+		ind_b iCMD;
+		ind_b iSTS;
+	}; //iCMD_iSTS;
+	ind_b iDATA;
+	union {
+		ind_b iFEATURES;
+		ind_b iERROR;
+	}; //iFEATURES_iERROR
+	ind_b iSTCOUNT;
+	ind_b iSECT_N;
+	ind_b iCYL_L_N;
+	ind_b iCYL_H_N;
+	union {
+		ind_b iHD_N;
+		ind_b iDRV_HD;
+	}; //iHD_N_iDRV_HD
+	union {				// Control Block Register
+		ind_b iALT_STS;		
+		ind_b iDEV_CTRL;
+	}; //iALT_STS_iDEV_CTRL
+};
+
+struct geometria {			// Struttura 3-D di un disco
+	unsigned short cil;	
+	unsigned short test;
+	unsigned short sett;
+	unsigned int tot_sett;		// Utile in LBA
+};
+
+struct drive {				// Drive su un canale ATA
+	bool presente;
+	bool dma;
+	geometria geom;
+};
+
+struct des_ata {		// Descrittore operazione per i controller ATA
+	interfata_reg indreg;
+	drive disco[2];		// Ogni controller ATA gestisce 2 drive
+	hd_cmd comando;
+	char errore;
+	char cont;
+	short* punt;	
+	int mutex;
+	int sincr;
+};
+
+extern "C" des_ata hd[A];	// 2 controller ATA
+
+const estern_id hd_id[2]={ata0,ata1};
+
+//Funzioni di utilita' per la gestione del disco
+//
+inline bool hd_drq(char &s) {		// Test di Data ReQuest
+	return s&HD_STS_DRQ;
+}
+
+inline bool hd_errore(char &s) {	// Test di un eventuale errore (generico)
+	return s&HD_STS_ERR;
+}
+
+inline bool hd_drdy(char &s) {		// Test di Drive ReaDY
+	return s&HD_STS_DRDY;
+}
+
+// Attende una particolare configurazione di bit nel registro di stato del
+//  controller; tipicamente deve resettarsi BuSY
+//  
+char aspetta_STS(des_ata *p_des,char bit,bool &ris) {
+	char stato,test;
+	int timeout=D_TIMEOUT * 1000;		// Previsto un timeout
+	do {
+		inputb(p_des->indreg.iALT_STS,stato);
+		if (bit==HD_STS_DRDY || bit==HD_STS_DRQ)
+			test=(~stato);
+		else
+			test=stato;
+		test&=bit;
+		timeout--;
+		if (timeout<0) {
+			ris=false;		// Scaduto il timeout!
+			return stato;
+		}
+	} while (test!=0);
+	ris=true;
+	return stato;
+}
+
+// Invia un comando al controller con la temporizzazione corretta
+// 
+inline bool invia_cmd(des_ata *p_des,hd_cmd com) {
+#ifdef STRICT_ATA
+	bool ris=true;
+	aspetta_STS(p_des,HD_STS_DRDY,ris);
+	if (!ris)
+		return false;
+#endif
+	p_des->comando=com;
+	outputb(com,p_des->indreg.iCMD);
+	//ndelay(400);
+	return true;
+}
+
+// Legge il buffer di uscita del controller se questo contiene dati
+// 
+void leggi_sett_buff(des_ata *p_des,short vetti[],char &stato) {
+	if (!hd_drq(stato))		
+		// DRQ _deve_ essere settato!
+		panic("\nErrore Grave: DRQ non e' settato!");
+	inputbuffw(p_des->indreg.iDATA,vetti,H_BLK_SIZE);
+	//for (int i=0;i<H_BLK_SIZE;i++) //<=== Forma equivalente (debugging)
+	//	inputw(p_des->indreg.iDATA,vetti[i]);
+}
+
+// Scrive il buffer di ingresso del controller se questo aspetta dati
+// 
+void scrivi_sett_buff(des_ata *p_des,short vetti[],char &stato) {
+	if (!hd_drq(stato))		
+		// DRQ _deve_ essere settato!
+		panic("\nErrore Grave: DRQ non e' settato!");
+	outputbuffw(vetti,p_des->indreg.iDATA,H_BLK_SIZE);
+	//for (int i=0;i<H_BLK_SIZE;i++) //<=== Forma equivalente (debugging)
+	//	outputw(vetti[i],p_des->indreg.iDATA);
+}
+
+//Funzioni per l'ingresso/uscita dati e processo estern0
+//
+extern "C" void go_inouthd(ind_b i_dev_ctl);
+
+extern "C" void halt_inouthd(ind_b i_dev_ctl);
+
+extern "C" bool test_canale(ind_b st,ind_b stc,ind_b stn);
+
+extern "C" int leggi_signature(ind_b stc,ind_b stn,ind_b cyl,ind_b cyh);
+
+extern "C" void umask_hd(ind_b h);
+
+extern "C" void mask_hd(ind_b h);
+
+extern "C" bool drive_reset(ind_b dvctrl,ind_b st);
+
+extern "C" void set_drive(short ms,ind_b i_drv_hd);
+
+extern "C" void get_drive(ind_b i_drv_hd,short &ms);
+
+extern "C" void setup_addr_hd(des_ata *p,unsigned int primo);	
+
+// Trasferimento dati in PIO Mode
+//
+
+// Avvio delle operazioni di lettura da hard dik
+// 
+void starthd_in(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	{
+	p_des->punt=vetti;
+	p_des->cont=quanti;
+	bool ris;
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// aspetta "drive not BuSY"
+	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
+	char stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!!
+	if (!hd_drdy(stato) || hd_errore(stato))
+			panic("Errore nell'inizializzazione della lettura!");
+	setup_addr_hd(p_des,primo); 
+	outputb(quanti,p_des->indreg.iSTCOUNT);
+	// Abilita le interruzioni per il controller-drive selezionato
+	go_inouthd(p_des->indreg.iDEV_CTRL);	
+	invia_cmd(p_des,READ_SECT);
+	umask_hd(p_des->indreg.iSTS);
+}
+
+// Avvio delle operazioni di scrittura su hard disk
+//
+void starthd_out(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsigned char &quanti)	
+{	char stato;				
+	bool ris;
+	p_des->punt=vetti;
+	p_des->cont=quanti;
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
+	set_drive(drv,p_des->indreg.iDRV_HD);	// Selezione del drive richiesto
+	stato=aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta di nuovo!
+	if (!hd_drdy(stato) || hd_errore(stato))
+			panic("Errore nell'inizializzazione della scrittura!");
+	setup_addr_hd(p_des,primo); 
+	outputb(quanti,p_des->indreg.iSTCOUNT);
+	//Abilita le interruzioni per il controller-drive selezionato
+	go_inouthd(p_des->indreg.iDEV_CTRL);		
+	invia_cmd(p_des,WRITE_SECT);	// Asimmetria con la lettura, bisogna
+	aspetta_STS(p_des,HD_STS_BSY,ris);	// Aspetta "drive not BuSY"
+	// Aspetta DRQ, previsto dal protocollo di comunicazione
+	stato=aspetta_STS(p_des,HD_STS_DRQ,ris);
+	inputb(p_des->indreg.iSTS,stato);
+	scrivi_sett_buff(p_des,p_des->punt,stato);
+	p_des->punt+=H_BLK_SIZE;	// Solo dopo quest'operazione e' sicuro
+	umask_hd(p_des->indreg.iSTS);	//  abilitare l'hd ad interrompere
+}
+
+// Primitiva di lettura da hard disk: legge quanti blocchi (max 256, char!)
+//  a partire da primo depositandoli in vetti; il controller usato e ind_ata,
+//  il drive e' drv. Riporta un fallimento in errore
+//  
+extern "C" void c_readhd_n(short ind_ata,short drv,short vetti[],unsigned int primo,unsigned char &quanti,char &errore)
+{
+	des_ata *p_des;
+
+	p_des = &hd[ind_ata];
+
+	// Controllo sulla protezione
+	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
+		return;
+	//if (!verifica_area(&quanti,sizeof(int),true) ||
+	//!verifica_area(vetti,quanti,true) ||
+	//!verifica_area(&errore,sizeof(char),true)) return;
+
+	// Controllo sulla selezione di un drive presente
+	if (p_des->disco[drv].presente==false) {
+		errore=D_ERR_PRESENCE;
+		return;
+	}
+
+	// Controllo sull'indirizzamento
+	if (primo>p_des->disco[drv].geom.tot_sett)
+		errore=D_ERR_BOUNDS;
+	else {		
+		sem_wait(p_des->mutex);
+		p_des->errore=HD_NONE;		// Reset degli errori precedenti 
+		p_des->disco[drv].dma=false;	// Trasferimento in PIO Mode
+		// Abilitazione del controller all'operazione
+		starthd_in(p_des,drv,vetti,primo,quanti);
+		sem_wait(p_des->sincr);
+		quanti=p_des->cont;
+		errore=p_des->errore;
+		sem_signal(p_des->mutex);
+	}
+}
+
+// Primitiva di scrittura su hard disk: scrive quanti blocchi (max 256, char!)
+//  a partire da primo prelevandoli da vetti; il controller usato e' ind_ata,
+//  il drive e' drv. Riporta un fallimento in errore
+//  
+extern "C" void c_writehd_n(short ind_ata,short drv,short vetti[],unsigned int primo,unsigned char &quanti,char &errore)
+{
+	des_ata *p_des;
+
+	p_des = &hd[ind_ata];
+
+	// Controllo sulla protezione
+	if (ind_ata<0 || ind_ata>=A || drv<0 || drv>=2)
+		return;
+	//if (!verifica_area(&quanti,sizeof(int),true) ||
+	//!verifica_area(vetti,quanti,true) ||
+	//!verifica_area(&errore,sizeof(char),true)) return;
+
+	// Controllo sulla selezione di un drive presente
+	if (p_des->disco[drv].presente==false) {
+		errore=D_ERR_PRESENCE;
+		return;
+	}
+	// Controllo sull'indirizzamento
+	if (primo>p_des->disco[drv].geom.tot_sett)
+		errore=D_ERR_BOUNDS;
+	else {
+		sem_wait(p_des->mutex);
+		p_des->errore=HD_NONE;		// Reset degli errori precedenti
+		p_des->disco[drv].dma=false;	//Trasferimento in PIO Mode
+		starthd_out(p_des,drv,vetti,primo,quanti);
+		sem_wait(p_des->sincr);
+		quanti=p_des->cont;
+		errore=p_des->errore;
+		sem_signal(p_des->mutex);
+	}
+}
+
+// driver per l'hard disk, valido sia per l'ingresso che per l'uscita
+//
+extern "C" void c_driver_hd()
+{
+	des_ata *p_des;
+	char stato;
+	short drv;
+	hd_cmd curr_cmd;
+	proc_elem* lavoro;
+	bool fine;
+
+	p_des = &hd[0];	
+
+	curr_cmd=p_des->comando;	// Gestione delle interruzioni
+	p_des->comando=NONE;		//  non richieste
+	if (curr_cmd!=NONE) {
+		get_drive(p_des->indreg.iDRV_HD,drv);
+		bool ris;
+		stato=aspetta_STS(p_des,HD_STS_BSY,ris);
+		fine=false;
+		inputb(p_des->indreg.iSTS,stato);
+		if (!hd_errore(stato) && (curr_cmd==READ_SECT || curr_cmd==WRITE_SECT)) {
+			if (curr_cmd==WRITE_SECT) {
+				p_des->cont--;
+				if (p_des->cont==0)
+					fine=true;
+				else {
+					scrivi_sett_buff(p_des,p_des->punt,stato);
+					p_des->comando=WRITE_SECT;
+				}
+			}
+			else {		// Comando di READ_SECT
+				leggi_sett_buff(p_des,p_des->punt,stato);
+				p_des->cont--;
+				if (p_des->cont==0)
+					fine=true;
+				else
+					p_des->comando=READ_SECT;
+			}
+			p_des->punt+=H_BLK_SIZE;
+		}
+		else {
+			inputb(p_des->indreg.iERROR,p_des->errore);
+			fine=true;
+		}
+		if (fine==true) {
+			mask_hd(p_des->indreg.iSTS);
+			//Disabilita le interruzioni dal controller
+			halt_inouthd(p_des->indreg.iDEV_CTRL);	
+			des_sem* s = &array_dess[p_des->sincr];
+			s->counter++;
+			if (s->counter <= 0) {
+				rimozione_coda(s->pointer, lavoro);
+				inserimento_coda(pronti, lavoro);
+			}
+		}	
+	}
+	schedulatore();
+}
+
+const int ATA1_IRQ=15;
+
+// Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
+// 
+void hd_init() {
+	char stato=0;
+	bool test;
+	int init_time=D_TIMEOUT;
+	short st_sett[H_BLK_SIZE];
+	short id;
+	bool r,r1,r2;
+	//int hd_base_prio=PRIO_ESTERN_BASE+IRQ_MAX-ATA1_IRQ;
+	short canali=0;
+	
+	des_ata *p_des;
+	for (int i=0;i<A;i++) {				// Per ogni controller
+		p_des=&hd[i];
+		// Disabilita le interruzioni
+		halt_inouthd(p_des->indreg.iDEV_CTRL);	
+	}
+	for (int i=0;i<A;i++) {			// Per ogni controller
+		p_des=&hd[i];
+		short drv=HD_DRV_MASTER;
+		set_drive(drv,p_des->indreg.iDRV_HD);	//LBA e drive drv
+		//delay(400);
+		// Procedura diversificata una volta effettuato il test()
+		if (test_canale(p_des->indreg.iSTS,p_des->indreg.iSTCOUNT,p_des->indreg.iSECT_N)) {
+			set_drive(HD_DRV_MASTER,p_des->indreg.iDRV_HD);
+			invia_cmd(p_des,DIAGN);		// Diagnostica dei drive
+			do
+				inputb(p_des->indreg.iSTS,stato);
+			while (stato&HD_STS_BSY);	// Polling
+			inputb(p_des->indreg.iERROR,stato);
+			do
+				inputb(p_des->indreg.iSTS,stato);
+			while (!stato&HD_STS_DRDY);	// Polling
+
+			for (int d=0;d<2;d++) {		// Per ogni drive
+				set_drive(drv,p_des->indreg.iDRV_HD);
+				//delay(400);
+				p_des->disco[d].dma=false;
+				if (!drive_reset(p_des->indreg.iDEV_CTRL,p_des->indreg.iSTS)) {
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+				else
+					p_des->disco[d].presente=true;
+				if (leggi_signature(p_des->indreg.iSTCOUNT,p_des->indreg.iSECT_N,p_des->indreg.iCYL_L_N,p_des->indreg.iCYL_H_N)!=0) {
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+				else
+					p_des->disco[d].presente=true;
+		
+		//Riconoscimento della geometria e dei parametri del disco
+				if (!invia_cmd(p_des,IDENTIFY)) {	
+					p_des->disco[d].presente=false;
+					drv=HD_DRV_SLAVE;
+					continue;
+				}
+				bool ris;
+				aspetta_STS(p_des,HD_STS_BSY,ris);
+				inputb(p_des->indreg.iSTS,stato);
+				leggi_sett_buff(p_des,st_sett,stato);
+				// Inizializzazione della geometria
+				p_des->disco[d].geom.cil=st_sett[1];		
+				p_des->disco[d].geom.test=st_sett[3];
+				p_des->disco[d].geom.sett=st_sett[6];
+				p_des->disco[d].geom.tot_sett=(st_sett[58]<<16)+st_sett[57];
+				drv=HD_DRV_SLAVE;
+			}
+			mask_hd(p_des->indreg.iSTS);
+			c_sem_ini(p_des->mutex, 1, r1);
+			c_sem_ini(p_des->sincr, 0, r2);
+			if(!r1 || !r2)
+				panic("\nImpossibile allocare i semafori per l' IO");
+		}
+		else
+			p_des->disco[0].presente=p_des->disco[1].presente=false;
+		p_des->comando=NONE;
+	}
+}
+
+// Funzione di utilita' perche' l'utente possa conoscere se interessato,
+//  le dimensioni e la struttura dei suoi hard disk
+//  
+extern "C" void c_geometria(int interf,short drv,unsigned short &c,unsigned short &t,unsigned short &s,int &ts,char &err) {
+	if (hd[interf].disco[drv].presente==true) {
+		c=hd[interf].disco[drv].geom.cil;
+		t=hd[interf].disco[drv].geom.test;
+		s=hd[interf].disco[drv].geom.sett;
+		ts=hd[interf].disco[drv].geom.tot_sett;
+		err=D_ERR_NONE;
+	}
+	else
+		err=D_ERR_PRESENCE;
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+// INIZIALIZZAZIONE                                                              //
+///////////////////////////////////////////////////////////////////////////////////
+//
+
+
+struct superblock_t {
+	char		bootstrap[512];
+	unsigned int	bm_start;
+	int		blocks;
+	unsigned int	directory;
+	void		(*entry_point)(int);
+	void*		end;
+};
+
+char read_buf[SIZE_PAGINA * 8];
+
+void dummy(int a) {
+	for(;;);
+}
+
+
+void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* msg) {
+	unsigned char totale, da_leggere;
+	char errore;
+	des_sem* s;
+	
+	totale = da_leggere = ceild(bytes, 512);
+	readhd_n(0, 1, buf, block * 8, da_leggere, errore);
+	if (da_leggere != 0 || errore != 0) { 
+		printk("letti %d settori su %d, errore = %d\n", totale - da_leggere, totale, errore);
+		printk("Impossibile leggere %s\n", msg);
+		panic("Fatal error");
+	}
+}
+
+// timer
+extern unsigned long ticks;
+extern unsigned long clocks_per_usec;
+
+	
+// inizializzazione della console
+void con_init(void);
+// controllore interruzioni
+extern "C" void init_8259();
+extern "C" unsigned long  calibra_tsc();
+extern "C" void trasforma_in_processo();
+extern "C" void salta_a_main(entry_t user_entry, void* stack);
+extern void* stack;
+
+void dd(int i)
+{
+	while(processi > 0);
+	shutdown();
+}
+
+proc_elem init;
+
+extern "C" void
+cmain (unsigned long magic, multiboot_info_t* mbi)
+{
+	des_proc* pdes_proc;
+
+	// inizializziamo per prima cosa la console, in modo da poter scrivere
+	// messaggi sullo schermo
+	con_init();
+
+	// controlliamo di essere stati caricati
+	// da un bootloader che rispetti lo standard multiboot
+	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+		printk ("Numero magico non valido: 0x%x\n", magic);
+		return;
+	}
+
+	// vediamo se il boot loader ci ha passato l'informazione su quanta
+	// memoria fisica e' installata nel sistema
+	if (mbi->flags & 1) {
+		max_mem_lower = addr(mbi->mem_lower * 1024);
+		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
+	} else {
+		printk ("Quantita' di memoria sconosciuta, assumo 32MB\n");
+		max_mem_lower = addr(639 * 1024);
+		max_mem_upper = addr(32 * 1024 * 1024);
+	}
+	printk("Memoria fisica: %d byte (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
+	
+	// per come abbiamo organizzato il sistema non possiamo gestire piu' di
+	// 1GB di memoria fisica
+	if (max_mem_upper > fine_sistema_privato) {
+		max_mem_upper = fine_sistema_privato;
+		printk("verranno gestiti solo %d byte di memoria fisica\n", max_mem_upper);
+	}
+
+	// controlliamo se il boot loader ha caricato dei moduli
+	if (mbi->flags & (1 << 3)) {
+		// se si', calcoliamo prima lo spazio occupato
+		printk ("Numero moduli: %d\n", mbi->mods_count);
+		module_t* mod = mbi->mods_addr;
+		for (int i = 0; i < mbi->mods_count; i++) {
+			printk ("Modulo #%d (%s): inizia a %x, finisce a %x\n",
+					i, mod->string, mod->mod_start, mod->mod_end);
+			if (salta_a(mod->mod_start) < 0 ||
+			    occupa(distance(mod->mod_end, mod->mod_start)) == 0) {
+				panic("Errore nel caricamento (lo spazio risulta occupato)");
+			}
+			mod++;
+		}
+
+		// quindi, ne interpretiamo il contenuto
+		mod = mbi->mods_addr;
+		for (int i = 0; i < mbi->mods_count; i++) {
+			if (str_equal(mod->string, "/io")) {
+				printk("Sposto il modulo IO all'indirizzo di collegamento:\n");
+				io_entry = (entry_t)carica_modulo_io(mod);
+				if (io_entry == 0)
+					panic("Impossibile caricare il modulo di IO");
+			} else {
+				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
+				printk("Modulo '%s' non riconosciuto (eliminato)\n");
+			}
+			mod++;
+		}
+
+	}
+
+
+	// il resto della memoria e' per le pagine fisiche
+	init_pagine_fisiche();
+
+	// inizializziamo la mappa di bit che serve a tenere traccia dei
+	// semafori allocati
+	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
+
+	// il direttorio principale viene utilizzato fino a quando non creiamo
+	// il primo processo.  Poi, servira' come "modello" da cui creare i
+	// direttori dei nuovi processi.
+	direttorio_principale = alloca_direttorio();
+	if (direttorio_principale == 0)
+		panic("Impossibile allocare il direttorio principale");
+	memset(direttorio_principale, 0, SIZE_PAGINA);
+
+	// memoria fisica in memoria virtuale
+	for (void* ind = addr(0); ind < max_mem_upper; ind = add(ind, SIZE_PAGINA)) {
+		descrittore_tabella* pdes_tab =
+			&direttorio_principale->entrate[indice_direttorio(ind)];
+		tabella_pagine* ptab;
+		if (pdes_tab->P == 0) {
+			ptab = alloca_tabella_residente();
+			if (ptab == 0) panic("Impossibile allocare le tabelle condivise");
+			pdes_tab->address   = uint(ptab) >> 12;
+			pdes_tab->D	    = 0;
+			pdes_tab->pgsz      = 0; // pagine di 4K
+			pdes_tab->D	    = 0;
+			pdes_tab->US	    = 0; // livello sistema;
+			pdes_tab->RW	    = 1; // scrivibile
+			pdes_tab->P 	    = 1; // presente
+		} else {
+			ptab = tabella_puntata(pdes_tab);
+		}
+		descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind)];
+		pdes_pag->address = uint(ind) >> 12;   // indirizzo virtuale == indirizzo fisico
+		pdes_tab->pgsz    = 0;
+		pdes_pag->global  = 1;
+		pdes_pag->US      = 0; // livello sistema;
+		pdes_pag->RW	  = 1; // scrivibile
+		pdes_pag->PCD     = 0;
+		pdes_pag->PWT     = 0;
+		pdes_pag->P       = 1;
+	}
+
+	carica_cr3(direttorio_principale);
+	// avendo predisposto il direttorio in modo che tutta la memoria fisica
+	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
+	// la paginazione, sicuri che avremo continuita' di indirizzamento
+	attiva_paginazione();
+
+	// quando abbiamo finito di usare la struttura dati passataci dal boot
+	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
+	// < 1MB. Lasciamo inutilizzata la prima pagina, in modo che
+	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
+	// specificare un puntatore non valido
+	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
+
+	init_8259();
+
+
+	id_main = alloca_tss();
+	if (id_main == 0)
+		panic("Impossibile creare il processo main");
+	init.identifier = id_main;
+	init.priority = 0;
+	pdes_proc = des_p(init.identifier);
+	memset(pdes_proc, 0, sizeof(des_proc));
+	pdes_proc->cr3 = direttorio_principale;
+	pdes_proc->liv = LIV_SISTEMA;
+	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
+	if (dummy == 0)
+		panic("Impossibile creare il processo dummy");
+	inserimento_coda(pronti, dummy);
+	esecuzione = &init;
+	processi++;
+	trasforma_in_processo();
+	printk("Processo init\n");
+	attiva_timer(DELAY);
+	unsigned long clocks_per_sec = calibra_tsc();
+	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
+	hd_init();
+	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
+	superblock_t *s = reinterpret_cast<superblock_t*>(read_buf);
+	printk("    bm_start   : %d\n", s->bm_start);
+	printk("    blocks     : %d\n", s->blocks);
+	printk("    directory  : %d\n", s->directory);
+	printk("    entry point: %x\n", s->entry_point);
+	printk("    end        : %x\n", s->end);
+	unsigned int pages = ceild(s->blocks, SIZE_PAGINA * 8);
+	unsigned int *buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
+	if (buf == 0) 
+		panic("Impossibile allocare la bitmap dei blocchi");
+	bm_create(&block_bm, buf, s->blocks);
+	leggi_swap(buf, s->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+	direttorio* tmp = new direttorio;
+	if (tmp == 0)
+		panic("memoria insufficiente");
+	leggi_swap(tmp, s->directory, sizeof(direttorio), "il direttorio principale");
+	// tabelle condivise per lo spazio utente condiviso
+	printk("Creo o leggo le tabelle condivise\n");
+	void* last_address;
+	for (void* ind = inizio_utente_condiviso;
+	     	   ind < fine_utente_condiviso;
+	           ind = add(ind, SIZE_PAGINA * 1024))
+	{
+		descrittore_tabella
+			*pdes_tab1 = &tmp->entrate[indice_direttorio(ind)],
+			*pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
+		tabella_pagine* ptab;
+		
+		*pdes_tab2 = *pdes_tab1;
+
+		if (pdes_tab1->azzera == 0 && pdes_tab1->address == 0)
+			continue;
+
+		last_address = add(ind, SIZE_PAGINA * 1024);
+
+		ptab = alloca_tabella_condivisa();
+		if (ptab == 0)
+			panic("Impossibile allocare tabella condivisa\n");
+		if (! carica_tabella(pdes_tab2, ptab) )
+			panic("Impossibile caricare tabella condivisa");
+		pdes_tab2->address	= uint(ptab) >> 12;
+		pdes_tab2->P		= 1;
+		for (int i = 0; i < 1024; i++) {
+			descrittore_pagina* pdes_pag = &ptab->entrate[i];
+			if (pdes_pag->preload == 1) {
+				pagina* pag = alloca_pagina_residente();
+				if (pag == 0) 
+					panic("Impossibile allocare pagina residente");
+				if (! carica_pagina(pdes_pag, pag) ) 
+					panic("Impossibile caricare pagina residente");
+				collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
+			}
+		}
+
+	}
+	delete tmp;
+	heap.start = allinea(s->end, sizeof(int));
+	heap.dimensione = distance(last_address, heap.start);
+	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
+			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
+	bool risu;
+	c_sem_ini(pf_mutex, 1, risu);
+	if (!risu)
+		panic("Impossibile allocare il semaforo per i page fault");
+	pagina* pila_utente = crea_pila_utente(direttorio_principale, fine_utente_privato, 1);
+	if (pila_utente == 0) 
+		panic("Impossibile allocare la pila utente per main");
+	pdes_proc->esp0 = add(&stack, SIZE_PAGINA);
+	pdes_proc->ss0 = SEL_DATI_SISTEMA;
+	pdes_proc->ds  = SEL_DATI_UTENTE;
+	pdes_proc->es  = SEL_DATI_UTENTE;
+	pdes_proc->fpu.cr = 0x037f;
+	pdes_proc->fpu.tr = 0xffff;
+	pdes_proc->liv = LIV_UTENTE;
+	salta_a_main(s->entry_point, fine_utente_privato);
 }
