@@ -508,7 +508,7 @@ void operator delete[](void* p) {
 // per le tabelle non presenti) e le informazioni necessarie alla corretta 
 // creazione del descrittore di pagina, qualora la pagina dovesse essere 
 // caricata in memoria fisica (in particolare, i valori da assegnare ai bit RW, 
-// PCD e PWT). Quando una pagina V, non presente viene resa presente, 
+// PCD e PWT). Quando una pagina V, non presente, viene resa presente, 
 // caricandola in una pagina fisica F, l'informazione del blocco associato alla 
 // pagina viene ricopiata nel descrittore della pagina fisica F (altrimenti, 
 // poiche' nel descrittore verra' scritto il byte di accesso e l'indirizzo di 
@@ -1223,7 +1223,7 @@ extern "C" void sem_signal(int);
 // il microprogramma di gestione delle eccezioni di page fault lascia in cima 
 // alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
 // significativi specificano piu' precisamente il motivo per cui si e' 
-// verificato un page fault. Il significato dei campi e' il seguente:
+// verificato un page fault. Il significato dei bit e' il seguente:
 // - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
 // di protezione: il processore si trovava a livello utente e la pagina (o la 
 // tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
@@ -1302,6 +1302,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	}
 	// ptab punta alla tabella delle pagine (sia che fosse gia' presente, 
 	// sia che sia stata appena caricata)
+	
 
 	// ricaviamo il descrittore di pagina interessato dal fault
 	pdes_pag = &ptab->entrate[indice_tabella(indirizzo_virtuale)];
@@ -1321,6 +1322,13 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	// caricare p, rilascia il mutex e sveglia P2, che ora trova pagina p 
 	// presente)
 	if (pdes_pag->P == 0) {
+		// c'e' una, pur remota, possibilita' che rimpiazzamento_pagina
+		// scelga proprio la tabella ptab per il rimpiazzamento.
+		// Per impedirlo, rendiamo temporaneamente residente tale 
+		// tabella
+		des_pf *ppf = struttura(pfis(ptab));
+		cont_pf save = ppf->contenuto;
+		ppf->contenuto = TABELLA_RESIDENTE;
 
 		// proviamo ad allocare una pagina fisica per la pagina. Se non 
 		// ve ne sono, dobbiamo invocare la routine di rimpiazzamento 
@@ -1328,18 +1336,23 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 		pag = alloca_pagina_virtuale();
 		if (pag == 0) 
 			pag = rimpiazzamento_pagina();
-			// FIXME: che succede se viene scelta proprio la 
-			// tabella allocata poco prima?
 		
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
 		// schedulato un altro processo e, quindi, gli interrupt 
 		// verrano riabilitati)
-		if (! carica_pagina(pdes_pag, pag) )
+		if (! carica_pagina(pdes_pag, pag) ) {
+			ppf->contenuto = save;
 			goto error;
+		}
 
 		// infine colleghiamo la pagina
 		collega_pagina(ptab, pag, indirizzo_virtuale);
 		pdes_pag->D = 0; // appena caricata
+
+		// ripristiniamo il vecchio contenuto del decrittore di ptab
+		// (potra' essere TABELLA_PRIVATA o TABELLA_CONDIVISA)
+		ppf->contenuto = save;
+
 	}
 	sem_signal(pf_mutex);
 	return;
