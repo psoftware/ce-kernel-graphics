@@ -5,25 +5,32 @@
 #include <sys.h>
 #include <lib.h>
 
-process big body big_c(0), 10, LIV_UTENTE;
-process big2 body big_c(0), 10, LIV_UTENTE;
+process big1 body big_c(1), 10, LIV_UTENTE;
+process big2 body big_c(2), 10, LIV_UTENTE;
+process big3 body big_c(3), 10, LIV_UTENTE;
+process big4 body big_c(4), 10, LIV_UTENTE;
+process big5 body big_c(5), 10, LIV_UTENTE;
+process big6 body big_c(6), 10, LIV_UTENTE;
+process big7 body big_c(7), 10, LIV_UTENTE;
+process big8 body big_c(8), 10, LIV_UTENTE;
+process big9 body big_c(9), 10, LIV_UTENTE;
 
 #define N  9000000
 unsigned int values[N];
 
 process_body big_c(int a)
 {
-	printf(a, "scrivo i valori\n");
+	printf(0, "scrivo i valori\n");
 	for (int i = 0; i < N; i++) {
 		values[i] = i;
-		if (i % 4096 == 0) printf(a, ".");
+		if (i % 65536 == 0) printf(0, "%d", a);
 	}
-	printf(a, "\nora li sommo\n");
+	printf(0, "\nora li sommo\n");
 	unsigned int sum = 0;
 	for (int i = 0; i < N; i++) {
 		sum += values[i];
-		if (i % 4096 == 0) printf(a, ".");
+		if (i % 65536 == 0) printf(0, "%d", a);
 	}
-	printf(a, "\nsomma: %d\n", sum);
+	printf(0, "\nsomma: %d\n", sum);
 }
 

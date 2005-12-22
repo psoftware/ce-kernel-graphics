@@ -53,8 +53,6 @@
 #define IO_TIPO_GEOM		0x66
 #define IO_TIPO_RHDN		0x67
 #define IO_TIPO_WHDN		0x68
-#define IO_TIPO_RFDN		0x69
-#define IO_TIPO_WFDN		0x6A
 
 #define BLK_SIZE 512			// Dimensione del blocco (HD e FD)
 #define H_BLK_SIZE (BLK_SIZE / 2)	// Meta' dimensione blocco (short int)

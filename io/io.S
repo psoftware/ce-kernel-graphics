@@ -930,9 +930,6 @@ _fill_io_gates:
 	fill_io_gate io_tipo_wse0 a_writese_0
 	fill_io_gate io_tipo_tr a_term_read_n
 	fill_io_gate io_tipo_tw a_term_write_n
-	fill_io_gate io_tipo_geom a_geometria
-	fill_io_gate io_tipo_rhdn a_readhd_n
-	fill_io_gate io_tipo_whdn a_writehd_n
 	
 	leave
 	ret

@@ -3082,12 +3082,10 @@ char aspetta_STS(des_ata *p_des,char bit,bool &ris) {
 // Invia un comando al controller con la temporizzazione corretta
 // 
 inline bool invia_cmd(des_ata *p_des,hd_cmd com) {
-#ifdef STRICT_ATA
 	bool ris=true;
 	aspetta_STS(p_des,HD_STS_DRDY,ris);
 	if (!ris)
 		return false;
-#endif
 	p_des->comando=com;
 	outputb(com,p_des->indreg.iCMD);
 	//ndelay(400);
@@ -3183,6 +3181,7 @@ void starthd_out(des_ata *p_des,short drv,short vetti[],unsigned int primo,unsig
 	inputb(p_des->indreg.iSTS,stato);
 	scrivi_sett_buff(p_des,p_des->punt,stato);
 	p_des->punt+=H_BLK_SIZE;	// Solo dopo quest'operazione e' sicuro
+	p_des->cont--;
 	umask_hd(p_des->indreg.iSTS);	//  abilitare l'hd ad interrompere
 }
 
@@ -3285,12 +3284,12 @@ extern "C" void c_driver_hd()
 		inputb(p_des->indreg.iSTS,stato);
 		if (!hd_errore(stato) && (curr_cmd==READ_SECT || curr_cmd==WRITE_SECT)) {
 			if (curr_cmd==WRITE_SECT) {
-				p_des->cont--;
 				if (p_des->cont==0)
 					fine=true;
 				else {
 					scrivi_sett_buff(p_des,p_des->punt,stato);
 					p_des->comando=WRITE_SECT;
+					p_des->cont--;
 				}
 			}
 			else {		// Comando di READ_SECT
