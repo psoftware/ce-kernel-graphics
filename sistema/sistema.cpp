@@ -235,8 +235,8 @@ void* malloc(unsigned int quanti) {
 		// allocabile)
 		if (scorri->dimensione - dim >= sizeof(des_mem) + sizeof(int)) {
 
-			// il nuovo descittore verra' scritto nei primi byte della zona
-			// da creare (quindi, "dim" byte dopo "p")
+			// il nuovo descrittore verra' scritto nei primi byte 
+			// della zona da creare (quindi, "dim" byte dopo "p")
 			des_mem* nuovo = static_cast<des_mem*>(add(p, dim));
 
 			// aggiustiamo le dimensioni della vecchia e della nuova zona
@@ -482,7 +482,7 @@ void operator delete[](void* p) {
 // (per effetto di una interruzione software, esterna o di una eccezione), la
 // routine puo' continuare ad utilizzare il direttorio del processo e avere 
 // accesso al proprio codice e alle proprie strutture dati.
-// La seconda parte delle memoria fisica e' gestita tramite una struttra dati 
+// La seconda parte della memoria fisica e' gestita tramite una struttra dati 
 // del nucleo, allocata dinamicamente in fase di inizializzazione del sistema, 
 // contenente un descrittore per ogni pagina fisica. Per le pagine fisiche 
 // occupate (da un direttorio, una tabella o una pagina virtuale) e 
@@ -570,14 +570,14 @@ void operator delete[](void* p) {
 // Se il descrittore di una tabella delle pagine possiede il bit "azzera" pari 
 // a 1, e' come se tutte le pagine puntate dalla tabella avessero il bit 
 // "azzera" pari a 1;
-// - preload: le pagine virtuali (o le tabelle) il cui descrittore contiene il 
+// - preload: una pagina virtuale (o le tabella) il cui descrittore contiene il 
 // bit "preload" pari a 1 e' esclusa dal meccanismo del rimpiazzamento: la 
 // pagina viene precaricata dallo swap (o creata, se anche il bit azzera e' 
 // pari ad 1) al momento della creazione del processo, e poi non puo' essere 
-// rimpiazzata. Tale meccanismo serve a realizzare le pagine residenti, che si 
+// rimpiazzata.  Tale meccanismo serve a realizzare le pagine residenti, che si 
 // rendono necessarie soprattutto per il processo che esegue la funzione "main" 
 // (tale processo puo' invocare le primitive activate_p e sem_ini, che 
-// prevedono dei parametri formali di ritorno; parametri attuali sono scritti 
+// prevedono dei parametri formali di ritorno; i parametri attuali sono scritti 
 // dal nucleo e devono trovarsi in pagine non rimpiazzabili e precaricate, 
 // altrimenti il nucleo stesso potrebbe causare dei page fault)
 
@@ -601,7 +601,7 @@ struct descrittore_pagina {
 typedef descrittore_pagina descrittore_tabella;
 
 // Un direttorio e' un vettore di 1024 descrittori di tabella
-// NOTA: lo racchiudo in una struttura in modo che "direttorio" sia un tipo
+// NOTA: lo racchiudiamo in una struttura in modo che "direttorio" sia un tipo
 struct direttorio {
 	descrittore_tabella entrate[1024];
 }; 
@@ -631,7 +631,8 @@ union pagina_fisica {
 
 // dato un puntatore a un direttorio, a una tabella delle pagine o a una pagina
 // virtuale, possiamo aver bisogno di un puntatore alla pagina fisica che li
-// contiene
+// contiene (poiche' gli indirizzi di partenza coincidono, si tratta solo di 
+// eseguire una conversione di tipo)
 inline pagina_fisica* pfis(direttorio* pdir)
 {
 	return reinterpret_cast<pagina_fisica*>(pdir);
@@ -993,7 +994,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 	ppf->tabella		= ptab;
 	ppf->indirizzo_virtuale = ind_virtuale;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
-	// dele pagina
+	// delle pagine
 	ppf->contatore		= 1 << 31;
 	ppf->blocco		= pdes_pag->address; // vedi NOTA prec
 
@@ -1322,36 +1323,38 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	// caricare p, rilascia il mutex e sveglia P2, che ora trova pagina p 
 	// presente)
 	if (pdes_pag->P == 0) {
-		// c'e' una, pur remota, possibilita' che rimpiazzamento_pagina
-		// scelga proprio la tabella ptab per il rimpiazzamento.
-		// Per impedirlo, rendiamo temporaneamente residente tale 
-		// tabella
-		des_pf *ppf = struttura(pfis(ptab));
-		cont_pf save = ppf->contenuto;
-		ppf->contenuto = TABELLA_RESIDENTE;
 
 		// proviamo ad allocare una pagina fisica per la pagina. Se non 
 		// ve ne sono, dobbiamo invocare la routine di rimpiazzamento 
 		// per creare lo spazio
 		pag = alloca_pagina_virtuale();
-		if (pag == 0) 
+		if (pag == 0)  {
+			// c'e' una, pur remota, possibilita' che 
+			// rimpiazzamento_pagina scelga proprio la tabella ptab 
+			// per il rimpiazzamento. Per impedirlo, rendiamo 
+			// temporaneamente residente tale tabella
+			des_pf *ppf = struttura(pfis(ptab));
+			cont_pf save = ppf->contenuto;
+			ppf->contenuto = TABELLA_RESIDENTE;
+			
 			pag = rimpiazzamento_pagina();
+
+			// ripristiniamo il vecchio contenuto del decrittore di 
+			// ptab (potra' essere TABELLA_PRIVATA o 
+			// TABELLA_CONDIVISA)
+			ppf->contenuto = save;
+		}
 		
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
 		// schedulato un altro processo e, quindi, gli interrupt 
 		// verrano riabilitati)
-		if (! carica_pagina(pdes_pag, pag) ) {
-			ppf->contenuto = save;
+		if (! carica_pagina(pdes_pag, pag) ) 
 			goto error;
-		}
 
 		// infine colleghiamo la pagina
 		collega_pagina(ptab, pag, indirizzo_virtuale);
 		pdes_pag->D = 0; // appena caricata
 
-		// ripristiniamo il vecchio contenuto del decrittore di ptab
-		// (potra' essere TABELLA_PRIVATA o TABELLA_CONDIVISA)
-		ppf->contenuto = save;
 
 	}
 	sem_signal(pf_mutex);
@@ -1491,8 +1494,7 @@ des_pf* rimpiazzamento() {
 		}
 	}
 
-	// se vittima e' 0 c'e' qualcosa che non va
-	if (vittima == 0) goto error;
+	// assert (vittima != 0);
 
 	if (vittima->contenuto == TABELLA_PRIVATA) {
 		// usiamo le informazioni nel mapping inverso per ricavare 
@@ -2112,7 +2114,7 @@ extern "C" void c_begin_p()
 
 extern "C" void c_give_num(int &lav)
 {
-        lav = processi - 1;
+        lav = processi;
 }
 
 
@@ -3436,12 +3438,7 @@ struct superblock_t {
 	void*		end;
 };
 
-char read_buf[SIZE_PAGINA * 8];
-
-void dummy(int a) {
-	for(;;);
-}
-
+char read_buf[SIZE_PAGINA];
 
 void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* msg) {
 	unsigned char totale, da_leggere;
@@ -3463,7 +3460,6 @@ extern unsigned long clocks_per_usec;
 
 	
 // inizializzazione della console
-void con_init(void);
 // controllore interruzioni
 extern "C" void init_8259();
 extern "C" unsigned long  calibra_tsc();
@@ -3604,30 +3600,48 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// specificare un puntatore non valido
 	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
 
+
+	// inizializziamo il controllore delle interruzioni [vedi sistema.S]
 	init_8259();
+	
+	// processo dummy
+	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
+	if (dummy == 0)
+		panic("Impossibile creare il processo dummy");
+	inserimento_coda(pronti, dummy);
 
-
+	// creazione del primo processo
 	id_main = alloca_tss();
 	if (id_main == 0)
 		panic("Impossibile creare il processo main");
 	init.identifier = id_main;
 	init.priority = 0;
 	pdes_proc = des_p(init.identifier);
+
+	// il primo processo utilizza il direttorio principale e,
+	// inizialmente, si trova a livello sistema (deve eseguire la parte 
+	// rimanente di questa routine, che si trova a livello sistema)
 	memset(pdes_proc, 0, sizeof(des_proc));
 	pdes_proc->cr3 = direttorio_principale;
 	pdes_proc->liv = LIV_SISTEMA;
-	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
-	if (dummy == 0)
-		panic("Impossibile creare il processo dummy");
-	inserimento_coda(pronti, dummy);
 	esecuzione = &init;
 	processi++;
 	trasforma_in_processo();
+
+	// da qui in poi, e' il processo init che esegue
 	printk("Processo init\n");
+
+	// attiviamo il timer e calibriamo il contatore per i microdelay
+	// (necessari nella corretta realizzazione del driver dell'hard disk)
 	attiva_timer(DELAY);
 	unsigned long clocks_per_sec = calibra_tsc();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
+	
+	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
+	// swap
 	hd_init();
+
+	// lettura del superblocco
 	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
 	superblock_t *s = reinterpret_cast<superblock_t*>(read_buf);
 	printk("    bm_start   : %d\n", s->bm_start);
@@ -3635,16 +3649,21 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	printk("    directory  : %d\n", s->directory);
 	printk("    entry point: %x\n", s->entry_point);
 	printk("    end        : %x\n", s->end);
+
+	// lettura della bitmap dei blocchi
 	unsigned int pages = ceild(s->blocks, SIZE_PAGINA * 8);
 	unsigned int *buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
 	if (buf == 0) 
 		panic("Impossibile allocare la bitmap dei blocchi");
 	bm_create(&block_bm, buf, s->blocks);
 	leggi_swap(buf, s->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+
+	// lettura del direttorio principale dallo swap
 	direttorio* tmp = new direttorio;
 	if (tmp == 0)
 		panic("memoria insufficiente");
 	leggi_swap(tmp, s->directory, sizeof(direttorio), "il direttorio principale");
+
 	// tabelle condivise per lo spazio utente condiviso
 	printk("Creo o leggo le tabelle condivise\n");
 	void* last_address;
@@ -3685,14 +3704,21 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	}
 	delete tmp;
+
+	// inizializzazione dello heap utente
 	heap.start = allinea(s->end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
 	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
+
+	// semaforo per la mutua esclusione nella gestione dei page fault
 	bool risu;
 	c_sem_ini(pf_mutex, 1, risu);
 	if (!risu)
 		panic("Impossibile allocare il semaforo per i page fault");
+	
+	// ora trasformiamo il processo corrente in un processo utente (in modo 
+	// che possa passare ad eseguire la routine main)
 	pagina* pila_utente = crea_pila_utente(direttorio_principale, fine_utente_privato, 1);
 	if (pila_utente == 0) 
 		panic("Impossibile allocare la pila utente per main");
