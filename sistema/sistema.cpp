@@ -550,13 +550,23 @@ void operator delete[](void* p) {
 // PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
 // Il descrittore di pagina (o di tabella) prevede 3 bit che sono lasciati a 
-// disposizione del programmatore di sistema. In questo sistema, ne sono stati 
-// usati 2, denominati "azzera" e "preload" (precarica). Il loro significato e' 
-// il seguente:
-// - azzera: una pagina virtuale il cui descrittore contiene il bit azzera pari 
-// a 1 non possiede inizialmente un blocco in memoria di massa.  Se, e quando, 
-// tale pagina verra' realmente acceduta, un nuovo blocco verra' allocato in 
-// quel momento, e la pagina riempita con zeri. Tale ottimizzazione si rende 
+// disposizione del programmatore di sistema. In questo sistema, ne e' stato 
+// usati uno, denominato "preload" (precarica). Il suo significato e' il 
+// seguente: una pagina virtuale (o le tabella) il cui descrittore contiene il 
+// bit "preload" pari a 1 e' esclusa dal meccanismo del rimpiazzamento: la 
+// pagina viene precaricata dallo swap al momento della creazione del processo, 
+// e poi non puo' essere rimpiazzata.  Tale meccanismo serve a realizzare le 
+// pagine residenti, che si rendono necessarie soprattutto per il processo che 
+// esegue la funzione "main" (tale processo puo' invocare le primitive 
+// activate_p e sem_ini, che prevedono dei parametri formali di ritorno; i 
+// parametri attuali sono scritti dal nucleo e devono trovarsi in pagine non 
+// rimpiazzabili e precaricate, altrimenti il nucleo stesso potrebbe causare 
+// dei page fault)
+//
+// una pagina virtuale il cui descrittore contiene il campo address pari a 0 
+// non possiede inizialmente un blocco in memoria di massa.  Se, e quando, tale 
+// pagina verra' realmente acceduta, un nuovo blocco verra' allocato in quel 
+// momento, e la pagina riempita con zeri. Tale ottimizzazione si rende 
 // necessaria, perche' molte pagine sono potenzialmente utilizzabili dal 
 // processo, ma non sono realmente utilizzate quasi mai (ad esempio, la maggior 
 // parte delle pagine che compongono lo heap e lo stack). Senza questa 
@@ -567,19 +577,9 @@ void operator delete[](void* p) {
 // che si trova nei sistemi con file system, in cui i dati globali 
 // inizializzati a zero non sono realmente memorizzati nel file eseguibile, ma 
 // il file eseguibile ne specifica solo la dimensione totale.
-// Se il descrittore di una tabella delle pagine possiede il bit "azzera" pari 
-// a 1, e' come se tutte le pagine puntate dalla tabella avessero il bit 
-// "azzera" pari a 1;
-// - preload: una pagina virtuale (o le tabella) il cui descrittore contiene il 
-// bit "preload" pari a 1 e' esclusa dal meccanismo del rimpiazzamento: la 
-// pagina viene precaricata dallo swap (o creata, se anche il bit azzera e' 
-// pari ad 1) al momento della creazione del processo, e poi non puo' essere 
-// rimpiazzata.  Tale meccanismo serve a realizzare le pagine residenti, che si 
-// rendono necessarie soprattutto per il processo che esegue la funzione "main" 
-// (tale processo puo' invocare le primitive activate_p e sem_ini, che 
-// prevedono dei parametri formali di ritorno; i parametri attuali sono scritti 
-// dal nucleo e devono trovarsi in pagine non rimpiazzabili e precaricate, 
-// altrimenti il nucleo stesso potrebbe causare dei page fault)
+// Se il descrittore di una tabella delle pagine possiede il campo address pari 
+// a 0, e' come se tutte le pagine puntate dalla tabella avessero il campo 
+// address pari a 0
 
 struct descrittore_pagina {
 	// byte di accesso
@@ -594,9 +594,8 @@ struct descrittore_pagina {
 	unsigned int global:	1;	// non visto a lezione
 	// fine byte di accesso
 
-	unsigned int avail:	1;	// non usato
+	unsigned int avail:	2;	// non usato
 	unsigned int preload:	1;	// la pag. deve essere precaricata
-	unsigned int azzera:    1;	// ottimizzazione pagine iniz. vuote
 
 	unsigned int address:	20;	// indirizzo fisico/blocco
 };
@@ -1377,7 +1376,7 @@ error:
 // all'indirizzo pag
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 {
-	if (pdes_pag->azzera == 1) {
+	if (pdes_pag->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&block_bm, blocco) ) {
 			printk("spazio nello swap insufficiente\n");
@@ -1385,18 +1384,16 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 		}
 		pdes_pag->address = blocco;
 		memset(pag, 0, SIZE_PAGINA);
-		pdes_pag->azzera = 0;
 		return true;
-	} else if (pdes_pag->address != 0)
+	} else 
 		return leggi_blocco(pdes_pag->address, pag);
-	return false;
 }
 
 // carica la tabella descritta da pdes_tab in memoria fisica, all'indirizzo
 // ptab
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 {
-	if (pdes_tab->azzera == 1) {
+	if (pdes_tab->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&block_bm, blocco)) {
 			printk("spazio nello swap insufficiente\n");
@@ -1412,14 +1409,11 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 			pdes_pag->pgsz		= 0;
 			pdes_pag->RW		= pdes_tab->RW;
 			pdes_pag->US		= pdes_tab->US;
-			pdes_pag->azzera	= 1;
 			pdes_pag->P		= 0;
 		}
-		pdes_tab->azzera = 0;
 		return true;
-	} else if (pdes_tab->address != 0)
+	} else 
 		return leggi_blocco(pdes_tab->address, ptab);
-	return false;
 }
 
 
@@ -1749,7 +1743,6 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 	for (int i = 0; i < num_tab; i++) {
 
 		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
-		pdes_tab->azzera  = 1;
 		pdes_tab->US	  = 1;
 		pdes_tab->RW	  = 1;
 		pdes_tab->address = 0;
@@ -3683,9 +3676,6 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		tabella_pagine* ptab;
 		
 		*pdes_tab2 = *pdes_tab1;
-
-		if (pdes_tab1->azzera == 0 && pdes_tab1->address == 0)
-			continue;
 
 		last_address = add(ind, SIZE_PAGINA * 1024);
 
