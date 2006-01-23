@@ -25,6 +25,7 @@ unsigned int a2i(void* v) {
 }
 
 struct descrittore_pagina {
+	// byte di accesso
 	unsigned int P:		1;	// bit di presenza
 	unsigned int RW:	1;	// Read/Write
 	unsigned int US:	1;	// User/Supervisor
@@ -34,11 +35,14 @@ struct descrittore_pagina {
 	unsigned int D:		1;	// Dirty
 	unsigned int pgsz:	1;	// non visto a lezione
 	unsigned int global:	1;	// non visto a lezione
-	unsigned int avail:	1;	// non usati
-	unsigned int preload:   1;	// pag. da precaricare
-	unsigned int azzera:    1;	// ottimizzazione pagine iniz. vuote
+	// fine byte di accesso
+
+	unsigned int avail:	2;	// non usato
+	unsigned int preload:	1;	// la pag. deve essere precaricata
+
 	unsigned int address:	20;	// indirizzo fisico/blocco
 };
+
 
 typedef descrittore_pagina descrittore_tabella;
 
@@ -309,7 +313,7 @@ int main(int argc, char* argv[]) {
 				pdes_pag->address = b;
 				scrivi_blocco(img, pdes_pag->address, &pag);
 			} else {
-				pdes_pag->azzera = 1;
+				pdes_pag->address = 0;
 			}
 			pdes_pag->RW = scrivibile;
 			pdes_pag->US = 1;
@@ -374,7 +378,6 @@ int main(int argc, char* argv[]) {
 	{
 		descrittore_pagina* pdes_pag = &main_dir.entrate[i];
 		pdes_pag->address = 0;
-		pdes_pag->azzera = 1;
 		pdes_pag->US	 = 1;
 		pdes_pag->RW	 = 1;
 	}
