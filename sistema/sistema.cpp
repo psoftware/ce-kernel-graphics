@@ -1251,12 +1251,12 @@ struct page_fault_error {
 
 // funzioni usate dalla routine di trasferimento
 tabella_pagine* rimpiazzamento_tabella();
-pagina* 	rimpiazzamento_pagina();
+pagina* 	rimpiazzamento_pagina(tabella_pagine* escludi);
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag);
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
 extern "C" void abort_p();
 
-void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
+void trasferimento(void* indirizzo_virtuale, bool scrittura)
 {
 	descrittore_pagina* pdes_pag;
 	pagina* pag;
@@ -1277,7 +1277,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 	// se l'accesso era in scrittura e (tutte le pagine puntate da) la 
 	// tabella e' di sola lettura, il processo ha commesso un errore e va 
 	// interrotto
-	if (errore.write == 1 && pdes_tab->RW == 0) {
+	if (scrittura && pdes_tab->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
 		goto error; // Dijkstra se ne faccia una ragione
 	}
@@ -1315,7 +1315,7 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 
 	// se l'accesso era in scrittura e la pagina e' di sola lettura, il 
 	// programma ha commesso un errore e va interrotto
-	if (errore.write == 1 && pdes_pag->RW == 0) {
+	if (scrittura && pdes_pag->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
 		goto error;
 	}
@@ -1332,22 +1332,12 @@ void trasferimento(void* indirizzo_virtuale, page_fault_error errore)
 		// ve ne sono, dobbiamo invocare la routine di rimpiazzamento 
 		// per creare lo spazio
 		pag = alloca_pagina_virtuale();
-		if (pag == 0)  {
-			// c'e' una, pur remota, possibilita' che 
-			// rimpiazzamento_pagina scelga proprio la tabella ptab 
-			// per il rimpiazzamento. Per impedirlo, rendiamo 
-			// temporaneamente residente tale tabella
-			des_pf *ppf = struttura(pfis(ptab));
-			cont_pf save = ppf->contenuto;
-			ppf->contenuto = TABELLA_RESIDENTE;
-			
-			pag = rimpiazzamento_pagina();
-
-			// ripristiniamo il vecchio contenuto del decrittore di 
-			// ptab (potra' essere TABELLA_PRIVATA o 
-			// TABELLA_CONDIVISA)
-			ppf->contenuto = save;
-		}
+		if (pag == 0)  
+			// passiamo l'indirizzo di ptab alla routine di 
+			// rimpiazzamento. In nessun caso la routine deve 
+			// scegliere ptab come pagina da rimpiazzare.
+			pag = rimpiazzamento_pagina(ptab);
+		
 		
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
 		// schedulato un altro processo e, quindi, gli interrupt 
@@ -1433,13 +1423,24 @@ tabella_pagine* rimpiazzamento_tabella()
 	return &indirizzo(ppf)->tab;
 }
 
-pagina* rimpiazzamento_pagina() 
+pagina* rimpiazzamento_pagina(tabella_pagine* escludi) 
 {
+	// Per impedire che venga scelta la tabella "escludi", la rendiamo 
+	// temporaneamente residente
+	des_pf *p = struttura(pfis(escludi));
+	cont_pf save = p->contenuto;
+	p->contenuto = TABELLA_RESIDENTE;
+
 	des_pf *ppf = rimpiazzamento();
+	
+	// ripristiniamo il vecchio contenuto del decrittore di "escludi" 
+	// (potra' essere TABELLA_PRIVATA o TABELLA_CONDIVISA)
+	p->contenuto = save;
 
 	if (ppf == 0) return 0;
 
 	ppf->contenuto = PAGINA;
+
 	return &indirizzo(ppf)->pag;
 }
 
@@ -2210,7 +2211,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 		terminate_p();
 	}
 
-	trasferimento(indirizzo_virtuale, errore);
+	trasferimento(indirizzo_virtuale, errore.write);
 }
 
 /////////////////////////////////////////////////////////////////////////
