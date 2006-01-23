@@ -1583,9 +1583,6 @@ struct des_proc {			// offset:
 	char liv;			// 212
 }; // dimensione 212 + 1 + 3(allineamento) = 216
 
-// vettore dei descrittori di processo
-extern des_proc array_desp[MAX_PROCESSI];
-
 // numero di processi attivi
 int processi = 0;
 
@@ -1610,13 +1607,11 @@ extern proc_elem *pronti;
 pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine);
 pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale);
 void rilascia_tutto(direttorio* pdir, void* start, void* end);
-extern "C" int alloca_tss();
+extern "C" int alloca_tss(des_proc* p);
 extern "C" void rilascia_tss(int indice);
 
 // ritorna il descrittore del processo id
-extern "C" des_proc *des_p(short id) {
-	return &array_desp[id - 5];
-}
+extern "C" des_proc *des_p(short id);
 
 proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 {
@@ -1631,18 +1626,19 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	p = new proc_elem;
         if (p == 0) goto errore1;
 
-	identifier = alloca_tss();
-	if (identifier == 0) goto errore2;
+	pdes_proc = new des_proc;
+	if (pdes_proc == 0) goto errore2;
+	memset(pdes_proc, 0, sizeof(des_proc));
+
+	identifier = alloca_tss(pdes_proc);
+	if (identifier == 0) goto errore3;
 
         p->identifier = identifier;
         p->priority = prio;
 
-	pdes_proc = des_p(identifier);
-	memset(pdes_proc, 0, sizeof(des_proc));
-
 	// pagina fisica per il direttorio del processo
 	pdirettorio = alloca_direttorio();
-	if (pdirettorio == 0) goto errore3;
+	if (pdirettorio == 0) goto errore4;
 
 	// il direttorio viene inizialmente copiato dal direttorio principale
 	// (in questo modo, il nuovo processo acquisisce automaticamente gli
@@ -1651,7 +1647,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	*pdirettorio = *direttorio_principale;
 	
 	pila_sistema = crea_pila_sistema(pdirettorio, fine_sistema_privato);
-	if (pila_sistema == 0) goto errore4;
+	if (pila_sistema == 0) goto errore5;
 
 	if (liv == LIV_UTENTE) {
 
@@ -1666,7 +1662,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// usando come pila la pila utente (al suo indirizzo virtuale)
 
 		pila_utente = crea_pila_utente(pdirettorio, fine_utente_privato, 64);
-		if (pila_utente == 0) goto errore5;
+		if (pila_utente == 0) goto errore6;
 
 		// dobbiamo ora fare in modo che la pila utente si trovi nella
 		// situazione in cui si troverebbe dopo una CALL alla funzione
@@ -1721,11 +1717,12 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	return p;
 
-errore5:	rilascia_tutto(pdirettorio,
+errore6:	rilascia_tutto(pdirettorio,
 		  sub(fine_sistema_privato, SIZE_PAGINA),
 		  fine_sistema_privato);
-errore4:	rilascia(pdirettorio);
-errore3:	rilascia_tss(identifier);
+errore5:	rilascia(pdirettorio);
+errore4:	rilascia_tss(identifier);
+errore3:	delete pdes_proc;
 errore2:	delete p;
 errore1:	return 0;
 }
@@ -1900,6 +1897,7 @@ extern "C" void c_terminate_p()
 	rilascia(pdirettorio);
 	rilascia_tss(esecuzione->identifier);
 	delete esecuzione;
+	delete pdes_proc;
 	processi--;
 	if (processi <= 0) {
 		printk("Tutti i processi sono terminati\n");
@@ -2195,16 +2193,15 @@ extern void* fine_codice_sistema;
 
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
-#if 0
-	printk("eip: %x, page fault a %x:", eip, indirizzo_virtuale);
-	printk("%s, %s, %s, %s\n",
-		errore.prot  ? "protezione"	: "pag/tab assente",
-		errore.write ? "scrittura"	: "lettura",
-		errore.user  ? "da utente"	: "da sistema",
-		errore.res   ? "bit riservato"	: "");
-#endif
-	if (eip < fine_codice_sistema)
+	if (eip < fine_codice_sistema) {
+		printk("eip: %x, page fault a %x:", eip, indirizzo_virtuale);
+		printk("%s, %s, %s, %s\n",
+			errore.prot  ? "protezione"	: "pag/tab assente",
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema",
+			errore.res   ? "bit riservato"	: "");
 		panic("page fault dal modulo sistema");
+	}
 	if (errore.res == 1)
 		panic("descrittore scorretto");
 
@@ -2467,23 +2464,23 @@ extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
 	direttorio* pdirettorio;
 	char liv;
 
-	pdes_proc = des_p(esecuzione->identifier);
-	liv = pdes_proc->liv;
-	pdirettorio = pdes_proc->cr3;
-
-	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
-		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
-		if (pdes_tab->P == 0)  // XXX: page fault esclusi
-			return false;
-		tabella_pagine *ptab = tabella_puntata(pdes_tab);
-		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
-		if (pdes_pag->P == 0)  // XXX: page fault esclusi
-			return false;
-		if (liv == LIV_UTENTE && pdes_pag->US == 0)
-			return false;
-		if (write && pdes_pag->RW == 0)
-			return false;
-	}
+//	pdes_proc = des_p(esecuzione->identifier);
+//	liv = pdes_proc->liv;
+//	pdirettorio = pdes_proc->cr3;
+//
+//	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
+//		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
+//		if (pdes_tab->P == 0)  // XXX: page fault esclusi
+//			return false;
+//		tabella_pagine *ptab = tabella_puntata(pdes_tab);
+//		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
+//		if (pdes_pag->P == 0)  // XXX: page fault esclusi
+//			return false;
+//		if (liv == LIV_UTENTE && pdes_pag->US == 0)
+//			return false;
+//		if (write && pdes_pag->RW == 0)
+//			return false;
+//	}
 	return true;
 }
 
@@ -3610,12 +3607,14 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	inserimento_coda(pronti, dummy);
 
 	// creazione del primo processo
-	id_main = alloca_tss();
+	pdes_proc = new des_proc;
+	if (pdes_proc == 0)
+		panic("Impossibile creare il processo main (mem. insufficiente)");
+	id_main = alloca_tss(pdes_proc);
 	if (id_main == 0)
-		panic("Impossibile creare il processo main");
+		panic("Impossibile creare il processo main (gdt insufficiente)");
 	init.identifier = id_main;
 	init.priority = 0;
-	pdes_proc = des_p(init.identifier);
 
 	// il primo processo utilizza il direttorio principale e,
 	// inizialmente, si trova a livello sistema (deve eseguire la parte 

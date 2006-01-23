@@ -211,9 +211,9 @@ qui:
      movw    %cx, %ss
      movw    %cx, %ds
      movw    %cx, %es
-     movw    $0, %cx			# FS e GS non sono usati
-     movw    %cx,  %fs
-     movw    %cx,  %gs
+     movw    $0,  %cx			# FS e GS non sono usati
+     movw    %cx, %fs
+     movw    %cx, %gs
 
      movl    $0, %ebp
 
@@ -415,8 +415,16 @@ carica_stato:
 init_gdt:
 	pushl %ebp
 	movl %esp, %ebp
+	pushl %edi
 	pushl %ecx
-	pushl %ebx
+	pushl %eax
+
+	# azzeriamo la gdt
+	movl $gdt, %edi
+	movl $0x4000, %ecx
+	movl $0, %eax
+	rep stosl
+
 
 			#indice	base	limite	P	DPL		TIPO		G
 	carica_descr	0	0	0	NON_P	0		0		0
@@ -425,28 +433,9 @@ init_gdt:
 	carica_descr	3	0	0xfffff	PRES	LIV_UTENTE	SEG_CODICE	G_PAGINA
 	carica_descr	4	0	0xfffff	PRES	LIV_UTENTE	SEG_DATI	G_PAGINA
 
-	movl $_array_desp, %ebx
-	movl $5, %ecx
-ciclo_tss:
-	cmpl $(MAX_PROCESSI + 5), %ecx
-	jl carica_tss
-	jmp fine_carica_tss
-carica_tss:
-	pushl $G_BYTE
-	pushl $SEG_TSS
-	pushl $LIV_SISTEMA
-	pushl $NON_P
-	pushl $(SIZE_DESP-1)
-	pushl %ebx
-	pushl %ecx
-	call _init_descrittore
-	addl $28, %esp
-	incl %ecx
-	addl $SIZE_DESP, %ebx
-	jmp ciclo_tss
-fine_carica_tss:
-	popl %ebx
+	popl %eax
 	popl %ecx
+	popl %edi
 	leave
 	ret
 
@@ -629,7 +618,7 @@ _init_descrittore:
 	leave
 	ret
 
-# trova un desctrittore di segmento TSS non ancora
+# trova un descrittore di segmento TSS non ancora
 # utilizzato, e ne restituisce l'indice in %eax
 # (0 se tutti occupati)
 # lo stato occupato/libero del descrittore e' dato
@@ -645,18 +634,29 @@ _alloca_tss:
 	movl $0, %eax
 	movl $5, %ecx
 1:
-	cmpl $(5+MAX_PROCESSI), %ecx
+	cmpl $8192, %ecx
 	jl 2f
 	jmp 3f
 2:
 	testb $PRES, 5(%ebx, %ecx, 8)
 	jnz 4f
-	orb $PRES, 5(%ebx, %ecx, 8)
+
+	pushl $0		# gran. byte
+	pushl $SEG_TSS		# tipo
+	pushl $LIV_SISTEMA	# dpl
+	pushl $PRES		# bit presenza
+	pushl $(SIZE_DESP - 1)	# limite
+	pushl 8(%ebp)		# base
+	pushl %ecx		# indice descr.
+	call  _init_descrittore
+	addl $28, %esp
+
 	movl %ecx, %eax
 	jmp 3f
 4:	
 	incl %ecx
 	jmp 1b
+
 3:
 	popl %ecx
 	popl %ebx
@@ -683,6 +683,24 @@ _rilascia_tss:
 	popl %eax
 	popl %ecx
 	popl %ebx
+	leave
+	ret
+
+# dato l'identificatore di un processo,
+# ne restituisce il puntatore al descrittore
+	.global _des_p
+_des_p:	
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx
+
+	movl $0, %ebx
+        movw 8(%ebp), %bx		# esecuzione->identifier in ebx
+        leal gdt(, %ebx, 8), %eax       # ind. entrata della gdt relativa in eax
+	estrai_base			# ind. TSS -> %ebx
+	movl %ebx, %eax
+
+	popl %eax
 	leave
 	ret
 
@@ -1774,8 +1792,6 @@ _esecuzione:	.long 0
 _pronti:	.long 0
 .global		_array_dess
 _array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
-.global		_array_desp
-_array_desp:	.space SIZE_DESP * MAX_PROCESSI
 # Descrittore Hard Disk
 	.global _hd
 _hd:	.long	0x01f7		#hd[0].indreg.iCMD_iSTS
@@ -1832,7 +1848,7 @@ _hd:	.long	0x01f7		#hd[0].indreg.iCMD_iSTS
 	# puntatori alle tabelle GDT e IDT
 	# nel formato richiesto dalle istruzioni LGDT e LIDT
 gdt_pointer:
-	.word (5+MAX_PROCESSI)*8-1 	# limite della GDT
+	.word 0xffff		 	# limite della GDT
 	.long gdt			# base della GDT
 idt_pointer:
 	.word 0x7FF			# limite della IDT (256 entrate)
@@ -1842,7 +1858,7 @@ idt_pointer:
 gdt:
 	# spazio per 5 descrittori piu' i descrittori di TSS 
 	# i descrittori verrano costruiti a tempo di esecuzione
-	.space 8 * (5 + MAX_PROCESSI), 0
+	.space 8 * 8192, 0
 
 	.align 16
 idt:

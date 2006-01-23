@@ -1,4 +1,3 @@
-#define MAX_PROCESSI		100
 #define MAX_SEMAFORI		100
 
 #define SEL_CODICE_SISTEMA	8

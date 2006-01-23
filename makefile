@@ -4,8 +4,8 @@ START_IO=        0x00200000
 START_UTENTE=	 0x80000000
 SWAPSIZE=10000
 
-CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -O2
-CPPFLAGS=-nostdinc -Iinclude 
+CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
+CPPFLAGS=-nostdinc -Iinclude -g
 
 all: build/sistema \
      build/io 	   \
