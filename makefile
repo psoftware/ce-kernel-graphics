@@ -26,7 +26,7 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	gcc $(CPPFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/multiboot.h include/elf.h include/costanti.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h sistema/elf.h include/costanti.h
 	g++ $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp

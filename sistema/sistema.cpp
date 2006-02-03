@@ -1,6 +1,6 @@
 // sistema.cpp
 //
-#include "multiboot.h"
+#include "mboot.h"
 #include "costanti.h"
 #include "elf.h"
 
@@ -3709,7 +3709,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	delete tmp;
 
 	// inizializzazione dello heap utente
-	heap.start = allinea(s->end, sizeof(int));
+	heap.start = allineav(s->end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
 	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));

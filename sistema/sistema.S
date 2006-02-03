@@ -1,7 +1,7 @@
 // sistema.s
 
 #define ASM 1
-#include "multiboot.h"
+#include "mboot.h"
 #include "costanti.h"
 
 
@@ -1854,13 +1854,13 @@ idt_pointer:
 	.word 0x7FF			// limite della IDT (256 entrate)
 	.long idt			// base della IDT
 
-.align 16
+.balign 16
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 
 	// i descrittori verrano costruiti a tempo di esecuzione
 	.space 8 * 8192, 0
 
-	.align 16
+.balign 16
 idt:
 	// spazio per 256 gate
 	// verra' riempita a tempo di esecuzione
