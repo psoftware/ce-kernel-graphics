@@ -1,24 +1,24 @@
-# io.s
-#
+// io.s
+//
 #include "costanti.h"
 
-################################################################################
-##                                 COSTANTI                                   ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                                 COSTANTI                                   //
+////////////////////////////////////////////////////////////////////////////////
 
-# Tipi delle interruzioni delle chiamate di sistema usate
-# Devono coincidere con quelli usati in sistema.s e utente.s
-#
+// Tipi delle interruzioni delle chiamate di sistema usate
+// Devono coincidere con quelli usati in sistema.s e utente.s
+//
 .set tipo_t, TIPO_T
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
 .set tipo_s, TIPO_S
 .set tipo_nd, TIPO_ND
 
-# Tipi delle interruzioni usate per interfacciarsi al modulo
-#  sistema
-# Devono coincidere con quelli usati in sistema.s
-#
+// Tipi delle interruzioni usate per interfacciarsi al modulo
+//  sistema
+// Devono coincidere con quelli usati in sistema.s
+//
 .set tipo_ae, TIPO_AE
 .set tipo_nwfi, TIPO_NWFI
 .set tipo_va, TIPO_VA
@@ -33,9 +33,9 @@
 .set tipo_ci, TIPO_CI
 
 
-# Tipi delle interruzioni usate dalle primitive di IO
-# Devono coincidere con quelli usati in utente.s
-#
+// Tipi delle interruzioni usate dalle primitive di IO
+// Devono coincidere con quelli usati in utente.s
+//
 .set io_tipo_rsen, IO_TIPO_RSEN
 .set io_tipo_rseln, IO_TIPO_RSELN
 .set io_tipo_wsen, IO_TIPO_WSEN
@@ -49,44 +49,44 @@
 .set io_tipo_wfdn, IO_TIPO_WFDN
 
 
-################################################################################
-##                  MACRO PER LA MANIPOLAZIONE DEI PARAMETRI                  ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                  MACRO PER LA MANIPOLAZIONE DEI PARAMETRI                  //
+////////////////////////////////////////////////////////////////////////////////
 
-# Copia dei parametri di una chiamata di sistema dalla pila utente
-#  alla pila sistema
-# Replicato in sistema.s
-#
+// Copia dei parametri di una chiamata di sistema dalla pila utente
+//  alla pila sistema
+// Replicato in sistema.s
+//
 .macro copia_param n_long offset
         movl $\offset, %ecx
-        movl 4(%esp, %ecx, 4), %eax     # cs in eax
-        testl $3, %eax			# verifica del livello di privilegio
-					#  del chiamante
-        jz 1f                           # copia da pila sistema
+        movl 4(%esp, %ecx, 4), %eax     // cs in eax
+        testl $3, %eax			// verifica del livello di privilegio
+					//  del chiamante
+        jz 1f                           // copia da pila sistema
 
-        movl 12(%esp, %ecx, 4), %eax    # vecchio esp (della pila utente)
-					#  in eax
-        leal 4(%eax), %esi		# indirizzo del primo parametro in
-					#  esi
+        movl 12(%esp, %ecx, 4), %eax    // vecchio esp (della pila utente)
+					//  in eax
+        leal 4(%eax), %esi		// indirizzo del primo parametro in
+					//  esi
         jmp 2f
 1:
-        leal 16(%esp, %ecx, 4), %esi	# indirizzo del primo parametro in esi
+        leal 16(%esp, %ecx, 4), %esi	// indirizzo del primo parametro in esi
 2:
-        movl $\n_long, %eax		# creazione in pila dello spazio per
-        shll $2, %eax			#  la copia dei parametri
+        movl $\n_long, %eax		// creazione in pila dello spazio per
+        shll $2, %eax			//  la copia dei parametri
         subl %eax, %esp
-        leal (%esp), %edi		# indirizzo della destinazione del
-					#  primo parametro in edi
+        leal (%esp), %edi		// indirizzo della destinazione del
+					//  primo parametro in edi
 
         movl $\n_long, %ecx
         cld
         rep
-           movsl			# copia dei parametri
+           movsl			// copia dei parametri
 .endm
 
-# Salvataggio dei registri in pila
-# Replicato in sistema.s
-#
+// Salvataggio dei registri in pila
+// Replicato in sistema.s
+//
 .macro salva_registri
 	pushl %eax
 	pushl %ecx
@@ -97,9 +97,9 @@
 	pushl %ebp
 .endm
 
-# Caricamento dei registri dalla pila (duale rispetto a salva_registri)
-# Replicato in sistema.s
-#
+// Caricamento dei registri dalla pila (duale rispetto a salva_registri)
+// Replicato in sistema.s
+//
 .macro carica_registri
 	popl %ebp
 	popl %edi
@@ -114,103 +114,103 @@
 start:
 _start:	jmp _cmain
 
-################################################################################
-##                             SEZIONE DATI                                   ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                             SEZIONE DATI                                   //
+////////////////////////////////////////////////////////////////////////////////
 
 	.data
 
-# Descrittori delle interfacce seriali
-#
-	.global _com		# non comi, como
-_com:	.long	0x03f8		# com[0].indreg.iRBR
-	.long	0x03f8		# com[0].indreg.iTHR
-	.long	0x03fd		# com[0].indreg.iLSR
-	.long	0x03f9		# com[0].indreg.iIER
-	.long	0x03fa		# com[0].indreg.iIIR
-	.long	0		# com[0].mutex
-	.long	0		# com[0].sincr
-	.long	0		# com[0].cont
-	.long	0		# com[0].punt
-	.long	0		# com[0].funzione
-	.long	0		# com[0].stato
-	.long	0x02f8		# com[1].indreg.iRBR
-	.long	0x02f8		# com[1].indreg.iTHR
-	.long	0x03fd		# com[1].indreg.iLSR
-	.long	0x02f9		# com[1].indreg.iIER
-	.long	0x02fa		# com[1].indreg.iIIR
-	.long	0		# com[1].mutex
-	.long	0		# com[1].sincr
-	.long	0		# com[1].cont
-	.long	0		# com[1].punt
-	.long	0		# com[1].funzione
-	.long	0		# com[1].stato
+// Descrittori delle interfacce seriali
+//
+	.global _com		// non comi, como
+_com:	.long	0x03f8		// com[0].indreg.iRBR
+	.long	0x03f8		// com[0].indreg.iTHR
+	.long	0x03fd		// com[0].indreg.iLSR
+	.long	0x03f9		// com[0].indreg.iIER
+	.long	0x03fa		// com[0].indreg.iIIR
+	.long	0		// com[0].mutex
+	.long	0		// com[0].sincr
+	.long	0		// com[0].cont
+	.long	0		// com[0].punt
+	.long	0		// com[0].funzione
+	.long	0		// com[0].stato
+	.long	0x02f8		// com[1].indreg.iRBR
+	.long	0x02f8		// com[1].indreg.iTHR
+	.long	0x03fd		// com[1].indreg.iLSR
+	.long	0x02f9		// com[1].indreg.iIER
+	.long	0x02fa		// com[1].indreg.iIIR
+	.long	0		// com[1].mutex
+	.long	0		// com[1].sincr
+	.long	0		// com[1].cont
+	.long	0		// com[1].punt
+	.long	0		// com[1].funzione
+	.long	0		// com[1].stato
 
 
-# Descrittore Hard Disk
-#
+// Descrittore Hard Disk
+//
 
 	.global _hd
-_hd:	.long	0x01f7		#hd[0].indreg.iCMD_iSTS
-	.long	0x01f0		#hd[0].indreg.iDATA
-	.long	0x01f1		#hd[0].indreg.iFEATURES_iERROR
-	.long 	0x01f2		#hd[0].indreg.iSTCONT
-	.long	0x01f3		#hd[0].indreg.iSECT_N
-	.long	0x01f4		#hd[0].indreg.iCYL_L_N
-	.long	0x01f5		#hd[0].indreg.iCYL_H_N
-	.long	0x01f6		#hd[0].indreg.iHD_N_iDRV_HD
-	.long	0x03f6		#hd[0].indreg.iALT_STS_iDEV_CTRL
-	.long	0		#hd[0].disco[0].{presente,dma} (sono byte!)
-	.word	0		#hd[0].disco[0].geom.cil
-	.word	0		#hd[0].disco[0].geom.test
-	.long	0		#hd[0].disco[0].geom.sett
-	.long	0		#hd[0].disco[0].geom.tot_sett
-	.long	0		#hd[0].disco[1].{presente,dma} (sono byte!)
-	.word	0		#hd[0].disco[1].geom.cil
-	.word	0		#hd[0].disco[1].geom.test
-	.long	0		#hd[0].disco[1].geom.sett
-	.long	0		#hd[0].disco[1].geom.tot_sett
-	.long	0		#hd[0].comando
-				#hd[0].errore (byte!)
-	.long	0		#hd[0].cont (byte!)
-	.long	0		#hd[0].punt
-	.long	0		#hd[0].mutex
-	.long	0		#hd[0].sincr
-	.long	0x0177		#hd[1].indreg.iCMD_iSTS
-	.long	0x0170		#hd[1].indreg.iDATA
-	.long	0x0171		#hd[1].indreg.iFEATURES_iERROR
-	.long 	0x0172		#hd[1].indreg.iSTCONT
-	.long	0x0173		#hd[1].indreg.iSECT_N
-	.long	0x0174		#hd[1].indreg.iCYL_L_N
-	.long	0x0175		#hd[1].indreg.iCYL_H_N
-	.long	0x0176		#hd[1].indreg.iHD_N_iDRV_HD
-	.long	0x0376		#hd[1].indreg.iALT_STS_iDEV_CTRL
-	.long	0		#hd[1].disco[0].{presente,dma} (sono byte!)
-	.word	0		#hd[1].disco[0].geom.cil
-	.word	0		#hd[1].disco[0].geom.test
-	.long	0		#hd[1].disco[0].geom.sett
-	.long	0		#hd[1].disco[0].geom.tot_sett
-	.long	0		#hd[1].disco[1].{presente,dma} (sono byte!)
-	.word	0		#hd[1].disco[1].geom.cil
-	.word	0		#hd[1].disco[1].geom.test
-	.long	0		#hd[1].disco[1].geom.sett
-	.long	0		#hd[1].disco[1].geom.tot_sett
-	.long	0		#hd[1].comando
-				#hd[1].errore (byte!)
-	.long	0		#hd[1].cont (byte!)
-	.long	0		#hd[1].punt
-	.long	0		#hd[1].mutex
-	.long	0		#hd[1].sincr
+_hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
+	.long	0x01f0		//hd[0].indreg.iDATA
+	.long	0x01f1		//hd[0].indreg.iFEATURES_iERROR
+	.long 	0x01f2		//hd[0].indreg.iSTCONT
+	.long	0x01f3		//hd[0].indreg.iSECT_N
+	.long	0x01f4		//hd[0].indreg.iCYL_L_N
+	.long	0x01f5		//hd[0].indreg.iCYL_H_N
+	.long	0x01f6		//hd[0].indreg.iHD_N_iDRV_HD
+	.long	0x03f6		//hd[0].indreg.iALT_STS_iDEV_CTRL
+	.long	0		//hd[0].disco[0].{presente,dma} (sono byte!)
+	.word	0		//hd[0].disco[0].geom.cil
+	.word	0		//hd[0].disco[0].geom.test
+	.long	0		//hd[0].disco[0].geom.sett
+	.long	0		//hd[0].disco[0].geom.tot_sett
+	.long	0		//hd[0].disco[1].{presente,dma} (sono byte!)
+	.word	0		//hd[0].disco[1].geom.cil
+	.word	0		//hd[0].disco[1].geom.test
+	.long	0		//hd[0].disco[1].geom.sett
+	.long	0		//hd[0].disco[1].geom.tot_sett
+	.long	0		//hd[0].comando
+				//hd[0].errore (byte!)
+	.long	0		//hd[0].cont (byte!)
+	.long	0		//hd[0].punt
+	.long	0		//hd[0].mutex
+	.long	0		//hd[0].sincr
+	.long	0x0177		//hd[1].indreg.iCMD_iSTS
+	.long	0x0170		//hd[1].indreg.iDATA
+	.long	0x0171		//hd[1].indreg.iFEATURES_iERROR
+	.long 	0x0172		//hd[1].indreg.iSTCONT
+	.long	0x0173		//hd[1].indreg.iSECT_N
+	.long	0x0174		//hd[1].indreg.iCYL_L_N
+	.long	0x0175		//hd[1].indreg.iCYL_H_N
+	.long	0x0176		//hd[1].indreg.iHD_N_iDRV_HD
+	.long	0x0376		//hd[1].indreg.iALT_STS_iDEV_CTRL
+	.long	0		//hd[1].disco[0].{presente,dma} (sono byte!)
+	.word	0		//hd[1].disco[0].geom.cil
+	.word	0		//hd[1].disco[0].geom.test
+	.long	0		//hd[1].disco[0].geom.sett
+	.long	0		//hd[1].disco[0].geom.tot_sett
+	.long	0		//hd[1].disco[1].{presente,dma} (sono byte!)
+	.word	0		//hd[1].disco[1].geom.cil
+	.word	0		//hd[1].disco[1].geom.test
+	.long	0		//hd[1].disco[1].geom.sett
+	.long	0		//hd[1].disco[1].geom.tot_sett
+	.long	0		//hd[1].comando
+				//hd[1].errore (byte!)
+	.long	0		//hd[1].cont (byte!)
+	.long	0		//hd[1].punt
+	.long	0		//hd[1].mutex
+	.long	0		//hd[1].sincr
 
-################################################################################
-##                            SEZIONE TESTO                                   ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                            SEZIONE TESTO                                   //
+////////////////////////////////////////////////////////////////////////////////
 
 	.text
 
-################################################################################
-##                          CHIAMATE DI SISTEMA                               ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                          CHIAMATE DI SISTEMA                               //
+////////////////////////////////////////////////////////////////////////////////
 
 	.global _terminate_p
 _terminate_p:
@@ -232,9 +232,9 @@ _sem_signal:
 	int $tipo_s
 	ret
 
-################################################################################
-##                     INTERFACCIA VERSO IL MODULO SISTEMA                    ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                     INTERFACCIA VERSO IL MODULO SISTEMA                    //
+////////////////////////////////////////////////////////////////////////////////
 
 	.global _activate_pe
 _activate_pe:
@@ -301,13 +301,13 @@ _ndelay:
 	int $tipo_nd
 	ret
  
-################################################################################
-##                         FUNZIONI DI SUPPORTO                               ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                         FUNZIONI DI SUPPORTO                               //
+////////////////////////////////////////////////////////////////////////////////
 
-# Ingresso di un byte da una porta di IO
-# Replicato in sistema.s
-#
+// Ingresso di un byte da una porta di IO
+// Replicato in sistema.s
+//
 	.global _inputb
 _inputb:
 	pushl %eax
@@ -320,9 +320,9 @@ _inputb:
 	popl %eax
 	ret
 
-# Uscita di un byte su una porta di IO
-# Replicato in sistema.s
-#
+// Uscita di un byte su una porta di IO
+// Replicato in sistema.s
+//
 	.global _outputb
 _outputb:
 	pushl %eax
@@ -334,9 +334,9 @@ _outputb:
 	popl %eax
 	ret
 
-# Ingresso di una word da una porta di IO
-# Replicato in sistema.s
-#
+// Ingresso di una word da una porta di IO
+// Replicato in sistema.s
+//
 	.global _inputw
 _inputw:
 	pushl %eax
@@ -349,9 +349,9 @@ _inputw:
 	popl %eax
 	ret
 
-# Uscita di una word su una porta di IO
-# Replicato in sistema.s
-#
+// Uscita di una word su una porta di IO
+// Replicato in sistema.s
+//
 	.global _outputw
 _outputw:
 	pushl %eax
@@ -363,9 +363,9 @@ _outputw:
 	popl %eax
 	ret
 
-# Ingresso di un buffer continuo da un buffer di IO di word
-# Replicato in sistema.s
-#
+// Ingresso di un buffer continuo da un buffer di IO di word
+// Replicato in sistema.s
+//
 	.global _inputbuffw
 _inputbuffw:
 	pushl %eax
@@ -386,9 +386,9 @@ _inputbuffw:
 	popl %eax
 	ret
 
-# Uscita di un buffer continuo su una buffer di IO di word
-# Replicato in sistema.s
-#
+// Uscita di un buffer continuo su una buffer di IO di word
+// Replicato in sistema.s
+//
 	.global _outputbuffw
 _outputbuffw:
 	pushl %eax
@@ -409,25 +409,25 @@ _outputbuffw:
 	popl %eax
 	ret
 
-# Indirizzi delle porte del controllore delle interruzioni
-#
+// Indirizzi delle porte del controllore delle interruzioni
+//
 .set OCW1M, 0x21
 .set OCW2M, 0x20
 .set OCW1S, 0xa1
 .set OCW2S, 0xa0
 .set EOI, 0x20
 
-# Inizio dell' ingresso da una interfaccia seriale
-#
+// Inizio dell' ingresso da una interfaccia seriale
+//
 	.global _go_inputse
 _go_inputse:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di IER in edx
+	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
-	orb $0x01, %al			# abilitazione dell' interfaccia a
-					#  generare interruzioni in ingresso
+	orb $0x01, %al			// abilitazione dell' interfaccia a
+					//  generare interruzioni in ingresso
 	outb %al, %dx
 
 	cmpw $0x03f9, %dx
@@ -441,27 +441,27 @@ _go_inputse:
 	cli
 	inb $OCW1M, %al
 	andb %ah, %al
-	outb %al, $OCW1M		# abilitazione del controllore ad
-					#  accettare richieste di interruzione
-					#  da parte dell' interfaccia
+	outb %al, $OCW1M		// abilitazione del controllore ad
+					//  accettare richieste di interruzione
+					//  da parte dell' interfaccia
 	sti
 
 	popl %edx
 	popl %eax
 	ret
 
-# Fine dell' ingresso da un' interfaccia seriale
-#
+// Fine dell' ingresso da un' interfaccia seriale
+//
 	.global _halt_inputse
 _halt_inputse:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di IER in edx
+	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfe, %al
-	outb %al, %dx			# disabilitazione della generazione
-					#  di interruzioni
+	outb %al, %dx			// disabilitazione della generazione
+					//  di interruzioni
 
 	cmpw $0x03f9, %dx
 	jne 1f
@@ -474,22 +474,22 @@ _halt_inputse:
 	cli
 	inb $OCW1M, %al
 	andb %ah, %al
-	outb %al, $OCW1M		# disabilitazione dell 'interruzione al
-					#  controllore
+	outb %al, $OCW1M		// disabilitazione dell 'interruzione al
+					//  controllore
 	sti
 
 	popl %edx
 	popl %eax
 	ret
 
-# Inizio dell' uscita su interfaccia seriale
-#
+// Inizio dell' uscita su interfaccia seriale
+//
 	.global _go_outputse
 _go_outputse:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di IER in edx
+	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	orb $0x02, %al
 	outb %al, %dx
@@ -512,14 +512,14 @@ _go_outputse:
 	popl %eax
 	ret
 
-# Fine dell' uscita su interfaccia seriale
-#
+// Fine dell' uscita su interfaccia seriale
+//
 	.global _halt_outputse
 _halt_outputse:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di IER in edx
+	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfd, %al
 	outb %al, %dx
@@ -542,8 +542,8 @@ _halt_outputse:
 	popl %eax
 	ret
 
-# Indirizzi delle porte delle interfacce seriali
-#
+// Indirizzi delle porte delle interfacce seriali
+//
 .set LCR1, 0x03fb
 .set LCR2, 0x02fb
 .set DLR_LSB1, 0x03f8
@@ -558,8 +558,8 @@ _halt_outputse:
 .set MCR2, 0x02fc
 
 
-# Inizializzazione delle interfacce seriali
-# 
+// Inizializzazione delle interfacce seriali
+// 
 	.global _com_setup
 _com_setup:
 	pushl %eax
@@ -581,7 +581,7 @@ _com_setup:
 	movw $IER1, %dx
 	outb %al, %dx
 	movw $RBR1, %dx
-	movw $MCR1, %dx			# abilitazione porta 3-state
+	movw $MCR1, %dx			// abilitazione porta 3-state
 	movb $0b00001000, %al
 	outb %al, %dx
 	inb %dx, %al
@@ -613,9 +613,9 @@ _com_setup:
 
 	ret
 
-# Abilitazione del controllore delle interruzioni ad inoltrare le richieste
-#  provenienti dalla tastera
-#
+// Abilitazione del controllore delle interruzioni ad inoltrare le richieste
+//  provenienti dalla tastera
+//
 	.global _abilita_tastiera
 _abilita_tastiera:
 	inb $OCW1M, %al
@@ -624,12 +624,12 @@ _abilita_tastiera:
 	ret
 
 
-# Funzioni di utilita' per la gestione degli hard disk
-#
+// Funzioni di utilita' per la gestione degli hard disk
+//
 
-# Esegue un probing del canale ATA specificato tentando di capire se
-#  ad esso sono collegati nessuno, uno o piu` dispositivi
-#
+// Esegue un probing del canale ATA specificato tentando di capire se
+//  ad esso sono collegati nessuno, uno o piu` dispositivi
+//
 	.global _test_canale
 _test_canale:
 	pushl %ebx
@@ -676,9 +676,9 @@ chret1:	popl %edx
 	popl %ebx
 	ret
 
-# Assmendo che il canale sia "attivo" cerca di capire se il dispositivo
-#  indirizzato e` un ATA (hard disk) o ATAPI (chrom)
-#
+// Assmendo che il canale sia "attivo" cerca di capire se il dispositivo
+//  indirizzato e` un ATA (hard disk) o ATAPI (chrom)
+//
 	.global _leggi_signature
 _leggi_signature:
 	pushl %edx
@@ -739,41 +739,41 @@ rserr:	movl $0,%eax
 rsret:	popl %edx
 	ret
 
-# Abilita il controller ATA specificato a generare richieste di interruzione
-#  utili sia per l'ingresso che per l'uscita
-#
+// Abilita il controller ATA specificato a generare richieste di interruzione
+//  utili sia per l'ingresso che per l'uscita
+//
 	.global _go_inouthd
 _go_inouthd:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di DEV_CTL in edx
+	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
 	movb $0x08,%al
-	outb %al, %dx			# abilitazione dell' interfaccia a
-					# generare interruzioni
+	outb %al, %dx			// abilitazione dell' interfaccia a
+					// generare interruzioni
 	popl %edx
 	popl %eax
 	ret
 
-# Disabilita il controller ATA specificato a generare richeste di interruzione
-#  NB. Su un PC (non su Bochs) questa stassa procedura produrra` una richiesta
-#  di interruzione!
-#
+// Disabilita il controller ATA specificato a generare richeste di interruzione
+//  NB. Su un PC (non su Bochs) questa stassa procedura produrra` una richiesta
+//  di interruzione!
+//
 	.global _halt_inouthd
 _halt_inouthd:
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp), %edx		# ind. di DEV_CTL in edx
+	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
 	movb $0x0A,%al
-	outb %al, %dx			# disabilitazione della generazione
-					# di interruzioni
+	outb %al, %dx			// disabilitazione della generazione
+					// di interruzioni
 	popl %edx
 	popl %eax
 	ret
 
-# Indica al controllore quale drive deve essere selezionato
-#
+// Indica al controllore quale drive deve essere selezionato
+//
 	.global _set_drive
 _set_drive:
 	pushl %eax
@@ -796,8 +796,8 @@ ms_out:	movl 16(%esp),%edx
 	popl %eax
 	ret
 
-# Legge lo stato attuale del controllore per capire quale drive e` attivo
-#
+// Legge lo stato attuale del controllore per capire quale drive e` attivo
+//
 	.global _get_drive
 _get_drive:
 	pushl %eax
@@ -818,8 +818,8 @@ ms_ret:	movl 16(%esp),%edx
 	popl %eax
 	ret
 	
-# Indirizzi dei registri del controller ata
-#
+// Indirizzi dei registri del controller ata
+//
 
 .set HD_STS_1, 0x01F7
 .set HD_STS_2, 0x0177
@@ -828,13 +828,13 @@ ms_ret:	movl 16(%esp),%edx
 .set HD_CYL_H_N, 0x01f5
 .set HD_N, 0x01f6
 
-# Maschere dei bit fndamentali
-#
+// Maschere dei bit fndamentali
+//
 .set HD_STS_DRDY, 0x40
 
-# Disabilita il controllore di interruzioni ad inoltrare richieste provenienti
-#  da uno dei due controller ATA, Slave PIC, linee 14 o 15
-#
+// Disabilita il controllore di interruzioni ad inoltrare richieste provenienti
+//  da uno dei due controller ATA, Slave PIC, linee 14 o 15
+//
 	.global _mask_hd
 _mask_hd:
 	pushl %eax
@@ -842,21 +842,21 @@ _mask_hd:
 	cmpl $0x01F7,%eax
 	je msk0
 	cmpl $0x0177,%eax
-	je msk1			# capisce qual'e` il canale
+	je msk1			// capisce qual'e` il canale
 	jmp m_end
 msk0:	inb $OCW1S,%al
-	orb $0b01000000,%al	# linea 14
+	orb $0b01000000,%al	// linea 14
 	outb %al,$OCW1S	
 	jmp m_end
 msk1:	inb $OCW1S,%al
-	orb $0b10000000,%al	# linea 15
+	orb $0b10000000,%al	// linea 15
 	outb %al,$OCW1S
 m_end:	popl %eax
 	ret
 
-# Abilita il controllore di interruzione ad inoltrere le richieste provenienti
-#  da uno dei due controller ATA, Slave PIC, linee 14 o 15
-#
+// Abilita il controllore di interruzione ad inoltrere le richieste provenienti
+//  da uno dei due controller ATA, Slave PIC, linee 14 o 15
+//
 	.global _umask_hd
 _umask_hd:
 	pushl %eax
@@ -864,21 +864,21 @@ _umask_hd:
 	cmpl $0x01F7,%eax
 	je umsk0
 	cmpl $0x0177,%eax
-	je umsk1		# Capisce qual'e` il canale
+	je umsk1		// Capisce qual'e` il canale
 	jmp um_end
 umsk0:	inb $OCW1S,%al
-	andb $0b10111111,%al	# linea 14
+	andb $0b10111111,%al	// linea 14
 	outb %al,$OCW1S	
 	jmp um_end
 umsk1:	inb $OCW1S,%al
-	andb $0b01111111,%al	# linea 15
+	andb $0b01111111,%al	// linea 15
 	outb %al,$OCW1S
 um_end:	popl %eax
 	ret
 	
-# Scompone correttamente il blocco iniziale di una operazione su hard disk
-# e lo scrive nei registri opportuni
-#
+// Scompone correttamente il blocco iniziale di una operazione su hard disk
+// e lo scrive nei registri opportuni
+//
 	.global _setup_addr_hd
 _setup_addr_hd:
 	pushl %eax
@@ -886,29 +886,29 @@ _setup_addr_hd:
 	pushl %edi
 	
 	movl 20(%esp),%eax
-	movl 16(%esp),%edi	# accede al descrittore per comodita`
+	movl 16(%esp),%edi	// accede al descrittore per comodita`
 	movl 16(%edi),%edx
-	outb %al,%dx		# caricato iSECT_N
+	outb %al,%dx		// caricato iSECT_N
 	movl 20(%edi),%edx
 	movb %ah,%al
-	outb %al,%dx		# caricato cyl_LSB
+	outb %al,%dx		// caricato cyl_LSB
 	shrl $16,%eax
 	movl 24(%edi),%edx
-	outb %al,%dx		# caricato cyl_MSB
+	outb %al,%dx		// caricato cyl_MSB
 	movl 28(%edi),%edx
-	inb %dx,%al		# iDRV_HD in %al
-	andb $0xF0,%al		# maschera per l'indirizzo in DRV_HD
-	andb $0x0F,%ah		# maschera per i 4 bit +sing di primo
+	inb %dx,%al		// iDRV_HD in %al
+	andb $0xF0,%al		// maschera per l'indirizzo in DRV_HD
+	andb $0x0F,%ah		// maschera per i 4 bit +sing di primo
 	orb %ah,%al
-	outb %al,%dx		# caricato iDRV_HD
+	outb %al,%dx		// caricato iDRV_HD
 	
 	popl %edi
 	popl %edx
 	popl %eax
 	ret
 
-# Chiama _fill_gate con i parametri specificati
-#
+// Chiama _fill_gate con i parametri specificati
+//
 .macro fill_io_gate gate off
 	pushl $LIV_UTENTE
 	pushl $\off
@@ -917,8 +917,8 @@ _setup_addr_hd:
 	addl $12, %esp
 .endm
 
-# Inizializzazione dei gate per le primitive di IO
-#
+// Inizializzazione dei gate per le primitive di IO
+//
 	.global _fill_io_gates
 _fill_io_gates:
 	pushl %ebp
@@ -934,9 +934,9 @@ _fill_io_gates:
 	leave
 	ret
 
-################################################################################
-##                              PRIMITIVE DI IO                               ##
-################################################################################
+////////////////////////////////////////////////////////////////////////////////
+//                              PRIMITIVE DI IO                               //
+////////////////////////////////////////////////////////////////////////////////
 
 	.global a_readse_n
 	.extern _c_readse_n
@@ -969,7 +969,7 @@ a_writese_n:
 	iret
 
 	.global a_writese_0
-	.extern _c_writese_0	# non _c_writese_ln, che va lo stesso
+	.extern _c_writese_0	// non _c_writese_ln, che va lo stesso
 a_writese_0:
 	salva_registri
 	copia_param 3 7
@@ -980,7 +980,7 @@ a_writese_0:
 
 	.global a_term_read_n
 	.extern _c_term_read_n
-a_term_read_n:	# routine int $io_tipo_tr
+a_term_read_n:	// routine int $io_tipo_tr
 	salva_registri
 	copia_param 3 7
 	call _c_term_read_n
@@ -990,7 +990,7 @@ a_term_read_n:	# routine int $io_tipo_tr
 
 	.global a_term_write_n
 	.extern _c_term_write_n
-a_term_write_n: # routine int $io_tipo_tw
+a_term_write_n: // routine int $io_tipo_tw
 	salva_registri
 	copia_param 3 7
  	call _c_term_write_n
@@ -1000,7 +1000,7 @@ a_term_write_n: # routine int $io_tipo_tw
 	
 	.global a_geometria
 	.extern _c_geometria
-a_geometria:	# routine int $io_tipo_geom
+a_geometria:	// routine int $io_tipo_geom
 	salva_registri
 	copia_param 7 7
 	call _c_geometria

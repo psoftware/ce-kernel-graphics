@@ -72,22 +72,15 @@ unsigned int ceild(unsigned int v, unsigned int q) {
 	return v / q + (v % q != 0 ? 1 : 0);
 }
 
-// restituisce un valore dello stesso tipo T di v, uguale al piu' piccolo
-// multiplo di a maggiore o uguale a v
-template <class T>
-inline
-T allinea(T v, unsigned int a)
-{
-	unsigned int v1 = reinterpret_cast<unsigned int>(v);
-	return reinterpret_cast<T>(v1 % a == 0 ? v1 : ((v1 + a - 1) / a) * a);
-}
-
 // se T e' int dobbiamo specializzare il template, perche'
 // reinterpret_cast<unsigned int> non e' valido su un int
-template <>
 inline
-int allinea(int v, unsigned int a) {
+unsigned int allinea(unsigned int v, unsigned int a) {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
+}
+inline
+void* allineav(void* v, unsigned int a) {
+	return reinterpret_cast<void*>(allinea(reinterpret_cast<unsigned int>(v), a));
 }
 
 // copia n byte da src a dst [vedi avanti]
@@ -551,7 +544,7 @@ void operator delete[](void* p) {
 /////////////////////////////////////////////////////////////////////////
 // Il descrittore di pagina (o di tabella) prevede 3 bit che sono lasciati a 
 // disposizione del programmatore di sistema. In questo sistema, ne e' stato 
-// usati uno, denominato "preload" (precarica). Il suo significato e' il 
+// usato uno, denominato "preload" (precarica). Il suo significato e' il 
 // seguente: una pagina virtuale (o le tabella) il cui descrittore contiene il 
 // bit "preload" pari a 1 e' esclusa dal meccanismo del rimpiazzamento: la 
 // pagina viene precaricata dallo swap al momento della creazione del processo, 
@@ -563,13 +556,13 @@ void operator delete[](void* p) {
 // rimpiazzabili e precaricate, altrimenti il nucleo stesso potrebbe causare 
 // dei page fault)
 //
-// una pagina virtuale il cui descrittore contiene il campo address pari a 0 
-// non possiede inizialmente un blocco in memoria di massa.  Se, e quando, tale 
-// pagina verra' realmente acceduta, un nuovo blocco verra' allocato in quel 
-// momento, e la pagina riempita con zeri. Tale ottimizzazione si rende 
-// necessaria, perche' molte pagine sono potenzialmente utilizzabili dal 
-// processo, ma non sono realmente utilizzate quasi mai (ad esempio, la maggior 
-// parte delle pagine che compongono lo heap e lo stack). Senza questa 
+// una pagina virtuale non presente, il cui descrittore contiene il campo 
+// address pari a 0, non possiede inizialmente un blocco in memoria di massa.  
+// Se, e quando, tale pagina verra' realmente acceduta, un nuovo blocco verra' 
+// allocato in quel momento, e la pagina riempita con zeri. Tale ottimizzazione 
+// si rende necessaria, perche' molte pagine sono potenzialmente utilizzabili 
+// dal processo, ma non sono realmente utilizzate quasi mai (ad esempio, la 
+// maggior parte delle pagine che compongono lo heap e lo stack). Senza questa 
 // ottimizzazione, bisognerebbe prevedere uno dispositivo di swap molto grande 
 // (ad es., 1 Giga Byte di spazio privato per ogni processo, piu' 1 Giga Byte 
 // di spazio utente condiviso) oppure limitare ulteriormente la dimensione 
@@ -794,7 +787,7 @@ des_pf* struttura(pagina_fisica* pagina) {
 void init_pagine_fisiche() {
 
 	// allineamo mem_upper alla linea, per motivi di efficienza
-	salta_a(allinea(mem_upper, sizeof(int)));
+	salta_a(allineav(mem_upper, sizeof(int)));
 
 	// calcoliamo quanta memoria principale rimane
 	int dimensione = distance(max_mem_upper, mem_upper);
@@ -810,7 +803,7 @@ void init_pagine_fisiche() {
 	pagine_fisiche = static_cast<des_pf*>(occupa(sizeof(des_pf) * quante));
 
 	// riallineamo mem_upper a un multiplo di pagina
-	salta_a(allinea(mem_upper, SIZE_PAGINA));
+	salta_a(allineav(mem_upper, SIZE_PAGINA));
 
 	// ricalcoliamo quante col nuovo mem_upper, per sicurezza
 	// (sara' minore o uguale al precedente)
@@ -1225,28 +1218,6 @@ int pf_mutex;
 extern "C" void sem_wait(int);
 extern "C" void sem_signal(int);
 
-// il microprogramma di gestione delle eccezioni di page fault lascia in cima 
-// alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
-// significativi specificano piu' precisamente il motivo per cui si e' 
-// verificato un page fault. Il significato dei bit e' il seguente:
-// - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
-// di protezione: il processore si trovava a livello utente e la pagina (o la 
-// tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
-// tabella erano assenti (bit P = 0)
-// - write: l'accesso che ha causato il page fault era in scrittura (non 
-// implica che la pagina non fosse scrivibile)
-// - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
-// utente (non implica che la pagina fosse invece di livello sistema)
-// - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
-// avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
-// tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
-struct page_fault_error {
-	unsigned int prot  : 1;
-	unsigned int write : 1;
-	unsigned int user  : 1;
-	unsigned int res   : 1;
-	unsigned int pad   : 28; // bit non significativi
-};
 
 
 // funzioni usate dalla routine di trasferimento
@@ -1283,7 +1254,10 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	}
 	
 	tabella_pagine* ptab;
-	if (pdes_tab->P == 0) {
+	if (pdes_tab->P == 1) {
+		// la tabella e' presente
+		ptab = tabella_puntata(pdes_tab);
+	} else {
 		// la tabella e' assente
 		
 		// proviamo ad allocare una pagina fisica per la tabella. Se 
@@ -1301,12 +1275,9 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		
 		// e collegarla al direttorio
 		collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
-	} else {
-		// la tabella e' presente
-		ptab = tabella_puntata(pdes_tab);
-	}
-	// ptab punta alla tabella delle pagine (sia che fosse gia' presente, 
-	// sia che sia stata appena caricata)
+	} 
+	// ora ptab punta alla tabella delle pagine (sia che fosse gia' 
+	// presente, sia che sia stata appena caricata)
 	
 
 	// ricaviamo il descrittore di pagina interessato dal fault
@@ -1314,7 +1285,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	
 
 	// se l'accesso era in scrittura e la pagina e' di sola lettura, il 
-	// programma ha commesso un errore e va interrotto
+	// processo utente ha commesso un errore e va interrotto
 	if (scrittura && pdes_pag->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
 		goto error;
@@ -1366,6 +1337,14 @@ error:
 // all'indirizzo pag
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 {
+	// come detto precedentemente, trattiamo in modo speciale il caso in 
+	// cui la pagina da caricare abbia address == 0: in questo caso, la 
+	// pagina non si trova gia' nello swap, ma va allocata e azzerata.  
+	// Poiche', dopo questa operazione, al campo address viene assegnato il 
+	// numero del blocco (allocato tramite bm_alloc e sicuramente diverso 
+	// da 0, in quanto il blocco 0 e' sicuramente occupato dal 
+	// superblocco), da questo momento in poi e' come se la pagina fosse 
+	// sempre stata presente nello swap
 	if (pdes_pag->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&block_bm, blocco) ) {
@@ -1383,6 +1362,11 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 // ptab
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 {
+	// anche per le tabelle vale il caso speciale in cui address == 0: la 
+	// tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
+	// in modo che ogni entrata della nuova tabella erediti le proprieta' 
+	// della tabella stessa (in particolare, i bit RW e US) e punti a 
+	// pagine da creare (ovvero, con address = 0).
 	if (pdes_tab->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&block_bm, blocco)) {
@@ -2191,6 +2175,29 @@ extern "C" void c_sem_signal(int sem)
 	}
 }
 extern void* fine_codice_sistema;
+
+// il microprogramma di gestione delle eccezioni di page fault lascia in cima 
+// alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
+// significativi specificano piu' precisamente il motivo per cui si e' 
+// verificato un page fault. Il significato dei bit e' il seguente:
+// - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
+// di protezione: il processore si trovava a livello utente e la pagina (o la 
+// tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
+// tabella erano assenti (bit P = 0)
+// - write: l'accesso che ha causato il page fault era in scrittura (non 
+// implica che la pagina non fosse scrivibile)
+// - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
+// utente (non implica che la pagina fosse invece di livello sistema)
+// - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
+// avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
+// tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
+struct page_fault_error {
+	unsigned int prot  : 1;
+	unsigned int write : 1;
+	unsigned int user  : 1;
+	unsigned int res   : 1;
+	unsigned int pad   : 28; // bit non significativi
+};
 
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
