@@ -817,7 +817,7 @@ _inputbuffw:
 	
 	movl 20(%esp), %edx
 	movl 24(%esp), %edi
-	movl 28(%esp),%ecx
+	movl 28(%esp), %ecx
 	cld
 	rep
 	insw
@@ -1498,9 +1498,12 @@ a_writehd_n:
 //
 	.global _test_canale
 _test_canale:
+	pushl %ebp
+	movl %esp, %ebp
 	pushl %ebx
 	pushl %edx
-	movw 12(%esp),%dx
+
+	movw 8(%ebp),%dx
 	movw 0xFFFF,%bx
 chcyc1:	inb %dx,%al
 	cmpb $0xFF,%al
@@ -1511,25 +1514,25 @@ chcyc1:	inb %dx,%al
 	decw %bx
 	jnz chcyc1
 chprb1:	movb $0x55,%al
-	movw 16(%esp),%dx 
+	movw 12(%ebp),%dx 
 	outb %al,%dx
 	movb $0xAA,%al
-	movw 20(%esp),%dx
+	movw 16(%ebp),%dx
 	outb %al,%dx
-	movw 16(%esp),%dx
+	movw 12(%ebp),%dx
 	outb %al,%dx
 	movb $0x55,%al
-	movw 20(%esp),%dx
+	movw 16(%ebp),%dx
 	outb %al,%dx
-	movw 16(%esp),%dx
+	movw 12(%ebp),%dx
 	outb %al,%dx
 	movb $0xAA,%al
-	movw 20(%esp),%dx
+	movw 16(%ebp),%dx
 	outb %al,%dx
-	movw 16(%esp),%dx
+	movw 12(%ebp),%dx
 	inb %dx,%al
 	movb %al,%ah
-	movw 20(%esp),%dx
+	movw 16(%ebp),%dx
 	inb %dx,%al
 	cmpw $0x55AA,%ax
 	jne chfl1
@@ -1540,6 +1543,7 @@ chfl1:
 	movl $0,%eax
 chret1:	popl %edx
 	popl %ebx
+	leave
 	ret
 
 // Assmendo che il canale sia "attivo" cerca di capire se il dispositivo
@@ -1547,28 +1551,30 @@ chret1:	popl %edx
 //
 	.global _leggi_signature
 _leggi_signature:
+	pushl %ebp
+	movl %esp, %ebp
 	pushl %edx
-	movw 8(%esp),%dx
+	movw 8(%ebp),%dx
 	inb %dx,%al
 	cmpb $0x01,%al
 	jne sgerr
-	movw 12(%esp),%dx
+	movw 12(%ebp),%dx
 	inb %dx,%al
 	cmpb $0x01,%al
 	jne sgerr
-	movw 16(%esp),%dx
+	movw 16(%ebp),%dx
 	inb %dx,%al
 	cmpb $0x00,%al
 	je sgata1
 	cmpb $0x14,%al
 	je sgpi1
 	jmp sgerr
-sgata1:	movw 20(%esp),%dx
+sgata1:	movw 20(%ebp),%dx
 	inb %dx,%al
 	cmpb $0x00,%al
 	jne sgerr
 	jmp sgata
-sgpi1:	movw 20(%esp),%dx
+sgpi1:	movw 20(%ebp),%dx
 	inb %dx,%al
 	cmpb $0xEB,%al
 	jne sgerr
@@ -1583,25 +1589,45 @@ sgerr:
 	movl $-1,%eax
 sgret:	
 	popl %edx
+	leave
 	ret
 
-	.global _drive_reset
-_drive_reset:
+	.global _hd_software_reset
+_hd_software_reset:
+	pushl %ebp
+	movl %esp, %ebp
 	pushl %edx
-	movw 8(%esp),%dx
+	pushl %eax
+
+	// il bit di reset deve essere a 0 per almeno 5usec
+	pushl $5
+	pushl $0
+	call _busywait_usec
+	addl $8, %esp
+
+	movw 8(%ebp),%dx
 	movb $0x0E,%al
 	outb %al,%dx
-	movw 12(%esp),%dx
-	inb %dx,%al
-	testb $0x80,%al
-	jz rserr
-	movw 8(%esp),%dx
+
+	// il bit di reset deve essere a 1 per almeno 5usec
+	pushl $5
+	pushl $0
+	call _busywait_usec
+	addl $8, %esp
+
+	movw 8(%ebp),%dx
 	movb $0x02,%al
 	outb %al,%dx
-	movl $1,%eax
-	jmp rsret
-rserr:	movl $0,%eax
-rsret:	popl %edx
+
+	// il bit di reset deve essere mantenuto a 0 per almeno 2msec 
+	pushl $2000
+	pushl $0
+	call _busywait_usec
+	addl $8, %esp
+
+	popl %eax
+	popl %edx
+	leave
 	ret
 
 // Abilita il controller ATA specificato a generare richieste di interruzione
@@ -1637,34 +1663,107 @@ _halt_inouthd:
 	popl %eax
 	ret
 
-// Indica al controllore quale drive deve essere selezionato
-//
-	.global _set_drive
-_set_drive:
+	.global _busywait_usec
+_busywait_usec:
+	pushl %ebp
+	movl %esp, %ebp
 	pushl %eax
 	pushl %edx
 
-	movl 12(%esp),%eax
+	movl 8(%ebp), %eax
+	mull _clocks_per_usec
+	pushl %edx
+	pushl %eax
+	call _busywait_clock
+	addl $8, %esp
+
+	popl %edx
+	popl %eax
+	leave
+	ret
+	
+
+	.global _busywait_clock
+_busywait_clock:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %edx
+	pushl %ebx
+	pushl %ecx
+	rdtsc
+	movl %eax, %ebx
+	movl %edx, %ecx
+1:	rdtsc
+	subl %ebx, %eax
+	sbbl %ecx, %edx
+	cmpl 8(%ebp), %edx
+	ja 2f
+	cmpl 12(%ebp), %eax
+	jbe 1b
+2:	popl %ecx
+	popl %ebx
+	popl %edx
+	popl %eax
+	leave
+	ret
+
+wait_500ns:
+	pushl _clocks_per_usec
+	shrl (%esp)
+	pushl $0
+	call _busywait_clock
+	addl $8, %esp
+	ret
+	
+// Indica al controllore quale drive deve essere selezionato
+//
+	.global _hd_select_device
+_hd_select_device:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %edx
+
+	movl 8(%ebp),%eax
 	cmpl $0,%eax
 	je shd_ms
 shd_sl:	movb $0xF0,%al
 	jmp ms_out
 shd_ms:	movb $0xE0,%al
-ms_out:	movl 16(%esp),%edx
+ms_out:	movl 12(%ebp),%edx
 	outb %al,%dx
 
-	//pushl $400
-	//call _ndelay
-	//addl $4, %esp
+	call wait_500ns
 
 	popl %edx
 	popl %eax
+	leave
 	ret
+
+	.global _hd_write_command
+_hd_write_command:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %edx
+	pushl %eax
+
+	movb 8(%ebp), %al
+	movw 12(%ebp), %dx
+	outb %al, %dx
+
+	call wait_500ns
+
+	popl %eax
+	popl %edx
+	leave
+	ret
+
 
 // Legge lo stato attuale del controllore per capire quale drive e` attivo
 //
-	.global _get_drive
-_get_drive:
+	.global _hd_read_device
+_hd_read_device:
 	pushl %eax
 	pushl %edx
 
@@ -1744,8 +1843,8 @@ um_end:	popl %eax
 // Scompone correttamente il blocco iniziale di una operazione su hard disk
 // e lo scrive nei registri opportuni
 //
-	.global _setup_addr_hd
-_setup_addr_hd:
+	.global _hd_write_address
+_hd_write_address:
 	pushl %eax
 	pushl %edx
 	pushl %edi
