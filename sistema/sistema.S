@@ -1728,9 +1728,9 @@ _hd_select_device:
 	movl 8(%ebp),%eax
 	cmpl $0,%eax
 	je shd_ms
-shd_sl:	movb $0xF0,%al
+shd_sl:	movb $0xf0,%al
 	jmp ms_out
-shd_ms:	movb $0xE0,%al
+shd_ms:	movb $0xe0,%al
 ms_out:	movl 12(%ebp),%edx
 	outb %al,%dx
 
@@ -1845,12 +1845,14 @@ um_end:	popl %eax
 //
 	.global _hd_write_address
 _hd_write_address:
+	pushl %ebp
+	movl %esp, %ebp
 	pushl %eax
 	pushl %edx
 	pushl %edi
 	
-	movl 20(%esp),%eax
-	movl 16(%esp),%edi	// accede al descrittore per comodita`
+	movl 12(%ebp),%eax
+	movl 8(%ebp),%edi	// accede al descrittore per comodita`
 	movl 16(%edi),%edx
 	outb %al,%dx		// caricato iSECT_N
 	movl 20(%edi),%edx
@@ -1861,14 +1863,16 @@ _hd_write_address:
 	outb %al,%dx		// caricato cyl_MSB
 	movl 28(%edi),%edx
 	inb %dx,%al		// iDRV_HD in %al
-	andb $0xF0,%al		// maschera per l'indirizzo in DRV_HD
-	andb $0x0F,%ah		// maschera per i 4 bit +sing di primo
+	andb $0xf0,%al		// maschera per l'indirizzo in DRV_HD
+	andb $0x0f,%ah		// maschera per i 4 bit +sign di primo
+	orb  $0xe0,%ah		// seleziona LBA
 	orb %ah,%al
 	outb %al,%dx		// caricato iDRV_HD
 	
 	popl %edi
 	popl %edx
 	popl %eax
+	leave
 	ret
 
 ////////////////////////////////////////////////////////////////

@@ -946,7 +946,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella_pagine* ptab, sho
 	// non c'e' alcuna garanzia che la routine del timer riesca ad andare 
 	// in esecuzione e aggiornare il contatore prima del prossimo page 
 	// fault)
-	ppf->contatore       = 1 << 31;
+	ppf->contatore       = 0x80000000;
 	ppf->u.tab.blocco    = pdes_tab->address; // vedi NOTA prec.
 	
 	// mapping diretto
@@ -976,7 +976,7 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 	return pdes_tab;
 }
 
-// collega la pagina puntata da "ptab" alla tabella puntata da "ptab", 
+// collega la pagina puntata da "pag" alla tabella puntata da "ptab", 
 // all'indirizzo virtuale "ind_virtuale". Aggiorna anche il descrittore di 
 // pagina fisica corrispondente alla pagina fisica che contiene la pagina.
 // NOTA: si suppone che la pagina non fosse precedentemente collegata, e quindi 
@@ -992,12 +992,13 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 	ppf->u.pag.ind_virtuale = ind_virtuale;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
 	// delle pagine
-	ppf->contatore          = 1 << 31;
+	ppf->contatore          = 0x80000000;
 	ppf->u.pag.blocco	= pdes_pag->address; // vedi NOTA prec
 
 	// incremento del contatore nella tabella
 	ppf = struttura(pfis(ptab));
 	ppf->u.tab.quante++;
+	ppf->contatore		|= 0x80000000;
 
 	// mapping diretto
 	pdes_pag->address	= uint(pag) >> 12;
@@ -1006,6 +1007,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 
 	return pdes_pag;
 }
+
 
 // scollega la pagina di indirizzo virtuale "ind_virtuale" dalla tabella 
 // puntata da "ptab". Aggiorna anche il contatore di pagine nel descrittore di 
@@ -1039,6 +1041,7 @@ extern "C" void readhd_n(short ind_ata, short drv, void* vetti,
 		unsigned int primo, unsigned char quanti, char &errore);
 extern "C" void writehd_n(short ind_ata, short drv, void* vetti,
 		unsigned int primo, unsigned char quanti, char &errore);
+void hd_print_error(int i, int d, int sect, char errore);
 
 bm_t block_bm;
 
@@ -1048,11 +1051,12 @@ bool leggi_blocco(unsigned int blocco, void* dest) {
 	readhd_n(0, 1, dest, blocco * 8, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile leggere il blocco %d\n", blocco);
-		printk("errore = %d\n", errore);
+		hd_print_error(0, 1, blocco * 8, errore);
 		return false;
 	}
 	return true;
 }
+
 
 bool scrivi_blocco(unsigned int blocco, void* dest) {
 	char errore;
@@ -1060,7 +1064,7 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 	writehd_n(0, 1, dest, blocco * 8, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile scrivere il blocco %d\n", blocco);
-		printk("errore = %d\n", errore);
+		hd_print_error(0, 1, blocco * 8, errore);
 		return false;
 	}
 	return true;
@@ -1118,9 +1122,9 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 // rimpiazzamento.
 void aggiorna_statistiche()
 {
-	des_pf *ppf1, *ppf2;
+	des_pf *ppf1, *ppf2, *ppf3, *save = 0;
 	tabella_pagine* ptab;
-	descrittore_pagina* pp;
+	descrittore_pagina* pp, *save_pp;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
@@ -1134,7 +1138,7 @@ void aggiorna_statistiche()
 			// queste non vanno controllate perche' non ha senso
 		case TABELLA_RESIDENTE:
 			// queste non vanno controllate perche' puntano a 
-			// pagina non rimpiazzabili
+			// pagine non rimpiazzabili
 			break;
 		case TABELLA_PRIVATA:
 		case TABELLA_CONDIVISA:
@@ -1157,10 +1161,11 @@ void aggiorna_statistiche()
 					// associato alla pagina fisica puntata 
 					// da "pp"
 					ppf2 = struttura(pfis(pagina_puntata(pp)));
+
 					
 					// aggiornamento di tipo LRU
 					ppf2->contatore >>= 1;	// shift in ogni caso
-					ppf2->contatore |= pp->A << 31;
+					ppf2->contatore |= (unsigned long)pp->A << 31;
 
 					// aggiornamento di tipo LFU
 					// ppf2->contatore++
@@ -1488,7 +1493,8 @@ des_pf* rimpiazzamento() {
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
-		scrivi_blocco(pdes_tab->address, indirizzo(vittima));
+		if (!scrivi_blocco(pdes_tab->address, indirizzo(vittima)))
+			goto error;
 	} else {
 		// usiamo le informazioni nel mapping inverso per ricavare 
 		// subito l'entrata nel direttorio da modificare
@@ -1504,7 +1510,8 @@ des_pf* rimpiazzamento() {
 		if (pdes_pag->D == 1) {
 			// pagina modificata, va salvata nello swap (operazione 
 			// bloccante)
-			scrivi_blocco(pdes_pag->address, indirizzo(vittima));
+			if (!scrivi_blocco(pdes_pag->address, indirizzo(vittima)))
+				goto error;
 		} 
 	}
 	return vittima;
@@ -1746,7 +1753,7 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 	if (! carica_tabella(pdes_tab, ptab) ) 
 		goto errore2;
 
-	collega_tabella(pdir, ptab, indice_direttorio(ind));
+	pdes_tab = collega_tabella(pdir, ptab, indice_direttorio(ind));
 
 	ind_fisico = alloca_pagina_virtuale();
 	if (ind_fisico == 0) goto errore2;
@@ -1757,6 +1764,7 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 
 	pdes_pag->D		= 1; // verra' modificata
 	pdes_pag->A		= 1; // e acceduta
+	pdes_tab->A		= 1;
 
 	// restituiamo un puntatore alla pila creata
 	return ind_fisico;
@@ -2294,8 +2302,6 @@ void* carica_modulo_io(module_t* mod)
 		memcpy(elf_ph->p_vaddr,				// destinazione
 		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
 		       elf_ph->p_filesz);			// quanti byte copiare
-		printk("    Copiata sezione di %d byte all'indirizzo %x\n",
-				elf_ph->p_filesz, elf_ph->p_vaddr);
 
 
 		// la dimensione del segmento nel modulo (p_filesz) puo' essere
@@ -2310,8 +2316,6 @@ void* carica_modulo_io(module_t* mod)
 			memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
 			       0,				        // valore da scrivere
 			       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
-			printk("    azzerati ulteriori %d byte\n",
-					elf_ph->p_memsz - elf_ph->p_filesz);
 		}
 	}
 	// una volta copiati i segmenti di programma all'indirizzo per cui
@@ -2998,27 +3002,27 @@ enum hd_cmd {			// Comandi per i controllori degli hard disk
 
 struct interfata_reg {
 	union {				// Command Block Register
-		ind_b iCMD;
-		ind_b iSTS;
+		ind_b iCMD;		// 0
+		ind_b iSTS;		// 0
 	}; //iCMD_iSTS;
-	ind_b iDATA;
+	ind_b iDATA;			// 4
 	union {
-		ind_b iFEATURES;
-		ind_b iERROR;
+		ind_b iFEATURES;	// 8
+		ind_b iERROR;		// 8
 	}; //iFEATURES_iERROR
-	ind_b iSTCOUNT;
-	ind_b iSECT_N;
-	ind_b iCYL_L_N;
-	ind_b iCYL_H_N;
+	ind_b iSTCOUNT;			// 12
+	ind_b iSECT_N;			// 16
+	ind_b iCYL_L_N;			// 20
+	ind_b iCYL_H_N;			// 24
 	union {
-		ind_b iHD_N;
-		ind_b iDRV_HD;
+		ind_b iHD_N;		// 28
+		ind_b iDRV_HD;		// 32
 	}; //iHD_N_iDRV_HD
 	union {				// Control Block Register
-		ind_b iALT_STS;		
-		ind_b iDEV_CTRL;
+		ind_b iALT_STS;		// 36
+		ind_b iDEV_CTRL;	// 40
 	}; //iALT_STS_iDEV_CTRL
-};
+}; // size = 44
 
 struct geometria {			// Struttura 3-D di un disco
 	unsigned short cil;	
@@ -3098,11 +3102,41 @@ bool hd_wait_data(des_ata* p_des)
 	char stato;
 
 	do {
-		inputb(p_des->indreg.iSTS, stato);
+		inputb(p_des->indreg.iALT_STS, stato);
 	} while (stato & HD_STS_BSY);
 
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
 }
+
+void hd_print_error(int i, int d, int sect, char error) {
+	if (error == D_ERR_NONE)
+		return;
+
+	printk("Errore su hard disk:\n");
+	if (i < 0 || i > A || d < 0 || d > 2) {
+		printk("valori errati (%d, %d)\n");
+	} else {
+		printk("%s/%s: ", (i ? "secondario" : "primario"), (d ? "slave"      : "master"));
+		switch (error) {
+		case D_ERR_PRESENCE:
+			printk("assente o non rilevato\n");
+			break;
+		case D_ERR_BOUNDS:
+			printk("accesso al settore %s fuori dal range\n");
+			break;
+		case D_ERR_GENERIC:
+			printk("errore generico (DRQ=0)\n");
+			break;
+		default:
+			if (error & 4) 
+				printk("comando abortito\n");
+			else
+				printk("error register = %d\n", error);
+			break;
+		}
+	}
+}
+
 
 // Avvio delle operazioni di lettura da hard disk
 // 
@@ -3245,47 +3279,49 @@ extern "C" void c_driver_hd()
 
 	p_des = &hd[0];	
 
-	inputb(p_des->indreg.iSTS, stato); // acknowledge dell'interrupt
+	inputb(p_des->indreg.iSTS, stato); // ack dell'interrutp
+
+	//while (stato & HD_STS_BSY) {
+	//	printk("hd busy dopo l'interrupt\n");
+	//	inputb(p_des->indreg.iALT_STS, stato);
+	//}
 
 	curr_cmd = p_des->comando;	
 	p_des->comando = NONE;	
-	if (curr_cmd == NONE) {
-		schedulatore();
-		return;
-	}
-
 	fine = false;
-	if (stato & HD_STS_ERR) {
-		inputb(p_des->indreg.iERROR, p_des->errore);
-		fine = true;
-	} else {	
-		hd_read_device(p_des->indreg.iDRV_HD, drv);
-		switch (curr_cmd) {
-		case WRITE_SECT:
-			if (p_des->cont == 0)
-				fine = true;
-			else {
-				outputbuffw(p_des->punt, p_des->indreg.iDATA, H_BLK_SIZE);
-				p_des->comando = WRITE_SECT;
-				p_des->punt += H_BLK_SIZE;
-				p_des->cont--;
-			}
-			break;
-		case READ_SECT:
-			inputbuffw(p_des->indreg.iDATA, p_des->punt, H_BLK_SIZE);
-			p_des->cont--;
-			if (p_des->cont == 0)
-				fine = true;
-			else {
-				p_des->comando = READ_SECT;
-				p_des->punt += H_BLK_SIZE;
-			}
-			break;
-		default:
-			printk("Comando sconosciuto: %d\n", curr_cmd);
+	switch (curr_cmd) {
+	case WRITE_SECT:
+		if (p_des->cont == 0)
 			fine = true;
-			break;
+		else {
+			if (!hd_wait_data(p_des)) {
+				inputb(p_des->indreg.iERROR, p_des->errore);
+				fine = true;
+			}
+			outputbuffw(p_des->punt, p_des->indreg.iDATA, H_BLK_SIZE);
+			p_des->comando = WRITE_SECT;
+			p_des->punt += H_BLK_SIZE;
+			p_des->cont--;
 		}
+		break;
+	case READ_SECT:
+		if (!hd_wait_data(p_des)) {
+			inputb(p_des->indreg.iERROR, p_des->errore);
+			fine = true;
+		}
+		inputbuffw(p_des->indreg.iDATA, p_des->punt, H_BLK_SIZE);
+		p_des->cont--;
+		if (p_des->cont == 0)
+			fine = true;
+		else {
+			p_des->comando = READ_SECT;
+			p_des->punt += H_BLK_SIZE;
+		}
+		break;
+	default:
+		printk("Comando sconosciuto: %d\n", curr_cmd);
+		fine = true;
+		break;
 	}
 	if (fine == true) {
 		mask_hd(p_des->indreg.iSTS);
@@ -3404,7 +3440,7 @@ void hd_init() {
 				*ptr++ = (char)(st_sett[j]);
 			}
 			*ptr = 0;
-			printk("%s %s: %s - %d/%d/%d (%d)\n",
+			printk("  - %s %s: %s - %d/%d/%d (%d)\n",
 				(i ? "sec" : "pri"),
 				(d ? "slave "   : "master"),
 				serial,
@@ -3467,7 +3503,7 @@ void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* m
 	
 	readhd_n(0, 1, buf, block * 8, ceild(bytes, 512), errore);
 	if (errore != 0) { 
-		printk("Impossibile leggere %s\n", msg);
+		printk("\nImpossibile leggere %s\n", msg);
 		printk("errore = %d\n", errore);
 		panic("Fatal error");
 	}
@@ -3498,16 +3534,26 @@ extern "C" void
 cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	des_proc* pdes_proc;
+	proc_elem* dummy;
+	unsigned long clocks_per_sec;
+	superblock_t *superblock;
+	unsigned int pages, *buf;
+	void* last_address;
+	bool risu;
+	direttorio* tmp, *main_dir;
+	pagina* pila_utente;
 
 	// inizializziamo per prima cosa la console, in modo da poter scrivere
 	// messaggi sullo schermo
 	con_init();
 
+	printk("Nucleo di Calcolatori Elettronici, v1.0\n");
+
 	// controlliamo di essere stati caricati
 	// da un bootloader che rispetti lo standard multiboot
 	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
 		printk ("Numero magico non valido: 0x%x\n", magic);
-		return;
+		goto error;
 	}
 
 	// vediamo se il boot loader ci ha passato l'informazione su quanta
@@ -3532,14 +3578,12 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	// controlliamo se il boot loader ha caricato dei moduli
 	if (mbi->flags & (1 << 3)) {
 		// se si', calcoliamo prima lo spazio occupato
-		printk ("Numero moduli: %d\n", mbi->mods_count);
 		module_t* mod = mbi->mods_addr;
 		for (int i = 0; i < mbi->mods_count; i++) {
-			printk ("Modulo #%d (%s): inizia a %x, finisce a %x\n",
-					i, mod->string, mod->mod_start, mod->mod_end);
 			if (salta_a(mod->mod_start) < 0 ||
 			    occupa(distance(mod->mod_end, mod->mod_start)) == 0) {
-				panic("Errore nel caricamento (lo spazio risulta occupato)");
+				printk("Errore nel caricamento del modulo (lo spazio risulta occupato)");
+				goto error;
 			}
 			mod++;
 		}
@@ -3548,10 +3592,12 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		mod = mbi->mods_addr;
 		for (int i = 0; i < mbi->mods_count; i++) {
 			if (str_equal(mod->string, "/io")) {
-				printk("Sposto il modulo IO all'indirizzo di collegamento:\n");
 				io_entry = (entry_t)carica_modulo_io(mod);
-				if (io_entry == 0)
-					panic("Impossibile caricare il modulo di IO");
+				if (io_entry == 0) {
+					printk("Impossibile caricare il modulo di IO");
+					goto error;
+				}
+				printk("Caricato il modulo di IO\n");
 			} else {
 				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
 				printk("Modulo '%s' non riconosciuto (eliminato)\n");
@@ -3564,17 +3610,22 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// il resto della memoria e' per le pagine fisiche
 	init_pagine_fisiche();
+	printk("Pagine fisiche: %d\n", num_pagine_fisiche);
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati
 	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
+	printk("Semafori: %d\n", MAX_SEMAFORI);
 
 	// il direttorio principale viene utilizzato fino a quando non creiamo
 	// il primo processo.  Poi, servira' come "modello" da cui creare i
 	// direttori dei nuovi processi.
 	direttorio_principale = alloca_direttorio();
-	if (direttorio_principale == 0)
-		panic("Impossibile allocare il direttorio principale");
+	if (direttorio_principale == 0) {
+		printk("Impossibile allocare il direttorio principale");
+		goto error;
+	}
+		
 	memset(direttorio_principale, 0, SIZE_PAGINA);
 
 	// memoria fisica in memoria virtuale
@@ -3584,7 +3635,10 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		tabella_pagine* ptab;
 		if (pdes_tab->P == 0) {
 			ptab = alloca_tabella_residente();
-			if (ptab == 0) panic("Impossibile allocare le tabelle condivise");
+			if (ptab == 0) {
+				printk("Impossibile allocare le tabelle condivise");
+				goto error;
+			}
 			pdes_tab->address   = uint(ptab) >> 12;
 			pdes_tab->D	    = 0;
 			pdes_tab->pgsz      = 0; // pagine di 4K
@@ -3605,12 +3659,14 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		pdes_pag->PWT     = 0;
 		pdes_pag->P       = 1;
 	}
+	printk("Mappata memoria fisica in memoria virtuale\n");
 
 	carica_cr3(direttorio_principale);
 	// avendo predisposto il direttorio in modo che tutta la memoria fisica
 	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
 	// la paginazione, sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
+	printk("Paginazione attivata\n");
 
 	// quando abbiamo finito di usare la struttura dati passataci dal boot
 	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
@@ -3622,20 +3678,28 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// inizializziamo il controllore delle interruzioni [vedi sistema.S]
 	init_8259();
+	printk("Controllore delle interruzioni inizializzato\n");
 	
 	// processo dummy
-	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
-	if (dummy == 0)
-		panic("Impossibile creare il processo dummy");
+	dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
+	if (dummy == 0) {
+		printk("Impossibile creare il processo dummy");
+		goto error;
+	}
 	inserimento_coda(pronti, dummy);
+	printk("Creato il processo dummy\n");
 
 	// creazione del primo processo
 	pdes_proc = new des_proc;
-	if (pdes_proc == 0)
-		panic("Impossibile creare il processo main (mem. insufficiente)");
+	if (pdes_proc == 0) {
+		printk("Impossibile creare il processo main (mem. insufficiente)");
+		goto error;
+	}
 	id_main = alloca_tss(pdes_proc);
-	if (id_main == 0)
-		panic("Impossibile creare il processo main (gdt insufficiente)");
+	if (id_main == 0) {
+		printk("Impossibile creare il processo main (gdt insufficiente)");
+		goto error;
+	}
 	init.identifier = id_main;
 	init.priority = 0;
 
@@ -3650,44 +3714,56 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	trasforma_in_processo();
 
 	// da qui in poi, e' il processo init che esegue
-	printk("Processo init\n");
+	printk("Processo main:\n");
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
+	printk("- calibrazione del tsc...");
 	attiva_timer(DELAY);
-	unsigned long clocks_per_sec = calibra_tsc();
+	clocks_per_sec = calibra_tsc();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
+	printk("ok\n");
 	
 	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
 	// swap
+	printk("- inizializzazione e riconoscimento hard disk:\n");
 	hd_init();
 
 	// lettura del superblocco
+	printk("- lettura del superblocco dall'area di swap:\n");
 	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
-	superblock_t *s = reinterpret_cast<superblock_t*>(read_buf);
-	printk("    bm_start   : %d\n", s->bm_start);
-	printk("    blocks     : %d\n", s->blocks);
-	printk("    directory  : %d\n", s->directory);
-	printk("    entry point: %x\n", s->entry_point);
-	printk("    end        : %x\n", s->end);
+	superblock = reinterpret_cast<superblock_t*>(read_buf);
+	printk("  - bm: %d, blocks: %d, dir: %d, entry: %x, end: %x\n", 
+			superblock->bm_start,
+			superblock->blocks,
+			superblock->directory,
+			superblock->entry_point,
+			superblock->end);
 
 	// lettura della bitmap dei blocchi
-	unsigned int pages = ceild(s->blocks, SIZE_PAGINA * 8);
-	unsigned int *buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
-	if (buf == 0) 
-		panic("Impossibile allocare la bitmap dei blocchi");
-	bm_create(&block_bm, buf, s->blocks);
-	leggi_swap(buf, s->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+	printk("- lettura della bitmap dei blocchi...");
+	pages = ceild(superblock->blocks, SIZE_PAGINA * 8);
+	buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
+	if (buf == 0) {
+		printk("Impossibile allocare la bitmap dei blocchi");
+		goto error;
+	}
+	bm_create(&block_bm, buf, superblock->blocks);
+	leggi_swap(buf, superblock->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+	printk("ok\n");
 
 	// lettura del direttorio principale dallo swap
-	direttorio* tmp = new direttorio;
-	if (tmp == 0)
-		panic("memoria insufficiente");
-	leggi_swap(tmp, s->directory, sizeof(direttorio), "il direttorio principale");
+	printk("- lettura del direttorio principale...");
+	tmp = new direttorio;
+	if (tmp == 0) {
+		printk("memoria insufficiente");
+		goto error;
+	}
+	leggi_swap(tmp, superblock->directory, sizeof(direttorio), "il direttorio principale");
+	printk("ok\n");
 
 	// tabelle condivise per lo spazio utente condiviso
-	printk("Creo o leggo le tabelle condivise\n");
-	void* last_address;
+	printk("- creazione o lettura delle tabelle condivise...");
 	for (void* ind = inizio_utente_condiviso;
 	     	   ind < fine_utente_condiviso;
 	           ind = add(ind, SIZE_PAGINA * 1024))
@@ -3702,44 +3778,63 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		last_address = add(ind, SIZE_PAGINA * 1024);
 
 		ptab = alloca_tabella_condivisa();
-		if (ptab == 0)
-			panic("Impossibile allocare tabella condivisa\n");
-		if (! carica_tabella(pdes_tab2, ptab) )
-			panic("Impossibile caricare tabella condivisa");
+		if (ptab == 0) {
+			printk("Impossibile allocare tabella condivisa\n");
+			goto error;
+		}
+		if (! carica_tabella(pdes_tab2, ptab) ) {
+			printk("Impossibile caricare tabella condivisa");
+			goto error;
+		}
 		pdes_tab2->address	= uint(ptab) >> 12;
 		pdes_tab2->P		= 1;
 		for (int i = 0; i < 1024; i++) {
 			descrittore_pagina* pdes_pag = &ptab->entrate[i];
 			if (pdes_pag->preload == 1) {
 				pagina* pag = alloca_pagina_residente();
-				if (pag == 0) 
-					panic("Impossibile allocare pagina residente");
-				if (! carica_pagina(pdes_pag, pag) ) 
-					panic("Impossibile caricare pagina residente");
+				if (pag == 0) {
+					printk("Impossibile allocare pagina residente");
+					goto error;
+				}
+				if (! carica_pagina(pdes_pag, pag) ) {
+					printk("Impossibile caricare pagina residente");
+					goto error;
+				}
 				collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
 			}
 		}
 
 	}
 	delete tmp;
+	printk("ok\n");
 
 	// inizializzazione dello heap utente
-	heap.start = allineav(s->end, sizeof(int));
+	heap.start = allineav(superblock->end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
-	printk("Heap utente a %x, dimensione: %d B (%d MiB)\n",
+	printk("- heap utente a %x, dimensione: %d B (%d MiB)\n",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 
 	// semaforo per la mutua esclusione nella gestione dei page fault
-	bool risu;
 	c_sem_ini(pf_mutex, 1, risu);
-	if (!risu)
-		panic("Impossibile allocare il semaforo per i page fault");
+	if (!risu) {
+		printk("Impossibile allocare il semaforo per i page fault");
+		goto error;
+	}
 	
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
-	pagina* pila_utente = crea_pila_utente(direttorio_principale, fine_utente_privato, 1);
-	if (pila_utente == 0) 
-		panic("Impossibile allocare la pila utente per main");
+	printk("- salto a livello utente\n");
+	main_dir = alloca_direttorio();
+	if (main_dir == 0) {
+		printk("Impossibile allocare il direttorio per main");
+		goto error;
+	}
+	*main_dir = *direttorio_principale;
+	pila_utente = crea_pila_utente(main_dir, fine_utente_privato, 1);
+	if (pila_utente == 0) {
+		printk("Impossibile allocare la pila utente per main");
+		goto error;
+	}
 	pdes_proc->esp0 = add(&stack, SIZE_PAGINA);
 	pdes_proc->ss0 = SEL_DATI_SISTEMA;
 	pdes_proc->ds  = SEL_DATI_UTENTE;
@@ -3747,5 +3842,9 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	pdes_proc->fpu.cr = 0x037f;
 	pdes_proc->fpu.tr = 0xffff;
 	pdes_proc->liv = LIV_UTENTE;
-	salta_a_main(s->entry_point, fine_utente_privato);
+	pdes_proc->cr3 = main_dir;
+	salta_a_main(superblock->entry_point, fine_utente_privato);
+
+error:
+	panic("Fatal error");
 }

@@ -60,6 +60,7 @@
 #define D_ERR_NONE 0x00
 #define D_ERR_BOUNDS 0xFF
 #define D_ERR_PRESENCE 0xFE
+#define D_ERR_GENERIC  0xFD
 
 #define inizio_sistema_condiviso  addr(0x00000000)
 #define fine_sistema_condiviso    inizio_sistema_privato
