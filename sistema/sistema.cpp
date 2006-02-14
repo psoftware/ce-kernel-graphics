@@ -1876,7 +1876,8 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 }
 
 void shutdown() {
-	asm("sti: 1: nop; jmp 1b" : : );
+	printk("Tutti i processi sono terminati!\n");
+	asm("1: sti; nop; jmp 1b" : : );
 }
 extern "C" void terminate_p();
 
@@ -1892,10 +1893,6 @@ extern "C" void c_terminate_p()
 	delete esecuzione;
 	delete pdes_proc;
 	processi--;
-	if (processi <= 0) {
-		printk("Tutti i processi sono terminati\n");
-		shutdown();
-	}
 	schedulatore();
 }
 
@@ -2095,10 +2092,11 @@ extern "C" void attiva_timer(unsigned long delay);
 
 extern "C" void c_begin_p()
 {
-	io_entry(0);
-	esecuzione->priority = -2;
+	if (esecuzione->identifier != id_main) {
+		printk("begin_p() non chiamata da main!\n");
+		abort_p();
+	}
 	processi--;
-        inserimento_coda(pronti, esecuzione);
         schedulatore();
 }
 
@@ -3524,8 +3522,10 @@ extern void* stack;
 
 void dd(int i)
 {
-	while(processi > 0);
+	while (processi > 0)
+		;
 	shutdown();
+
 }
 
 proc_elem init;
@@ -3808,6 +3808,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	delete tmp;
 	printk("ok\n");
 
+
+
 	// inizializzazione dello heap utente
 	heap.start = allineav(superblock->end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
@@ -3820,17 +3822,17 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		printk("Impossibile allocare il semaforo per i page fault");
 		goto error;
 	}
+
+
+	// inizializzazione del modulo di io
+	printk("- inizializzazione del modulo di I/O...");
+	io_entry(0);
+	printk("ok\n");
 	
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
 	printk("- salto a livello utente\n");
-	main_dir = alloca_direttorio();
-	if (main_dir == 0) {
-		printk("Impossibile allocare il direttorio per main");
-		goto error;
-	}
-	*main_dir = *direttorio_principale;
-	pila_utente = crea_pila_utente(main_dir, fine_utente_privato, 1);
+	pila_utente = crea_pila_utente(direttorio_principale, fine_utente_privato, 1);
 	if (pila_utente == 0) {
 		printk("Impossibile allocare la pila utente per main");
 		goto error;
@@ -3842,9 +3844,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	pdes_proc->fpu.cr = 0x037f;
 	pdes_proc->fpu.tr = 0xffff;
 	pdes_proc->liv = LIV_UTENTE;
-	pdes_proc->cr3 = main_dir;
 	salta_a_main(superblock->entry_point, fine_utente_privato);
-
 error:
 	panic("Fatal error");
 }
