@@ -1860,8 +1860,10 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
-	if (id_main != 0 && esecuzione->identifier != id_main)
-		panic("activate_p non chiamata da main");
+	if (id_main != 0 && esecuzione->identifier != id_main) {
+		printk("activate_p non chiamata da main");
+		abort_p();
+	}
 
 	p = crea_processo(f, a, prio, liv);
 
@@ -1950,8 +1952,10 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
-	if (id_main != 0 && esecuzione->identifier != id_main)
-		panic("activate_pe non chiamata da main");
+	if (id_main != 0 && esecuzione->identifier != id_main) {
+		printk("activate_pe non chiamata da main");
+		abort_p();
+	}
 
 	p = crea_processo(f, a, prio, liv);
 	if (p != 0) {
@@ -2124,8 +2128,10 @@ extern "C" void c_sem_ini(int &index_des_s, int val, bool &risu)
 {
 	unsigned int pos;
 
-	//if (id_main != 0 && esecuzione->identifier != id_main)
-	//	panic("sem_ini non chiamata da main");
+	if (id_main != 0 && esecuzione->identifier != id_main) {
+		printk("sem_ini non chiamata da main");
+		abort_p();
+	}
 
 	if(!bm_alloc(&sem_bm, pos)) {
 		risu = false;
@@ -3722,8 +3728,8 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	attiva_timer(DELAY);
 	clocks_per_sec = calibra_tsc();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
-	printk("ok\n");
-	
+	printk("%d clocks/usec\n", clocks_per_usec);
+
 	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
 	// swap
 	printk("- inizializzazione e riconoscimento hard disk:\n");
