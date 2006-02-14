@@ -770,13 +770,13 @@ pagina_fisica* prima_pagina;
 
 // restituisce l'indirizzo fisico della pagina fisica associata al descrittore
 // passato come argomento
-pagina_fisica* indirizzo(des_pf* p) {
+pagina_fisica* indirizzoPF(des_pf* p) {
 	return static_cast<pagina_fisica*>(add(prima_pagina, (p - pagine_fisiche) * SIZE_PAGINA));
 }
 
 // dato l'indirizzo di una pagina fisica, restituisce un puntatore al
 // descrittore associato
-des_pf* struttura(pagina_fisica* pagina) {
+des_pf* strutturaPF(pagina_fisica* pagina) {
 	return &pagine_fisiche[distance(pagina, prima_pagina) / SIZE_PAGINA];
 }
 
@@ -855,7 +855,7 @@ direttorio* alloca_direttorio() {
 	// pagina descritta (funzione "indirizzo"), che puntera' ad una "union 
 	// pagina_fisica". Quindi, restituiamo un puntatore al campo di tipo 
 	// "direttorio" all'interno della union
-	return &indirizzo(p)->dir;
+	return &indirizzoPF(p)->dir;
 }
 
 // le tre funzioni per l'allocazione di una tabella differiscono solo per il 
@@ -866,7 +866,7 @@ tabella_pagine* alloca_tabella(cont_pf tipo = TABELLA_PRIVATA) {
 	des_pf* p = alloca_pagina();
 	if (p == 0) return 0;
 	p->contenuto = tipo;
-	return &indirizzo(p)->tab;
+	return &indirizzoPF(p)->tab;
 }
 
 tabella_pagine* alloca_tabella_condivisa() {
@@ -883,7 +883,7 @@ pagina* alloca_pagina_virtuale(cont_pf tipo = PAGINA) {
 	des_pf* p = alloca_pagina();
 	if (p == 0) return 0;
 	p->contenuto = tipo;
-	return &indirizzo(p)->pag;
+	return &indirizzoPF(p)->pag;
 }
 
 pagina* alloca_pagina_residente() {
@@ -906,17 +906,17 @@ void rilascia_pagina(des_pf* p) {
 // invocano la funzione "rilascia_pagina" generica.
 inline
 void rilascia(direttorio* d) {
-	rilascia_pagina(struttura(pfis(d)));
+	rilascia_pagina(strutturaPF(pfis(d)));
 }
 
 inline
 void rilascia(tabella_pagine* d) {
-	rilascia_pagina(struttura(pfis(d)));
+	rilascia_pagina(strutturaPF(pfis(d)));
 }
 
 inline
 void rilascia(pagina* d) {
-	rilascia_pagina(struttura(pfis(d)));
+	rilascia_pagina(strutturaPF(pfis(d)));
 }
 
 // funzioni che aggiornano sia le strutture dati della paginazione che
@@ -934,7 +934,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella_pagine* ptab, sho
 
 	// mapping inverso:
 	// ricaviamo il descrittore della pagina fisica che contiene la tabella
-	des_pf* ppf  = struttura(pfis(ptab));
+	des_pf* ppf  = strutturaPF(pfis(ptab));
 	ppf->u.tab.dir    = pdir;
 	ppf->u.tab.indice = indice;
 	ppf->u.tab.quante = 0; // inizialmente, nessuna pagina e' presente
@@ -970,7 +970,7 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
-	des_pf* ppf = struttura(pfis(tabella_puntata(pdes_tab)));
+	des_pf* ppf = strutturaPF(pfis(tabella_puntata(pdes_tab)));
 	pdes_tab->address = ppf->u.tab.blocco;
 
 	return pdes_tab;
@@ -987,7 +987,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 	descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind_virtuale)];
 
 	// mapping inverso
-	des_pf* ppf = struttura(pfis(pag));
+	des_pf* ppf = strutturaPF(pfis(pag));
 	ppf->u.pag.tabella	= ptab;
 	ppf->u.pag.ind_virtuale = ind_virtuale;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
@@ -996,7 +996,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 	ppf->u.pag.blocco	= pdes_pag->address; // vedi NOTA prec
 
 	// incremento del contatore nella tabella
-	ppf = struttura(pfis(ptab));
+	ppf = strutturaPF(pfis(ptab));
 	ppf->u.tab.quante++;
 	ppf->contatore		|= 0x80000000;
 
@@ -1021,11 +1021,11 @@ descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale) {
 
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
-	des_pf* ppf = struttura(pfis(pagina_puntata(pdes_pag)));
+	des_pf* ppf = strutturaPF(pfis(pagina_puntata(pdes_pag)));
 	pdes_pag->address = ppf->u.pag.blocco;
 
 	// infine, decrementiamo il numero di pagine puntate dalla tabella
-	ppf = struttura(pfis(ptab));
+	ppf = strutturaPF(pfis(ptab));
 	ppf->u.tab.quante--;
 
 	return pdes_pag;
@@ -1152,7 +1152,7 @@ void aggiorna_statistiche()
 		if (check) {
 			// trattiamo tutto come se fosse una tabella, anche se 
 			// si tratta di un direttorio (vedi NOTA 2)
-			ptab = &indirizzo(ppf1)->tab;
+			ptab = &indirizzoPF(ppf1)->tab;
 			for (int j = 0; j < 1024; j++) {
 				pp = &ptab->entrate[j];
 				if (pp->P == 1) {
@@ -1160,7 +1160,7 @@ void aggiorna_statistiche()
 					// descrittore di pagina fisica 
 					// associato alla pagina fisica puntata 
 					// da "pp"
-					ppf2 = struttura(pfis(pagina_puntata(pp)));
+					ppf2 = strutturaPF(pfis(pagina_puntata(pp)));
 
 					
 					// aggiornamento di tipo LRU
@@ -1409,14 +1409,14 @@ tabella_pagine* rimpiazzamento_tabella()
 	if (ppf == 0) return 0;
 
 	ppf->contenuto = TABELLA_PRIVATA;
-	return &indirizzo(ppf)->tab;
+	return &indirizzoPF(ppf)->tab;
 }
 
 pagina* rimpiazzamento_pagina(tabella_pagine* escludi) 
 {
 	// Per impedire che venga scelta la tabella "escludi", la rendiamo 
 	// temporaneamente residente
-	des_pf *p = struttura(pfis(escludi));
+	des_pf *p = strutturaPF(pfis(escludi));
 	cont_pf save = p->contenuto;
 	p->contenuto = TABELLA_RESIDENTE;
 
@@ -1430,7 +1430,7 @@ pagina* rimpiazzamento_pagina(tabella_pagine* escludi)
 
 	ppf->contenuto = PAGINA;
 
-	return &indirizzo(ppf)->pag;
+	return &indirizzoPF(ppf)->pag;
 }
 
 // funzioni usate da rimpiazzamento
@@ -1493,7 +1493,7 @@ des_pf* rimpiazzamento() {
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
-		if (!scrivi_blocco(pdes_tab->address, indirizzo(vittima)))
+		if (!scrivi_blocco(pdes_tab->address, indirizzoPF(vittima)))
 			goto error;
 	} else {
 		// usiamo le informazioni nel mapping inverso per ricavare 
@@ -1510,7 +1510,7 @@ des_pf* rimpiazzamento() {
 		if (pdes_pag->D == 1) {
 			// pagina modificata, va salvata nello swap (operazione 
 			// bloccante)
-			if (!scrivi_blocco(pdes_pag->address, indirizzo(vittima)))
+			if (!scrivi_blocco(pdes_pag->address, indirizzoPF(vittima)))
 				goto error;
 		} 
 	}
