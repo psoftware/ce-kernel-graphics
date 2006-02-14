@@ -507,8 +507,8 @@ init_idt:
 	carica_gate	0x21		handler_KBD	LIV_SISTEMA
 	carica_gate	0x23		handler_COM2	LIV_SISTEMA
 	carica_gate	0x24		handler_COM1	LIV_SISTEMA
-	carica_gate	0x2E 		driver_hd 	LIV_SISTEMA
-	carica_gate	0x2F 		handler_HD1 	LIV_SISTEMA
+	carica_gate	0x2E 		driver_hd0 	LIV_SISTEMA
+	carica_gate	0x2F 		driver_hd1 	LIV_SISTEMA
 
 	// primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
@@ -1215,9 +1215,27 @@ driver_t:
 	iret
 
 	.extern _c_driver_hd
-driver_hd:
+driver_hd0:
 	call salva_stato
 	call inspronti
+	pushl $0
+	call _c_driver_hd
+	movb $EOI, %al		// ack al controllore slave
+	outb %al, $OCW2S
+	movb $READ_ISR, %al	// lettura di ISR dello slave
+	outb %al, $OCW3S
+	inb $OCW3S, %al
+	testb $0xff, %al
+	jnz 1f
+	movb $EOI, %al
+	outb %al, $OCW2M
+1:	call carica_stato
+	iret
+
+driver_hd1:
+	call salva_stato
+	call inspronti
+	pushl $1
 	call _c_driver_hd
 	movb $EOI, %al		// ack al controllore slave
 	outb %al, $OCW2S
@@ -1280,16 +1298,6 @@ handler_COM2:
 1:
 	movl _in_com + 4, %eax
 2:
-	movl %eax, _esecuzione
-
-	call carica_stato
-	iret
-
-handler_HD1:
-	call salva_stato
-	call inspronti
-
-	movl _ata+4, %eax
 	movl %eax, _esecuzione
 
 	call carica_stato

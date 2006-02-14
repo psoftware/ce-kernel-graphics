@@ -1045,13 +1045,16 @@ void hd_print_error(int i, int d, int sect, char errore);
 
 bm_t block_bm;
 
+#define SWAP_PS  1
+#define SWAP_MS  0
+
 bool leggi_blocco(unsigned int blocco, void* dest) {
 	char errore;
 
-	readhd_n(0, 1, dest, blocco * 8, 8, errore);
+	readhd_n(SWAP_PS, SWAP_MS, dest, blocco * 8, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile leggere il blocco %d\n", blocco);
-		hd_print_error(0, 1, blocco * 8, errore);
+		hd_print_error(SWAP_PS, SWAP_MS, blocco * 8, errore);
 		return false;
 	}
 	return true;
@@ -1061,10 +1064,10 @@ bool leggi_blocco(unsigned int blocco, void* dest) {
 bool scrivi_blocco(unsigned int blocco, void* dest) {
 	char errore;
 
-	writehd_n(0, 1, dest, blocco * 8, 8, errore);
+	writehd_n(SWAP_PS, SWAP_MS, dest, blocco * 8, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile scrivere il blocco %d\n", blocco);
-		hd_print_error(0, 1, blocco * 8, errore);
+		hd_print_error(SWAP_PS, SWAP_MS, blocco * 8, errore);
 		return false;
 	}
 	return true;
@@ -3272,7 +3275,7 @@ extern "C" void c_writehd_n(short ind_ata, short drv, short vetti[], unsigned in
 
 // driver per l'hard disk, valido sia per l'ingresso che per l'uscita
 //
-extern "C" void c_driver_hd()
+extern "C" void c_driver_hd(int ind_ata)
 {
 	des_ata *p_des;
 	int drv;
@@ -3281,14 +3284,9 @@ extern "C" void c_driver_hd()
 	bool fine;
 	char stato;
 
-	p_des = &hd[0];	
+	p_des = &hd[ind_ata];	
 
-	inputb(p_des->indreg.iSTS, stato); // ack dell'interrutp
-
-	//while (stato & HD_STS_BSY) {
-	//	printk("hd busy dopo l'interrupt\n");
-	//	inputb(p_des->indreg.iALT_STS, stato);
-	//}
+	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
 
 	curr_cmd = p_des->comando;	
 	p_des->comando = NONE;	
@@ -3427,6 +3425,7 @@ void hd_init() {
 
 			if (!p_des->disco[d].presente) 
 				continue;
+			halt_inouthd(p_des->indreg.iDEV_CTRL);	
 			if (!hd_check_status(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
@@ -3505,10 +3504,10 @@ void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* m
 	char errore;
 	des_sem* s;
 	
-	readhd_n(0, 1, buf, block * 8, ceild(bytes, 512), errore);
+	readhd_n(SWAP_PS, SWAP_MS, buf, block * 8, ceild(bytes, 512), errore);
 	if (errore != 0) { 
 		printk("\nImpossibile leggere %s\n", msg);
-		printk("errore = %d\n", errore);
+		hd_print_error(SWAP_PS, SWAP_MS, block * 8, errore);
 		panic("Fatal error");
 	}
 }
