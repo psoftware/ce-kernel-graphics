@@ -60,7 +60,6 @@ extern "C" void nwfi(controllore c);
 
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
-extern "C" void panic(const char *msg);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void reboot(void);
 extern "C" void ndelay(unsigned int nano_sec);
@@ -365,7 +364,7 @@ const estern_id com_id[2][2] = {
 //
 const int COM2_IRQ = 4;
 
-void com_init()
+int com_init()
 {
 	des_se *p_des;
 	bool r1, r2;
@@ -380,15 +379,16 @@ void com_init()
 		sem_ini(p_des->mutex, 1, r1);
 		sem_ini(p_des->sincr, 0, r2);
 		if(!r1 || !r2)
-			panic("Impossibile allocare semaforo per l' IO");
+			return -2;
 
 		activate_pe(input_com, i, com_base_prio - i,
 			LIV_SISTEMA, id, com_id[i][0], r1);
 		activate_pe(output_com, i, com_base_prio - i,
 			LIV_SISTEMA, id, com_id[i][1], r2);
 		if(!r1 || !r2)
-			panic("Impossibile creare processo esterno di uscita");
+			return -2;
 	}
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -617,7 +617,7 @@ const int KBD_IRQ = 1;
 
 // inizializzazione
 //
-void kbd_init()
+int kbd_init()
 {
 	short id;
 	bool r;
@@ -625,13 +625,14 @@ void kbd_init()
 	activate_pe(tast_in, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ,
 		LIV_SISTEMA, id, tastiera, r);
 	if(!r)
-		panic("Impossibile creare processo esterno della tastiera");
+		return -3;
 
 	// l' inizializzazione avviene ad interruzioni disabilitate, quindi
 	//  non ci saranno richieste di interruzione accolte fino all' uscita
 	//  da io_init
 	//
 	abilita_tastiera();
+	return 0;
 }
 
 // lettura di n caratteri da kbd
@@ -792,7 +793,7 @@ extern "C" void c_term_write_n(int term, char vetti[], int quanti)
 	sem_signal(p_des->mutex);
 }
 
-void term_init(void)
+int term_init(void)
 {
 	des_term *p_des;
 	bool r1, r2;
@@ -804,8 +805,8 @@ void term_init(void)
 
 		sem_ini(p_des->mutex, 1, r1);
 		sem_ini(p_des->sincr, 0, r2);
-		if(!r1 || !r2)
-			panic("Impossibile inizializzare i semafori per l' I/O");
+		if(!r1 || !r2) 
+			return -1;
 		p_des->waiting = false;
 
 		kbd_init(&p_des->kbd, p_des);
@@ -823,13 +824,19 @@ void term_init(void)
 //
 extern "C" void fill_io_gates(void);
 
-// eseguita in fase di inizializzazione ad interruzioni disabilitate
+// eseguita in fase di inizializzazione
 //
-extern "C" void cmain(void)
+extern "C" int cmain(void)
 {
+	int error;
+
 	fill_io_gates();
-	term_init();
-	com_init();
+	error = term_init();
+	if (error < 0) return error;
+	error = com_init();
+	if (error < 0) return error;
+
+	return 0;
 }
 
 // Replicata in sistema.cpp

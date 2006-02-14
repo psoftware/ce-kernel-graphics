@@ -526,10 +526,7 @@ init_idt:
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
 	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
 	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
-	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
-	carica_gate	tipo_r		_reboot		LIV_SISTEMA
-	carica_gate	tipo_nd		a_ndelay	LIV_SISTEMA
 
 	// gestione console (di Checconi)
 	carica_gate	tipo_cr		a_con_read	LIV_SISTEMA
@@ -539,7 +536,7 @@ init_idt:
 	carica_gate	tipo_cu		a_con_update	LIV_SISTEMA
 	carica_gate	tipo_ci		a_con_init	LIV_SISTEMA
 
-	// gestione HD (Faggioli)
+	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
 	carica_gate	io_tipo_whdn	a_writehd_n	LIV_SISTEMA
 
@@ -776,9 +773,6 @@ _check_bit_A:
 // hardware gestito direttamente dal nucleo: 			 //
 //  PIC, timer, console, swap					 //
 //////////////////////////////////////////////////////////////////
-_reboot:
-die:	jmp die				
-
 // Replicato in io.s
 //
 	.global _inputb
@@ -1202,7 +1196,7 @@ _writehd_n:
 	ret
 
 ////////////////////////////////////////////////////////
-// handler/driver                                       //
+// handler/driver                                     //
 ////////////////////////////////////////////////////////
 	.extern _c_driver_t
 driver_t:
@@ -1445,37 +1439,12 @@ a_verifica_area:
 	carica_reg_rit
 	iret
 
-	.extern _panic
-a_panic:
-	copia_param 1 0
-	call _panic			// panic blocca il sistema
-
 a_fill_gate:
 	salva_registri
 	copia_param 3 7
 	call _init_gate
 	addl $12, %esp
 	carica_registri
-	iret
-
-a_ndelay:
-	pushl %eax
-	pushl %edx
-	pushl %ebx
-	pushl %ecx
-	movl _clocks_per_usec, %eax
-	mull 32(%esp)
-	movl %eax, %ecx
-	rdtsc
-	movl %eax, %ebx
-1:	rdtsc
-	subl %ebx, %eax
-	cmpl %ecx, %eax
-	jbe 1b
-	popl %ecx
-	popl %ebx
-	popl %edx
-	popl %eax
 	iret
 
 // SWAP

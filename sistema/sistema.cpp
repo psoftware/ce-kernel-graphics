@@ -1846,7 +1846,7 @@ void rilascia_tutto(direttorio* pdir, void* start, void* end) {
 // PRIMITIVE                                                                    //
 //////////////////////////////////////////////////////////////////////////////////
 
-typedef void (*entry_t)(int);
+typedef int (*entry_t)(int);
 entry_t io_entry = 0;
 volatile short id_main = 0;
 
@@ -2152,7 +2152,7 @@ extern "C" void c_sem_wait(int sem)
 	des_sem *s;
 
 	if(sem < 0 || sem >= MAX_SEMAFORI) {
-		printk("semaforo errato %d\n", sem);
+		printk("semaforo errato: %d\n", sem);
 		abort_p();
 	}
 
@@ -2172,7 +2172,7 @@ extern "C" void c_sem_signal(int sem)
 	proc_elem *lavoro;
 
 	if(sem < 0 || sem >= MAX_SEMAFORI) {
-		printk("semaforo errato %d\n", sem);
+		printk("semaforo errato: %d\n", sem);
 		abort_p();
 	}
 
@@ -3494,7 +3494,7 @@ struct superblock_t {
 	unsigned int	bm_start;
 	int		blocks;
 	unsigned int	directory;
-	void		(*entry_point)(int);
+	int		(*entry_point)(int);
 	void*		end;
 };
 
@@ -3547,6 +3547,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	bool risu;
 	direttorio* tmp, *main_dir;
 	pagina* pila_utente;
+	int errore;
 
 	// inizializziamo per prima cosa la console, in modo da poter scrivere
 	// messaggi sullo schermo
@@ -3831,7 +3832,11 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// inizializzazione del modulo di io
 	printk("- inizializzazione del modulo di I/O...");
-	io_entry(0);
+	errore = io_entry(0);
+	if (errore < 0) {
+		printk("ERRORE: %d\n", -errore);
+		goto error;
+	}
 	printk("ok\n");
 	
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
