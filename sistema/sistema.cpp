@@ -2474,32 +2474,30 @@ extern "C" void c_driver_t(void)
 // verifica i permessi del processo sui parametri passati (problema del
 //  Cavallo di Troia)
 
-// Questa versione di verifica_area presuppone che la memoria
-// non sia virtuale
-
-extern "C" bool verifica_area(void *area, unsigned int dim, bool write)
+extern "C" bool c_verifica_area(void *area, unsigned int dim, bool write)
 {
 	des_proc *pdes_proc;
 	direttorio* pdirettorio;
 	char liv;
+	
+	pdes_proc = des_p(esecuzione->identifier);
+	liv = pdes_proc->liv;
 
-//	pdes_proc = des_p(esecuzione->identifier);
-//	liv = pdes_proc->liv;
-//	pdirettorio = pdes_proc->cr3;
-//
-//	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
-//		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
-//		if (pdes_tab->P == 0)  // XXX: page fault esclusi
-//			return false;
-//		tabella_pagine *ptab = tabella_puntata(pdes_tab);
-//		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
-//		if (pdes_pag->P == 0)  // XXX: page fault esclusi
-//			return false;
-//		if (liv == LIV_UTENTE && pdes_pag->US == 0)
-//			return false;
-//		if (write && pdes_pag->RW == 0)
-//			return false;
-//	}
+	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
+		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
+		if (liv == LIV_UTENTE && pdes_tab->US == 0)
+			return false;
+		if (write && pdes_tab->RW == 0)
+			return false;
+		if (pdes_tab->P == 0)
+			continue;
+		tabella_pagine *ptab = tabella_puntata(pdes_tab);
+		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
+		if (liv == LIV_UTENTE && pdes_pag->US == 0)
+			return false;
+		if (write && pdes_pag->RW == 0)
+			return false;
+	}
 	return true;
 }
 

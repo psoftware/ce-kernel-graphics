@@ -1430,12 +1430,12 @@ m_noack:
 	call carica_stato
 	iret
 
-	.extern _verifica_area
+	.extern _c_verifica_area
 a_verifica_area:
 	salva_reg_rit
 	copia_param 3 6
-	call _verifica_area
-	addl $12, %esp
+	call _c_verifica_area
+	addl $16, %esp
 	carica_reg_rit
 	iret
 
