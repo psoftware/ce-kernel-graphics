@@ -697,7 +697,7 @@ _des_p:
 	estrai_base			// ind. TSS -> %ebx
 	movl %ebx, %eax
 
-	popl %eax
+	popl %ebx
 	leave
 	ret
 

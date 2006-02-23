@@ -2,7 +2,7 @@ MAKE=make
 START_SISTEMA=   0x00100000
 START_IO=        0x00200000
 START_UTENTE=	 0x80000000
-SWAPSIZE=10000
+SWAPSIZE=2008
 
 CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude -g
