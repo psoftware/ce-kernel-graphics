@@ -3114,6 +3114,7 @@ bool hd_wait_data(des_ata* p_des)
 }
 
 void hd_print_error(int i, int d, int sect, char error) {
+	des_ata* p = &hd[i];
 	if (error == D_ERR_NONE)
 		return;
 
@@ -3127,7 +3128,7 @@ void hd_print_error(int i, int d, int sect, char error) {
 			printk("assente o non rilevato\n");
 			break;
 		case D_ERR_BOUNDS:
-			printk("accesso al settore %s fuori dal range\n");
+			printk("accesso al settore %d fuori dal range [0, %d)\n", sect, p->disco[d].geom.tot_sett);
 			break;
 		case D_ERR_GENERIC:
 			printk("errore generico (DRQ=0)\n");
@@ -3220,7 +3221,7 @@ extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 	}
 
 	// Controllo sull'indirizzamento
-	if (primo + quanti >= p_des->disco[drv].geom.tot_sett) {
+	if (primo + quanti > p_des->disco[drv].geom.tot_sett) {
 		errore = D_ERR_BOUNDS;
 		return;
 	}
@@ -3259,7 +3260,7 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], un
 		return;
 	}
 	// Controllo sull'indirizzamento
-	if (primo + quanti >= p_des->disco[drv].geom.tot_sett) {
+	if (primo + quanti > p_des->disco[drv].geom.tot_sett) {
 		errore=D_ERR_BOUNDS;
 		return;
 	}

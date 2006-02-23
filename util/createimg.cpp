@@ -104,7 +104,7 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 	unsigned int vecsize = size / sizeof(int) + (size % sizeof(int) ? 1 : 0);
 
 	for(int i = 0; i < vecsize; ++i)
-		bm->vect[i] = 0xffffffff;
+		bm->vect[i] = 0;
 }
 
 
@@ -113,7 +113,7 @@ bool bm_alloc(bm_t *bm, unsigned int& pos)
 	int i, l;
 
 	i = 0;
-	while(i <= bm->size && bm_isset(bm, i)) i++;
+	while(i < bm->size && bm_isset(bm, i)) i++;
 
 	if (i == bm->size)
 		return false;
@@ -201,6 +201,9 @@ int main(int argc, char* argv[]) {
 
 	int nlong = dim / sizeof(uint) + (dim % sizeof(uint) ? 1 : 0);
 	bm_create(&blocks, new uint[nlong], dim);
+
+	for (int i = 0; i < dim; i++)
+		bm_free(&blocks, i);
 
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	for (int i = 0; i <= nbmblocks + 1; i++)
