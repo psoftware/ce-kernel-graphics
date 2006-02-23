@@ -2978,10 +2978,10 @@ void bm_free(bm_t *bm, unsigned int pos)
 // DRIVER SWAP                                                                      
 ///////////////////////////////////////////////////////////////////////////////////////
 // ingresso di una stringa di word da un buffer di IO
-extern "C" void inputbuffw(ind_b reg, short *a,short n);
+extern "C" void inputbuffw(ind_b reg, unsigned short *a,short n);
 
 // uscita di una stringa di word su un buffer di IO
-extern "C" void outputbuffw(short *a, ind_b reg,short n);
+extern "C" void outputbuffw(unsigned short *a, ind_b reg,short n);
 
 #define STRICT_ATA
 
@@ -3048,7 +3048,7 @@ struct des_ata {		// Descrittore operazione per i canali ATA
 	hd_cmd comando;
 	char errore;
 	char cont;
-	short* punt;	
+	unsigned short* punt;	
 	int mutex;
 	int sincr;
 };
@@ -3145,7 +3145,7 @@ void hd_print_error(int i, int d, int sect, char error) {
 
 // Avvio delle operazioni di lettura da hard disk
 // 
-void starthd_in(des_ata *p_des, short drv, short vetti[], unsigned int primo, unsigned char quanti)
+void starthd_in(des_ata *p_des, short drv, unsigned short vetti[], unsigned int primo, unsigned char quanti)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
@@ -3166,7 +3166,7 @@ errore:
 
 // Avvio delle operazioni di scrittura su hard disk
 //
-void starthd_out(des_ata *p_des, short drv, short vetti[], unsigned int primo, unsigned char quanti)	
+void starthd_out(des_ata *p_des, short drv, unsigned short vetti[], unsigned int primo, unsigned char quanti)	
 {	char stato;				
 	bool ris;
 	p_des->cont = quanti;
@@ -3196,7 +3196,7 @@ errore:
 //  a partire da primo depositandoli in vetti; il controller usato e ind_ata,
 //  il drive e' drv. Riporta un fallimento in errore
 //  
-extern "C" void c_readhd_n(short ind_ata, short drv, short vetti[],
+extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 		unsigned int primo, unsigned char quanti, char &errore)
 {
 	des_ata *p_des;
@@ -3236,7 +3236,7 @@ extern "C" void c_readhd_n(short ind_ata, short drv, short vetti[],
 //  a partire da primo prelevandoli da vetti; il controller usato e' ind_ata,
 //  il drive e' drv. Riporta un fallimento in errore
 //  
-extern "C" void c_writehd_n(short ind_ata, short drv, short vetti[], unsigned int primo,
+extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], unsigned int primo,
 		unsigned char quanti, char &errore)
 {
 	des_ata *p_des;
@@ -3417,7 +3417,7 @@ void hd_init() {
 		// che lo slave ci sia davvero fino a quando non inviamo un 
 		// comando. Inviamo, quindi il comando IDENTIFY DEVICE
 		for (int d = 0; d < 2; d++) {
-			short st_sett[256];
+			unsigned short st_sett[256];
 			char serial[41], *ptr = serial;
 			char stato;
 
