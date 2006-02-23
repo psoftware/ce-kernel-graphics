@@ -1435,7 +1435,7 @@ a_verifica_area:
 	salva_reg_rit
 	copia_param 3 6
 	call _c_verifica_area
-	addl $16, %esp
+	addl $12, %esp
 	carica_reg_rit
 	iret
 
