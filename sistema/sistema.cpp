@@ -2482,6 +2482,7 @@ extern "C" bool c_verifica_area(void *area, unsigned int dim, bool write)
 	
 	pdes_proc = des_p(esecuzione->identifier);
 	liv = pdes_proc->liv;
+	pdirettorio = pdes_proc->cr3;
 
 	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
 		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
