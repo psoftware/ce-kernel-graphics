@@ -1,8 +1,7 @@
-MAKE=make
 START_SISTEMA=   0x00100000
 START_IO=        0x00200000
 START_UTENTE=	 0x80000000
-SWAPSIZE=2008
+SWAP=		 /dev/loop2
 
 CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude -g
@@ -56,8 +55,9 @@ build/parse: util/parse.c util/src.h
 build/createimg: util/createimg.cpp
 	g++ -Iinclude -o build/createimg util/createimg.cpp
 
+.PHONY: swap
 swap: build/createimg build/utente
-	build/createimg $(SWAPSIZE) build/utente
+	build/createimg $(SWAP) build/utente
 	
 
 clean:

@@ -1884,15 +1884,11 @@ _hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
 	.long	0x01f6		//hd[0].indreg.iHD_N_iDRV_HD
 	.long	0x03f6		//hd[0].indreg.iALT_STS_iDEV_CTRL
 	.long	0		//hd[0].disco[0].{presente,dma} (sono byte!)
-	.word	0		//hd[0].disco[0].geom.cil
-	.word	0		//hd[0].disco[0].geom.test
-	.long	0		//hd[0].disco[0].geom.sett
-	.long	0		//hd[0].disco[0].geom.tot_sett
+	.long	0		//hd[0].disco[0].tot_sett
+	.long	0		//hd[0].disco[0].part
 	.long	0		//hd[0].disco[1].{presente,dma} (sono byte!)
-	.word	0		//hd[0].disco[1].geom.cil
-	.word	0		//hd[0].disco[1].geom.test
-	.long	0		//hd[0].disco[1].geom.sett
-	.long	0		//hd[0].disco[1].geom.tot_sett
+	.long	0		//hd[0].disco[1].tot_sett
+	.long	0		//hd[0].disco[1].part
 	.long	0		//hd[0].comando
 				//hd[0].errore (byte!)
 	.long	0		//hd[0].cont (byte!)
@@ -1909,15 +1905,11 @@ _hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
 	.long	0x0176		//hd[1].indreg.iHD_N_iDRV_HD
 	.long	0x0376		//hd[1].indreg.iALT_STS_iDEV_CTRL
 	.long	0		//hd[1].disco[0].{presente,dma} (sono byte!)
-	.word	0		//hd[1].disco[0].geom.cil
-	.word	0		//hd[1].disco[0].geom.test
-	.long	0		//hd[1].disco[0].geom.sett
-	.long	0		//hd[1].disco[0].geom.tot_sett
+	.long	0		//hd[1].disco[0].tot_sett
+	.long	0		//hd[1].disco[0].part
 	.long	0		//hd[1].disco[1].{presente,dma} (sono byte!)
-	.word	0		//hd[1].disco[1].geom.cil
-	.word	0		//hd[1].disco[1].geom.test
-	.long	0		//hd[1].disco[1].geom.sett
-	.long	0		//hd[1].disco[1].geom.tot_sett
+	.long	0		//hd[1].disco[1].tot_sett
+	.long	0		//hd[1].disco[1].part
 	.long	0		//hd[1].comando
 				//hd[1].errore (byte!)
 	.long	0		//hd[1].cont (byte!)

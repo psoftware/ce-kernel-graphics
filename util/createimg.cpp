@@ -129,12 +129,13 @@ void bm_free(bm_t *bm, unsigned int pos)
 }
 
 struct superblock_t {
-	char	bootstrap[512];
+	char	magic[4];
 	block_t	bm_start;
 	int	blocks;
 	block_t	directory;
 	void*   entry_point;
 	void*   end;
+	unsigned int	checksum;
 } superblock;
 
 bool elf32_check(Elf32_Ehdr* elf_h) {
@@ -176,14 +177,6 @@ void leggi_blocco(FILE* img, block_t b, void* buf)
 }
 	
 FILE *exe, *img;
-bool image_created = false;
-
-
-void rmimage()
-{
-	if (!image_created) 
-		remove("swap");
-}
 
 int main(int argc, char* argv[]) {
 
@@ -193,11 +186,18 @@ int main(int argc, char* argv[]) {
 	pagina pag;
 
 	if (argc < 2) {
-		fprintf(stderr, "Utilizzo: %s <dimensione> <eseguibile> ...\n", argv[0]);
+		fprintf(stderr, "Utilizzo: %s <swap> <eseguibile>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
-	int  dim = atoi(argv[1]);
+	if ( !(img = fopen(argv[1], "r+")) || 
+	      (fseek(img, 0L, SEEK_END) < 0) )
+	{
+		perror(argv[1]);
+		exit(EXIT_FAILURE);
+	}
+
+	long dim = ftell(img) / SIZE_PAGINA;
 
 	int nlong = dim / sizeof(uint) + (dim % sizeof(uint) ? 1 : 0);
 	bm_create(&blocks, new uint[nlong], dim);
@@ -219,19 +219,6 @@ int main(int argc, char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	if ( !(img = fopen("swap", "w+")) ) {
-		perror("swap");
-		exit(EXIT_FAILURE);
-	}
-
-	atexit(rmimage);
-
-	if ( fseek(img, dim * SIZE_PAGINA - 1, SEEK_SET) < 0 ||
-	     fwrite("\0", 1, 1, img) < 1) 
-	{
-		fprintf(stderr, "errore nella creazione dello swap\n");
-		exit(EXIT_FAILURE);
-	}
 
 	descrittore_tabella* pdes_tab;
 	tabella_pagine* ptabella;
@@ -327,7 +314,7 @@ int main(int argc, char* argv[]) {
 	// abbiamo finito con i segmenti
 	delete[] buf;
 	// ora settiamo il bit preload per tutte le pagine che devono contenere
-	// la sezione RESIDENT e MAIN
+	// la sezione RESIDENT
 
 	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
 	buf = new char[elf_h->e_shnum * elf_h->e_shentsize];
@@ -386,7 +373,11 @@ int main(int argc, char* argv[]) {
 	}
 		
 	superblock.end = addr(last_address);
-	if ( fseek(img, 0, SEEK_SET) < 0 ||
+	superblock.magic[0] = 'C';
+	superblock.magic[1] = 'E';
+	superblock.magic[2] = 'S';
+	superblock.magic[3] = 'W';
+	if ( fseek(img, 512, SEEK_SET) < 0 ||
 	     fwrite(&superblock, sizeof(superblock), 1, img) < 0 ||
 	     fseek(img, SIZE_PAGINA, SEEK_SET) < 0 ||
 	     fwrite(blocks.vect, SIZE_PAGINA, nbmblocks, img) < nbmblocks ||
@@ -397,7 +388,6 @@ int main(int argc, char* argv[]) {
 	}
 	fclose(img);
 	fclose(exe);
-	image_created = true;
 	return EXIT_SUCCESS;
 }
 

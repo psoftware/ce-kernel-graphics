@@ -6,40 +6,40 @@
 #include <lib.h>
 
 process big1 body big_c(1), 10, LIV_UTENTE;
-//process big2 body big_c(2), 10, LIV_UTENTE;
-//process big3 body big_c(3), 10, LIV_UTENTE;
-//process big4 body big_c(4), 10, LIV_UTENTE;
-//process big5 body big_c(5), 10, LIV_UTENTE;
-//process big6 body big_c(6), 10, LIV_UTENTE;
-//process big7 body big_c(7), 10, LIV_UTENTE;
-//process big8 body big_c(8), 10, LIV_UTENTE;
-//process big9 body big_c(9), 10, LIV_UTENTE;
+process big2 body big_c(2), 10, LIV_UTENTE;
+process big3 body big_c(3), 10, LIV_UTENTE;
+process big4 body big_c(4), 10, LIV_UTENTE;
+process big5 body big_c(5), 10, LIV_UTENTE;
+process big6 body big_c(6), 10, LIV_UTENTE;
+process big7 body big_c(7), 10, LIV_UTENTE;
+process big8 body big_c(8), 10, LIV_UTENTE;
+process big9 body big_c(9), 10, LIV_UTENTE;
 
 #define N  9000000
 unsigned int values[N] __attribute__ ((aligned(4096)));
 
 process_body big_c(int a)
 {
-	printf(1, "&values = %x\n", values);
-	printf(1, "scrivo i valori\n");
+	printf(0, "&values = %x\n", values);
+	printf(0, "scrivo i valori\n");
 	for (int i = 0; i < N; i++) {
 		values[i] = i;
-		if (i % 65536 == 0) printf(1, "%d", a);
+		if (i % 65536 == 0) printf(0, "%d", a);
 	}
-	printf(1, "\nora li sommo\n");
+	printf(0, "\nora li sommo\n");
 	unsigned int sum = 0;
 	for (int i = 0; i < N; i++) {
 		if (values[i] != i) {
-			printf(1, "(ERRORE:%d != %d)", i, values[i]);
+			printf(0, "(ERRORE:%d != %d)", i, values[i]);
 			for (int j = 0; j < 1023; j++)
 				if (values[j] + 1 != values[j + 1]) {
-					printf(1, "(v[%d] = %d)", j + 1, values[j + 1]);
+					printf(0, "(v[%d] = %d)", j + 1, values[j + 1]);
 				}
 			terminate_p();
 		}
 		sum += values[i];
-		if (i % 65536 == 0) printf(1, "%d", a);
+		if (i % 65536 == 0) printf(0, "%d", a);
 	}
-	printf(1, "\nsomma: %d\n", sum);
+	printf(0, "\nsomma: %d\n", sum);
 }
 

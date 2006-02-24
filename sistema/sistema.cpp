@@ -1045,16 +1045,44 @@ void hd_print_error(int i, int d, int sect, char errore);
 
 bm_t block_bm;
 
-#define SWAP_PS  1
-#define SWAP_MS  0
+struct partizione {
+	int	     type;
+	unsigned int first;
+	unsigned int dim;
+	partizione*  next;
+};
+
+struct superblock_t {
+	char		magic[4];
+	unsigned int	bm_start;
+	int		blocks;
+	unsigned int	directory;
+	int		(*entry_point)(int);
+	void*		end;
+	unsigned int	checksum;
+};
+
+struct des_swap {
+	short channel;
+	short drive;
+	partizione* part;
+	bm_t free;
+	superblock_t sb;
+} swap;
 
 bool leggi_blocco(unsigned int blocco, void* dest) {
 	char errore;
+	unsigned int sector = blocco * 8 + swap.part->first;
 
-	readhd_n(SWAP_PS, SWAP_MS, dest, blocco * 8, 8, errore);
+	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
+		printk("Accesso al di fuori della partizione");
+		return false;
+	}
+
+	readhd_n(swap.channel, swap.drive, dest, sector, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile leggere il blocco %d\n", blocco);
-		hd_print_error(SWAP_PS, SWAP_MS, blocco * 8, errore);
+		hd_print_error(swap.channel, swap.drive, blocco * 8, errore);
 		return false;
 	}
 	return true;
@@ -1063,11 +1091,16 @@ bool leggi_blocco(unsigned int blocco, void* dest) {
 
 bool scrivi_blocco(unsigned int blocco, void* dest) {
 	char errore;
+	unsigned int sector = blocco * 8 + swap.part->first;
 
-	writehd_n(SWAP_PS, SWAP_MS, dest, blocco * 8, 8, errore);
+	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
+		printk("Accesso al di fuori della partizione");
+		return false;
+	}
+	writehd_n(swap.channel, swap.drive, dest, sector, 8, errore);
 	if (errore != 0) { 
 		printk("Impossibile scrivere il blocco %d\n", blocco);
-		hd_print_error(SWAP_PS, SWAP_MS, blocco * 8, errore);
+		hd_print_error(swap.channel, swap.drive, blocco * 8, errore);
 		return false;
 	}
 	return true;
@@ -1125,9 +1158,9 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 // rimpiazzamento.
 void aggiorna_statistiche()
 {
-	des_pf *ppf1, *ppf2, *ppf3, *save = 0;
+	des_pf *ppf1, *ppf2;
 	tabella_pagine* ptab;
-	descrittore_pagina* pp, *save_pp;
+	descrittore_pagina* pp;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
@@ -2570,13 +2603,45 @@ char *strncpy(char *dest, const char *src, unsigned int l)
 
 // restituisce true se le stringhe puntate da first e second
 // sono uguali
-bool str_equal(const char* first, const char* second) {
+bool str_equal(const char* first, const char* second)
+{
 
 	while (*first && *second && *first++ == *second++)
 		;
 
 	return (!*first && !*second);
 }
+
+
+char* str_token(char* src, char** cont)
+{
+	if (src == 0) {
+		if (cont != 0) *cont = 0;
+		return 0;
+	}
+	// assert(src != 0);
+
+	char *stok = src, *etok;
+	// assert(stok != 0);
+
+	// eliminiamo gli spazi iniziali
+	while (*stok == ' ') stok++;
+	// assert(stok != 0 && *stok != ' ');
+	etok = stok;
+	// assert(etok != 0 && *etok != ' ');
+	// quindi, raggiungiamo la fine della parola trovata
+	while (*etok != '\0' && *etok != ' ') etok++;
+	// assert(etok != 0 && (*etok == '\0' || *etok == ' ');
+	if (*etok != '\0' && cont != 0)
+		*cont = etok + 1;
+	else
+		*cont = 0;
+	*etok = '\0';
+	return stok;
+}
+
+
+
 
 static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
@@ -2624,6 +2689,17 @@ static void itostr(char *buf, unsigned int len, long l)
 	}
 
 	buf[i] = 0;
+}
+
+int strtoi(char* buf)
+{
+	int v = 0;
+	while (*buf >= '0' && *buf <= '9') {
+		v *= 10;
+		v += *buf - '0';
+		buf++;
+	}
+	return v;
 }
 
 #define DEC_BUFSIZE 12
@@ -3030,17 +3106,11 @@ struct interfata_reg {
 	}; //iALT_STS_iDEV_CTRL
 }; // size = 44
 
-struct geometria {			// Struttura 3-D di un disco
-	unsigned short cil;	
-	unsigned short test;
-	unsigned short sett;
-	unsigned int tot_sett;		// Utile in LBA
-};
-
 struct drive {				// Drive su un canale ATA
 	bool presente;
 	bool dma;
-	geometria geom;
+	unsigned int tot_sett;
+	partizione* part;
 };
 
 struct des_ata {		// Descrittore operazione per i canali ATA
@@ -3129,7 +3199,7 @@ void hd_print_error(int i, int d, int sect, char error) {
 			printk("assente o non rilevato\n");
 			break;
 		case D_ERR_BOUNDS:
-			printk("accesso al settore %d fuori dal range [0, %d)\n", sect, p->disco[d].geom.tot_sett);
+			printk("accesso al settore %d fuori dal range [0, %d)\n", sect, p->disco[d].tot_sett);
 			break;
 		case D_ERR_GENERIC:
 			printk("errore generico (DRQ=0)\n");
@@ -3222,7 +3292,7 @@ extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 	}
 
 	// Controllo sull'indirizzamento
-	if (primo + quanti > p_des->disco[drv].geom.tot_sett) {
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
 		errore = D_ERR_BOUNDS;
 		return;
 	}
@@ -3261,7 +3331,7 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], un
 		return;
 	}
 	// Controllo sull'indirizzamento
-	if (primo + quanti > p_des->disco[drv].geom.tot_sett) {
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
 		errore=D_ERR_BOUNDS;
 		return;
 	}
@@ -3336,6 +3406,84 @@ extern "C" void c_driver_hd(int ind_ata)
 		}
 	}	
 	schedulatore();
+}
+
+struct des_part {
+	unsigned int active	: 8;
+	unsigned int head_start	: 8;
+	unsigned int sec_start	: 6;
+	unsigned int cyl_start_H: 2;
+	unsigned int cyl_start_L: 8;
+	unsigned int type	: 8;
+	unsigned int head_end	: 8;
+	unsigned int sec_end	: 6;
+	unsigned int cyl_end_H	: 2;
+	unsigned int cyl_end_L	: 8;
+	unsigned int offset;
+	unsigned int sectors;
+};
+
+bool leggi_partizioni(short ind_ata, short drv)
+{
+	char errore;
+	des_part* p;
+	partizione *estesa, **ptail;
+	des_ata* p_des = &hd[ind_ata];
+	static char buf[512];
+
+	// lettura del Master Boot Record (LBA = 0)
+	readhd_n(ind_ata, drv, buf, 0, 1, errore);
+	if (errore != 0)
+		goto errore;
+		
+	p = reinterpret_cast<des_part*>(buf + 446);
+	// interpretiamo i descrittori delle partizioni primarie
+	estesa = 0;
+	ptail = &p_des->disco[drv].part;
+	for (int i = 0; i < 4; i++) {
+		partizione* pp = *ptail = new partizione;
+
+		pp->type  = p->type;
+		pp->first = p->offset;
+		pp->dim   = p->sectors;
+		
+		if (pp->type == 5)
+			estesa = *ptail;
+
+		ptail = &pp->next;
+		p++;
+	}
+	if (estesa != 0) {
+		// dobbiamo leggere le partizioni logiche
+		unsigned int offset_estesa = estesa->first;
+		unsigned int offset_logica = offset_estesa;
+		while (1) {
+			readhd_n(ind_ata, drv, buf, offset_logica, 1, errore);
+			if (errore != 0)
+				goto errore;
+			p = reinterpret_cast<des_part*>(buf + 446);
+			
+			*ptail = new partizione;
+			
+			(*ptail)->type  = p->type;
+			(*ptail)->first = p->offset + offset_logica;
+			(*ptail)->dim   = p->sectors;
+
+			ptail = &(*ptail)->next;
+			p++;
+
+			if (p->type != 5) break;
+
+			offset_logica = p->offset + offset_estesa;
+		}
+	}
+	*ptail = 0;
+	
+	return true;
+
+errore:
+	printk("errore: %d\n", errore);
+	return false;
 }
 
 // esegue un software reset di entrambi gli hard disk collegati al canale 
@@ -3417,7 +3565,7 @@ void hd_init() {
 		// rispondere alle letture/scritture nei registri al posto 
 		// dello slave. Cio' vuol dire che non possiamo essere sicuri 
 		// che lo slave ci sia davvero fino a quando non inviamo un 
-		// comando. Inviamo, quindi il comando IDENTIFY DEVICE
+		// comando. Inviamo quindi il comando IDENTIFY DEVICE
 		for (int d = 0; d < 2; d++) {
 			unsigned short st_sett[256];
 			char serial[41], *ptr = serial;
@@ -3433,55 +3581,36 @@ void hd_init() {
 				goto error;
 			inputb(p_des->indreg.iSTS, stato); // ack
 			inputbuffw(p_des->indreg.iDATA, st_sett, H_BLK_SIZE);
-			// Inizializzazione della geometria
-			p_des->disco[d].geom.cil      = st_sett[1];		
-			p_des->disco[d].geom.test     = st_sett[3];
-			p_des->disco[d].geom.sett     = st_sett[6];
-			p_des->disco[d].geom.tot_sett = (st_sett[61] << 16) + st_sett[60];
+			p_des->disco[d].tot_sett = (st_sett[61] << 16) + st_sett[60];
 			for (int j = 27; j <= 46; j++) {
 				*ptr++ = (char)(st_sett[j] >> 8);
 				*ptr++ = (char)(st_sett[j]);
 			}
 			*ptr = 0;
-			printk("  - %s %s: %s - %d/%d/%d (%d)\n",
-				(i ? "sec" : "pri"),
-				(d ? "slave "   : "master"),
+			printk("  - %s%s: %s - (%d)\n",
+				(i ? "S" : "P"), (d ? "S" : "M"),
 				serial,
-				p_des->disco[d].geom.cil,
-				p_des->disco[d].geom.test,
-				p_des->disco[d].geom.sett,
-				p_des->disco[d].geom.tot_sett);
+				p_des->disco[d].tot_sett);
+
 			continue;
 
 		error:
 			p_des->disco[d].presente = false;
 			continue;
 		}
-
+		mask_hd(p_des->indreg.iSTS);
+		bool r1, r2;
+		c_sem_ini(p_des->mutex, 1, r1);
+		c_sem_ini(p_des->sincr, 0, r2);
+		if(!r1 || !r2)
+			panic("\nImpossibile allocare i semafori per l' IO");
+		for (int d = 0; d < 2; d++) {
+			if (p_des->disco[d].presente)
+				leggi_partizioni(i, d);
+		}
 	}
-	mask_hd(p_des->indreg.iSTS);
-	bool r1, r2;
-	c_sem_ini(p_des->mutex, 1, r1);
-	c_sem_ini(p_des->sincr, 0, r2);
-	if(!r1 || !r2)
-		panic("\nImpossibile allocare i semafori per l' IO");
 }
 
-
-// Funzione di utilita' perche' l'utente possa conoscere se interessato,
-//  le dimensioni e la struttura dei suoi hard disk
-//  
-extern "C" void c_geometria(int interf,short drv,unsigned short &c,unsigned short &t,unsigned short &s,int &ts,char &err) {
-	if (hd[interf].disco[drv].presente==true) {
-		c=hd[interf].disco[drv].geom.cil;
-		t=hd[interf].disco[drv].geom.test;
-		s=hd[interf].disco[drv].geom.sett;
-		ts=hd[interf].disco[drv].geom.tot_sett;
-		err=D_ERR_NONE;
-	}
-	else
-		err=D_ERR_PRESENCE;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////
 // INIZIALIZZAZIONE                                                              //
@@ -3489,25 +3618,101 @@ extern "C" void c_geometria(int interf,short drv,unsigned short &c,unsigned shor
 //
 
 
-struct superblock_t {
-	char		bootstrap[512];
-	unsigned int	bm_start;
-	int		blocks;
-	unsigned int	directory;
-	int		(*entry_point)(int);
-	void*		end;
-};
+void parse_swap(char* arg, short& channel, short& drive, short& partition)
+{
+	channel = -1;
+	drive   = -1;
+	partition = -1;
 
-char read_buf[SIZE_PAGINA];
+	// il primo carattere indica il canale (primaprio/secondario)
+	switch (*arg) {
+	case '\0':
+		printk("Opzione -s: manca l'argomento\n");
+		goto error;
+	case 'P':
+	case 'p':
+		// primario
+		channel = 0;
+		break;
+	case 'S':
+	case 's':
+		// secondario
+		channel = 1;
+		break;
+	default:
+		printk("Opzione -s: il canale deve essere 'P' o 'S'\n");
+		goto error;
+	}
 
-void leggi_swap(void* buf, unsigned int block, unsigned int bytes, const char* msg) {
+	arg++;
+
+	// il secondo carattere indica il dispositivo (master/slave)
+	switch (*arg) {
+	case '\0':
+		printk("Opzione -s: parametro incompleto\n");
+		goto error;
+	case 'M':
+	case 'm':
+		// master
+		drive = 0;
+		break;
+	case 'S':
+	case 's':
+		// slave
+		drive = 1;
+		break;
+	default:
+		printk("Opzione -s: il drive deve essere 'M' o 'S'\n");
+		goto error;
+	}
+
+	arg++;
+
+	if (*arg == '\0') {
+		printk("Opzione -s: manca il numero di partizione\n");
+		goto error;
+	}
+
+	partition = strtoi(arg);
+
+	if (partition == 0)
+		goto error;
+
+	printk("Opzione -s: swap su %s/%s/%d\n",
+			(channel ? "secondario" : "primario"),
+			(drive   ? "slave"      : "master"),
+			partition);
+	return;
+
+
+error:
+	channel = -1;
+	drive = -1;
+	partition = -1;
+	return;
+}
+	
+
+	
+
+
+char read_buf[512];
+
+void leggi_swap(void* buf, unsigned int first, unsigned int bytes, const char* msg) {
 	char errore;
 	des_sem* s;
+	unsigned int sector = first + swap.part->first;
+
+	if (first < 0 || first + bytes > swap.part->dim) {
+		printk("Accesso al di fuori della partizione");
+		panic("Fatal error");
+	}
+
 	
-	readhd_n(SWAP_PS, SWAP_MS, buf, block * 8, ceild(bytes, 512), errore);
+	readhd_n(swap.channel, swap.drive, buf, sector, ceild(bytes, 512), errore);
 	if (errore != 0) { 
 		printk("\nImpossibile leggere %s\n", msg);
-		hd_print_error(SWAP_PS, SWAP_MS, block * 8, errore);
+		hd_print_error(swap.channel, swap.drive, sector, errore);
 		panic("Fatal error");
 	}
 }
@@ -3548,6 +3753,9 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	direttorio* tmp, *main_dir;
 	pagina* pila_utente;
 	int errore;
+	char *arg, *cont;
+	short swap_ch, swap_drv, swap_part;
+	des_ata* pdes_ata;
 
 	// inizializziamo per prima cosa la console, in modo da poter scrivere
 	// messaggi sullo schermo
@@ -3573,6 +3781,25 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
 	printk("Memoria fisica: %d byte (%d MB)\n", max_mem_upper, uint(max_mem_upper) >> 20 );
+	
+	// interpretiamo i parametri
+	for (arg = str_token(mbi->cmdline, &cont);
+	     cont != 0 || arg != 0;
+	     arg = str_token(cont, &cont))
+	{
+		if (arg[0] != '-')
+			continue;
+		switch (arg[1]) {
+		case '\0':
+			break;
+		case 's':
+			// indicazione sullo swap
+			parse_swap(&arg[2], swap_ch, swap_drv, swap_part);
+			break;
+		default:
+			printk("Opzione sconosciuta: '%s'\n", arg[1]);
+		}
+	}
 	
 	// per come abbiamo organizzato il sistema non possiamo gestire piu' di
 	// 1GB di memoria fisica
@@ -3735,10 +3962,48 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	printk("- inizializzazione e riconoscimento hard disk:\n");
 	hd_init();
 
+	// ricerca della partizione di swap
+	if (swap_ch == -1 || swap_drv == -1 || swap_part == -1) {
+		printk("Partizione di swap non specificata!\n");
+		goto error;
+	}
+	pdes_ata = &hd[swap_ch];
+	if (!pdes_ata->disco[swap_drv].presente) {
+		printk("Swap: disco %d/%d non esistente o non rilevato\n", swap_ch, swap_drv);
+		goto error;
+	}
+	int i;
+	partizione* part;
+	for (i = 1, part = pdes_ata->disco[swap_drv].part;
+	     i < swap_part && part != 0;
+	     i++, part = part->next)
+		;
+	if (i != swap_part || part == 0) {
+		printk("Partizione di swap non trovata\n");
+		goto error;
+	}
+	if (part->type != 0x3f) {
+		printk("Tipo della partizione di swap scorretto (%d)\n", part->type);
+		goto error;
+	}
+	printk("- partizione di swap: %d+%d\n", part->first, part->dim);
+	swap.channel = swap_ch;
+	swap.drive   = swap_drv;
+	swap.part    = part;
+
 	// lettura del superblocco
 	printk("- lettura del superblocco dall'area di swap:\n");
-	leggi_swap(read_buf, 0, sizeof(superblock_t), "il superblocco");
+	leggi_swap(read_buf, 1, sizeof(superblock_t), "il superblocco");
 	superblock = reinterpret_cast<superblock_t*>(read_buf);
+
+	if (superblock->magic[0] != 'C' ||
+	    superblock->magic[1] != 'E' ||
+	    superblock->magic[2] != 'S' ||
+	    superblock->magic[3] != 'W')
+	{
+		printk("Firma errata nel superblocco\n");
+		goto error;
+	}
 	printk("  - bm: %d, blocks: %d, dir: %d, entry: %x, end: %x\n", 
 			superblock->bm_start,
 			superblock->blocks,
@@ -3755,7 +4020,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	}
 	bm_create(&block_bm, buf, superblock->blocks);
-	leggi_swap(buf, superblock->bm_start, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+	leggi_swap(buf, superblock->bm_start * 8, pages * SIZE_PAGINA, "la bitmap dei blocchi");
 	printk("ok\n");
 
 	// lettura del direttorio principale dallo swap
@@ -3765,7 +4030,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 		printk("memoria insufficiente");
 		goto error;
 	}
-	leggi_swap(tmp, superblock->directory, sizeof(direttorio), "il direttorio principale");
+	leggi_swap(tmp, superblock->directory * 8, sizeof(direttorio), "il direttorio principale");
 	printk("ok\n");
 
 	// tabelle condivise per lo spazio utente condiviso
