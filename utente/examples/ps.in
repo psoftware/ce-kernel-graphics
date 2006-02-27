@@ -14,9 +14,9 @@
  * Variabili condivise, necessarie per come viene gestito l' IO da
  *  interfaccia seriale.
  */
-extern char serial_buffer[200];
-extern int serial_num;
-extern char serial_error;
+char serial_buffer[200];
+int serial_num;
+char serial_error;
 
 /*
  * Processo S

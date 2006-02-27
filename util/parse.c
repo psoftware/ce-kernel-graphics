@@ -490,7 +490,7 @@ void semaphore()
 
 	emetti("extern int ");
 	emetti(nome_sem);
-	emetti(";\n");
+	emetti(" __attribute__ (( section (\"RESIDENT\") ));\n");
 
 	agg_sem(nome_sem, valore);
 }
