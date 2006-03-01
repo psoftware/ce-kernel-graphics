@@ -962,7 +962,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella_pagine* ptab, sho
 // scollega la tabella di indice "indice" dal direttorio puntato da "ptab".  
 // Aggiorna anche il contatore di pagine nel descrittore di pagina fisica 
 // corrispondente alla tabella
-descrittore_tabella* scollega_tabella(direttorio* pdir, short indice, des_pf* vittima = 0)
+descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 {
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
 	// tabella
@@ -972,10 +972,6 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice, des_pf* vi
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
 	des_pf* ppf = strutturaPF(pfis(tabella_puntata(pdes_tab)));
-	if (vittima && vittima != ppf) {
-		printk("vittima != ppf\n");
-		panic("Internal bug");
-	}
 	pdes_tab->address = ppf->u.tab.blocco;
 
 	return pdes_tab;
@@ -1017,7 +1013,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 // scollega la pagina di indirizzo virtuale "ind_virtuale" dalla tabella 
 // puntata da "ptab". Aggiorna anche il contatore di pagine nel descrittore di 
 // pagina fisica corrispondente alla tabella
-descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale, des_pf* vittima = 0) {
+descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale) {
 
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
 	// pagina
@@ -1027,10 +1023,6 @@ descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale, de
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
 	des_pf* ppf = strutturaPF(pfis(pagina_puntata(pdes_pag)));
-	if (vittima && vittima != ppf) {
-		printk("(pag)vittima != ppf\n");
-		panic("Internal bug");
-	}
 	pdes_pag->address = ppf->u.pag.blocco;
 
 	// infine, decrementiamo il numero di pagine puntate dalla tabella
@@ -1537,7 +1529,7 @@ des_pf* rimpiazzamento() {
 		// usiamo le informazioni nel mapping inverso per ricavare 
 		// subito l'entrata nel direttorio da modificare
 		descrittore_tabella *pdes_tab =
-			scollega_tabella(vittima->u.tab.dir, vittima->u.tab.indice, vittima);
+			scollega_tabella(vittima->u.tab.dir, vittima->u.tab.indice);
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
@@ -1552,7 +1544,7 @@ des_pf* rimpiazzamento() {
 		// a salvarla nello swap (altrimenti, qualche altro processo 
 		// potrebbe cercare di scrivervi mentre e' ancora in corso 
 		// l'operazione di salvataggio)
-		descrittore_pagina* pdes_pag = scollega_pagina(ptab, vittima->u.pag.ind_virtuale, vittima);
+		descrittore_pagina* pdes_pag = scollega_pagina(ptab, vittima->u.pag.ind_virtuale);
 		invalida_entrata_TLB(vittima->u.pag.ind_virtuale);
 
 		if (pdes_pag->D == 1) {
