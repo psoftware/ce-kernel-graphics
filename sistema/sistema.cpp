@@ -866,6 +866,7 @@ tabella_pagine* alloca_tabella(cont_pf tipo = TABELLA_PRIVATA) {
 	des_pf* p = alloca_pagina();
 	if (p == 0) return 0;
 	p->contenuto = tipo;
+	p->u.tab.quante = 0;
 	return &indirizzoPF(p)->tab;
 }
 
@@ -961,7 +962,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella_pagine* ptab, sho
 // scollega la tabella di indice "indice" dal direttorio puntato da "ptab".  
 // Aggiorna anche il contatore di pagine nel descrittore di pagina fisica 
 // corrispondente alla tabella
-descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
+descrittore_tabella* scollega_tabella(direttorio* pdir, short indice, des_pf* vittima = 0)
 {
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
 	// tabella
@@ -971,6 +972,10 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
 	des_pf* ppf = strutturaPF(pfis(tabella_puntata(pdes_tab)));
+	if (vittima && vittima != ppf) {
+		printk("vittima != ppf\n");
+		panic("Internal bug");
+	}
 	pdes_tab->address = ppf->u.tab.blocco;
 
 	return pdes_tab;
@@ -1012,7 +1017,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 // scollega la pagina di indirizzo virtuale "ind_virtuale" dalla tabella 
 // puntata da "ptab". Aggiorna anche il contatore di pagine nel descrittore di 
 // pagina fisica corrispondente alla tabella
-descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale) {
+descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale, des_pf* vittima = 0) {
 
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
 	// pagina
@@ -1022,6 +1027,10 @@ descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale) {
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
 	des_pf* ppf = strutturaPF(pfis(pagina_puntata(pdes_pag)));
+	if (vittima && vittima != ppf) {
+		printk("(pag)vittima != ppf\n");
+		panic("Internal bug");
+	}
 	pdes_pag->address = ppf->u.pag.blocco;
 
 	// infine, decrementiamo il numero di pagine puntate dalla tabella
@@ -1076,6 +1085,7 @@ bool leggi_blocco(unsigned int blocco, void* dest) {
 
 	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
 		printk("Accesso al di fuori della partizione");
+		panic("Internal Bug");
 		return false;
 	}
 
@@ -1095,6 +1105,7 @@ bool scrivi_blocco(unsigned int blocco, void* dest) {
 
 	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
 		printk("Accesso al di fuori della partizione");
+		panic("Internal Bug");
 		return false;
 	}
 	writehd_n(swap.channel, swap.drive, dest, sector, 8, errore);
@@ -1271,7 +1282,7 @@ extern "C" void abort_p();
 void trasferimento(void* indirizzo_virtuale, bool scrittura)
 {
 	descrittore_pagina* pdes_pag;
-	pagina* pag;
+	pagina* pag = 0;
 	
 	// mutua esclusione
 	sem_wait(pf_mutex);
@@ -1291,7 +1302,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// interrotto
 	if (scrittura && pdes_tab->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
-		goto error; // Dijkstra se ne faccia una ragione
+		goto error1; // Dijkstra se ne faccia una ragione
 	}
 	
 	tabella_pagine* ptab;
@@ -1312,7 +1323,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		// verra' schedulato un altro processo e, quindi, gli interrupt 
 		// verrano riabilitati)
 		if (! carica_tabella(pdes_tab, ptab) )
-			goto error;
+			goto error3;
 		
 		// e collegarla al direttorio
 		collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
@@ -1329,7 +1340,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// processo utente ha commesso un errore e va interrotto
 	if (scrittura && pdes_pag->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
-		goto error;
+		goto error1;
 	}
 
 	// dobbiamo controllare che la pagina sia effettivamente assente
@@ -1355,7 +1366,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		// schedulato un altro processo e, quindi, gli interrupt 
 		// verrano riabilitati)
 		if (! carica_pagina(pdes_pag, pag) ) 
-			goto error;
+			goto error2;
 
 		// infine colleghiamo la pagina
 		collega_pagina(ptab, pag, indirizzo_virtuale);
@@ -1366,8 +1377,9 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	sem_signal(pf_mutex);
 	return;
 
-error:
-	printk("page fault non risolubile\n");
+error3:	rilascia(ptab);
+error2:	if (pag != 0) rilascia(pag);
+error1: printk("page fault non risolubile\n");
 	// anche in caso di errore dobbiamo rilasciare il semaforo di mutua 
 	// esclusione, pena il blocco di tutta la memoria virtuale
 	sem_signal(pf_mutex);
@@ -1525,7 +1537,7 @@ des_pf* rimpiazzamento() {
 		// usiamo le informazioni nel mapping inverso per ricavare 
 		// subito l'entrata nel direttorio da modificare
 		descrittore_tabella *pdes_tab =
-			scollega_tabella(vittima->u.tab.dir, vittima->u.tab.indice);
+			scollega_tabella(vittima->u.tab.dir, vittima->u.tab.indice, vittima);
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
@@ -1540,7 +1552,7 @@ des_pf* rimpiazzamento() {
 		// a salvarla nello swap (altrimenti, qualche altro processo 
 		// potrebbe cercare di scrivervi mentre e' ancora in corso 
 		// l'operazione di salvataggio)
-		descrittore_pagina* pdes_pag = scollega_pagina(ptab, vittima->u.pag.ind_virtuale);
+		descrittore_pagina* pdes_pag = scollega_pagina(ptab, vittima->u.pag.ind_virtuale, vittima);
 		invalida_entrata_TLB(vittima->u.pag.ind_virtuale);
 
 		if (pdes_pag->D == 1) {
@@ -1634,7 +1646,7 @@ extern proc_elem *pronti;
 // funzioni usate da crea_processo
 pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine);
 pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale);
-void rilascia_tutto(direttorio* pdir, void* start, void* end);
+void rilascia_tutto(direttorio* pdir, void* start, int ntab);
 extern "C" int alloca_tss(des_proc* p);
 extern "C" void rilascia_tss(int indice);
 
@@ -1745,9 +1757,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	return p;
 
-errore6:	rilascia_tutto(pdirettorio,
-		  sub(fine_sistema_privato, SIZE_PAGINA),
-		  fine_sistema_privato);
+errore6:	rilascia_tutto(pdirettorio, inizio_sistema_privato, dim_sistema_privato);
 errore5:	rilascia(pdirettorio);
 errore4:	rilascia_tss(identifier);
 errore3:	delete pdes_proc;
@@ -1767,7 +1777,7 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 	void *ind = sub(ind_virtuale, num_pagine * SIZE_PAGINA);
 	for (int i = 0; i < num_tab; i++) {
 
-		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
+		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		pdes_tab->US	  = 1;
 		pdes_tab->RW	  = 1;
 		pdes_tab->address = 0;
@@ -1856,10 +1866,10 @@ errore1:	return 0;
 // rilascia tutte le pagine fisiche (e le relative tabelle) mappate
 // dall'indirizzo virtuale start (incluso) all'indirizzo virtuale end (escluso)
 // (si suppone che start e end siano allineati alla pagina)
-void rilascia_tutto(direttorio* pdir, void* start, void* end) {
-	for (int i = indice_direttorio(start);
-	         i < indice_direttorio(end); 
-	         i++)
+void rilascia_tutto(direttorio* pdir, void* start, int ntab)
+{
+	int j = indice_direttorio(start);
+	for (int i = j; i < j + ntab; i++)
 	{
 		descrittore_tabella* pdes_tab = &pdir->entrate[i];
 		if (pdes_tab->P == 1) {
@@ -1868,6 +1878,8 @@ void rilascia_tutto(direttorio* pdir, void* start, void* end) {
 				descrittore_pagina* pdes_pag = &ptab->entrate[j];
 				if (pdes_pag->P == 1)
 					rilascia(pagina_puntata(pdes_pag));
+				else if (pdes_pag->address != 0)
+					bm_free(&block_bm, pdes_pag->address);
 			}
 			rilascia(ptab);
 		}
@@ -1924,8 +1936,8 @@ extern "C" void c_terminate_p()
 	des_proc* pdes_proc = des_p(esecuzione->identifier);
 
 	direttorio* pdirettorio = pdes_proc->cr3;
-	rilascia_tutto(pdirettorio, inizio_sistema_privato, fine_sistema_privato);
-	rilascia_tutto(pdirettorio, inizio_utente_privato,  fine_utente_privato);
+	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
+	rilascia_tutto(pdirettorio, inizio_utente_privato,  ntab_utente_privato);
 	rilascia(pdirettorio);
 	rilascia_tss(esecuzione->identifier);
 	delete esecuzione;
@@ -3704,7 +3716,7 @@ void leggi_swap(void* buf, unsigned int first, unsigned int bytes, const char* m
 	unsigned int sector = first + swap.part->first;
 
 	if (first < 0 || first + bytes > swap.part->dim) {
-		printk("Accesso al di fuori della partizione");
+		printk("Accesso al di fuori della partizione: %d+%d\n", first, bytes);
 		panic("Fatal error");
 	}
 
@@ -4037,7 +4049,7 @@ cmain (unsigned long magic, multiboot_info_t* mbi)
 	printk("- creazione o lettura delle tabelle condivise...");
 	for (void* ind = inizio_utente_condiviso;
 	     	   ind < fine_utente_condiviso;
-	           ind = add(ind, SIZE_PAGINA * 1024))
+	           ind = add(ind, SIZE_SUPERPAGINA))
 	{
 		descrittore_tabella
 			*pdes_tab1 = &tmp->entrate[indice_direttorio(ind)],

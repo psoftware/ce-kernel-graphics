@@ -15,6 +15,7 @@
 #define LIV_SISTEMA		0
 
 #define SIZE_PAGINA		4096
+#define SIZE_SUPERPAGINA	(SIZE_PAGINA * 1024)
 #define SIZE_DESP		216
 #define SIZE_DESS		64
 #define DELAY			59659		
@@ -62,11 +63,23 @@
 #define D_ERR_PRESENCE 0xFE
 #define D_ERR_GENERIC  0xFD
 
-#define inizio_sistema_condiviso  addr(0x00000000)
-#define fine_sistema_condiviso    inizio_sistema_privato
-#define inizio_sistema_privato    addr(0x40000000)
-#define fine_sistema_privato      inizio_utente_condiviso
-#define inizio_utente_condiviso   addr(0x80000000)
-#define fine_utente_condiviso     inizio_utente_privato
-#define inizio_utente_privato     addr(0xc0000000)
-#define fine_utente_privato       addr(0xfffff000)
+#ifndef ASM
+const unsigned int ntab_sistema_condiviso = 256;
+const unsigned int ntab_sistema_privato   = 256;
+const unsigned int ntab_utente_condiviso  = 256;
+const unsigned int ntab_utente_privato    = 255;
+
+const unsigned int dim_sistema_condiviso = ntab_sistema_condiviso * SIZE_SUPERPAGINA;
+const unsigned int dim_sistema_privato   = ntab_sistema_privato   * SIZE_SUPERPAGINA;
+const unsigned int dim_utente_condiviso  = ntab_utente_condiviso  * SIZE_SUPERPAGINA;
+const unsigned int dim_utente_privato    = ntab_utente_privato    * SIZE_SUPERPAGINA;
+
+void* const inizio_sistema_condiviso = (void*)0x00000000;
+void* const fine_sistema_condiviso   = (void*)((unsigned int)inizio_sistema_condiviso + dim_sistema_condiviso);
+void* const inizio_sistema_privato   = fine_sistema_condiviso;
+void* const fine_sistema_privato     = (void*)((unsigned int)inizio_sistema_privato + dim_sistema_privato);
+void* const inizio_utente_condiviso  = fine_sistema_privato;
+void* const fine_utente_condiviso    = (void*)((unsigned int)inizio_utente_condiviso + dim_utente_condiviso);
+void* const inizio_utente_privato    = fine_utente_condiviso;
+void* const fine_utente_privato      = (void*)((unsigned int)inizio_utente_privato + dim_utente_privato);
+#endif

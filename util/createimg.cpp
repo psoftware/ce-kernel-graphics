@@ -363,7 +363,7 @@ int main(int argc, char* argv[]) {
 	
 	// infine, le tabelle condivise per lo heap
 	for (int i = indice_direttorio(last_address) + 1;
-		 i < indice_direttorio(a2i(fine_utente_privato));
+		 i < indice_direttorio(a2i(fine_utente_condiviso));
 		 i++)
 	{
 		descrittore_pagina* pdes_pag = &main_dir.entrate[i];
