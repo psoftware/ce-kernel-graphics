@@ -72,16 +72,18 @@ const int CON_BUF_SIZE = 0x0fa0;
 
 struct con_status {
 	unsigned char buffer[CON_BUF_SIZE];
-	short x, y;
+	short x, y, sy;
 };
 
 extern "C" void con_read(char &ch, bool &risu);
 extern "C" void con_write(const char *vett, int quanti);
+extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
 
 extern "C" void con_save(con_status *cs);
 extern "C" void con_load(const con_status *cs);
 extern "C" void con_update(con_status *cs, const char *vett, int quanti);
 extern "C" void con_init(con_status *cs);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
@@ -580,6 +582,7 @@ static int kbd_get(kbd_t *kbd)
 }
 
 bool term_newchar(des_term *term, unsigned short code);
+void console_cursor();
 
 // processo esterno per la gestione dell' ingresso da tastiera
 //
@@ -590,6 +593,7 @@ void tast_in(int h)
 	bool r;
 
 	for(;;) {
+		console_cursor();
 		con_read(ch, r);
 
 		if(r && kbd_att) {
@@ -674,6 +678,17 @@ int kbd_activate(kbd_t *kbd)
 ////////////////////////////////////////////////////////////////////////////////
 //                             I/O DA TERMINALE                               //
 ////////////////////////////////////////////////////////////////////////////////
+unsigned const int TERM_ROW_NUM = 25;
+unsigned const int TERM_COL_NUM = 80;
+unsigned const int TERM_SIZE = TERM_ROW_NUM * TERM_COL_NUM;
+unsigned const int CON_ROW_NUM = 25;
+unsigned const int CON_COL_NUM = 80;
+unsigned const int CON_SIZE = CON_COL_NUM * CON_COL_NUM;
+const short CUR_HIGH = 0x0e;
+const short CUR_LOW = 0x0f;
+
+const ind_b ADD_P = (ind_b)0x03d4;
+const ind_b DAT_P = (ind_b)0x03d5;
 
 // descrittore di terminale virtuale
 //
@@ -683,20 +698,195 @@ struct des_term {
 	bool waiting;	// un processo attende su sincr
 
 	kbd_t kbd;	// tastiera virtuale
-	con_status cstat; // stato della console per il video virtuale
+	unsigned char video[TERM_SIZE]; // buffer circolare
+	int pos;	// posizione in cui verra' aggiunto il prox. car
+	int fpos;	// primo char significativo nel buffer video
 };
 
+
+struct des_console {
+	des_term* t;  // terminale virtuale mostrato sulla console
+	int vpos;     // primo char del terminale mostrato sulla console
+	int off;      // offset nel monitor del prossimo char da scrivere
+	int pos;      // pos nel terminale relativa all'ultimo aggiornamento
+};
+
+des_console console;
+
 const int N_TERM = 12;
-int term_att = 0;
 
 des_term term_virt[N_TERM];
 
+inline int circular_sub(int p1, int p2, int mod)
+{
+	int dist = p1 - p2;
+	if (dist < 0) dist += mod;
+	return dist;
+}
+
+inline int circular_sum(int p1, int p2, int mod)
+{
+	return (p1 + p2) % mod;
+}
+
+inline int term_distance(int p1, int p2)
+{
+	return circular_sub(p1, p2, TERM_SIZE);
+}
+
+inline int term_row_distance(int r1, int r2)
+{
+	return circular_sub(r1, r2, TERM_ROW_NUM);
+}
+
+inline int term_row(int p)
+{
+	return p / TERM_COL_NUM;
+}
+
+inline int term_pos(int r, int c)
+{
+	return r * TERM_COL_NUM + c;
+}
+
+inline int term_inc_row(int r, int s = 1)
+{
+	return circular_sum(r, s, TERM_ROW_NUM);
+
+}
+
+inline int term_inc_pos(int p, int s = 1)
+{
+	return circular_sum(p, s, TERM_SIZE);
+}
+
+
+
+void term_new_line(des_term* t)
+{
+	// calcoliamo la riga corrente nel buffer circolare
+	int y = term_row(t->pos);
+
+	// e quella che deve essere la nuova
+	int new_y = term_inc_row(y);
+
+	// se si sovrappone alla prima salvata, ne perdiamo una
+	if (new_y == term_row(t->fpos)) 
+		t->fpos = term_pos(term_inc_row(term_row(t->fpos)), 0);
+
+	// riempiamo la nuova linea con spazi
+	t->pos = term_pos(new_y, 0);
+	for (int i = 0; i < TERM_COL_NUM; i++)
+		t->video[t->pos + i] = ' ';
+}
+
+
+
+void term_copy(int pos, int quanti) {
+
+	if (pos + quanti <= TERM_SIZE) {
+		writevid_n(console.off, &console.t->video[pos], quanti);
+	} else {
+		int first  = TERM_SIZE - pos, second = quanti - first;
+		writevid_n(console.off, &console.t->video[pos], first);
+		writevid_n(console.off + first, &console.t->video[0], second);
+	}
+}
+
+
+
+void console_sync(des_term* t)
+{
+	if (console.t != t)
+		return;
+
+	int dist = term_distance(t->pos, t->fpos);
+	int vpos = (dist < CON_SIZE) ? t->fpos : term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM), 0);
+	if (console.vpos != vpos) {
+		// la prima linea sulla console non e' quella richiesta dal 
+		// terminale: ricopiamo tutto da quella riga in poi
+		console.off = 0;
+		term_copy(vpos, TERM_SIZE);
+		console.vpos = vpos;
+		console.off = term_distance(t->pos, vpos);
+	} else {
+		int quanti = term_distance(t->pos, console.pos);
+		term_copy(console.pos, quanti);
+		console.off += quanti;
+	}
+	// aggiorniamo le coordinate della console
+	console.pos = t->pos;
+}
+
+void console_backspace(des_term* t)
+{
+	if (console.t != t)
+		return;
+
+	console.off -= term_distance(console.pos, t->pos);
+	console.pos = t->pos;
+	term_copy(console.pos, 1);
+}
+
+void term_put_char(des_term* t, char ch)
+{
+	switch(ch) {
+		case '\n':
+			term_new_line(t);
+			break;
+		case '\b':
+			console_sync(t);
+			if (t->pos != t->fpos)
+				t->pos = term_distance(t->pos, 1);
+			t->video[t->pos] = ' ';
+			console_backspace(t);
+			break;
+		default:
+			if(ch < 31 || ch < 0)
+				return;
+
+			t->video[t->pos] = ch;
+			int new_pos = term_inc_pos(t->pos);
+			if (new_pos == t->fpos)
+				term_new_line(t);
+			else
+				t->pos = new_pos;
+	}
+}
+
+void term_switch(des_term* t)
+{
+	if (console.t == t)
+		return;
+
+	console.t = t;
+	console.vpos = -1;
+	console_sync(t);
+}
+
+// NOTA: non richiede che vetti sia nello spazio condiviso, dato che l' IO non
+//  e' ad interruzione di programma
+extern "C" void c_term_write_n(int term, char vetti[], int quanti)
+{
+	des_term *p_des;
+
+	if(term < 0 || term >= N_TERM || !verifica_area(vetti, quanti, false))
+		return;
+
+	des_term* t = &term_virt[term];
+
+	sem_wait(t->mutex);
+	for (int i = 0; i < quanti; i++)
+		term_put_char(t, vetti[i]);
+	console_sync(t);
+	sem_signal(t->mutex);
+}
+
 void attiva_term(int t)
 {
-	con_save(&term_virt[term_att].cstat);
-	term_att = t;
-	kbd_activate(&term_virt[term_att].kbd);
-	con_load(&term_virt[term_att].cstat);
+	des_term* p = &term_virt[t];
+	kbd_activate(&p->kbd);
+	term_switch(p);
 }
 
 bool term_newchar(des_term *term, unsigned short code)
@@ -717,7 +907,8 @@ bool term_newchar(des_term *term, unsigned short code)
 
 	if(code < 0xff) {
 		ch = code&0xff;
-		con_write(&ch, 1);
+		term_put_char(term, ch);
+		console_sync(term);
 	}
 
 	if(term->waiting && code == '\n') {
@@ -728,12 +919,17 @@ bool term_newchar(des_term *term, unsigned short code)
 	return true;
 }
 
+
+	
+
+
 // NOTA: non richiede che vetti sia nello spazio condiviso, dato che l' handler
 //  dell' interruzione scrive in un buffer interno
 extern "C" void c_term_read_n(int term, char vetti[], int &quanti)
 {
 	des_term *p_des;
 	int disp, letti;
+
 
 	if(term < 0 || term >= N_TERM ||
 			!verifica_area(&quanti, sizeof(int), true) ||
@@ -771,27 +967,6 @@ extern "C" void c_term_read_n(int term, char vetti[], int &quanti)
 	sem_signal(p_des->mutex);
 }
 
-// NOTA: non richiede che vetti sia nello spazio condiviso, dato che l' IO non
-//  e' ad interruzione di programma
-extern "C" void c_term_write_n(int term, char vetti[], int quanti)
-{
-	des_term *p_des;
-
-	if(term < 0 || term >= N_TERM || !verifica_area(vetti, quanti, false))
-		return;
-
-	p_des = &term_virt[term];
-	sem_wait(p_des->mutex);
-
-	lock();
-	if(term_att == term)
-		con_write(vetti, quanti);
-	else
-		con_update(&term_virt[term].cstat, vetti, quanti);
-	unlock();
-
-	sem_signal(p_des->mutex);
-}
 
 int term_init(void)
 {
@@ -800,18 +975,33 @@ int term_init(void)
 
 	kbd_init();
 
-	for(int i = 0; i < N_TERM; ++i) {
-		p_des = &term_virt[i];
+	for (int i = 0; i < N_TERM; i++) {
+		des_term *t = &term_virt[i];
 
-		sem_ini(p_des->mutex, 1, r1);
-		sem_ini(p_des->sincr, 0, r2);
+		sem_ini(t->mutex, 1, r1);
+		sem_ini(t->sincr, 0, r2);
 		if(!r1 || !r2) 
 			return -1;
-		p_des->waiting = false;
+		kbd_init(&t->kbd, t);
+		t->waiting = false;
 
-		kbd_init(&p_des->kbd, p_des);
-		con_init(&p_des->cstat);
-   	}
+		t->pos = t->fpos = 0;
+		for (int i = 0; i < TERM_SIZE; i++)
+			t->video[i] = ' ';
+	}
+
+	console.t = &term_virt[0];
+	console.pos = console.off = 0;
+	console.vpos = -1;
+}
+
+
+void console_cursor()
+{
+	outputb(CUR_HIGH, ADD_P);
+	outputb((char)(console.off >> 8), DAT_P);
+	outputb(CUR_LOW, ADD_P);
+	outputb((char)(console.off & 0xff), DAT_P);
 }
 
 

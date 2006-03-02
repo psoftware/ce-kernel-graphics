@@ -1285,13 +1285,13 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// virtuale)
 	direttorio* pdir = leggi_cr3(); // direttorio del processo
 
-	// ricaviamo per prima cosa il descrittore di pagina interessato dal 
+	// ricaviamo per prima cosa il descrittore di tabella interessato dal 
 	// fault
 	descrittore_tabella* pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
 
 	// se l'accesso era in scrittura e (tutte le pagine puntate da) la 
-	// tabella e' di sola lettura, il processo ha commesso un errore e va 
-	// interrotto
+	// tabella e' (sono) di sola lettura, il processo ha commesso un errore 
+	// e va interrotto
 	if (scrittura && pdes_tab->RW == 0) {
 		printk("Errore di accesso in scrittura\n");
 		goto error1; // Dijkstra se ne faccia una ragione
@@ -1320,8 +1320,8 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		// e collegarla al direttorio
 		collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
 	} 
-	// ora ptab punta alla tabella delle pagine (sia che fosse gia' 
-	// presente, sia che sia stata appena caricata)
+	// ora ptab punta alla tabella delle pagine (sia se era gia' presente, 
+	// sia se e' stata appena caricata)
 	
 
 	// ricaviamo il descrittore di pagina interessato dal fault
@@ -1339,8 +1339,8 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// (scenario: un processo P1 causa un page fault su una pagina p, si
 	// blocca per caricarla e viene schedulato P2, che causa un page fault 
 	// sulla stessa pagina p e si blocca sul mutex. Quanto P1 finisce di 
-	// caricare p, rilascia il mutex e sveglia P2, che ora trova pagina p 
-	// presente)
+	// caricare p, rilascia il mutex e sveglia P2, che ora trova la pagina 
+	// p presente)
 	if (pdes_pag->P == 0) {
 
 		// proviamo ad allocare una pagina fisica per la pagina. Se non 
@@ -2898,6 +2898,23 @@ void con_init(void)
 
 	gotoxy(&curr_pos, 0, 0);
 }
+
+
+extern "C" void c_writevid_n(int off, const char* vett, int quanti)
+{
+	unsigned char* start = VIDEO_MEM_BASE + off * 2, *stop;
+
+	if (start < VIDEO_MEM_BASE)
+		return;
+
+	stop = (start + quanti * 2 > VIDEO_MEM_BASE + VIDEO_MEM_SIZE) ? 
+			VIDEO_MEM_BASE + VIDEO_MEM_SIZE :
+			start + quanti * 2;
+
+	for (unsigned char* ptr = start; ptr < stop; ptr += 2)
+		*ptr = *vett++;
+}
+
 
 //////////////////////////////////////////////////////////////////////////////
 

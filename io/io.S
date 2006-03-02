@@ -32,6 +32,7 @@
 .set tipo_cl, TIPO_CL
 .set tipo_cu, TIPO_CU
 .set tipo_ci, TIPO_CI
+.set tipo_wv, TIPO_WV
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
@@ -246,6 +247,11 @@ _con_init:
 	.global _ndelay
 _ndelay:
 	int $tipo_nd
+	ret
+
+	.global _writevid_n
+_writevid_n:
+	int $tipo_wv
 	ret
  
 ////////////////////////////////////////////////////////////////////////////////

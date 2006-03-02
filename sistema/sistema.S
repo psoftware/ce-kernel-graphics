@@ -471,6 +471,8 @@ init_gdt:
 .set tipo_cu, TIPO_CU
 .set tipo_ci, TIPO_CI
 
+.set tipo_wv, TIPO_WV
+
 .set io_tipo_rhdn, IO_TIPO_RHDN
 .set io_tipo_whdn, IO_TIPO_WHDN
 
@@ -535,6 +537,8 @@ init_idt:
 	carica_gate	tipo_cl		a_con_load	LIV_SISTEMA
 	carica_gate	tipo_cu		a_con_update	LIV_SISTEMA
 	carica_gate	tipo_ci		a_con_init	LIV_SISTEMA
+
+	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
@@ -1045,6 +1049,15 @@ a_con_init:
 	copia_param 1 7
 	call _c_con_init
 	addl $4, %esp
+	carica_registri
+	iret
+
+	.extern _c_writevid_n
+a_writevid_n:
+	salva_registri
+	copia_param 3 7
+	call _c_writevid_n
+	addl $12, %esp
 	carica_registri
 	iret
 

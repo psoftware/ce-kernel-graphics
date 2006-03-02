@@ -44,6 +44,7 @@
 #define TIPO_CL			0x53
 #define TIPO_CU			0x54
 #define TIPO_CI			0x55
+#define TIPO_WV			0x56
 #define IO_TIPO_RSEN		0x60
 #define IO_TIPO_RSELN		0x61
 #define IO_TIPO_WSEN		0x62
