@@ -683,7 +683,7 @@ unsigned const int TERM_COL_NUM = 80;
 unsigned const int TERM_SIZE = TERM_ROW_NUM * TERM_COL_NUM;
 unsigned const int CON_ROW_NUM = 25;
 unsigned const int CON_COL_NUM = 80;
-unsigned const int CON_SIZE = CON_COL_NUM * CON_COL_NUM;
+unsigned const int CON_SIZE = CON_ROW_NUM * CON_COL_NUM;
 const short CUR_HIGH = 0x0e;
 const short CUR_LOW = 0x0f;
 
@@ -818,7 +818,7 @@ void console_sync(des_term* t)
 		// la prima linea sulla console non e' quella richiesta dal 
 		// terminale: ricopiamo tutto da quella riga in poi
 		console.off = 0;
-		term_copy(vpos, TERM_SIZE);
+		term_copy(vpos, CON_SIZE);
 		console.vpos = vpos;
 		console.off = term_distance(t->pos, vpos);
 	} else {
