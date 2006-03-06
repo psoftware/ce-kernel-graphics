@@ -699,8 +699,8 @@ struct des_term {
 
 	kbd_t kbd;	// tastiera virtuale
 	unsigned char video[TERM_SIZE]; // buffer circolare
-	int pos;	// posizione in cui verra' aggiunto il prox. car
-	int fpos;	// primo char significativo nel buffer video
+	int pos;	// posizione (nel buffer circolare) in cui verra' aggiunto il prox. car
+	int fpos;	// primo char significativo nel buffer circolare
 };
 
 
@@ -708,7 +708,8 @@ struct des_console {
 	des_term* t;  // terminale virtuale mostrato sulla console
 	int vpos;     // primo char del terminale mostrato sulla console
 	int off;      // offset nel monitor del prossimo char da scrivere
-	int pos;      // pos nel terminale relativa all'ultimo aggiornamento
+	int pos;      // pos nel terminale del prossimo char da scrivere
+		      // (relativa all'ultima sincronizzazione)
 };
 
 des_console console;
@@ -717,6 +718,8 @@ const int N_TERM = 12;
 
 des_term term_virt[N_TERM];
 
+
+// sottrazione modulo 'mod' (il '%' del C/C++ calcola il valore sbagliato)
 inline int circular_sub(int p1, int p2, int mod)
 {
 	int dist = p1 - p2;
@@ -724,44 +727,51 @@ inline int circular_sub(int p1, int p2, int mod)
 	return dist;
 }
 
+// somma modulo 'mod'
 inline int circular_sum(int p1, int p2, int mod)
 {
 	return (p1 + p2) % mod;
 }
 
+// distanza in senso antiorario tra  le posizioni p2 e p1 nel buffer circolare
 inline int term_distance(int p1, int p2)
 {
 	return circular_sub(p1, p2, TERM_SIZE);
 }
 
+// distanza in senzo antiorario tra le righe r2 e r1 nel buffer circolare
 inline int term_row_distance(int r1, int r2)
 {
 	return circular_sub(r1, r2, TERM_ROW_NUM);
 }
 
+// riga corrispondente alla posizione p
 inline int term_row(int p)
 {
 	return p / TERM_COL_NUM;
 }
 
+// posizione corrispondente alla riga r e colonna c
 inline int term_pos(int r, int c)
 {
 	return r * TERM_COL_NUM + c;
 }
 
+// incrementa la riga r nel buffer circolare
 inline int term_inc_row(int r, int s = 1)
 {
 	return circular_sum(r, s, TERM_ROW_NUM);
 
 }
 
+// incrementa la posizione p nel buffer circolare
 inline int term_inc_pos(int p, int s = 1)
 {
 	return circular_sum(p, s, TERM_SIZE);
 }
 
 
-
+// aggiunge una nuova linea al contenuto del buffer circolare
 void term_new_line(des_term* t)
 {
 	// calcoliamo la riga corrente nel buffer circolare
@@ -782,6 +792,8 @@ void term_new_line(des_term* t)
 
 
 
+// copia 'quanti' byte, a partire dalla posizione 'pos', dal terminale virtuale 
+// corrente alla console
 void term_copy(int pos, int quanti) {
 
 	if (pos + quanti <= TERM_SIZE) {
@@ -794,7 +806,7 @@ void term_copy(int pos, int quanti) {
 }
 
 
-
+// sincronizza la console con il contenuto del terminale virtuale corrente
 void console_sync(des_term* t)
 {
 	if (console.t != t)
@@ -810,22 +822,23 @@ void console_sync(des_term* t)
 		console.vpos = vpos;
 		console.off = term_distance(t->pos, vpos);
 	} else {
-		int quanti = term_distance(t->pos, console.pos);
-		term_copy(console.pos, quanti);
-		console.off += quanti;
+		// la prima riga sulla console e' quella richiesta dal 
+		// terminale
+		int n_term = term_distance(t->pos, vpos),
+		    n_con  = term_distance(console.pos, vpos);
+		if (n_con < n_term) {
+			// ci sono nuovi caratteri da copiare
+			int quanti = n_term - n_con;
+			term_copy(console.pos, quanti);
+			console.off += quanti;
+		} else if (n_con > n_term) {
+			// alcuni caratteri sono stati eliminati
+			console.off = n_term;
+			term_copy(t->pos, n_con - n_term);
+		}
 	}
 	// aggiorniamo le coordinate della console
 	console.pos = t->pos;
-}
-
-void console_backspace(des_term* t)
-{
-	if (console.t != t)
-		return;
-
-	console.off -= term_distance(console.pos, t->pos);
-	console.pos = t->pos;
-	term_copy(console.pos, 1);
 }
 
 void term_put_char(des_term* t, char ch)
@@ -835,11 +848,9 @@ void term_put_char(des_term* t, char ch)
 			term_new_line(t);
 			break;
 		case '\b':
-			console_sync(t);
 			if (t->pos != t->fpos)
 				t->pos = term_distance(t->pos, 1);
 			t->video[t->pos] = ' ';
-			console_backspace(t);
 			break;
 		default:
 			if(ch < 31 || ch < 0)
