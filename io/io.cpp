@@ -701,6 +701,7 @@ struct des_term {
 	unsigned char video[TERM_SIZE]; // buffer circolare
 	int pos;	// posizione (nel buffer circolare) in cui verra' aggiunto il prox. car
 	int fpos;	// primo char significativo nel buffer circolare
+	int vpos;	// primo char da mostrare sul video (-1 in modalita' follow)
 };
 
 
@@ -708,8 +709,6 @@ struct des_console {
 	des_term* t;  // terminale virtuale mostrato sulla console
 	int vpos;     // primo char del terminale mostrato sulla console
 	int off;      // offset nel monitor del prossimo char da scrivere
-	int pos;      // pos nel terminale del prossimo char da scrivere
-		      // (relativa all'ultima sincronizzazione)
 };
 
 des_console console;
@@ -812,33 +811,35 @@ void console_sync(des_term* t)
 	if (console.t != t)
 		return;
 
+	bool refresh = false;
 	int dist = term_distance(t->pos, t->fpos);
-	int vpos = (dist < CON_SIZE) ? t->fpos : term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM), 0);
+	int vpos = t->vpos;
+	if (vpos < 0) // modalita' follow
+		vpos = (dist < CON_SIZE) ?
+			t->fpos :
+		        term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM), 0);
+
 	if (console.vpos != vpos) {
 		// la prima linea sulla console non e' quella richiesta dal 
 		// terminale: ricopiamo tutto da quella riga in poi
 		console.off = 0;
-		term_copy(vpos, CON_SIZE);
 		console.vpos = vpos;
-		console.off = term_distance(t->pos, vpos);
-	} else {
-		// la prima riga sulla console e' quella richiesta dal 
-		// terminale
-		int n_term = term_distance(t->pos, vpos),
-		    n_con  = term_distance(console.pos, vpos);
-		if (n_con < n_term) {
-			// ci sono nuovi caratteri da copiare
-			int quanti = n_term - n_con;
-			term_copy(console.pos, quanti);
-			console.off += quanti;
-		} else if (n_con > n_term) {
-			// alcuni caratteri sono stati eliminati
-			console.off = n_term;
-			term_copy(t->pos, n_con - n_term);
-		}
+		refresh = true;
+	} 
+	int n_term = term_distance(t->pos, vpos);
+	if (n_term > CON_SIZE)
+		n_term = CON_SIZE;
+	int quanti = n_term - console.off;
+	if (quanti > 0) {
+		// ci sono nuovi caratteri da copiare
+		term_copy(term_inc_pos(console.vpos, console.off), quanti);
+	} else if (quanti < 0) {
+		// alcuni caratteri sono stati eliminati
+		term_copy(t->pos, -quanti);
 	}
-	// aggiorniamo le coordinate della console
-	console.pos = t->pos;
+	console.off += quanti;
+	if (refresh && console.off < CON_SIZE)
+		term_copy(term_inc_pos(console.vpos, console.off), CON_SIZE - console.off);
 }
 
 void term_put_char(des_term* t, char ch)
@@ -872,6 +873,7 @@ void term_switch(des_term* t)
 
 	console.t = t;
 	console.vpos = -1;
+	console.off = 0;
 	console_sync(t);
 }
 
@@ -997,13 +999,12 @@ int term_init(void)
 		t->waiting = false;
 
 		t->pos = t->fpos = 0;
+		t->vpos = -1;
 		for (int i = 0; i < TERM_SIZE; i++)
 			t->video[i] = ' ';
 	}
 
-	console.t = &term_virt[0];
-	console.pos = console.off = 0;
-	console.vpos = -1;
+	term_switch(&term_virt[0]);
 }
 
 
