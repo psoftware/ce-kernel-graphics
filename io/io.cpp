@@ -812,9 +812,17 @@ void console_sync(des_term* t)
 		return;
 
 	bool refresh = false;
+	// calcoliamo il numero di caratteri significativi nel buffer del 
+	// terminale virtuale
 	int dist = term_distance(t->pos, t->fpos);
+
+	// quindi, calcoliamo l'offset (nel buffer virtuale) del primo 
+	// carattere della prima riga che vogliamo visualizzare
 	int vpos = t->vpos;
-	if (vpos < 0) // modalita' follow
+	if (vpos < 0) // se negativo, il terminale e' in modalita' follow:
+		      // la prima riga va calcolata in base alla pos. corrente 
+		      // di t->pos (cio' causera' lo scrolling del video quando 
+		      // saranno state riempite CON_ROW_NUM righe)
 		vpos = (dist < CON_SIZE) ?
 			t->fpos :
 		        term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM - 1), 0);
@@ -826,26 +834,36 @@ void console_sync(des_term* t)
 		console.vpos = vpos;
 		refresh = true;
 	} 
+	// calcoliamo il numero di caratteri significativi, nel buffer 
+	// virtuale, successivi al primo da visualizzare (se sono piu' di 
+	// quelli visualizzabili, assumiamo il massimo)
 	int n_term = term_distance(t->pos, vpos);
 	if (n_term > CON_SIZE)
 		n_term = CON_SIZE;
+
+	// calcoliamo il numero di caratteri di differenza tra quelli 
+	// significativi da visualizzare e quelli gia' visualizzati
 	int quanti = n_term - console.off;
 	if (quanti > 0) {
 		// ci sono nuovi caratteri da copiare
 		term_copy(term_inc_pos(console.vpos, console.off), quanti);
 		console.off += quanti;
 	} else if (quanti < 0) {
-		console.off = n_term;
 		// alcuni caratteri sono stati eliminati
+		console.off = n_term;
 		term_copy(t->pos, -quanti);
 	}
 
+	// se e' necessario un refresh, dobbiamo copiare l'intera schermata, e 
+	// non solo i caratteri nuovi
 	if (refresh && console.off < CON_SIZE)
 		term_copy(term_inc_pos(console.vpos, console.off), CON_SIZE - console.off);
 }
 
 void term_put_char(des_term* t, char ch)
 {
+	int tab_pos;
+
 	switch(ch) {
 		case '\n':
 			term_new_line(t);
@@ -854,6 +872,11 @@ void term_put_char(des_term* t, char ch)
 			if (t->pos != t->fpos)
 				t->pos = term_distance(t->pos, 1);
 			t->video[t->pos] = ' ';
+			break;
+		case '\t':
+			tab_pos = (t->pos / 8 + 1) * 8;
+			for (int i = t->pos + 1; i < tab_pos; i++)
+				term_put_char(t, ' ');
 			break;
 		default:
 			if(ch < 31 || ch < 0)
