@@ -817,7 +817,7 @@ void console_sync(des_term* t)
 	if (vpos < 0) // modalita' follow
 		vpos = (dist < CON_SIZE) ?
 			t->fpos :
-		        term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM), 0);
+		        term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM - 1), 0);
 
 	if (console.vpos != vpos) {
 		// la prima linea sulla console non e' quella richiesta dal 
@@ -833,11 +833,13 @@ void console_sync(des_term* t)
 	if (quanti > 0) {
 		// ci sono nuovi caratteri da copiare
 		term_copy(term_inc_pos(console.vpos, console.off), quanti);
+		console.off += quanti;
 	} else if (quanti < 0) {
+		console.off = n_term;
 		// alcuni caratteri sono stati eliminati
 		term_copy(t->pos, -quanti);
 	}
-	console.off += quanti;
+
 	if (refresh && console.off < CON_SIZE)
 		term_copy(term_inc_pos(console.vpos, console.off), CON_SIZE - console.off);
 }
