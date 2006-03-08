@@ -229,9 +229,6 @@ qui:
      					// e' scritto in C++
      addl    $8, %esp
 
-     pushl   $halt_message
-     call    _printk
-
 loop:   hlt
      jmp     loop
 
@@ -245,34 +242,50 @@ halt_message:
 // stampa sulla console gli lo stack degli indirizzi di ritorno
 // attualmente in pila (utile per il debugging)
 stringa_backtrace:
-	.asciz "%x\n"
+	.asciz "%x  "
+buf_backtrace:
+	.fill 80
+count_backtrace:
+	.long 0
+off_backtrace:
+	.long 0
 	.global _backtrace
 _backtrace:
-	pushl %ebp
-	movl %esp, %ebp
-	subl $4, %esp
 	pushl %esi
+	pushl %eax
 
-	movl $5, -4(%ebp)
+	movl 12(%esp), %eax
+	movl %eax, off_backtrace
+
+	movl $20, count_backtrace
 	movl %ebp, %esi
 3:
-	cmpl $0, -4(%ebp)
+	cmpl $0, count_backtrace
 	je 2f
 	cmpl $0, %esi
 	je 2f
-	jmp 1f
-1:
+	cmpl $0x8000000, %esi
+	jbe 2f
+
 	pushl 4(%esi)
 	pushl $stringa_backtrace
-	call _printk
-	addl $8, %esp
+	pushl $80
+	pushl $buf_backtrace
+	call _snprintf
+	addl $16, %esp
+	pushl %eax
+	pushl $buf_backtrace
+	pushl off_backtrace
+	call _c_writevid_n
+	addl $12, %esp
+	addl $10, off_backtrace
+	
 	movl (%esi), %esi
-	decl -4(%ebp)
+	decl count_backtrace
 	jmp 3b
 2:
-	popl %ecx
+	popl %eax
 	popl %esi
-	leave
 	ret
 	
 
@@ -450,6 +463,7 @@ init_gdt:
 .set tipo_ma, TIPO_MA
 .set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
+.set tipo_rl, TIPO_RL
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 // Devono corrispondere con i valori usati in io.s
@@ -465,13 +479,9 @@ init_gdt:
 
 // per la console
 .set tipo_cr, TIPO_CR
-.set tipo_cw, TIPO_CW
-.set tipo_cs, TIPO_CS
-.set tipo_cl, TIPO_CL
-.set tipo_cu, TIPO_CU
-.set tipo_ci, TIPO_CI
 
 .set tipo_wv, TIPO_WV
+.set tipo_av, TIPO_AV
 
 .set io_tipo_rhdn, IO_TIPO_RHDN
 .set io_tipo_whdn, IO_TIPO_WHDN
@@ -523,22 +533,20 @@ init_idt:
 	carica_gate	tipo_ma		a_mem_alloc	LIV_UTENTE
 	carica_gate	tipo_mf		a_mem_free	LIV_UTENTE
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
+	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
 	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
 	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
+	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 
 	// gestione console (di Checconi)
 	carica_gate	tipo_cr		a_con_read	LIV_SISTEMA
-	carica_gate	tipo_cw		a_con_write	LIV_SISTEMA
-	carica_gate	tipo_cs		a_con_save	LIV_SISTEMA
-	carica_gate	tipo_cl		a_con_load	LIV_SISTEMA
-	carica_gate	tipo_cu		a_con_update	LIV_SISTEMA
-	carica_gate	tipo_ci		a_con_init	LIV_SISTEMA
 
 	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
+	carica_gate	tipo_av		a_attrvid_n	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
@@ -997,6 +1005,7 @@ _salta_a_main:
 	pushl %eax
 	iret
 
+
 // console
 	.extern _c_con_read
 a_con_read:
@@ -1004,51 +1013,6 @@ a_con_read:
 	copia_param 2 7
 	call _c_con_read
 	addl $8, %esp
-	carica_registri
-	iret
-
-	.extern _c_con_write
-a_con_write:
-	salva_registri
-	copia_param 2 7
-	call _c_con_write
-	addl $8, %esp
-	carica_registri
-	iret
-
-	.extern _c_con_save
-a_con_save:
-	salva_registri
-	copia_param 2 7
-	call _c_con_save
-	addl $8, %esp
-	carica_registri
-	iret
-
-	.extern _c_con_load
-a_con_load:
-	salva_registri
-	copia_param 2 7
-	call _c_con_load
-	addl $8, %esp
-	carica_registri
-	iret
-
-	.extern _c_con_update
-a_con_update:
-	salva_registri
-	copia_param 3 7
-	call _c_con_update
-	addl $12, %esp
-	carica_registri
-	iret
-
-	.extern _c_con_init
-a_con_init:
-	salva_registri
-	copia_param 1 7
-	call _c_con_init
-	addl $4, %esp
 	carica_registri
 	iret
 
@@ -1060,6 +1024,16 @@ a_writevid_n:
 	addl $12, %esp
 	carica_registri
 	iret
+
+	.extern _c_attrvid_n
+a_attrvid_n:
+	salva_registri
+	copia_param 5 7
+	call _c_attrvid_n
+	addl $20, %esp
+	carica_registri
+	iret
+
 
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
@@ -1206,6 +1180,11 @@ _readhd_n:
 	.global _writehd_n
 _writehd_n:
 	int $io_tipo_whdn
+	ret
+
+	.global _panic
+_panic:
+	int $tipo_p
 	ret
 
 ////////////////////////////////////////////////////////
@@ -1399,6 +1378,23 @@ a_delay:	// routine int $tipo_d
 	// addl $4, %esp			// non necessario
 	call carica_stato
 	iret
+
+	.extern _c_readlog
+a_readlog:
+	salva_registri
+	copia_param 1 7
+	call _c_readlog
+	addl $4, %esp
+	carica_registri
+	iret
+
+	.extern _c_panic
+a_panic:
+	call salva_stato
+	copia_param 1 0
+	call _c_panic
+1:	nop
+	jmp 1b
 
 	.global _abort_p
 _abort_p:

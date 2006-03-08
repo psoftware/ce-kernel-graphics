@@ -14,6 +14,7 @@
 .set tipo_ma, 0x37
 .set tipo_mf, 0x38
 .set tipo_d, 0x39
+.set tipo_rl, 0x46
 
 .set io_tipo_rsen, 0x60
 .set io_tipo_rseln, 0x61
@@ -101,6 +102,11 @@ _term_read_n:
 	.global _term_write_n
 _term_write_n:
 	int $io_tipo_tw
+	ret
+
+	.global _readlog
+_readlog:
+	int $tipo_rl
 	ret
 
 	.global start, _start

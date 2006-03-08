@@ -37,14 +37,10 @@
 #define TIPO_P			0x43
 #define TIPO_FG			0x44
 #define TIPO_R			0x45
-#define TIPO_ND			0x46
+#define TIPO_RL			0x46
 #define TIPO_CR			0x50
-#define TIPO_CW			0x51
-#define TIPO_CS			0x52
-#define TIPO_CL			0x53
-#define TIPO_CU			0x54
-#define TIPO_CI			0x55
 #define TIPO_WV			0x56
+#define TIPO_AV			0x57
 #define IO_TIPO_RSEN		0x60
 #define IO_TIPO_RSELN		0x61
 #define IO_TIPO_WSEN		0x62
@@ -83,4 +79,14 @@ void* const inizio_utente_condiviso  = fine_sistema_privato;
 void* const fine_utente_condiviso    = (void*)((unsigned int)inizio_utente_condiviso + dim_utente_condiviso);
 void* const inizio_utente_privato    = fine_utente_condiviso;
 void* const fine_utente_privato      = (void*)((unsigned int)inizio_utente_privato + dim_utente_privato);
+
+const unsigned int LOG_MSG_SIZE = 72;
+enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
+
+struct log_msg {
+	log_sev sev;
+	short	identifier;
+	char msg[LOG_MSG_SIZE];
+};
+
 #endif

@@ -90,7 +90,15 @@ extern "C" void term_read_n(int term, char vetti[], int &quanti);
 //
 extern "C" void term_write_n(int term, char vetti[], int quanti);
 
-extern "C" int main();
+const unsigned int LOG_MSG_SIZE = 72;
+enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
+
+struct log_msg {
+	log_sev sev;
+	short  identifier;
+	char msg[LOG_MSG_SIZE];
+};
+extern "C" void readlog(log_msg& m);
 
 // Costanti
 //

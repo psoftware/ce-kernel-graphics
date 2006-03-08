@@ -15,6 +15,7 @@
 .set tipo_w, TIPO_W
 .set tipo_s, TIPO_S
 .set tipo_nd, TIPO_ND
+.set tipo_d, TIPO_D
 
 // Tipi delle interruzioni usate per interfacciarsi al modulo
 //  sistema
@@ -27,12 +28,9 @@
 .set tipo_fg, TIPO_FG
 .set tipo_r, TIPO_R
 .set tipo_cr, TIPO_CR
-.set tipo_cw, TIPO_CW
-.set tipo_cs, TIPO_CS
-.set tipo_cl, TIPO_CL
-.set tipo_cu, TIPO_CU
-.set tipo_ci, TIPO_CI
 .set tipo_wv, TIPO_WV
+.set tipo_av, TIPO_AV
+.set tipo_rl, TIPO_RL
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
@@ -44,11 +42,6 @@
 .set io_tipo_wse0, IO_TIPO_WSE0
 .set io_tipo_tr, IO_TIPO_TR
 .set io_tipo_tw, IO_TIPO_TW
-.set io_tipo_geom, IO_TIPO_GEOM
-.set io_tipo_rhdn, IO_TIPO_RHDN
-.set io_tipo_whdn, IO_TIPO_WHDN
-.set io_tipo_rfdn, IO_TIPO_RFDN
-.set io_tipo_wfdn, IO_TIPO_WFDN
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -214,9 +207,9 @@ _reboot:
 	int $tipo_r
 	ret
 
-	.global _con_write
-_con_write:
-	int $tipo_cw
+	.global _sys_readlog
+_sys_readlog:
+	int $tipo_rl
 	ret
 
 	.global _con_read
@@ -224,34 +217,19 @@ _con_read:
 	int $tipo_cr
 	ret
 
-	.global _con_save
-_con_save:
-	int $tipo_cs
-	ret
-
-	.global _con_load
-_con_load:
-	int $tipo_cl
-	ret
-
-	.global _con_update
-_con_update:
-	int $tipo_cu
-	ret
-
-	.global _con_init
-_con_init:
-	int $tipo_ci
-	ret
-
-	.global _ndelay
-_ndelay:
-	int $tipo_nd
-	ret
-
 	.global _writevid_n
 _writevid_n:
 	int $tipo_wv
+	ret
+
+	.global _attrvid_n
+_attrvid_n:
+	int $tipo_av
+	ret
+
+	.global _delay
+_delay:
+	int $tipo_d
 	ret
  
 ////////////////////////////////////////////////////////////////////////////////
@@ -668,4 +646,3 @@ a_term_write_n: // routine int $io_tipo_tw
  	addl $12, %esp
  	carica_registri
 	iret
-	

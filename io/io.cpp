@@ -47,6 +47,7 @@ extern "C" void terminate_p(void);
 extern "C" void sem_ini(int &index_des_s, int val, bool &risu);
 extern "C" void sem_wait(int sem);
 extern "C" void sem_signal(int sem);
+extern "C" void delay(int sec);
 
 ////////////////////////////////////////////////////////////////////////////////
 //               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
@@ -62,7 +63,6 @@ extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void reboot(void);
-extern "C" void ndelay(unsigned int nano_sec);
 
 //
 // Chiamate per l' IO da console
@@ -78,6 +78,7 @@ struct con_status {
 extern "C" void con_read(char &ch, bool &risu);
 extern "C" void con_write(const char *vett, int quanti);
 extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
+extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char fg, bool blink);
 
 extern "C" void con_save(con_status *cs);
 extern "C" void con_load(const con_status *cs);
@@ -1040,8 +1041,6 @@ void console_cursor()
 	outputb(CUR_LOW, ADD_P);
 	outputb((char)(console.off & 0xff), DAT_P);
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
 //                 INIZIALIZZAZIONE DEL SOTTOSISTEMA DI I/O                   //

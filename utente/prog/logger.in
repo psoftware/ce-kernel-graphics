@@ -1,0 +1,16 @@
+#include <sys.h>
+#include <lib.h>
+
+process __logger body __syslog(11), 100, LIV_UTENTE;
+
+log_msg __buf __attribute__ (( section("RESIDENT") ));
+
+char *__sev_names[] = { "DBG", "INF", "WRN", "ERR" };
+
+process_body __syslog(int a)
+{
+	for (;;) {
+		readlog(__buf);
+		printf(a, "%s %d\t%s\n", __sev_names[__buf.sev], __buf.identifier, __buf.msg);
+	}
+}
