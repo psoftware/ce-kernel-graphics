@@ -64,27 +64,9 @@ extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void reboot(void);
 
-//
-// Chiamate per l' IO da console
-//
-
-const int CON_BUF_SIZE = 0x0fa0;
-
-struct con_status {
-	unsigned char buffer[CON_BUF_SIZE];
-	short x, y, sy;
-};
-
-extern "C" void con_read(char &ch, bool &risu);
-extern "C" void con_write(const char *vett, int quanti);
 extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
 extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char fg, bool blink);
-
-extern "C" void con_save(con_status *cs);
-extern "C" void con_load(const con_status *cs);
-extern "C" void con_update(con_status *cs, const char *vett, int quanti);
-extern "C" void con_init(con_status *cs);
-
+extern "C" void console_read(char& ch);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
@@ -591,13 +573,12 @@ void tast_in(int h)
 {
 	char ch;
 	unsigned short code;
-	bool r;
 
 	for(;;) {
 		console_cursor();
-		con_read(ch, r);
+		console_read(ch);
 
-		if(r && kbd_att) {
+		if(kbd_att) {
 			code = kbd_keymap[KBD_SC_IDX(kbd_att->flags)][ch&0x7f];
 
 			if(!(ch&0x80) && KBD_IS_MOD(code))
@@ -805,6 +786,22 @@ void term_copy(int pos, int quanti) {
 	}
 }
 
+#define KBD_RBR		((ind_b)0x60)
+#define KBD_PORT_B	((ind_b)0x61)
+#define KBD_STR		((ind_b)0x64)
+
+void console_read(char &ch)
+{
+	char code, val;
+
+	inputb(KBD_RBR, code);
+	inputb(KBD_PORT_B, val);
+	outputb(val|0x80, KBD_PORT_B);
+	outputb(val, KBD_PORT_B);
+
+	ch = code;
+}
+
 
 // sincronizza la console con il contenuto del terminale virtuale corrente
 void console_sync(des_term* t)
@@ -903,8 +900,6 @@ void term_switch(des_term* t)
 	console_sync(t);
 }
 
-// NOTA: non richiede che vetti sia nello spazio condiviso, dato che l' IO non
-//  e' ad interruzione di programma
 extern "C" void c_term_write_n(int term, char vetti[], int quanti)
 {
 	des_term *p_des;
@@ -958,12 +953,6 @@ bool term_newchar(des_term *term, unsigned short code)
 	return true;
 }
 
-
-	
-
-
-// NOTA: non richiede che vetti sia nello spazio condiviso, dato che l' handler
-//  dell' interruzione scrive in un buffer interno
 extern "C" void c_term_read_n(int term, char vetti[], int &quanti)
 {
 	des_term *p_des;

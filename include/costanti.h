@@ -38,7 +38,6 @@
 #define TIPO_FG			0x44
 #define TIPO_R			0x45
 #define TIPO_RL			0x46
-#define TIPO_CR			0x50
 #define TIPO_WV			0x56
 #define TIPO_AV			0x57
 #define IO_TIPO_RSEN		0x60

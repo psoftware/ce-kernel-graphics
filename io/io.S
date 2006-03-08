@@ -27,7 +27,6 @@
 .set tipo_p, TIPO_P
 .set tipo_fg, TIPO_FG
 .set tipo_r, TIPO_R
-.set tipo_cr, TIPO_CR
 .set tipo_wv, TIPO_WV
 .set tipo_av, TIPO_AV
 .set tipo_rl, TIPO_RL
@@ -210,11 +209,6 @@ _reboot:
 	.global _sys_readlog
 _sys_readlog:
 	int $tipo_rl
-	ret
-
-	.global _con_read
-_con_read:
-	int $tipo_cr
 	ret
 
 	.global _writevid_n

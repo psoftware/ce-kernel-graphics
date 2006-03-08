@@ -476,10 +476,6 @@ init_gdt:
 .set tipo_fg, TIPO_FG
 .set tipo_r, TIPO_R
 .set tipo_nd, TIPO_ND
-
-// per la console
-.set tipo_cr, TIPO_CR
-
 .set tipo_wv, TIPO_WV
 .set tipo_av, TIPO_AV
 
@@ -541,10 +537,6 @@ init_idt:
 	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
-
-	// gestione console (di Checconi)
-	carica_gate	tipo_cr		a_con_read	LIV_SISTEMA
-
 	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
 	carica_gate	tipo_av		a_attrvid_n	LIV_SISTEMA
 
@@ -1007,15 +999,6 @@ _salta_a_main:
 
 
 // console
-	.extern _c_con_read
-a_con_read:
-	salva_registri
-	copia_param 2 7
-	call _c_con_read
-	addl $8, %esp
-	carica_registri
-	iret
-
 	.extern _c_writevid_n
 a_writevid_n:
 	salva_registri

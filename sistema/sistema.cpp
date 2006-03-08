@@ -2864,28 +2864,6 @@ extern "C" void c_panic(const char *msg,
 //
 
 // registri dell' interfaccia della tastiera
-#define KBD_RBR		((ind_b)0x60)
-#define KBD_PORT_B	((ind_b)0x61)
-#define KBD_STR		((ind_b)0x64)
-
-extern "C" void c_con_read(char &ch, bool &risu)
-{
-	char code, val;
-
-	inputb(KBD_STR, val);
-	if(val&0x01 == 0) {
-		risu = false;
-		return;
-	}
-
-	inputb(KBD_RBR, code);
-	inputb(KBD_PORT_B, val);
-	outputb(val|0x80, KBD_PORT_B);
-	outputb(val, KBD_PORT_B);
-
-	ch = code;
-	risu = true;
-}
 
 const unsigned int LOG_MSG_NUM = 100;
 
