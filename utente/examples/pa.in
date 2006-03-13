@@ -21,10 +21,10 @@ process proc_pa_3 body pa(2), 10, LIV_UTENTE;
 process proc_pa_4 body pa(3), 10, LIV_UTENTE; 
 
 #define BUFSIZE 20
+char a_buf[BUFSIZE];
 
 process_body pa(int a)
 {
-	char a_buf[BUFSIZE];
 	int a_q;
 
 	printf(a, "Programma pa (Processo sul terminale %d)\n", a);
@@ -50,7 +50,7 @@ process_body pa(int a)
 		printf(a, "Inserire una stringa (q INVIO per uscire): ");
 
 		a_q = 20;
-		term_read_n(a, a_buf, a_q);
+		readvterm_ln(a, a_buf, a_q);
 
 		printf(a, "Stringa letta: %s\n", a_buf);
 

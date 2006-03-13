@@ -10,6 +10,7 @@
 // Tipi delle interruzioni delle chiamate di sistema usate
 // Devono coincidere con quelli usati in sistema.s e utente.s
 //
+.set tipo_a, TIPO_A
 .set tipo_t, TIPO_T
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
@@ -25,8 +26,8 @@
 .set tipo_nwfi, TIPO_NWFI
 .set tipo_va, TIPO_VA
 .set tipo_p, TIPO_P
+.set tipo_ab, TIPO_AB
 .set tipo_fg, TIPO_FG
-.set tipo_r, TIPO_R
 .set tipo_wv, TIPO_WV
 .set tipo_av, TIPO_AV
 .set tipo_rl, TIPO_RL
@@ -40,6 +41,7 @@
 .set io_tipo_wsen, IO_TIPO_WSEN
 .set io_tipo_wse0, IO_TIPO_WSE0
 .set io_tipo_tr, IO_TIPO_TR
+.set io_tipo_trl, IO_TIPO_TRL
 .set io_tipo_tw, IO_TIPO_TW
 
 
@@ -152,6 +154,12 @@ _com:	.long	0x03f8		// com[0].indreg.iRBR
 //                          CHIAMATE DI SISTEMA                               //
 ////////////////////////////////////////////////////////////////////////////////
 
+	.text
+	.global _activate_p
+_activate_p:
+	int $tipo_a
+	ret
+
 	.global _terminate_p
 _terminate_p:
 	int $tipo_t
@@ -196,19 +204,14 @@ _panic:
 	int $tipo_p
 	ret
 
+	.global _abort_p
+_abort_p:
+	int $tipo_ab
+	ret
+
 	.global _fill_gate
 _fill_gate:
 	int $tipo_fg
-	ret
-
-	.global _reboot
-_reboot:
-	int $tipo_r
-	ret
-
-	.global _sys_readlog
-_sys_readlog:
-	int $tipo_rl
 	ret
 
 	.global _writevid_n
@@ -548,6 +551,63 @@ _abilita_tastiera:
 	outb %al, $OCW1M
 	ret
 
+.set KBD_RBR, 0x60
+.set KBD_PORT_B, 0x61
+.set KBD_STR, 0x64
+
+	.global _kbd_read
+_kbd_read:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx
+	
+	inb $KBD_RBR, %al
+	movb %al, %bl
+	inb $KBD_PORT_B, %al
+	movb %al, %ah
+	orb $0x80, %al
+	outb %al, $KBD_PORT_B
+	movb %ah, %al
+	outb %al, $KBD_PORT_B
+	movb %bl, %al
+
+	popl %ebx
+	leave
+	ret
+
+
+.set CUR_HIGH, 0x0e
+.set CUR_LOW, 0x0f
+.set ADD_P, 0x03d4
+.set DAT_P, 0x03d5
+
+	.global _console_cursor
+_console_cursor:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %edx
+	pushl %eax
+
+	movw $ADD_P, %dx
+	movb $CUR_HIGH, %al
+	outb %al, %dx
+	movw $DAT_P, %dx
+	movw 8(%ebp), %ax
+	movb %ah, %al
+	outb %al, %dx
+	movw $ADD_P, %dx
+	movb $CUR_LOW, %al
+	outb %al, %dx
+	movw $DAT_P, %dx
+	movw 8(%ebp), %ax
+	outb %al, %dx
+
+	popl %eax
+	popl %edx
+	leave
+	ret
+
+
 
 
 // Chiama _fill_gate con i parametri specificati
@@ -571,8 +631,9 @@ _fill_io_gates:
 	fill_io_gate io_tipo_rseln a_readse_ln
 	fill_io_gate io_tipo_wsen a_writese_n
 	fill_io_gate io_tipo_wse0 a_writese_0
-	fill_io_gate io_tipo_tr a_term_read_n
-	fill_io_gate io_tipo_tw a_term_write_n
+	fill_io_gate io_tipo_tr a_readvterm_n
+	fill_io_gate io_tipo_trl a_readvterm_ln
+	fill_io_gate io_tipo_tw a_writevterm_n
 	
 	leave
 	ret
@@ -621,22 +682,32 @@ a_writese_0:
 	carica_registri
 	iret
 
-	.global a_term_read_n
-	.extern _c_term_read_n
-a_term_read_n:	// routine int $io_tipo_tr
+	.global a_readvterm_n
+	.extern _c_readvterm_n
+a_readvterm_n:	// routine int $io_tipo_tr
 	salva_registri
-	copia_param 3 7
-	call _c_term_read_n
-	addl $12, %esp
+	copia_param 4 7
+	call _c_readvterm_n
+	addl $16, %esp
 	carica_registri
 	iret
 
-	.global a_term_write_n
-	.extern _c_term_write_n
-a_term_write_n: // routine int $io_tipo_tw
+	.global a_readvterm_ln
+	.extern _c_readvterm_ln
+a_readvterm_ln:	// routine int $io_tipo_trl
+	salva_registri
+	copia_param 4 7
+	call _c_readvterm_ln
+	addl $16, %esp
+	carica_registri
+	iret
+
+	.global a_writevterm_n
+	.extern _c_writevterm_n
+a_writevterm_n: // routine int $io_tipo_tw
 	salva_registri
 	copia_param 3 7
- 	call _c_term_write_n
+ 	call _c_writevterm_n
  	addl $12, %esp
  	carica_registri
 	iret

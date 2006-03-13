@@ -135,7 +135,7 @@ int printf(int term, const char *fmt, ...)
 	l = vsnprintf(buf, 1024, fmt, ap);
 	va_end(ap);
 
-	term_write_n(term, buf, l);
+	writevterm_n(term, buf, l);
 
 	return l;
 }

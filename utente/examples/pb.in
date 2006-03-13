@@ -22,12 +22,12 @@ process proc_pb body pb(4), 13, LIV_UTENTE;
 process proc_pb1 body pb(5), 13, LIV_UTENTE;
 
 const int BUF_SIZE = 10;
+char b_buf[BUF_SIZE];
 
 process_body pb(int a)
 {
 	double da, db, dc;
 	int b_q;
-	char b_buf[BUF_SIZE];
 
 	printf(a, "Programma pb (Processo sul terminale %d)\n", a);
 	printf(a, "Esegue un ciclo acquisendo un mutex, in comune col");
@@ -42,7 +42,7 @@ process_body pb(int a)
 		printf(a, "Premere INVIO per continuare (q INVIO per uscire)\n",
 				51);
 		b_q = 5;
-		term_read_n(a, b_buf, b_q);
+		readvterm_ln(a, b_buf, b_q);
 		printf(a, "Attesa di 6 secondi\n");
 		delay(120);
 		sem_signal(semaforo_0);

@@ -14,14 +14,15 @@
 .set tipo_ma, 0x37
 .set tipo_mf, 0x38
 .set tipo_d, 0x39
-.set tipo_rl, 0x46
+.set tipo_rl, 0x3a
 
 .set io_tipo_rsen, 0x60
 .set io_tipo_rseln, 0x61
 .set io_tipo_wsen, 0x62
 .set io_tipo_wse0, 0x63
 .set io_tipo_tr, 0x64
-.set io_tipo_tw, 0x65
+.set io_tipo_trl, 0x65
+.set io_tipo_tw, 0x66
 
 	.text
 	.global _activate_p
@@ -94,13 +95,18 @@ _writese_0:
 	int $io_tipo_wse0
 	ret
 
-	.global _term_read_n
-_term_read_n:
+	.global _readvterm_n
+_readvterm_n:
 	int $io_tipo_tr
 	ret
 
-	.global _term_write_n
-_term_write_n:
+	.global _readvterm_ln
+_readvterm_ln:
+	int $io_tipo_trl
+	ret
+
+	.global _writevterm_n
+_writevterm_n:
 	int $io_tipo_tw
 	ret
 

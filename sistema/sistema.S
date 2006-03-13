@@ -466,18 +466,14 @@ init_gdt:
 .set tipo_rl, TIPO_RL
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
-// Devono corrispondere con i valori usati in io.s
-//
-
 .set tipo_ae, TIPO_AE
 .set tipo_nwfi, TIPO_NWFI
 .set tipo_va, TIPO_VA
-.set tipo_p, TIPO_P
 .set tipo_fg, TIPO_FG
-.set tipo_r, TIPO_R
-.set tipo_nd, TIPO_ND
+.set tipo_p, TIPO_P
 .set tipo_wv, TIPO_WV
 .set tipo_av, TIPO_AV
+.set tipo_ab, TIPO_AB
 
 .set io_tipo_rhdn, IO_TIPO_RHDN
 .set io_tipo_whdn, IO_TIPO_WHDN
@@ -539,6 +535,7 @@ init_idt:
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
 	carica_gate	tipo_av		a_attrvid_n	LIV_SISTEMA
+	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
@@ -1170,6 +1167,11 @@ _panic:
 	int $tipo_p
 	ret
 
+	.global _abort_p
+_abort_p:
+	int $tipo_ab
+	ret
+
 ////////////////////////////////////////////////////////
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
@@ -1363,7 +1365,7 @@ a_delay:	// routine int $tipo_d
 	iret
 
 	.extern _c_readlog
-a_readlog:
+a_readlog:	// routine int $tipo_rl
 	salva_registri
 	copia_param 1 7
 	call _c_readlog
@@ -1371,19 +1373,6 @@ a_readlog:
 	carica_registri
 	iret
 
-	.extern _c_panic
-a_panic:
-	call salva_stato
-	copia_param 1 0
-	call _c_panic
-1:	nop
-	jmp 1b
-
-	.global _abort_p
-_abort_p:
-	call _c_terminate_p
-	call carica_stato
-	iret
 
 //
 // Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
@@ -1439,6 +1428,21 @@ a_fill_gate:
 	carica_registri
 	iret
 
+	.extern _c_panic
+a_panic:	// routine int $tipo_p
+	call salva_stato
+	copia_param 1 0
+	call _c_panic
+1:	nop
+	jmp 1b
+
+	.extern _c_abort_p
+a_abort_p:
+	call salva_stato
+	call _c_abort_p
+	call carica_stato
+	iret
+
 // SWAP
 // Funzioni di utilita' per la gestione degli hard disk
 //
@@ -1462,6 +1466,7 @@ a_writehd_n:
 	addl $24, %esp
 	carica_registri
 	iret
+
 // Esegue un probing del canale ATA specificato tentando di capire se
 //  ad esso sono collegati nessuno, uno o piu` dispositivi
 //

@@ -17,6 +17,7 @@
 char serial_buffer[200];
 int serial_num;
 char serial_error;
+char c, c1;
 
 /*
  * Processo S
@@ -27,7 +28,6 @@ process_body ps(int a)
 {
 	int porta;
 	int c_len, c1_len;
-	char c[200], c1[200];
 
 	printf(a, "Processo di prova per comunicazione seriale\n");
 
@@ -40,25 +40,25 @@ process_body ps(int a)
 		printf(a, "Q - Esci\n");
 		printf(a, "Scelta -> ");
 
-		c_len = 200;
-		term_read_n(a, c, c_len);
+		readvterm_n(a, &c, 1);
 
-		c1_len = 200;
-		printf(a, "Porta -> ");
-		term_read_n(a, c1, c1_len);
-
-		porta = c1[0] - '0';
-		if(porta != 0 && porta != 1) {
-			printf(a, "Porta sbagliata %d\n", porta);
-			continue;
+		if (c != 'q' && c != 'Q') {
+			printf(a, "\nPorta -> ");
+			readvterm_n(a, &c1, 1);
+			porta = c1 - '0';
+			if(porta != 0 && porta != 1) {
+				printf(a, "\nPorta sbagliata %d\n", porta);
+				continue;
+			}
 		}
 
-		switch(c[0]) {
+
+		switch(c) {
 			case 'a':
 			case 'A':
 				serial_num = 200;
-				printf(a, "Inserisci stringa -> ");
-				term_read_n(a, serial_buffer, serial_num);
+				printf(a, "\nInserisci stringa -> ");
+				readvterm_ln(a, serial_buffer, serial_num);
 				printf(a, "Invio %s su %d con writese_0\n", serial_buffer, porta);
 				writese_0(porta, serial_buffer, serial_num);
 				printf(a, "Scritti %d byte\n", serial_num);
@@ -66,14 +66,14 @@ process_body ps(int a)
 			case 'b':
 			case 'B':
 				serial_num = 200;
-				printf(a, "Inserisci stringa -> ");
-				term_read_n(a, serial_buffer, serial_num);
+				printf(a, "\nInserisci stringa -> ");
+				readvterm_ln(a, serial_buffer, serial_num);
 				printf(a, "Invio %s su %d con writese_n\n", serial_buffer, porta);
 				writese_n(porta, serial_buffer, serial_num);
 				break;
 			case 'c':
 			case 'C':
-				printf(a, "Lettura stringa da %d con readse_n (5 caratteri)\n", porta);
+				printf(a, "\nLettura stringa da %d con readse_n (5 caratteri)\n", porta);
 				serial_num = 5;
 				readse_n(porta, serial_buffer, serial_num, serial_error);
 				printf(a, "Terminato con codice %d, letto %s\n",
@@ -81,7 +81,7 @@ process_body ps(int a)
 				break;
 			case 'd':
 			case 'D':	
-				printf(a, "Lettura stringa da %d con readse_ln\n", porta);
+				printf(a, "\nLettura stringa da %d con readse_ln\n", porta);
 				serial_num = 200;
 				readse_ln(porta, serial_buffer, serial_num, serial_error);
 				printf(a, "Terminato con codice %d, letto %s\n",
@@ -89,7 +89,7 @@ process_body ps(int a)
 				break;
 			case 'q':
 			case 'Q':
-				printf(a, "Fine.\n");
+				printf(a, "\nFine.\n");
 				goto end;
 		}
 	}

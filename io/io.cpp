@@ -47,7 +47,7 @@ extern "C" void terminate_p(void);
 extern "C" void sem_ini(int &index_des_s, int val, bool &risu);
 extern "C" void sem_wait(int sem);
 extern "C" void sem_signal(int sem);
-extern "C" void delay(int sec);
+extern "C" void activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu);
 
 ////////////////////////////////////////////////////////////////////////////////
 //               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
@@ -60,13 +60,12 @@ enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
 
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
-extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
+//extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
-extern "C" void reboot(void);
+extern "C" void abort_p();
 
 extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
 extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char fg, bool blink);
-extern "C" void console_read(char& ch);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
@@ -98,6 +97,8 @@ extern "C" void outputbuffw(short *a, ind_b reg,short n);
 
 void *memcpy(void *dest, const void *src, unsigned int n);
 void *memset(void *dest, int c, size_t n);
+
+extern "C" void console_read(char& ch);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI                       //
@@ -146,7 +147,7 @@ extern "C" void c_readse_n(int serial, char vetti[], int quanti, char &errore)
 
 	if(serial < 0 || serial >= S || !verifica_area(vetti, quanti, true) ||
 			!verifica_area(&errore, sizeof(char), true))
-		return;
+		abort_p();
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -164,7 +165,7 @@ extern "C" void c_readse_ln(int serial, char vetti[], int &quanti, char &errore)
 			!verifica_area(&quanti, sizeof(int), true) ||
 			!verifica_area(vetti, quanti, true) ||
  			!verifica_area(&errore, sizeof(char), true))
-		return;
+		abort_p();
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -466,16 +467,6 @@ enum {
 	KBD_FLAG_CTRL = 0x400
 };
 
-struct des_term;
-
-// tastiera virtuale
-struct kbd_t {
-	char queue[KBD_QUEUE_SIZE];
-	int in, out;
-	des_term *term;
-	int flags;
-	int nl_cnt;
-};
 
 // flag in corrispondenza dei modificatori
 const int kbd_modflag_tab[6] = {
@@ -487,24 +478,6 @@ const int kbd_modflag_tab[6] = {
 	KBD_FLAG_CTRL
 };
 
-// tastiera virtuale attiva
-static kbd_t *kbd_att = 0;
-
-// inizializzazione di una tastiera virtuale
-inline void kbd_init(kbd_t *kbd, des_term *term)
-{
-	memset(kbd, 0, sizeof(kbd_t));
-	kbd->term = term;
-	if(!kbd_att)
-		kbd_att = kbd;
-}
-
-// vera se e' stato premuto il ritorno a capo
-inline bool KBD_NL_READ(kbd_t *kbd)
-{
-	return kbd->nl_cnt > 0;
-}
-
 // indice nella keymap in base a flags
 inline int KBD_SC_IDX(int flags)
 {
@@ -512,88 +485,6 @@ inline int KBD_SC_IDX(int flags)
 		KBD_MOD_SHIFT: KBD_MOD_NONE;
 }
 
-// inserimento del codice nella coda (di caratteri) della tastiera attiva
-//
-static void kbd_put(unsigned short code)
-{
-	char ch;
-
-	if(!kbd_att)
- 		return;
-
-	ch = (char)(code&0xff);
-	switch(ch) {
-		case '\b':
-			if(kbd_att->in != kbd_att->out &&
-					kbd_att->queue[kbd_att->in > 0 ?
-     					kbd_att->in - 1: KBD_QUEUE_SIZE - 1] != '\n') {
-				--kbd_att->in;
-				kbd_att->in = kbd_att->in >= 0 ?
-					kbd_att->in: KBD_QUEUE_SIZE - 1;
-			}
-
-			break;
-		default:
-			if(!ch)
-				return;
-
-			kbd_att->queue[kbd_att->in] = ch;
-			if(ch == '\n')
-				++kbd_att->nl_cnt;
-			kbd_att->in = (kbd_att->in + 1) % KBD_QUEUE_SIZE;
-			if(kbd_att->in == kbd_att->out)
-				kbd_att->out = (kbd_att->out + 1) %
-					KBD_QUEUE_SIZE;
-	}
-}
-
-// lettura di un carattere dalla coda di kbd
-//
-static int kbd_get(kbd_t *kbd)
-{
-	int rv;
-
-	if(kbd->in == kbd->out)
-		return -1;
-
-	rv = kbd->queue[kbd->out];
-	if(rv == '\n')
-		--kbd->nl_cnt;
-	kbd->out = (kbd->out + 1) % KBD_QUEUE_SIZE;
-
-	return rv;
-}
-
-bool term_newchar(des_term *term, unsigned short code);
-void console_cursor();
-
-// processo esterno per la gestione dell' ingresso da tastiera
-//
-void tast_in(int h)
-{
-	char ch;
-	unsigned short code;
-
-	for(;;) {
-		console_cursor();
-		console_read(ch);
-
-		if(kbd_att) {
-			code = kbd_keymap[KBD_SC_IDX(kbd_att->flags)][ch&0x7f];
-
-			if(!(ch&0x80) && KBD_IS_MOD(code))
-				kbd_att->flags |= kbd_modflag_tab[KBD_MOD(code)];
-			else if((ch&0x80) && KBD_IS_MOD(code))
-				kbd_att->flags &= ~kbd_modflag_tab[KBD_MOD(code)];
-			else if(!(ch&0x80)) {
-				if(term_newchar(kbd_att->term, code))
-					kbd_put(code);
-			}
-		}
-
-		nwfi(master);
-	}
-}
 
 extern "C" void abilita_tastiera(void);
 
@@ -601,106 +492,9 @@ extern "C" void abilita_tastiera(void);
 //
 const int KBD_IRQ = 1;
 
-// inizializzazione
-//
-int kbd_init()
-{
-	short id;
-	bool r;
-
-	activate_pe(tast_in, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ,
-		LIV_SISTEMA, id, tastiera, r);
-	if(!r)
-		return -3;
-
-	// l' inizializzazione avviene ad interruzioni disabilitate, quindi
-	//  non ci saranno richieste di interruzione accolte fino all' uscita
-	//  da io_init
-	//
-	abilita_tastiera();
-	return 0;
-}
-
-// lettura di n caratteri da kbd
-//  (deve essere chiamata ad interruzioni disabilitate)
-//
-int kbd_read(kbd_t *kbd, char *buf, int n)
-{
-	int i = 0, ch;
-
-	while(i < n && (ch = kbd_get(kbd)) != -1) {
-		buf[i++] = (char)ch;
-		if(ch == '\n')
-			break;
-	}
-
-	return i;
-}
-
-// numero di caratteri disponibili nella coda di kbd
-//
-int kbd_avail(kbd_t *kbd)
-{
-	if(kbd->in >= kbd->out)
-		return kbd->in - kbd->out;
-
-	return KBD_QUEUE_SIZE - kbd->out + kbd->in;
-}
-
-// rende kbd la tastiera virtuale attiva
-//
-int kbd_activate(kbd_t *kbd)
-{
-	kbd_att->flags = KBD_FLAG_NONE;
-	kbd_att = kbd;
-
-	return 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//                             I/O DA TERMINALE                               //
-////////////////////////////////////////////////////////////////////////////////
-unsigned const int TERM_ROW_NUM = 25;
-unsigned const int TERM_COL_NUM = 80;
-unsigned const int TERM_SIZE = TERM_ROW_NUM * TERM_COL_NUM;
-unsigned const int CON_ROW_NUM = 25;
-unsigned const int CON_COL_NUM = 80;
-unsigned const int CON_SIZE = CON_ROW_NUM * CON_COL_NUM;
-const short CUR_HIGH = 0x0e;
-const short CUR_LOW = 0x0f;
-
-const ind_b ADD_P = (ind_b)0x03d4;
-const ind_b DAT_P = (ind_b)0x03d5;
-
-// descrittore di terminale virtuale
-//
-struct des_term {
-	int mutex;	// protezione da utilizzo concorrente
-	int sincr;	// sincronizzazione per la lettura da tastiera
-	bool waiting;	// un processo attende su sincr
-
-	kbd_t kbd;	// tastiera virtuale
-	unsigned char video[TERM_SIZE]; // buffer circolare
-	int pos;	// posizione (nel buffer circolare) in cui verra' aggiunto il prox. car
-	int fpos;	// primo char significativo nel buffer circolare
-	int vpos;	// primo char da mostrare sul video (-1 in modalita' follow)
-};
-
-
-struct des_console {
-	des_term* t;  // terminale virtuale mostrato sulla console
-	int vpos;     // primo char del terminale mostrato sulla console
-	int off;      // offset nel monitor del prossimo char da scrivere
-};
-
-des_console console;
-
-const int N_TERM = 12;
-
-des_term term_virt[N_TERM];
-
 
 // sottrazione modulo 'mod' (il '%' del C/C++ calcola il valore sbagliato)
+// p1 e p2 devono essere compresi tra 0 e mod-1
 inline int circular_sub(int p1, int p2, int mod)
 {
 	int dist = p1 - p2;
@@ -714,120 +508,296 @@ inline int circular_sum(int p1, int p2, int mod)
 	return (p1 + p2) % mod;
 }
 
-// distanza in senso antiorario tra  le posizioni p2 e p1 nel buffer circolare
-inline int term_distance(int p1, int p2)
+
+
+///////////////////////////////////////////////////////////////////////////////
+//    TASTIERA VIRTUALE                                                      //
+///////////////////////////////////////////////////////////////////////////////
+
+const unsigned int VKBD_BUF_SIZE = 20;
+
+struct des_vkbd {
+	int mutex;
+	int intr;
+	bool intr_enabled;
+	char buf[VKBD_BUF_SIZE];
+	int first;
+	int last;
+	int nchar;
+	unsigned int flags;
+};
+
+bool vkbd_init(des_vkbd* k)
 {
-	return circular_sub(p1, p2, TERM_SIZE);
+	bool risu;
+
+	sem_ini(k->mutex, 1, risu);
+	if (!risu) return false;
+	sem_ini(k->intr, 0, risu);
+	if (!risu) return false;
+	k->intr_enabled = false;
+	k->first = k->last = k->nchar = 0;
+	k->flags = 0;
+}
+
+void vkbd_wfi(des_vkbd* k)
+{
+	sem_wait(k->intr);
+}
+
+unsigned short vkbd_decode(des_vkbd* p_des, unsigned char c, bool& valido)
+{
+	bool rilasciato;
+	unsigned short code;
+
+	// - decodifica del carattere
+	rilasciato = (c & 0x80);
+	c &= 0x7f;
+	code = kbd_keymap[KBD_SC_IDX(p_des->flags)][c];
+
+	valido = false;
+	if (KBD_IS_MOD(code))
+		if (rilasciato) 
+			p_des->flags &= ~kbd_modflag_tab[KBD_MOD(code)];
+		else
+			p_des->flags |=  kbd_modflag_tab[KBD_MOD(code)];
+	else if (!rilasciato)
+		if (code < 0xff)
+			valido = true;
+	else
+		code = 0;
+	return code;
+}
+
+unsigned short vkbd_nuovo_car(des_vkbd* k, char c)
+{
+	bool valido;
+	unsigned short code;
+
+	sem_wait(k->mutex);
+
+	code = vkbd_decode(k, c, valido);
+
+	if (!valido)
+		goto out;
+
+
+	if (k->nchar >= VKBD_BUF_SIZE)
+		goto out;
+
+	c = static_cast<char>(code);
+
+	k->buf[k->last] = c;
+	k->last = circular_sum(k->last, 1, VKBD_BUF_SIZE);
+	k->nchar++;
+
+	if (k->intr_enabled && k->nchar == 1) 
+		sem_signal(k->intr);
+out:
+	sem_signal(k->mutex);
+	return code;
+}
+
+void vkbd_leggi_car(des_vkbd*k, char& c)
+{
+	sem_wait(k->mutex);
+
+	if (k->nchar <= 0)
+		goto out;
+
+	c = k->buf[k->first];
+	k->first = circular_sum(k->first, 1, VKBD_BUF_SIZE);
+	k->nchar--;
+
+	if (k->nchar > 0 && k->intr_enabled)
+		sem_signal(k->intr);
+out:
+	sem_signal(k->mutex);
+}
+
+void vkbd_intr_enable(des_vkbd* k)
+{
+	sem_wait(k->mutex);
+	if (!k->intr_enabled && k->nchar > 0)
+		sem_signal(k->intr);
+	k->intr_enabled = true;
+	sem_signal(k->mutex);
+}
+
+void vkbd_intr_disable(des_vkbd* k)
+{
+	sem_wait(k->mutex);
+	k->intr_enabled = false;
+	sem_signal(k->mutex);
+}
+
+void vkbd_switch(des_vkbd* k)
+{
+	k->flags = 0;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+//  MONITOR VIRTUALI                                                         //
+///////////////////////////////////////////////////////////////////////////////
+
+unsigned const int VMON_ROW_NUM = 25;
+unsigned const int VMON_COL_NUM = 80;
+unsigned const int VMON_SIZE = VMON_ROW_NUM * VMON_COL_NUM;
+
+// descrittore di monitor virtuale
+//
+//
+struct des_vmon {
+	unsigned char video[VMON_SIZE]; // buffer circolare
+	int pos;	// posizione (nel buffer circolare) in cui verra' aggiunto il prox. car
+	int fpos;	// primo char significativo nel buffer circolare
+	int vpos;	// primo char da mostrare sul video (-1 in modalita' follow)
+};
+
+// distanza in senso antiorario tra  le posizioni p2 e p1 nel buffer circolare
+inline int vmon_distance(int p1, int p2)
+{
+	return circular_sub(p1, p2, VMON_SIZE);
 }
 
 // distanza in senzo antiorario tra le righe r2 e r1 nel buffer circolare
-inline int term_row_distance(int r1, int r2)
+inline int vmon_row_distance(int r1, int r2)
 {
-	return circular_sub(r1, r2, TERM_ROW_NUM);
+	return circular_sub(r1, r2, VMON_ROW_NUM);
 }
 
 // riga corrispondente alla posizione p
-inline int term_row(int p)
+inline int vmon_row(int p)
 {
-	return p / TERM_COL_NUM;
+	return p / VMON_COL_NUM;
 }
 
 // posizione corrispondente alla riga r e colonna c
-inline int term_pos(int r, int c)
+inline int vmon_pos(int r, int c)
 {
-	return r * TERM_COL_NUM + c;
+	return r * VMON_COL_NUM + c;
 }
 
 // incrementa la riga r nel buffer circolare
-inline int term_inc_row(int r, int s = 1)
+inline int vmon_inc_row(int r, int s = 1)
 {
-	return circular_sum(r, s, TERM_ROW_NUM);
+	return circular_sum(r, s, VMON_ROW_NUM);
 
 }
 
 // incrementa la posizione p nel buffer circolare
-inline int term_inc_pos(int p, int s = 1)
+inline int vmon_inc_pos(int p, int s = 1)
 {
-	return circular_sum(p, s, TERM_SIZE);
+	return circular_sum(p, s, VMON_SIZE);
 }
 
 
 // aggiunge una nuova linea al contenuto del buffer circolare
-void term_new_line(des_term* t)
+void vmon_new_line(des_vmon* t)
 {
 	// calcoliamo la riga corrente nel buffer circolare
-	int y = term_row(t->pos);
+	int y = vmon_row(t->pos);
 
 	// e quella che deve essere la nuova
-	int new_y = term_inc_row(y);
+	int new_y = vmon_inc_row(y);
 
 	// se si sovrappone alla prima salvata, ne perdiamo una
-	if (new_y == term_row(t->fpos)) 
-		t->fpos = term_pos(term_inc_row(term_row(t->fpos)), 0);
+	if (new_y == vmon_row(t->fpos)) 
+		t->fpos = vmon_pos(vmon_inc_row(vmon_row(t->fpos)), 0);
 
 	// riempiamo la nuova linea con spazi
-	t->pos = term_pos(new_y, 0);
-	for (int i = 0; i < TERM_COL_NUM; i++)
+	t->pos = vmon_pos(new_y, 0);
+	for (int i = 0; i < VMON_COL_NUM; i++)
 		t->video[t->pos + i] = ' ';
 }
 
+// aggiunge un carattere sul monitor virtuale
+void vmon_put_char(des_vmon* t, char ch)
+{
+	int tab_pos;
+
+	switch(ch) {
+		case '\n':
+			vmon_new_line(t);
+			break;
+		case '\b':
+			if (t->pos != t->fpos)
+				t->pos = vmon_distance(t->pos, 1);
+			t->video[t->pos] = ' ';
+			break;
+		case '\t':
+			tab_pos = (t->pos / 8 + 1) * 8;
+			for (int i = t->pos + 1; i < tab_pos; i++)
+				vmon_put_char(t, ' ');
+			break;
+		default:
+			if(ch < 31 || ch < 0)
+				return;
+
+			t->video[t->pos] = ch;
+			int new_pos = vmon_inc_pos(t->pos);
+			if (new_pos == t->fpos)
+				vmon_new_line(t);
+			else
+				t->pos = new_pos;
+	}
+}
 
 
-// copia 'quanti' byte, a partire dalla posizione 'pos', dal terminale virtuale 
+// monitor reale
+unsigned const int CON_ROW_NUM = 25;
+unsigned const int CON_COL_NUM = 80;
+unsigned const int CON_SIZE = CON_ROW_NUM * CON_COL_NUM;
+
+struct des_console {
+	des_vmon* t;  // terminale virtuale mostrato sulla console
+	int vpos;     // primo char del terminale mostrato sulla console
+	int off;      // offset nel monitor del prossimo char da scrivere
+};
+
+des_console console;
+
+// copia 'quanti' byte, a partire dalla posizione 'pos', dal monitor virtuale 
 // corrente alla console
-void term_copy(int pos, int quanti) {
+void vmon_copy(int pos, int quanti) {
 
-	if (pos + quanti <= TERM_SIZE) {
+	if (pos + quanti <= VMON_SIZE) {
 		writevid_n(console.off, &console.t->video[pos], quanti);
 	} else {
-		int first  = TERM_SIZE - pos, second = quanti - first;
+		int first  = VMON_SIZE - pos, second = quanti - first;
 		writevid_n(console.off, &console.t->video[pos], first);
 		writevid_n(console.off + first, &console.t->video[0], second);
 	}
 }
 
-#define KBD_RBR		((ind_b)0x60)
-#define KBD_PORT_B	((ind_b)0x61)
-#define KBD_STR		((ind_b)0x64)
+extern "C" void console_cursor(int off);
 
-void console_read(char &ch)
-{
-	char code, val;
-
-	inputb(KBD_RBR, code);
-	inputb(KBD_PORT_B, val);
-	outputb(val|0x80, KBD_PORT_B);
-	outputb(val, KBD_PORT_B);
-
-	ch = code;
-}
-
-
-// sincronizza la console con il contenuto del terminale virtuale corrente
-void console_sync(des_term* t)
+// sincronizza la console con il contenuto del monitor virtuale corrente
+void console_sync(des_vmon* t)
 {
 	if (console.t != t)
 		return;
 
 	bool refresh = false;
 	// calcoliamo il numero di caratteri significativi nel buffer del 
-	// terminale virtuale
-	int dist = term_distance(t->pos, t->fpos);
+	// monitor virtuale
+	int dist = vmon_distance(t->pos, t->fpos);
 
 	// quindi, calcoliamo l'offset (nel buffer virtuale) del primo 
 	// carattere della prima riga che vogliamo visualizzare
 	int vpos = t->vpos;
-	if (vpos < 0) // se negativo, il terminale e' in modalita' follow:
+	if (vpos < 0) // se negativo, il monitor e' in modalita' follow:
 		      // la prima riga va calcolata in base alla pos. corrente 
 		      // di t->pos (cio' causera' lo scrolling del video quando 
 		      // saranno state riempite CON_ROW_NUM righe)
 		vpos = (dist < CON_SIZE) ?
 			t->fpos :
-		        term_pos(term_row_distance(term_row(t->pos), CON_ROW_NUM - 1), 0);
+		        vmon_pos(vmon_row_distance(vmon_row(t->pos), CON_ROW_NUM - 1), 0);
 
 	if (console.vpos != vpos) {
 		// la prima linea sulla console non e' quella richiesta dal 
-		// terminale: ricopiamo tutto da quella riga in poi
+		// monitor: ricopiamo tutto da quella riga in poi
 		console.off = 0;
 		console.vpos = vpos;
 		refresh = true;
@@ -835,61 +805,32 @@ void console_sync(des_term* t)
 	// calcoliamo il numero di caratteri significativi, nel buffer 
 	// virtuale, successivi al primo da visualizzare (se sono piu' di 
 	// quelli visualizzabili, assumiamo il massimo)
-	int n_term = term_distance(t->pos, vpos);
-	if (n_term > CON_SIZE)
-		n_term = CON_SIZE;
+	int n_vmon = vmon_distance(t->pos, vpos);
+	if (n_vmon > CON_SIZE)
+		n_vmon = CON_SIZE;
 
 	// calcoliamo il numero di caratteri di differenza tra quelli 
 	// significativi da visualizzare e quelli gia' visualizzati
-	int quanti = n_term - console.off;
+	int quanti = n_vmon - console.off;
 	if (quanti > 0) {
 		// ci sono nuovi caratteri da copiare
-		term_copy(term_inc_pos(console.vpos, console.off), quanti);
+		vmon_copy(vmon_inc_pos(console.vpos, console.off), quanti);
 		console.off += quanti;
 	} else if (quanti < 0) {
 		// alcuni caratteri sono stati eliminati
-		console.off = n_term;
-		term_copy(t->pos, -quanti);
+		console.off = n_vmon;
+		vmon_copy(t->pos, -quanti);
 	}
 
 	// se e' necessario un refresh, dobbiamo copiare l'intera schermata, e 
 	// non solo i caratteri nuovi
 	if (refresh && console.off < CON_SIZE)
-		term_copy(term_inc_pos(console.vpos, console.off), CON_SIZE - console.off);
+		vmon_copy(vmon_inc_pos(console.vpos, console.off), CON_SIZE - console.off);
+
+	console_cursor(console.off);
 }
 
-void term_put_char(des_term* t, char ch)
-{
-	int tab_pos;
-
-	switch(ch) {
-		case '\n':
-			term_new_line(t);
-			break;
-		case '\b':
-			if (t->pos != t->fpos)
-				t->pos = term_distance(t->pos, 1);
-			t->video[t->pos] = ' ';
-			break;
-		case '\t':
-			tab_pos = (t->pos / 8 + 1) * 8;
-			for (int i = t->pos + 1; i < tab_pos; i++)
-				term_put_char(t, ' ');
-			break;
-		default:
-			if(ch < 31 || ch < 0)
-				return;
-
-			t->video[t->pos] = ch;
-			int new_pos = term_inc_pos(t->pos);
-			if (new_pos == t->fpos)
-				term_new_line(t);
-			else
-				t->pos = new_pos;
-	}
-}
-
-void term_switch(des_term* t)
+void vmon_switch(des_vmon* t)
 {
 	if (console.t == t)
 		return;
@@ -900,136 +841,227 @@ void term_switch(des_term* t)
 	console_sync(t);
 }
 
-extern "C" void c_term_write_n(int term, char vetti[], int quanti)
+int vmon_init(des_vmon* t)
 {
-	des_term *p_des;
+	t->pos = t->fpos = 0;
+	t->vpos = -1;
+	for (int i = 0; i < VMON_SIZE; i++)
+		t->video[i] = ' ';
+}
 
-	if(term < 0 || term >= N_TERM || !verifica_area(vetti, quanti, false))
-		return;
+void vmon_write_n(des_vmon* t, char vetti[], int quanti)
+{
+	for (int i = 0; i < quanti; i++)
+		vmon_put_char(t, vetti[i]);
+	console_sync(t);
+}
 
-	des_term* t = &term_virt[term];
+////////////////////////////////////////////////////////////////////////////////
+//                          TERMINALI VIRTUALI                               
+////////////////////////////////////////////////////////////////////////////////
+
+
+struct des_vterm {
+	int mutex;
+	int sincr;
+	des_vkbd vkbd;
+	int cont;
+	ind_b punt;
+	funz funzione;
+	unsigned int flags;
+	int orig_cont;
+	bool echo;
+	des_vmon vmon;
+};
+
+
+const int N_VTERM = 12;
+
+des_vterm vterm[N_VTERM];
+des_vterm* vterm_active;
+
+
+void input_term(int h)
+{
+	char c;
+	bool fine, valido, echo;
+	des_vterm *p_des;
+
+	p_des = &vterm[h];
+	vkbd_wfi(&p_des->vkbd);
+
+	for(;;) {
+		fine = false;
+		vkbd_intr_disable(&p_des->vkbd);
+		vkbd_leggi_car(&p_des->vkbd, c);
+
+		echo = false;
+		if (c == '\b') {
+			if (p_des->cont < p_des->orig_cont) {
+				p_des->cont++;
+				p_des->punt--;
+				echo = p_des->echo;
+			} 
+		} else {
+			echo = p_des->echo;
+			
+			if (p_des->funzione == input_n) {
+				*p_des->punt = c;
+				p_des->punt++;
+				p_des->cont--;
+				if(p_des->cont == 0)
+					fine = true;
+			} else if (p_des->funzione == input_ln) {
+				if (c == '\r' || c == '\n') {
+					fine = true;
+					p_des->cont = p_des->orig_cont - p_des->cont;
+					*p_des->punt = 0;
+				} else {
+					*p_des->punt = c;
+					p_des->punt++;
+					p_des->cont--;
+					if (p_des->cont == 0) {
+						fine = true;
+						p_des->cont = p_des->orig_cont;
+					}
+				}
+			}
+		}
+
+		if (echo)
+			vmon_write_n(&p_des->vmon, &c, 1);
+
+		if (fine == true) {
+			sem_signal(p_des->sincr);
+		} else
+			vkbd_intr_enable(&p_des->vkbd);
+
+		vkbd_wfi(&p_des->vkbd);
+	}
+}
+
+extern "C" void c_writevterm_n(int term, char vetti[], int quanti)
+{
+	des_vterm *p_des;
+
+	if(term < 0 || term >= N_VTERM || !verifica_area(vetti, quanti, false))
+		abort_p();
+
+	des_vterm* t = &vterm[term];
 
 	sem_wait(t->mutex);
-	for (int i = 0; i < quanti; i++)
-		term_put_char(t, vetti[i]);
-	console_sync(t);
+	vmon_write_n(&t->vmon, vetti, quanti);
 	sem_signal(t->mutex);
 }
 
-void attiva_term(int t)
+void startvterm_in(des_vterm *p_des, char vetti[], int quanti, funz op, bool echo)
 {
-	des_term* p = &term_virt[t];
-	kbd_activate(&p->kbd);
-	term_switch(p);
+	p_des->cont = p_des->orig_cont = quanti;
+	p_des->punt = vetti;
+	p_des->funzione = op;
+	p_des->echo = echo;
+	vkbd_intr_enable(&p_des->vkbd);
 }
 
-bool term_newchar(des_term *term, unsigned short code)
+
+extern "C" void c_readvterm_n(int term, char vetti[], int quanti, bool echo)
 {
-	char ch;
+	des_vterm *p_des;
 
-	if(code >= KBD_F1 && code <= KBD_F12) {
-		attiva_term(KBD_FNUM(code));
-		return false;
-	}
-
-	if(code == KBD_CANC && (term->kbd.flags&KBD_FLAG_CTRL) &&
-			(term->kbd.flags&KBD_FLAG_ALT))
-		reboot();
-
-	if(code == '\b' && kbd_avail(&term->kbd) == 0)
-		return false;
-
-	if(code < 0xff) {
-		ch = code&0xff;
-		term_put_char(term, ch);
-		console_sync(term);
-	}
-
-	if(term->waiting && code == '\n') {
-		term->waiting = false;
-		sem_signal(term->sincr);
-	}
-
-	return true;
-}
-
-extern "C" void c_term_read_n(int term, char vetti[], int &quanti)
-{
-	des_term *p_des;
-	int disp, letti;
-
-
-	if(term < 0 || term >= N_TERM ||
-			!verifica_area(&quanti, sizeof(int), true) ||
+	if(term < 0 || term >= N_VTERM ||
 			!verifica_area(vetti, quanti, true))
+		abort_p();
+
+	if (quanti <= 0)
 		return;
 
-	p_des = &term_virt[term];
+	p_des = &vterm[term];
 	sem_wait(p_des->mutex);
-	quanti = quanti > KBD_QUEUE_SIZE ? KBD_QUEUE_SIZE: quanti;
+	startvterm_in(p_des, vetti, quanti, input_n, echo);
+	sem_wait(p_des->sincr);
+	sem_signal(p_des->mutex);
+}
 
-	lock();
-	disp = kbd_avail(&p_des->kbd);
+extern "C" void c_readvterm_ln(int term, char vetti[], int &quanti, bool echo)
+{
+	des_vterm *p_des;
 
-	if(disp >= quanti - 1 || KBD_NL_READ(&p_des->kbd)) {
-		// sono gia' disponibili abbastanza caratteri, o
-  		//  e' stato premuto invio
-		letti = kbd_read(&p_des->kbd, vetti, quanti - 1);
-	} else {
-		// e' necessario bloccare
-		p_des->waiting = true;
-		unlock();
+	if(term < 0 || term >= N_VTERM ||
+			!verifica_area(&quanti, sizeof(int), true) ||
+			!verifica_area(vetti, quanti, true))
+		abort_p();
 
-		sem_wait(p_des->sincr);
+	if (quanti <= 0)
+		return;
 
-		lock();
-		disp = kbd_avail(&p_des->kbd);
-		letti = kbd_read(&p_des->kbd, vetti, quanti - 1);
-	}
-
-	unlock();
-
-	vetti[letti] = 0;
-	quanti = letti + 1;
-
+	p_des = &vterm[term];
+	sem_wait(p_des->mutex);
+	startvterm_in(p_des, vetti, quanti, input_ln, echo);
+	sem_wait(p_des->sincr);
+	quanti = p_des->cont;
 	sem_signal(p_des->mutex);
 }
 
 
-int term_init(void)
+void vterm_switch(int t)
 {
-	des_term *p_des;
-	bool r1, r2;
+	vterm_active = &vterm[t];
+	vkbd_switch(&vterm_active->vkbd);
+	vmon_switch(&vterm_active->vmon);
+}
 
-	kbd_init();
 
-	for (int i = 0; i < N_TERM; i++) {
-		des_term *t = &term_virt[i];
+extern "C" char kbd_read();
 
-		sem_ini(t->mutex, 1, r1);
-		sem_ini(t->sincr, 0, r2);
-		if(!r1 || !r2) 
-			return -1;
-		kbd_init(&t->kbd, t);
-		t->waiting = false;
+// smistatore dei caratteri dalla tastiera reale alle tastiere virtuali
+void estern_kbd(int h)
+{
+	char ch;
+	unsigned short code;
+	des_vkbd* vkbd;
 
-		t->pos = t->fpos = 0;
-		t->vpos = -1;
-		for (int i = 0; i < TERM_SIZE; i++)
-			t->video[i] = ' ';
+	for(;;) {
+		ch = kbd_read();
+		code = vkbd_nuovo_car(&vterm_active->vkbd, ch);				
+		if (code >= KBD_F1 && code <= KBD_F12) 
+			vterm_switch(KBD_FNUM(code));
+		nwfi(master);
+	}
+}
+
+// inizializzazione
+int vterm_init()
+{
+	short id;
+	bool r;
+
+
+
+	for (int i = 0; i < N_VTERM; i++) {
+		des_vterm* p_des = &vterm[i];
+
+		sem_ini(p_des->mutex, 1, r);
+		if (!r) return -3;
+		sem_ini(p_des->sincr, 0, r);
+		if (!r) return -3;
+		if (!vkbd_init(&p_des->vkbd))
+			return -3;
+		if (!vmon_init(&p_des->vmon))
+			return -3;
+		activate_p(input_term, i, PRIO_ESTERN_BASE, LIV_SISTEMA, id, r);
+		if (!r) return -3;
 	}
 
-	term_switch(&term_virt[0]);
+	vterm_active = &vterm[0];
+	activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ, LIV_SISTEMA, id, tastiera, r);
+	if(!r)
+		return -3;
+
+	abilita_tastiera();
+	return 0;
 }
 
 
-void console_cursor()
-{
-	outputb(CUR_HIGH, ADD_P);
-	outputb((char)(console.off >> 8), DAT_P);
-	outputb(CUR_LOW, ADD_P);
-	outputb((char)(console.off & 0xff), DAT_P);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 //                 INIZIALIZZAZIONE DEL SOTTOSISTEMA DI I/O                   //
@@ -1046,7 +1078,7 @@ extern "C" int cmain(void)
 	int error;
 
 	fill_io_gates();
-	error = term_init();
+	error = vterm_init();
 	if (error < 0) return error;
 	error = com_init();
 	if (error < 0) return error;

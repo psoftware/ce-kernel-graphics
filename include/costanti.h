@@ -31,24 +31,27 @@
 #define TIPO_MA			0x37
 #define TIPO_MF			0x38
 #define TIPO_D			0x39
+#define TIPO_RL			0x3a
+
 #define TIPO_AE			0x40
 #define TIPO_NWFI		0x41
 #define TIPO_VA			0x42
-#define TIPO_P			0x43
 #define TIPO_FG			0x44
-#define TIPO_R			0x45
-#define TIPO_RL			0x46
-#define TIPO_WV			0x56
-#define TIPO_AV			0x57
+#define TIPO_P			0x45
+#define TIPO_WV			0x46
+#define TIPO_AV			0x47
+#define TIPO_AB			0x48
+
+#define IO_TIPO_RHDN		0x50
+#define IO_TIPO_WHDN		0x51
+
 #define IO_TIPO_RSEN		0x60
 #define IO_TIPO_RSELN		0x61
 #define IO_TIPO_WSEN		0x62
 #define IO_TIPO_WSE0		0x63
 #define IO_TIPO_TR		0x64
-#define IO_TIPO_TW		0x65
-#define IO_TIPO_GEOM		0x66
-#define IO_TIPO_RHDN		0x67
-#define IO_TIPO_WHDN		0x68
+#define IO_TIPO_TRL		0x65
+#define IO_TIPO_TW		0x66
 
 #define BLK_SIZE 512			// Dimensione del blocco (HD e FD)
 #define H_BLK_SIZE (BLK_SIZE / 2)	// Meta' dimensione blocco (short int)

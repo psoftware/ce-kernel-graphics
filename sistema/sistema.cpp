@@ -95,6 +95,7 @@ void log(log_sev, const char* fmt, ...);
 const char* last_log();
 // invia mgs al log, quindi blocca il sistema
 extern "C" void panic(const char *msg);
+extern "C" void abort_p();
 
 ///////////////////////////////////////////////////////////////////////
 // ALLOCAZIONE DELLA MEMORIA FISICA                                  //
@@ -1271,7 +1272,6 @@ tabella_pagine* rimpiazzamento_tabella();
 pagina* 	rimpiazzamento_pagina(tabella_pagine* escludi);
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag);
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
-extern "C" void abort_p();
 
 void trasferimento(void* indirizzo_virtuale, bool scrittura)
 {
@@ -1295,7 +1295,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// tabella e' (sono) di sola lettura, il processo ha commesso un errore 
 	// e va interrotto
 	if (scrittura && pdes_tab->RW == 0) {
-		log(LOG_ERR, "Errore di accesso in scrittura");
+		log(LOG_WARN, "Errore di accesso in scrittura");
 		goto error1; // Dijkstra se ne faccia una ragione
 	}
 	
@@ -1807,7 +1807,6 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 
 	pdes_pag->D		= 1; // verra' modificata
 	pdes_pag->A		= 1; // e acceduta
-	pdes_tab->A		= 1;
 
 	// restituiamo un puntatore alla pila creata
 	return ind_fisico;
@@ -1940,6 +1939,13 @@ extern "C" void c_terminate_p()
 	delete pdes_proc;
 	processi--;
 	schedulatore();
+}
+
+
+extern "C" void c_abort_p()
+{
+	log(LOG_WARN, "Processo abortito");
+	c_terminate_p();
 }
 
 // Registrazione processi esterni
@@ -2271,7 +2277,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 
 	if (errore.prot == 1) {
 		log(LOG_WARN, "Errore di protezione, il processo verra' terminato");
-		terminate_p();
+		abort_p();
 	}
 
 	trasferimento(indirizzo_virtuale, errore.write);

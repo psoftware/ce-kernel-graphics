@@ -84,11 +84,12 @@ extern "C" void writese_n(int serial, char vetto[], int quanti);
 
 // Legge QUANTI caratteri dal terminale TERM e li mette in VETTI
 //
-extern "C" void term_read_n(int term, char vetti[], int &quanti);
+extern "C" void readvterm_n(int term, char vetti[], int quanti, bool echo = true);
+extern "C" void readvterm_ln(int term, char vetti[], int &quanti, bool echo = true);
 
 // Scrive QUANTI caratteri sul terminale TERM, prelevandoli da VETTI
 //
-extern "C" void term_write_n(int term, char vetti[], int quanti);
+extern "C" void writevterm_n(int term, char vetti[], int quanti, bool echo = true);
 
 const unsigned int LOG_MSG_SIZE = 72;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
