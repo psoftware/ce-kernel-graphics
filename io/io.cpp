@@ -72,11 +72,6 @@ extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char f
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// protezione dalla concorrenza con le interruzioni
-//
-inline void lock() { asm("cli"); }
-inline void unlock() { asm("sti"); }
-
 // ingresso di un byte da una porta di IO
 extern "C" void inputb(ind_b reg, char &a);
 
@@ -94,9 +89,6 @@ extern "C" void inputbuffw(ind_b reg, short *a,short n);
 
 // uscita di una stringa di word su un buffer di IO
 extern "C" void outputbuffw(short *a, ind_b reg,short n);
-
-void *memcpy(void *dest, const void *src, unsigned int n);
-void *memset(void *dest, int c, size_t n);
 
 extern "C" void console_read(char& ch);
 
@@ -1086,27 +1078,3 @@ extern "C" int cmain(void)
 	return 0;
 }
 
-// Replicata in sistema.cpp
-//
-void *memcpy(void *dest, const void *src, unsigned int n)
-{
-	char *dest_ptr = (char *)dest, *src_ptr = (char *)src;
-	int i;
-
-	for(i = 0; i < n; ++i)
-		*dest_ptr++ = *src_ptr++;
-
-	return dest;
-}
-
-// Replicata in sistema.cpp
-//
-void *memset(void *dest, int c, size_t n)
-{
-        size_t i;
-
-        for(i = 0; i < n; ++i)
-              ((char *)dest)[i] = (char)c;
-
-        return dest;
-}
