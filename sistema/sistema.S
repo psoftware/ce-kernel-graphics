@@ -164,18 +164,18 @@
 // istruzione del sistema. Il bootstrap loader puo' anche passare
 // delle informazioni al sistema (tramite i registri e la memoria).
 //
-// In questo sistema, usiamo lo standard multiboot, che definisce il 
-// formato che il file contentente il sistema deve rispettare, e
+// In questo sistema usiamo lo standard multiboot, che definisce il formato che 
+// il file contentente il sistema deve rispettare e
 // il formato delle informazioni passate dal bootstrap loader al sistema.
 // Il formato del file contenente il sistema deve essere quello di un
 // normale file eseguibile, ma, nei primi 2*4K byte, deve contenere 
 // la struttura multiboot_header, definita piu' avanti. 
 // Il boot loader, prima di saltare alla prima istruzione del sistema
-// (l'entry point specificato nel file eseguibile) lascia nel registro
-// %eax un valore di riconoscimento, e in %ebx l'indirizzo di una struttura
+// (l'entry point specificato nel file eseguibile), lascia nel registro
+// %eax un valore di riconoscimento e in %ebx l'indirizzo di una struttura
 // dati, contentente varie informazioni (in particolare, la quantita'
 // di memoria principale installata nel sistema, il dispositivo da cui
-// e' stato eseguito il bootstrap, e l'indirizzo di memoria in cui sono
+// e' stato eseguito il bootstrap e l'indirizzo di memoria in cui sono
 // stati caricati gli eventuali moduli)
      .text
 
@@ -187,6 +187,7 @@ _start:
 				// trovarsi verso l'inizio del file
 
      .align  4
+     // le seguenti informazioni sono richieste dal bootstrap loader
 multiboot_header:
      .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
      .long   MULTIBOOT_HEADER_FLAGS   				// flag
@@ -197,7 +198,7 @@ multiboot_header:
      .long   _edata
      .long   _end
      .long   multiboot_entry
-#endif /* ! __ELF__ */
+#endif 
 
 multiboot_entry:
 
@@ -215,31 +216,33 @@ qui:
      movw    %cx, %fs
      movw    %cx, %gs
 
-     movl    $0, %ebp
+     movl    $0, %ebp			// azzeriamo il base pointer
+					// (utile per capire dove finisce la 
+					// lista dei frame di attivazione)
 
      call    init_idt			// riempie i gate per le eccezioni
      lidt    idt_pointer		// carichiamo la nuova IDT
 	
      pushl   $0				// resettiamo EFLAG
      popf				// N.B.: interrupt disabilitati
+					// (perche', azzerando tutti i flag,
+					// abbiamo azzerato anche IF)
 
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			
      call    _cmain			// il resto dell'inizializzazione
      					// e' scritto in C++
      addl    $8, %esp
-
+     // qui non possiamo arrivare, ma non si sa mai
 loop:   hlt
      jmp     loop
 
-halt_message:
-     .asciz  "Halted."
 
 //////////////////////////////////////////////////////////////////
 // funzioni di utilita'						//
 //////////////////////////////////////////////////////////////////
 
-// stampa sulla console gli lo stack degli indirizzi di ritorno
+// stampa sulla console lo stack degli indirizzi di ritorno
 // attualmente in pila (utile per il debugging)
 stringa_backtrace:
 	.asciz "%x  "
@@ -339,8 +342,8 @@ salva_stato:
 	popl %eax			// vecchio valore di %ebx in %eax
 	movl %eax, EBX(%ebx)
 	movl %esp, %eax
-	addl $4, %eax			// saltiamo ind. rit. di salva_stato...
-	movl %eax, ESP(%ebx)		// ...prima di memorizzare %esp
+	addl $4, %eax			// salviamo ind. rit. di salva_stato...
+	movl %eax, ESP(%ebx)		// ... prima di memorizzare %esp
 	movl %ebp, EBP(%ebx)
 	movl %esi, ESI(%ebx)
 	movl %edi, EDI(%ebx)
@@ -418,13 +421,12 @@ carica_stato:
 // Due segmenti (indici 1 e 2) servono per il livello di privilegio sistema
 // e due (indici 3 e 4) per il livello di privilegio utente.
 // Il segmento di indice 0 deve essere nullo.
-// A partire dal descrittore di indice 5, carichiamo i descrittori di segmento TSS,
-// ognuno associato alla corrispondente struttura des_proc nell'array array_desp.
-// Prepariamo staticamente un descrittore per ognuno dei MAX_PROCESSI possibili,
-// anche se ne verranno utilizzati di meno. Usiamo il bit P di presenza nel descittore
-// per specificare quali descrittori sono effettivamente utilizzati.
-// Inizialmente, tutti i bit di presenza sono 0, e passeranno ad 1 quando verrano
-// invocate le primitive activate_p e activate_pe
+// A partire dal descrittore di indice 5 caricheremo i descrittori di segmento 
+// TSS, ognuno associato alla corrispondente struttura des_proc.
+// Usiamo il bit P di presenza nel descrittore per specificare quali 
+// descrittori sono effettivamente utilizzati.
+// Inizialmente, tutti i bit di presenza sono 0 e passeranno ad 1 quando 
+// verrano invocate le primitive activate_p e activate_pe
 init_gdt:
 	pushl %ebp
 	movl %esp, %ebp
@@ -475,6 +477,7 @@ init_gdt:
 .set tipo_av, TIPO_AV
 .set tipo_ab, TIPO_AB
 
+// interruzioni usate dal nucleo stesso (dalle routine della memoria virtuale)
 .set io_tipo_rhdn, IO_TIPO_RHDN
 .set io_tipo_whdn, IO_TIPO_WHDN
 
@@ -737,12 +740,8 @@ _attiva_paginazione:
 	popl %eax
 	ret
 
-// restituisce in %eax il contenuto di cr2
-	.global _leggi_cr2
-_leggi_cr2:
-	movl %cr2, %eax
-	ret
-
+// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
+// eliminare la corrispondente traduzione dal TLB
 	.global _invalida_entrata_TLB
 _invalida_entrata_TLB:
 	pushl %ebp
@@ -756,26 +755,18 @@ _invalida_entrata_TLB:
 	leave
 	ret
 	
+// trova efficientemente il primo bit a 0 nella doppia parola passata come 
+// parametro (usato nella realizzazione dell'allocatore a mappa di bit)
 	.global _trova_bit
 _trova_bit:
 	bsfl 4(%esp), %eax
 	ret
 
-	.global _check_bit_A
-_check_bit_A:
-	movl 4(%esp), %eax
-	btrl $5, (%eax)
-	movl 8(%esp), %eax
-	rcrl %eax
-	ret
-	
-
 //////////////////////////////////////////////////////////////////
 // hardware gestito direttamente dal nucleo: 			 //
 //  PIC, timer, console, swap					 //
 //////////////////////////////////////////////////////////////////
-// Replicato in io.s
-//
+// legge un byte da una porta di I/O
 	.global _inputb
 _inputb:
 	pushl %eax
@@ -788,8 +779,7 @@ _inputb:
 	popl %eax
 	ret
 
-// Replicato in io.s
-//
+// scrive un byte in una porta di I/O
 	.global _outputb
 _outputb:
 	pushl %eax
@@ -801,8 +791,7 @@ _outputb:
 	popl %eax
 	ret
 
-// Ingresso di un buffer continuo da un buffer di IO di word
-//
+// legge una sequenza di parole da una porta di I/O
 	.global _inputbuffw
 _inputbuffw:
 	pushl %eax
@@ -823,8 +812,7 @@ _inputbuffw:
 	popl %eax
 	ret
 
-// Uscita di un buffer continuo su una buffer di IO di word
-//
+// scrive una sequenza di parole in una porta di I/O
 	.global _outputbuffw
 _outputbuffw:
 	pushl %eax
@@ -846,6 +834,7 @@ _outputbuffw:
 	ret
 
 // PIC
+// registri del controllore delle interruzioni
 .set ICW1M, 0x20
 .set ICW2M, 0x21
 .set ICW3M, 0x21
@@ -867,9 +856,9 @@ _outputbuffw:
 .set READ_ISR, 0x0b
 
 
-// inizializza il controllore delle interruzioni la base del controllore va
-// cambiata rispetto a quella impostata dal BIOS, in quanto, in modo protetto,
-// esistono piu' tipi di eccezioni che in modo reale, e la base impostata dal
+// inizializza il controllore delle interruzioni: la base del controllore va
+// cambiata rispetto a quella impostata dal BIOS. Infatti, in modo protetto,
+// esistono piu' tipi di eccezioni che in modo reale e la base impostata dal
 // BIOS va a collidere con alcune di queste.
 	.global _init_8259
 _init_8259:
@@ -910,6 +899,7 @@ _init_8259:
 	ret
 
 // timer
+// registri dell'interfaccia di conteggio
 .set CWR,     0x43
 .set CTR_LSB, 0x40
 .set CTR_MSB, 0x40
@@ -937,6 +927,24 @@ _attiva_timer:
 	leave
 	ret
 
+// alcune periferiche (in particolare gli hard disk che rispettano lo standard 
+// ATA) richiedono il rispetto di alcune temporizzazioni. Per esempio, e' 
+// richiesta un'attesa di 400 nanosecondi prima del test del bit BSY nel 
+// registro di stato degli hard disk. Per poter realizzare tali attese, si puo' 
+// utilizzare il Time Stamp Counter (tsc), un contatore che (dai processori 
+// Pentium in poi) e' presente nei processori Intel. Tale contatore e' grande 
+// 64 bit, viene incrementato ad ogni clock e puo' esseere letto tramite 
+// l'istruzione rdtsc (read tsc), che ne copia il contenuto nei registri %eax e 
+// %edx. Una attesa di un tempo T (troppo piccolo per essere realizzata tramite 
+// la primitiva delay) puo' essere realizzata leggendo una prima volta il tsc, 
+// calcolando il valore V che dovra' assumere dopo il tempo T e rileggendo (in 
+// un ciclo) il tsc fino a quando non assume un valore maggiore o uguale a V.  
+// Per calcolare V, pero', e' necessario conoscere la frequenza del clock del 
+// processore. La seguente funzione, invocata all'avvio del sistema, calcola 
+// una approssimazione di tale frequenza, usando la variabile globale ticks, 
+// che viene incrementata dalla rotine del timer ogni volta che questa va in 
+// esecuzione. 
+// 
 	.global _calibra_tsc
 _calibra_tsc:
 	pushl %ebp
@@ -945,22 +953,40 @@ _calibra_tsc:
 	pushl %ecx
 	pushl %edx
 
-	cpuid
-	rdtsc
-	movl %eax, -4(%ebp)
-	sti
+	cpuid			// l'istruzione cpuid serve da punto di sincronizzazione.
+				// Infatti, i processori moderni possono 
+				// eseguire le istruzioni senza rispettare 
+				// l'ordine in cui il programmatore le ha 
+				// scritte, per velocizzare l'esecuzione. In 
+				// questo caso, pero', vogliamo che la seguente 
+				// istruzione rdtsc venga eseguita esattamente 
+				// dove l'abbiamo scritta, perche' ci interessa 
+				// il tempo di esecuzione delle istruzioni che 
+				// vengono dopo. Cio' si ottiene, appunto, 
+				// precedendo l'istruzione rdtsc con 
+				// l'istruzione cpuid
+	sti			// abilitiamo il timer ad interrompere e, quindi, ad 
+				// incrementare la variabile _ticks
 1:	movl _ticks, %ecx
 	cmpl $0, %ecx
-	je 1b
-	movl %ecx, -8(%ebp)
+	je 1b			// aspettiamo che venga incrementata una prima volta
+	movl %ecx, -8(%ebp)	// quindi salviamo il suo valore iniziale
+	rdtsc			// tsc -> %edx, %eax
+	movl %eax, -4(%ebp)	// salviamo solo %eax (parte bassa del tsc): 
+				// cio' e' sufficiente a calcolare la 
+				// differenza che ci serve
 2:	movl _ticks, %ecx
 	subl -8(%ebp), %ecx
-	cmpl $20, %ecx
+	cmpl $20, %ecx		// aspettiamo che il valore di _ticks aumenti di 20
+				// (corrispondenti a circa un secondo di tempo 
+				// reale)
 	jbe 2b
-	cli
-	cpuid
+	cli			
+	cpuid			// passato un secondo, rileggiamo tsc
 	rdtsc
-	subl %eax, -4(%ebp)
+	subl %eax, -4(%ebp)	// la differenza, tra il nuovo valore di tsc e quello salvato
+				// precedentemente, e' il numero di cicli di 
+				// clock al secondo
 
 	movl -4(%ebp), %eax
 	
@@ -969,29 +995,47 @@ _calibra_tsc:
 	leave
 	ret
 
+
+// trasforma_in_processo viene chiamata nella fase di inizializzazione, in modo 
+// che il codice di inizializzazione venga eseguito nel contesto di un processo 
+// (il processo main) che, quindi, puo' invocare le primitive di sistema, anche 
+// bloccanti (in particolare, e' necessario invocare le primitive per leggere 
+// le informazioni iniziali dallo swap)
 	.global _trasforma_in_processo
 _trasforma_in_processo:
-	popl %eax
-	pushl $0x00000200 //eflag, IF=1
-	pushl $SEL_CODICE_SISTEMA
-	pushl %eax //eip
-	call salva_stato
-	call carica_stato
-	iret
+	// creiamo in pila la struttura che la salva_stato e la successiva iret 
+	// si aspettano
+	popl %eax			// indirizzo di ritorno in %eax		
+	pushl $0x00000200		// eflag, IF=1
+	pushl $SEL_CODICE_SISTEMA	// cs
+	pushl %eax			// eip
+	call salva_stato		// inizializziamo il descrittore di processo
+	call carica_stato		// carichiamo tr
+	iret				// torniamo al chiamante "trasformati" in processo
 
+
+// salta_a_main viene chiamata come ultima operazione della fase di 
+// inizializzazione, per passare ad eseguire il codice, a livello utente, della 
+// funzione main. Per passare da livello sistema a livello utente, l'unico modo
+// e' usare una iret, preparando opportunamente le informazioni in pila.
+// La funzione richiede due parametri: l'entry point di main e l'indirizzo 
+// della pila utente
 	.global _salta_a_main
 _salta_a_main:
-	movw $SEL_DATI_UTENTE, %ax
+	movw $SEL_DATI_UTENTE, %ax	// sostituiamo i selettori dati sistema
+					// con selettori dati utente
 	movw %ax, %ds
 	movw %ax, %es
-	popl %eax
-	popl %eax
-	popl %ebx
-	pushl $SEL_DATI_UTENTE
-	pushl %ebx
-	pushl $0x00000200
-	pushl $SEL_CODICE_UTENTE
-	pushl %eax
+	popl %eax			// indirizzo di ritorno, che scartiamo
+	popl %eax			// primo parametro: indirizzo di main -> %eax
+	popl %ebx			// secondo parametro: indirizzo pila utente ->%ebx
+	// prepariamo le informazioni che la iret si aspetta nel caso di 
+	// ritorno da livello sistema a livello utente
+	pushl $SEL_DATI_UTENTE		// selettore della nuova pila
+	pushl %ebx			// puntatore alla testa della nuova pila
+	pushl $0x00000200		// eflag (interrupt abilitati)
+	pushl $SEL_CODICE_UTENTE	// selettore del segmento codice 
+	pushl %eax			// nuovo eip
 	iret
 
 
@@ -1024,7 +1068,7 @@ a_attrvid_n:
 // prima istruzione di tutte le eccezioni che non prevedono
 // questa ulteriore parola lunga.
 // Inoltre, il trattamento di tutte le eccezioni e' simile:
-// stampare un avviso sulla console e interrompere il processo
+// inviare un messaggio al log e interrompere il processo
 // che ha causato l'eccezione. Per questo motivo, ogni gestore
 // mette in pila il numero corrispondente al suo tipo di eccezione
 // e salta al codice comune per tutti.
@@ -1093,11 +1137,21 @@ prot_fault:
 	pushl $13
 	jmp comm_exc
 
+// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
+// per realizzare la memoria virtuale. Per far cio', invochiamo la routine 
+// _c_page_fault passandole tre parametri:
+// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale 
+// coppia ci permette di individuare l'istruzione che aveva causato il fault e 
+// di sapere se il fault si e' verificato mentre il processore era in stato 
+// utente o in stato sistema (se era in stato sistema, si tratta probabilmente 
+// di un bug nel nucleo, nel qual caso vogliamo fermare tutto)
+// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale 
+// non tradotto che ha generato il fault
 page_fault:
 	salva_registri
-	movl 32(%esp), %eax
-	movl 28(%esp), %ebx
-	pushl %eax
+	movl 32(%esp), %eax	// cs salvato dall'eccezione
+	movl 28(%esp), %ebx	// eip salvato dall'eccezione
+	pushl %eax		
 	pushl %ebx
 	movl %cr2, %eax
 	pushl %eax
@@ -1134,9 +1188,13 @@ comm_exc:
 	call carica_stato
 	iret
 
-////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////
 // primitive richiamate dal nucleo stesso (page fault)  //
-////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////
+// le routine che gestiscono il page fault sono particolari, in quanto possono 
+// a loro volta invocare altre routine del nucleo stesso. In particolare, sono 
+// necessarie le seguenti:
+//
 	.global _sem_wait
 _sem_wait:
 	int $tipo_w
@@ -1175,6 +1233,8 @@ _abort_p:
 ////////////////////////////////////////////////////////
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
+//
+// driver del timer
 	.extern _c_driver_t
 driver_t:
 	call salva_stato
@@ -1185,6 +1245,7 @@ driver_t:
 	call carica_stato
 	iret
 
+// driver degli hard disk sul canale primario
 	.extern _c_driver_hd
 driver_hd0:
 	call salva_stato
@@ -1203,6 +1264,7 @@ driver_hd0:
 1:	call carica_stato
 	iret
 
+// driver degli hard disk sul canale secondario
 driver_hd1:
 	call salva_stato
 	call inspronti
@@ -1221,6 +1283,7 @@ driver_hd1:
 	iret
 	
 
+// handler della tastiera
 	.extern _pe_tast
 handler_KBD:
 	call salva_stato
@@ -1232,6 +1295,9 @@ handler_KBD:
 	call carica_stato
 	iret
 
+
+// handler delle interfacce seriali
+//
 .set IIR1, 0x03fa
 .set IIR2, 0x02fa
 
@@ -1276,7 +1342,7 @@ handler_COM2:
 
 
 ////////////////////////////////////////////////////////
-// a_primitive                                          //
+// a_primitive                                        //
 ////////////////////////////////////////////////////////
         .extern _c_activate_p
 a_activate_p:	// routine int $tipo_a
@@ -1303,11 +1369,9 @@ a_begin_p:	// routine int $tipo_b
 
         .extern _c_give_num
 a_give_num:	// routine int $tipo_g
-	salva_registri
-        copia_param 1 7
+	salva_reg_rit
         call _c_give_num
-        addl $4, %esp
-        carica_registri
+        carica_reg_rit
 	iret
 
 	.extern _c_sem_ini
@@ -1443,10 +1507,13 @@ a_abort_p:
 	call carica_stato
 	iret
 
-// SWAP
+/////////////////////////////////////////////////////////////////////
+// SWAP                                                           
 // Funzioni di utilita' per la gestione degli hard disk
-//
+////////////////////////////////////////////////////////////////////
 
+
+// lettura di n settori
 	.global a_readhd_n
 	.extern _c_readhd_n
 a_readhd_n:
@@ -1457,6 +1524,7 @@ a_readhd_n:
 	carica_registri
 	iret
 
+// scrittura di n settori
 	.global a_writehd_n
 	.extern _c_writehd_n
 a_writehd_n:
@@ -1566,6 +1634,7 @@ sgret:
 	leave
 	ret
 
+// invia un software reset agli hard disk del canale passato come parametro
 	.global _hd_software_reset
 _hd_software_reset:
 	pushl %ebp
@@ -1621,8 +1690,6 @@ _go_inouthd:
 	ret
 
 // Disabilita il controller ATA specificato a generare richeste di interruzione
-//  NB. Su un PC (non su Bochs) questa stassa procedura produrra` una richiesta
-//  di interruzione!
 //
 	.global _halt_inouthd
 _halt_inouthd:
@@ -1637,6 +1704,10 @@ _halt_inouthd:
 	popl %eax
 	ret
 
+// attende che sia trascorso il numero di microsecondi passato come parametro.
+// Fa uso della variabile globale _clocks_per_usec (numero di cicli di clock 
+// per microsecondo), il cui valore e' stato calcolato nella fase di 
+// inizializzazione del sistema (vedere _calibra_tsc)
 	.global _busywait_usec
 _busywait_usec:
 	pushl %ebp
@@ -1657,6 +1728,7 @@ _busywait_usec:
 	ret
 	
 
+// attende che sia trascorso un certo numero di cicli di clock
 	.global _busywait_clock
 _busywait_clock:
 	pushl %ebp
@@ -1682,6 +1754,9 @@ _busywait_clock:
 	leave
 	ret
 
+// attende che siano trascorsi approssimativamente 500 nanosecondi
+// (serve a realizzare l'attesa di 400 ns richiesta dallo standard ATA, 
+// mantenendo un certo margine di sicurezza)
 wait_500ns:
 	pushl _clocks_per_usec
 	shrl (%esp)
@@ -1690,8 +1765,7 @@ wait_500ns:
 	addl $8, %esp
 	ret
 	
-// Indica al controllore quale drive deve essere selezionato
-//
+// Seleziona uno dei due drive di un canale ATA
 	.global _hd_select_device
 _hd_select_device:
 	pushl %ebp
@@ -1715,6 +1789,7 @@ ms_out:	movl 12(%ebp),%edx
 	leave
 	ret
 
+// invia un comando al drive correntemente selezionato di un canale ATA
 	.global _hd_write_command
 _hd_write_command:
 	pushl %ebp
@@ -1734,8 +1809,8 @@ _hd_write_command:
 	ret
 
 
-// Legge lo stato attuale del controllore per capire quale drive e` attivo
-//
+// Legge lo stato attuale del registro di stato di un canale, per capire quale 
+// drive e` attivo
 	.global _hd_read_device
 _hd_read_device:
 	pushl %eax
@@ -1756,22 +1831,8 @@ ms_ret:	movl 16(%esp),%edx
 	popl %eax
 	ret
 	
-// Indirizzi dei registri del controller ata
-//
-
-.set HD_STS_1, 0x01F7
-.set HD_STS_2, 0x0177
-.set HD_SECT_N, 0x01f3
-.set HD_CYL_L_N, 0x01f4
-.set HD_CYL_H_N, 0x01f5
-.set HD_N, 0x01f6
-
-// Maschere dei bit fndamentali
-//
-.set HD_STS_DRDY, 0x40
-
 // Disabilita il controllore di interruzioni ad inoltrare richieste provenienti
-//  da uno dei due controller ATA, Slave PIC, linee 14 o 15
+//  da uno dei due controller ATA. Slave PIC, linee 14 o 15
 //
 	.global _mask_hd
 _mask_hd:
@@ -1793,8 +1854,7 @@ m_end:	popl %eax
 	ret
 
 // Abilita il controllore di interruzione ad inoltrere le richieste provenienti
-//  da uno dei due controller ATA, Slave PIC, linee 14 o 15
-//
+//  da uno dei due controller ATA. Slave PIC, linee 14 o 15
 	.global _umask_hd
 _umask_hd:
 	pushl %eax
@@ -1816,7 +1876,6 @@ um_end:	popl %eax
 	
 // Scompone correttamente il blocco iniziale di una operazione su hard disk
 // e lo scrive nei registri opportuni
-//
 	.global _hd_write_address
 _hd_write_address:
 	pushl %ebp

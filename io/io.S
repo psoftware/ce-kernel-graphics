@@ -10,39 +10,39 @@
 // Tipi delle interruzioni delle chiamate di sistema usate
 // Devono coincidere con quelli usati in sistema.s e utente.s
 //
-.set tipo_a, TIPO_A
-.set tipo_t, TIPO_T
+.set tipo_a,  TIPO_A
+.set tipo_t,  TIPO_T
 .set tipo_si, TIPO_SI
-.set tipo_w, TIPO_W
-.set tipo_s, TIPO_S
+.set tipo_w,  TIPO_W
+.set tipo_s,  TIPO_S
 .set tipo_nd, TIPO_ND
-.set tipo_d, TIPO_D
+.set tipo_d,  TIPO_D
 
 // Tipi delle interruzioni usate per interfacciarsi al modulo
 //  sistema
 // Devono coincidere con quelli usati in sistema.s
 //
-.set tipo_ae, TIPO_AE
+.set tipo_ae,   TIPO_AE
 .set tipo_nwfi, TIPO_NWFI
-.set tipo_va, TIPO_VA
-.set tipo_p, TIPO_P
-.set tipo_ab, TIPO_AB
-.set tipo_fg, TIPO_FG
-.set tipo_wv, TIPO_WV
-.set tipo_av, TIPO_AV
-.set tipo_rl, TIPO_RL
+.set tipo_va,   TIPO_VA
+.set tipo_p,    TIPO_P
+.set tipo_ab,   TIPO_AB
+.set tipo_fg,   TIPO_FG
+.set tipo_wv,   TIPO_WV
+.set tipo_av,   TIPO_AV
+.set tipo_rl,   TIPO_RL
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
 // Devono coincidere con quelli usati in utente.s
 //
-.set io_tipo_rsen, IO_TIPO_RSEN
+.set io_tipo_rsen,  IO_TIPO_RSEN
 .set io_tipo_rseln, IO_TIPO_RSELN
-.set io_tipo_wsen, IO_TIPO_WSEN
-.set io_tipo_wse0, IO_TIPO_WSE0
-.set io_tipo_tr, IO_TIPO_TR
-.set io_tipo_trl, IO_TIPO_TRL
-.set io_tipo_tw, IO_TIPO_TW
+.set io_tipo_wsen,  IO_TIPO_WSEN
+.set io_tipo_wse0,  IO_TIPO_WSE0
+.set io_tipo_tr,    IO_TIPO_TR
+.set io_tipo_trl,   IO_TIPO_TRL
+.set io_tipo_tw,    IO_TIPO_TW
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -51,8 +51,6 @@
 
 // Copia dei parametri di una chiamata di sistema dalla pila utente
 //  alla pila sistema
-// Replicato in sistema.s
-//
 .macro copia_param n_long offset
         movl $\offset, %ecx
         movl 4(%esp, %ecx, 4), %eax     // cs in eax
@@ -81,8 +79,6 @@
 .endm
 
 // Salvataggio dei registri in pila
-// Replicato in sistema.s
-//
 .macro salva_registri
 	pushl %eax
 	pushl %ecx
@@ -94,8 +90,6 @@
 .endm
 
 // Caricamento dei registri dalla pila (duale rispetto a salva_registri)
-// Replicato in sistema.s
-//
 .macro carica_registri
 	popl %ebp
 	popl %edi
@@ -104,6 +98,15 @@
 	popl %edx
 	popl %ecx
 	popl %eax
+.endm
+
+// Chiama _fill_gate con i parametri specificati
+.macro fill_io_gate gate off
+	pushl $LIV_UTENTE
+	pushl $\off
+	pushl $\gate
+	call _fill_gate
+	addl $12, %esp
 .endm
 
 .global start, _start
@@ -117,7 +120,6 @@ _start:	jmp _cmain
 	.data
 
 // Descrittori delle interfacce seriali
-//
 	.global _com		// non comi, como
 _com:	.long	0x03f8		// com[0].indreg.iRBR
 	.long	0x03f8		// com[0].indreg.iTHR
@@ -234,8 +236,6 @@ _delay:
 ////////////////////////////////////////////////////////////////////////////////
 
 // Ingresso di un byte da una porta di IO
-// Replicato in sistema.s
-//
 	.global _inputb
 _inputb:
 	pushl %eax
@@ -249,8 +249,6 @@ _inputb:
 	ret
 
 // Uscita di un byte su una porta di IO
-// Replicato in sistema.s
-//
 	.global _outputb
 _outputb:
 	pushl %eax
@@ -263,8 +261,6 @@ _outputb:
 	ret
 
 // Ingresso di una word da una porta di IO
-// Replicato in sistema.s
-//
 	.global _inputw
 _inputw:
 	pushl %eax
@@ -278,8 +274,6 @@ _inputw:
 	ret
 
 // Uscita di una word su una porta di IO
-// Replicato in sistema.s
-//
 	.global _outputw
 _outputw:
 	pushl %eax
@@ -292,8 +286,6 @@ _outputw:
 	ret
 
 // Ingresso di un buffer continuo da un buffer di IO di word
-// Replicato in sistema.s
-//
 	.global _inputbuffw
 _inputbuffw:
 	pushl %eax
@@ -315,8 +307,6 @@ _inputbuffw:
 	ret
 
 // Uscita di un buffer continuo su una buffer di IO di word
-// Replicato in sistema.s
-//
 	.global _outputbuffw
 _outputbuffw:
 	pushl %eax
@@ -338,7 +328,6 @@ _outputbuffw:
 	ret
 
 // Indirizzi delle porte del controllore delle interruzioni
-//
 .set OCW1M, 0x21
 .set OCW2M, 0x20
 .set OCW1S, 0xa1
@@ -346,7 +335,6 @@ _outputbuffw:
 .set EOI, 0x20
 
 // Inizio dell' ingresso da una interfaccia seriale
-//
 	.global _go_inputse
 _go_inputse:
 	pushl %eax
@@ -379,7 +367,6 @@ _go_inputse:
 	ret
 
 // Fine dell' ingresso da un' interfaccia seriale
-//
 	.global _halt_inputse
 _halt_inputse:
 	pushl %eax
@@ -411,7 +398,6 @@ _halt_inputse:
 	ret
 
 // Inizio dell' uscita su interfaccia seriale
-//
 	.global _go_outputse
 _go_outputse:
 	pushl %eax
@@ -441,7 +427,6 @@ _go_outputse:
 	ret
 
 // Fine dell' uscita su interfaccia seriale
-//
 	.global _halt_outputse
 _halt_outputse:
 	pushl %eax
@@ -471,7 +456,6 @@ _halt_outputse:
 	ret
 
 // Indirizzi delle porte delle interfacce seriali
-//
 .set LCR1, 0x03fb
 .set LCR2, 0x02fb
 .set DLR_LSB1, 0x03f8
@@ -487,7 +471,6 @@ _halt_outputse:
 
 
 // Inizializzazione delle interfacce seriali
-// 
 	.global _com_setup
 _com_setup:
 	pushl %eax
@@ -543,7 +526,6 @@ _com_setup:
 
 // Abilitazione del controllore delle interruzioni ad inoltrare le richieste
 //  provenienti dalla tastera
-//
 	.global _abilita_tastiera
 _abilita_tastiera:
 	inb $OCW1M, %al
@@ -551,10 +533,12 @@ _abilita_tastiera:
 	outb %al, $OCW1M
 	ret
 
+// indirizzi delle porte del controllore della tastiera
 .set KBD_RBR, 0x60
 .set KBD_PORT_B, 0x61
 .set KBD_STR, 0x64
 
+// lettura di un codice dalla tastiera
 	.global _kbd_read
 _kbd_read:
 	pushl %ebp
@@ -575,12 +559,14 @@ _kbd_read:
 	leave
 	ret
 
-
+// indirizzi delle porte relative alla gestione del cursore, nel controllore 
+// della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
 .set ADD_P, 0x03d4
 .set DAT_P, 0x03d5
 
+// visualizza il cursore nella posizione passata come parametro
 	.global _console_cursor
 _console_cursor:
 	pushl %ebp
@@ -609,31 +595,19 @@ _console_cursor:
 
 
 
-
-// Chiama _fill_gate con i parametri specificati
-//
-.macro fill_io_gate gate off
-	pushl $LIV_UTENTE
-	pushl $\off
-	pushl $\gate
-	call _fill_gate
-	addl $12, %esp
-.endm
-
 // Inizializzazione dei gate per le primitive di IO
-//
 	.global _fill_io_gates
 _fill_io_gates:
 	pushl %ebp
 	movl %esp, %ebp
 
-	fill_io_gate io_tipo_rsen a_readse_n
-	fill_io_gate io_tipo_rseln a_readse_ln
-	fill_io_gate io_tipo_wsen a_writese_n
-	fill_io_gate io_tipo_wse0 a_writese_0
-	fill_io_gate io_tipo_tr a_readvterm_n
-	fill_io_gate io_tipo_trl a_readvterm_ln
-	fill_io_gate io_tipo_tw a_writevterm_n
+	fill_io_gate	io_tipo_rsen	a_readse_n
+	fill_io_gate	io_tipo_rseln	a_readse_ln
+	fill_io_gate	io_tipo_wsen	a_writese_n
+	fill_io_gate	io_tipo_wse0	a_writese_0
+	fill_io_gate	io_tipo_tr	a_readvterm_n
+	fill_io_gate	io_tipo_trl	a_readvterm_ln
+	fill_io_gate	io_tipo_tw	a_writevterm_n
 	
 	leave
 	ret

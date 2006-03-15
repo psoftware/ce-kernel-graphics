@@ -12,32 +12,12 @@
 const int IRQ_MAX = 15;
 
 // Priorita' base dei processi esterni
-// La priorita' di un processo esterno e' calcolata aggiungendo a questa
-//  costante la priorita' dell' interruzione a cui e' associato (la priorita'
-//  delle interruzioni e' inversamente proporzionale al loro tipo, quindi si
-//  somma IRQ_MAX - TIPO alla priorita' di base).
-// Deve coincidere con il valore in sistema.cpp
-//
 const int PRIO_ESTERN_BASE = 0x400;
 
-// Identificatori dei processi esterni
-// Devono coincidere con i valori in sistema.cpp
-//
-enum estern_id {
-	tastiera,
-	com1_in,
-	com1_out,
-	com2_in,
-	com2_out,
-	ata0,
-	ata1
-};
 
 typedef char* ind_b;		// indirizzo di un byte (una porta)
 typedef short* ind_w;		// indirizzo di una parola
 typedef int* ind_l;		// indirizzo di una parola lunga
-typedef unsigned int ind_fisico;// locazione di memoria fisica (per il DMA)
-typedef unsigned int size_t;
 
 ////////////////////////////////////////////////////////////////////////////////
 //                        CHIAMATE DI SISTEMA USATE                           //
@@ -60,7 +40,6 @@ enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
 
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
-//extern "C" void trasforma(ind_l vetti, ind_fisico &iff);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void abort_p();
 
@@ -70,7 +49,6 @@ extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char f
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
 ////////////////////////////////////////////////////////////////////////////////
-
 
 // ingresso di un byte da una porta di IO
 extern "C" void inputb(ind_b reg, char &a);
@@ -89,8 +67,6 @@ extern "C" void inputbuffw(ind_b reg, short *a,short n);
 
 // uscita di una stringa di word su un buffer di IO
 extern "C" void outputbuffw(short *a, ind_b reg,short n);
-
-extern "C" void console_read(char& ch);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI                       //
@@ -416,7 +392,6 @@ enum kbd_mod {
 #define KBD_CANC	0xd000
 
 // tabella di corrispondenza tra codici e caratteri ascii (tastiera italiana)
-//
 static unsigned short kbd_keymap[KBD_MOD_NR][KBD_COD_NR] = {
 	{ 0, 27, '1', '2', '3', '4', '5', '6', '7', '8',
 	'9', '0', '\'', 141, '\b', '\t', 'q', 'w', 'e', 'r',
@@ -448,9 +423,6 @@ static unsigned short kbd_keymap[KBD_MOD_NR][KBD_COD_NR] = {
 	0, 0, 0, 0, 0, 0, 0 }
 };
 
-// dimensione della coda di una tastiera
-const int KBD_QUEUE_SIZE = 512;
-
 // maschere per il campo flags
 enum {
 	KBD_FLAG_NONE = 0,
@@ -481,7 +453,6 @@ inline int KBD_SC_IDX(int flags)
 extern "C" void abilita_tastiera(void);
 
 // Interruzione hardware della tastiera
-//
 const int KBD_IRQ = 1;
 
 
@@ -503,7 +474,7 @@ inline int circular_sum(int p1, int p2, int mod)
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//    TASTIERA VIRTUALE                                                      //
+//    TASTIERE VIRTUALI                                                      //
 ///////////////////////////////////////////////////////////////////////////////
 
 const unsigned int VKBD_BUF_SIZE = 20;
@@ -633,13 +604,11 @@ void vkbd_switch(des_vkbd* k)
 //  MONITOR VIRTUALI                                                         //
 ///////////////////////////////////////////////////////////////////////////////
 
-unsigned const int VMON_ROW_NUM = 25;
+unsigned const int VMON_ROW_NUM = 100;
 unsigned const int VMON_COL_NUM = 80;
 unsigned const int VMON_SIZE = VMON_ROW_NUM * VMON_COL_NUM;
 
 // descrittore di monitor virtuale
-//
-//
 struct des_vmon {
 	unsigned char video[VMON_SIZE]; // buffer circolare
 	int pos;	// posizione (nel buffer circolare) in cui verra' aggiunto il prox. car
@@ -1016,7 +985,7 @@ void estern_kbd(int h)
 		ch = kbd_read();
 		code = vkbd_nuovo_car(&vterm_active->vkbd, ch);				
 		if (code >= KBD_F1 && code <= KBD_F12) 
-			vterm_switch(KBD_FNUM(code));
+				vterm_switch(KBD_FNUM(code));
 		nwfi(master);
 	}
 }
