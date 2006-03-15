@@ -1806,7 +1806,6 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 	collega_pagina(ptab, ind_fisico, ind);
 
 	pdes_pag->D		= 1; // verra' modificata
-	pdes_pag->A		= 1; // e acceduta
 
 	// restituiamo un puntatore alla pila creata
 	return ind_fisico;
