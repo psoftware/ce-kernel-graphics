@@ -3238,6 +3238,7 @@ bool log_init_usr()
 		log(LOG_ERR, "Semafori insufficienti in log_init_usr");
 		return false;
 	}
+	return true;
 }
 
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa

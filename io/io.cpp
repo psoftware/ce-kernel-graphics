@@ -823,7 +823,7 @@ void vmon_write_n(des_vmon* t, char vetti[], int quanti)
 
 
 struct des_vterm {
-	int mutex;
+	int mutex_r;
 	int sincr;
 	des_vkbd vkbd;
 	int cont;
@@ -832,6 +832,7 @@ struct des_vterm {
 	unsigned int flags;
 	int orig_cont;
 	bool echo;
+	int mutex_w;
 	des_vmon vmon;
 };
 
@@ -910,9 +911,9 @@ extern "C" void c_writevterm_n(int term, char vetti[], int quanti)
 
 	des_vterm* t = &vterm[term];
 
-	sem_wait(t->mutex);
+	sem_wait(t->mutex_w);
 	vmon_write_n(&t->vmon, vetti, quanti);
-	sem_signal(t->mutex);
+	sem_signal(t->mutex_w);
 }
 
 void startvterm_in(des_vterm *p_des, char vetti[], int quanti, funz op, bool echo)
@@ -937,10 +938,10 @@ extern "C" void c_readvterm_n(int term, char vetti[], int quanti, bool echo)
 		return;
 
 	p_des = &vterm[term];
-	sem_wait(p_des->mutex);
+	sem_wait(p_des->mutex_r);
 	startvterm_in(p_des, vetti, quanti, input_n, echo);
 	sem_wait(p_des->sincr);
-	sem_signal(p_des->mutex);
+	sem_signal(p_des->mutex_r);
 }
 
 extern "C" void c_readvterm_ln(int term, char vetti[], int &quanti, bool echo)
@@ -956,11 +957,11 @@ extern "C" void c_readvterm_ln(int term, char vetti[], int &quanti, bool echo)
 		return;
 
 	p_des = &vterm[term];
-	sem_wait(p_des->mutex);
+	sem_wait(p_des->mutex_r);
 	startvterm_in(p_des, vetti, quanti, input_ln, echo);
 	sem_wait(p_des->sincr);
 	quanti = p_des->cont;
-	sem_signal(p_des->mutex);
+	sem_signal(p_des->mutex_r);
 }
 
 
@@ -1001,7 +1002,9 @@ int vterm_init()
 	for (int i = 0; i < N_VTERM; i++) {
 		des_vterm* p_des = &vterm[i];
 
-		sem_ini(p_des->mutex, 1, r);
+		sem_ini(p_des->mutex_r, 1, r);
+		if (!r) return -3;
+		sem_ini(p_des->mutex_w, 1, r);
 		if (!r) return -3;
 		sem_ini(p_des->sincr, 0, r);
 		if (!r) return -3;

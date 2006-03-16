@@ -1,16 +1,88 @@
 #include <sys.h>
 #include <lib.h>
 
-process __logger body __syslog(11), 100, LIV_UTENTE;
+process __logger_p0 body __logger_main(11), 201, LIV_UTENTE;
+process __logger_p1 body __logger_reader(11), 200, LIV_UTENTE;
+process __logger_p2 body __logger_ctrl(11), 200, LIV_UTENTE;
 
-log_msg __buf __attribute__ (( section("RESIDENT") ));
+log_msg __logger_buf __attribute__ (( section("RESIDENT") ));
 
-char *__sev_names[] = { "DBG", "INF", "WRN", "ERR" };
+char *__logger_sev_names[] = { "DBG", "INF", "WRN", "ERR" };
 
-process_body __syslog(int a)
+enum __logger_cmd_types { NEW_MSG, QUIT } __logger_cmd;
+
+semaphore __logger_non_busy value 1;
+semaphore __logger_new_cmd  value 0;
+semaphore __logger_mutex    value 1;
+
+void __logger_send_cmd(__logger_cmd_types cmd)
 {
+	sem_wait(__logger_mutex);
+	sem_wait(__logger_non_busy);
+	__logger_cmd = cmd;
+	sem_signal(__logger_new_cmd);
+	sem_signal(__logger_mutex);
+}
+
+__logger_cmd_types __logger_recv_cmd()
+{
+	__logger_cmd_types work;
+	sem_wait(__logger_new_cmd);
+	work = __logger_cmd;
+	sem_signal(__logger_non_busy);
+	return work;
+}
+
+bool __logger_quit = false;
+log_msg __logger_msg;
+
+process_body __logger_main(int a)
+{
+	__logger_cmd_types my_cmd;
+
+	while (!__logger_quit) {
+		my_cmd = __logger_recv_cmd();
+		switch (my_cmd) {
+		case NEW_MSG:
+			printf(a, "%s %d\t%s\n", __logger_sev_names[__logger_msg.sev],
+						 __logger_msg.identifier,
+						 __logger_msg.msg);
+			break;
+		default:
+			break;
+		}
+	}
+	printf(a, "*** logger (main) terminato ***\n");
+}
+
+process_body __logger_reader(int a)
+{
+
+	while (!__logger_quit) {
+		readlog(__logger_buf);
+		if (!__logger_quit) {
+			__logger_msg = __logger_buf;
+			__logger_send_cmd(NEW_MSG);
+		}
+	}
+	printf(a, "*** logger (reader) terminato ***\n");
+}
+
+char __logger_ctrl_buf;
+
+process_body __logger_ctrl(int a)
+{
+	
 	for (;;) {
-		readlog(__buf);
-		printf(a, "%s %d\t%s\n", __sev_names[__buf.sev], __buf.identifier, __buf.msg);
+		readvterm_n(a, &__logger_ctrl_buf, 1, false);
+		switch (__logger_ctrl_buf) {
+		case 'q':
+			__logger_quit = true;
+			__logger_send_cmd(QUIT);
+			*(int *)0 = 1;
+			break;
+		default:
+			break;
+		}
 	}
 }

@@ -141,3 +141,25 @@ int printf(int term, const char *fmt, ...)
 }
 
 
+// copia n byte da src a dest
+void *memcpy(void *dest, const void *src, unsigned int n)
+{
+	char       *dest_ptr = static_cast<char*>(dest);
+	const char *src_ptr  = static_cast<const char*>(src);
+
+	for (int i = 0; i < n; i++)
+		dest_ptr[i] = src_ptr[i];
+
+	return dest;
+}
+
+// scrive n byte pari a c, a partire da dest
+void *memset(void *dest, int c, unsigned int n)
+{
+	char *dest_ptr = static_cast<char*>(dest);
+
+        for (int i = 0; i < n; i++)
+              dest_ptr[i] = static_cast<char>(c);
+
+        return dest;
+}

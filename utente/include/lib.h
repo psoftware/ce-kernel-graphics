@@ -22,6 +22,11 @@ char *strncpy(char *dest, const char *src, size_t l);
 int vsnprintf(char *str, size_t size, const char *fmt, va_list ap);
 int snprintf(char *buf, size_t n, const char *fmt, ...);
 int printf(int term, const char *fmt, ...);
+//
+// copia n byte da src a dst
+void *memcpy(void *dest, const void *src, unsigned int n);
+// copia c nei primi n byte della zona di memoria puntata da dest
+void *memset(void *dest, int c, unsigned int n);
 
 #endif
 
