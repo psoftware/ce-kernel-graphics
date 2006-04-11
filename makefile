@@ -53,7 +53,7 @@ build/parse: util/parse.c util/src.h
 	gcc -o build/parse util/parse.c
 
 build/createimg: util/createimg.cpp
-	g++ -Iinclude -o build/createimg util/createimg.cpp
+	g++ -g -Iinclude -o build/createimg util/createimg.cpp
 
 .PHONY: swap
 swap: build/createimg build/utente

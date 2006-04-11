@@ -138,22 +138,290 @@ struct superblock_t {
 	unsigned int	checksum;
 } superblock;
 
-bool elf32_check(Elf32_Ehdr* elf_h) {
+// interfaccia generica ai tipi di file eseguibile
+class Segmento {
+public:
+	virtual bool scrivibile() const = 0;
+	virtual uint ind_virtuale() const = 0;
+	virtual uint dimensione() const = 0;
+	virtual bool finito() const = 0;
+	virtual bool copia_prossima_pagina(pagina* dest) = 0;
+	virtual ~Segmento() {}
+};
+
+class Eseguibile {
+public:
+	virtual Segmento* prossimo_segmento() = 0;
+	virtual void* entry_point() const = 0;
+	virtual bool prossima_resident(uint& start, uint& dim) = 0;
+	virtual ~Eseguibile() {}
+};
+
+class ListaInterpreti;
+
+class Interprete {
+public:
+	Interprete();
+	virtual Eseguibile* interpreta(FILE* exe) = 0;
+	virtual ~Interprete() {}
+};
+
+class ListaInterpreti {
+	
+public:
+	static ListaInterpreti* instance();
+	void aggiungi(Interprete* in) { testa = new Elem(in, testa); }
+	void rewind() { curr = testa; }
+	bool ancora() { return curr != NULL; }
+	Interprete* prossimo();
+private:
+	static ListaInterpreti* instance_;
+	ListaInterpreti() : testa(NULL), curr(NULL) {}
+	
+	struct Elem {
+		Interprete* in;
+		Elem* next;
+
+		Elem(Interprete* in_, Elem* next_ = NULL):
+			in(in_), next(next_)
+		{}
+	} *testa, *curr;
+
+
+};
+
+ListaInterpreti* ListaInterpreti::instance_ = NULL;
+
+ListaInterpreti* ListaInterpreti::instance()
+{
+	if (!instance_) {
+		instance_ = new ListaInterpreti();
+	}
+	return instance_;
+}
+
+Interprete* ListaInterpreti::prossimo()
+{
+	Interprete *in = NULL;
+	if (curr) {
+		in = curr->in;
+		curr = curr->next;
+	}
+	return in;
+}
+
+Interprete::Interprete()
+{
+	ListaInterpreti::instance()->aggiungi(this);
+}
+
+
+// interprete per formato elf
+class InterpreteElf32: public Interprete {
+public:
+	InterpreteElf32();
+	~InterpreteElf32() {}
+	virtual Eseguibile* interpreta(FILE* pexe);
+};
+
+InterpreteElf32::InterpreteElf32()
+{}
+
+class EseguibileElf32: public Eseguibile {
+	FILE *pexe;
+	Elf32_Ehdr h;
+	char *seg_buf;
+	char *sec_buf;
+	char *strtab;
+	uint resident_start;
+	uint resident_size;
+	int curr_seg;
+	int curr_resident;
+
+	class SegmentoElf32: public Segmento {
+		EseguibileElf32 *padre;
+		Elf32_Phdr* ph;
+		uint curr_offset;
+		uint da_leggere;
+	public:
+		SegmentoElf32(EseguibileElf32 *padre_, Elf32_Phdr* ph_);
+		virtual bool scrivibile() const;
+		virtual uint ind_virtuale() const;
+		virtual uint dimensione() const;
+		virtual bool finito() const;
+		virtual bool copia_prossima_pagina(pagina* dest);
+		~SegmentoElf32() {}
+	};
+
+	friend class SegmentoElf32;
+public:
+	EseguibileElf32(FILE* pexe_);
+	bool init();
+	virtual Segmento* prossimo_segmento();
+	virtual void* entry_point() const;
+	virtual bool prossima_resident(uint& start, uint& dim);
+	~EseguibileElf32();
+};
+
+EseguibileElf32::EseguibileElf32(FILE* pexe_)
+	: pexe(pexe_), curr_seg(0), curr_resident(0),
+	  seg_buf(NULL), sec_buf(NULL), strtab(NULL)
+{}
+
+	
+
+bool EseguibileElf32::init()
+{
+	if (fseek(pexe, 0, SEEK_SET) < 0) 
+		return false;
+
+	if (fread(&h, sizeof(Elf32_Ehdr), 1, pexe) < 1)
+		return false;
 
 	// i primi 4 byte devono contenere un valore prestabilito
-	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
-	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
+	if (!(h.e_ident[EI_MAG0] == ELFMAG0 &&
+	      h.e_ident[EI_MAG1] == ELFMAG1 &&
+	      h.e_ident[EI_MAG2] == ELFMAG2 &&
+	      h.e_ident[EI_MAG2] == ELFMAG2))
 		return false;
 
-	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS32  &&  // 32 bit
-	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&  // little endian
-	      elf_h->e_type	       == ET_EXEC     &&  // eseguibile
-	      elf_h->e_machine 	       == EM_386))	  // per Intel x86
+	if (!(h.e_ident[EI_CLASS] == ELFCLASS32  &&  // 32 bit
+	      h.e_ident[EI_DATA]  == ELFDATA2LSB &&  // little endian
+	      h.e_type            == ET_EXEC     &&  // eseguibile
+	      h.e_machine         == EM_386))        // per Intel x86
 		return false;
+
+	// leggiamo la tabella dei segmenti
+	seg_buf = new char[h.e_phnum * h.e_phentsize];
+	if ( fseek(pexe, h.e_phoff, SEEK_SET) < 0 ||
+	     fread(seg_buf, h.e_phentsize, h.e_phnum, pexe) < h.e_phnum)
+	{
+		fprintf(stderr, "Fine prematura del file ELF\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
+	sec_buf = new char[h.e_shnum * h.e_shentsize];
+	if ( fseek(pexe, h.e_shoff, SEEK_SET) < 0 ||
+	     fread(sec_buf, h.e_shentsize, h.e_shnum, pexe) < h.e_shnum)
+	{
+		fprintf(stderr, "Fine prematura del file ELF\n");
+		exit(EXIT_FAILURE);
+	}
+	// dobbiamo cariare anche la sezione contenente la tabella delle 
+	// stringhe
+	Elf32_Shdr* elf_strtab = (Elf32_Shdr*)(sec_buf + h.e_shentsize * h.e_shstrndx);
+	strtab = new char[elf_strtab->sh_size];
+	if ( fseek(pexe, elf_strtab->sh_offset, SEEK_SET) < 0 ||
+	     fread(strtab, elf_strtab->sh_size, 1, pexe) < 1)
+	{
+		fprintf(stderr, "Errore nella lettura della tabella delle stringhe\n");
+		exit(EXIT_FAILURE);
+	}
 
 	return true;
+}
+
+Segmento* EseguibileElf32::prossimo_segmento()
+{
+	while (curr_seg < h.e_phnum) {
+		Elf32_Phdr* ph = (Elf32_Phdr*)(seg_buf + h.e_phentsize * curr_seg);
+		curr_seg++;
+		
+		if (ph->p_type != PT_LOAD)
+			continue;
+
+		return new SegmentoElf32(this, ph);
+	}
+	return NULL;
+}
+
+void* EseguibileElf32::entry_point() const
+{
+	return h.e_entry;
+}
+
+bool EseguibileElf32::prossima_resident(uint& start, uint& dim)
+{
+	while (curr_resident < h.e_shnum) {
+		Elf32_Shdr* sh = (Elf32_Shdr*)(sec_buf + h.e_shentsize * curr_resident);
+
+		curr_resident++;
+
+		if (strcmp("RESIDENT", strtab + sh->sh_name) != 0)
+			continue;
+
+		start = a2i(sh->sh_addr);
+		dim = sh->sh_size;
+		return true;
+	}
+	return false;
+}
+
+EseguibileElf32::~EseguibileElf32()
+{
+	delete[] seg_buf;
+	delete[] sec_buf;
+	delete[] strtab;
+}
+
+EseguibileElf32::SegmentoElf32::SegmentoElf32(EseguibileElf32* padre_, Elf32_Phdr* ph_)
+	: padre(padre_), ph(ph_),
+	  curr_offset(ph->p_offset & ~(SIZE_PAGINA - 1)),
+	  da_leggere(ph->p_filesz + (ph->p_offset - curr_offset))
+{}
+
+bool EseguibileElf32::SegmentoElf32::scrivibile() const
+{
+	return (ph->p_flags & PF_W);
+}
+
+uint EseguibileElf32::SegmentoElf32::ind_virtuale() const
+{
+	return a2i(ph->p_vaddr);
+}
+
+uint EseguibileElf32::SegmentoElf32::dimensione() const
+{
+	return ph->p_memsz;
+}
+
+bool EseguibileElf32::SegmentoElf32::finito() const
+{
+	return (da_leggere <= 0);
+}
+
+
+bool EseguibileElf32::SegmentoElf32::copia_prossima_pagina(pagina* dest)
+{
+	if (finito())
+		return false;
+
+	if (fseek(padre->pexe, curr_offset, SEEK_SET) < 0) {
+		fprintf(stderr, "errore nel file ELF\n");
+		exit(EXIT_FAILURE);
+	}
+
+	memset(dest, 0, sizeof(pagina));
+	int curr = (da_leggere > sizeof(pagina) ? sizeof(pagina) : da_leggere);
+	if (fread(dest, 1, curr, padre->pexe) < curr) {
+		fprintf(stderr, "errore nella lettura dal file ELF\n");
+		exit(EXIT_FAILURE);
+	}
+	da_leggere -= curr;
+	curr_offset += curr;
+	return true;
+}
+
+Eseguibile* InterpreteElf32::interpreta(FILE* pexe)
+{
+	EseguibileElf32 *pe = new EseguibileElf32(pexe);
+
+	if (pe->init())
+		return pe;
+
+	delete pe;
+	return NULL;
 }
 
 void scrivi_blocco(FILE* img, block_t b, void* buf)
@@ -175,8 +443,9 @@ void leggi_blocco(FILE* img, block_t b, void* buf)
 		exit(EXIT_FAILURE);
 	}
 }
+
+InterpreteElf32 int_elf32;
 	
-FILE *exe, *img;
 
 int main(int argc, char* argv[]) {
 
@@ -184,6 +453,7 @@ int main(int argc, char* argv[]) {
 	direttorio main_dir;
 	tabella_pagine tab;
 	pagina pag;
+	FILE *exe, *img;
 
 	if (argc < 2) {
 		fprintf(stderr, "Utilizzo: %s <swap> <eseguibile>\n", argv[0]);
@@ -224,52 +494,35 @@ int main(int argc, char* argv[]) {
 	tabella_pagine* ptabella;
 	descrittore_pagina* pdes_pag;
 
-	Elf32_Ehdr* elf_h = new Elf32_Ehdr;
-
-	if (fread(elf_h, sizeof(Elf32_Ehdr), 1, exe) < 1 || !elf32_check(elf_h)) {
-		fprintf(stderr, "%s non ELF\n", argv[2]);
+	Eseguibile *e = NULL;
+	ListaInterpreti* interpreti = ListaInterpreti::instance();
+	interpreti->rewind();
+	while (interpreti->ancora()) {
+		e = interpreti->prossimo()->interpreta(exe);
+		if (e) break;
+	}
+	if (!e) {
+		fprintf(stderr, "Formato del file eseguibile non riconosciuto\n");
 		exit(EXIT_FAILURE);
 	}
-	superblock.entry_point = elf_h->e_entry;
+
+	superblock.entry_point = e->entry_point();
 
 	memset(&main_dir, 0, sizeof(direttorio));
 	
 	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	char* buf = new char[elf_h->e_phnum * elf_h->e_phentsize];
-	if ( fseek(exe, elf_h->e_phoff, SEEK_SET) < 0 ||
-	     fread(buf, elf_h->e_phentsize, elf_h->e_phnum, exe) < elf_h->e_phnum)
-	{
-		fprintf(stderr, "Fine prematura del file ELF\n");
-		exit(EXIT_FAILURE);
-	}
 	uint last_address = 0;
-	for (int i = 0; i < elf_h->e_phnum; i++) {
-		Elf32_Phdr* elf_ph = (Elf32_Phdr*)(buf + elf_h->e_phentsize * i);
+	Segmento *s = NULL;
+	while (s = e->prossimo_segmento()) {
+		uint ind_virtuale = s->ind_virtuale();
+		uint dimensione = s->dimensione();
+		uint end_addr = ind_virtuale + dimensione;
 
+		if (end_addr > last_address) 
+			last_address = end_addr;
 
-		// ci interessano solo i segmenti di tipo PT_LOAD
-		// (corrispondenti alle sezioni .text e .data)
-		if (elf_ph->p_type != PT_LOAD)
-			continue;
-		
-		// un flag del descrittore ci dice se il segmento deve essere
-		// scrivibile
-		unsigned int scrivibile = (elf_ph->p_flags & PF_W ? 1 : 0);
-
-		if (a2i(elf_ph->p_vaddr) + elf_ph->p_memsz > last_address) 
-			last_address = a2i(elf_ph->p_vaddr) + elf_ph->p_memsz;
-
-		uint start_off = elf_ph->p_offset & ~(SIZE_PAGINA - 1);
-		if ( fseek(exe, start_off, SEEK_SET) < 0) {
-			fprintf(stderr, "errore nel file ELF\n");
-			exit(EXIT_FAILURE);
-		}
-		uint da_leggere = elf_ph->p_filesz + (elf_ph->p_offset - start_off);
-		for (uint  ind_virtuale = uint(elf_ph->p_vaddr);
-		           ind_virtuale < uint(elf_ph->p_vaddr) + elf_ph->p_memsz;
-	                   ind_virtuale += SIZE_PAGINA)
+		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
 		{
-			
 			block_t b;
 			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
 			if (pdes_tab->address == 0) {
@@ -288,67 +541,36 @@ int main(int argc, char* argv[]) {
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			if (da_leggere > 0) {
+			if (!s->finito()) {
 				if (! bm_alloc(&blocks, b) ) {
 					fprintf(stderr, "spazio insufficiente nello swap\n");
 					exit(EXIT_FAILURE);
 				}
-				memset(&pag, 0, sizeof(pagina));
-				int curr = (da_leggere > sizeof(pagina) ? sizeof(pagina) : da_leggere);
-				if ( fread(&pag, 1, curr, exe) < curr ) {
-					fprintf(stderr, "errore nella lettura dal file ELF\n");
-					exit(EXIT_FAILURE);
-				}
-				da_leggere -= curr;
+				s->copia_prossima_pagina(&pag);
 				pdes_pag->address = b;
 				scrivi_blocco(img, pdes_pag->address, &pag);
 			} else {
 				pdes_pag->address = 0;
 			}
-			pdes_pag->RW = scrivibile;
+			pdes_pag->RW = s->scrivibile();
 			pdes_pag->US = 1;
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 
 	}
-	// abbiamo finito con i segmenti
-	delete[] buf;
 	// ora settiamo il bit preload per tutte le pagine che devono contenere
 	// la sezione RESIDENT
 
-	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
-	buf = new char[elf_h->e_shnum * elf_h->e_shentsize];
-	if ( fseek(exe, elf_h->e_shoff, SEEK_SET) < 0 ||
-	     fread(buf, elf_h->e_shentsize, elf_h->e_shnum, exe) < elf_h->e_shnum)
-	{
-		fprintf(stderr, "Fine prematura del file ELF\n");
-		exit(EXIT_FAILURE);
-	}
-	// dobbiamo cariare anche la sezione contenente la tabella delle 
-	// stringhe
-	Elf32_Shdr* elf_strtab = (Elf32_Shdr*)(buf + elf_h->e_shentsize * elf_h->e_shstrndx);
-	char* strtab = new char[elf_strtab->sh_size];
-	if ( fseek(exe, elf_strtab->sh_offset, SEEK_SET) < 0 ||
-	     fread(strtab, elf_strtab->sh_size, 1, exe) < 1)
-	{
-		fprintf(stderr, "Errore nella lettura della tabella delle stringhe\n");
-		exit(EXIT_FAILURE);
-	}
 	// cerchiamo la nostra sezione
-	for (int i = 1; i < elf_h->e_shnum; i++) {
-		Elf32_Shdr* elf_sh = (Elf32_Shdr*)(buf + elf_h->e_shentsize * i);
-
-		if (strcmp("RESIDENT", strtab + elf_sh->sh_name) != 0)
-			continue;
-
-		// trovata. Ora, settiamo i bit preload
-		for (uint ind_virtuale = a2i(elf_sh->sh_addr);
-			  ind_virtuale < a2i(elf_sh->sh_addr) + elf_sh->sh_size;
-			  ind_virtuale += SIZE_PAGINA)
+	uint start, size;
+	while (e->prossima_resident(start, size)) {
+		for (uint ind_virtuale = start;
+			  ind_virtuale < start + size;
+			  ind_virtuale += sizeof(pagina))
 		{
 			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
 			if (pdes_tab->address == 0) {
-				fprintf(stderr, "Errore interno");
+				fprintf(stderr, "Errore interno\n");
 				exit(EXIT_FAILURE);
 			} else {
 				leggi_blocco(img, pdes_tab->address, &tab);
@@ -359,7 +581,6 @@ int main(int argc, char* argv[]) {
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 	}			
-
 	
 	// infine, le tabelle condivise per lo heap
 	for (int i = indice_direttorio(last_address) + 1;
