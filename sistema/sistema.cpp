@@ -98,9 +98,9 @@ inline void* allineav(void* v, unsigned int a)
 // funzioni per la manipolazione di stringhe
 //
 // copia n byte da src a dst
-void *memcpy(void *dest, const void *src, unsigned int n);
+extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
-void *memset(void *dest, int c, unsigned int n);
+extern "C" void *memset(void *dest, int c, unsigned int n);
 // restituisce true se le due stringe first e second sono uguali
 bool str_equal(const char* first, const char* second);
 
@@ -446,12 +446,12 @@ void free_interna(void* indirizzo, unsigned int quanti)
 
 // ridefinizione degli operatori new e delete, in modo che utilizzino le 
 // funzioni malloc e free definite precedentemente
-void* operator new(unsigned int size)
+void* operator new(long unsigned int size)
 {
 	return malloc(size);
 }
 
-void* operator new[](unsigned int size)
+void* operator new[](long unsigned int size)
 {
 	return malloc(size);
 }
@@ -556,7 +556,7 @@ void operator delete[](void* p)
 // All'avvio del sistema, viene creato un direttorio principale, nel seguente 
 // modo:
 // - le entrate da 0 a 255 (massimo), corrispondenti allo spazio 
-// sistema/condiviso, veongono fatte puntare a tabelle, opportunamente create, 
+// sistema/condiviso, vengono fatte puntare a tabelle, opportunamente create, 
 // che mappano tutta la memoria fisica in memoria virtuale
 // - le entrate da 512 a 768 (massimo), corrispondenti allo spazio 
 // utente/condiviso, vengono copiate dalle corrispondenti entrate che si 
@@ -1186,7 +1186,7 @@ extern "C" void writehd_n(short ind_ata, short drv, void* vetti,
 		unsigned int primo, unsigned char quanti, char &errore);
 // utile per il debug: invia al log un messaggio relativo all'errore che e' 
 // stato riscontrato
-void hd_print_error(int i, int d, int sect, char errore);
+void hd_print_error(int i, int d, int sect, short errore);
 // cerca la partizione specificata
 partizione* hd_find_partition(short ind_ata, short drv, int p);
 
@@ -2148,8 +2148,8 @@ void rilascia_tutto(direttorio* pdir, void* start, int ntab)
 		descrittore_tabella* pdes_tab = &pdir->entrate[i];
 		if (pdes_tab->P == 1) {
 			tabella_pagine* ptab = tabella_puntata(pdes_tab);
-			for (int j = 0; j < 1024; j++) {
-				descrittore_pagina* pdes_pag = &ptab->entrate[j];
+			for (int k = 0; k < 1024; k++) {
+				descrittore_pagina* pdes_pag = &ptab->entrate[k];
 				if (pdes_pag->P == 1)
 					rilascia(pagina_puntata(pdes_pag));
 				else if (pdes_pag->address != 0)
@@ -3056,7 +3056,7 @@ end:
 }
 
 // stampa formattata su stringa (variadica)
-int snprintf(char *buf, unsigned int n, const char *fmt, ...)
+extern "C" int snprintf(char *buf, unsigned int n, const char *fmt, ...)
 {
 	va_list ap;
 	int l;
@@ -3416,7 +3416,7 @@ bool hd_wait_data(des_ata* p_des)
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
 }
 
-void hd_print_error(int i, int d, int sect, char error)
+void hd_print_error(int i, int d, int sect, short error)
 {
 	des_ata* p = &hd[i];
 	if (error == D_ERR_NONE)

@@ -89,7 +89,8 @@
 					//  primo parametro in EDI
         movl $\n_long, %ecx
         cld
-        rep movsl			// copia dei parametri
+        rep
+	movsl				// copia dei parametri
 
 .endm
 
@@ -438,7 +439,8 @@ init_gdt:
 	movl $gdt, %edi
 	movl $0x4000, %ecx
 	movl $0, %eax
-	rep stosl
+	rep
+	stosl
 
 
 			//indice	base	limite	P	DPL		TIPO		G

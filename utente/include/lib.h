@@ -24,9 +24,9 @@ int snprintf(char *buf, size_t n, const char *fmt, ...);
 int printf(int term, const char *fmt, ...);
 //
 // copia n byte da src a dst
-void *memcpy(void *dest, const void *src, unsigned int n);
+extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
-void *memset(void *dest, int c, unsigned int n);
+extern "C" void *memset(void *dest, int c, unsigned int n);
 
 #endif
 
