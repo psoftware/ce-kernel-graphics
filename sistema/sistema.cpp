@@ -446,12 +446,12 @@ void free_interna(void* indirizzo, unsigned int quanti)
 
 // ridefinizione degli operatori new e delete, in modo che utilizzino le 
 // funzioni malloc e free definite precedentemente
-void* operator new(long unsigned int size)
+void* operator new(size_t size)
 {
 	return malloc(size);
 }
 
-void* operator new[](long unsigned int size)
+void* operator new[](size_t size)
 {
 	return malloc(size);
 }
