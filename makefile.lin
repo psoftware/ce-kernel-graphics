@@ -1,7 +1,7 @@
 START_SISTEMA=   0x00100000
 START_IO=        0x00200000
 START_UTENTE=	 0x80000000
-SWAP=		 /dev/loop2
+SWAP=		 swap.img
 
 CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude -g

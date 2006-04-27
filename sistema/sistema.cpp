@@ -1304,7 +1304,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 		return false;
 	}
 		
-	if (part->type != 0x3f) {
+	if (swap_part && part->type != 0x3f) {
 		log(LOG_ERR, "Tipo della partizione di swap scorretto (%d)", part->type);
 		return false;
 	}
@@ -3658,7 +3658,8 @@ bool leggi_partizioni(short ind_ata, short drv)
 	partizione *estesa, **ptail;
 	des_ata* p_des = &hd[ind_ata];
 	static char buf[512];
-	int settore;
+	short settore;
+	partizione* pp;
 
 	// lettura del Master Boot Record (LBA = 0)
 	settore = 0;
@@ -3669,9 +3670,14 @@ bool leggi_partizioni(short ind_ata, short drv)
 	p = reinterpret_cast<des_part*>(buf + 446);
 	// interpretiamo i descrittori delle partizioni primarie
 	estesa = 0;
-	ptail = &p_des->disco[drv].part;
+	pp = new partizione;
+	// la partizione 0 corrisponde all'intero hard disk
+	pp->first = 0;
+	pp->dim = p_des->disco[drv].tot_sett;
+	p_des->disco[drv].part = pp;
+	ptail = &pp->next;
 	for (int i = 0; i < 4; i++) {
-		partizione* pp = *ptail = new partizione;
+		pp = *ptail = new partizione;
 
 		pp->type  = p->type;
 		pp->first = p->offset;
@@ -3725,7 +3731,7 @@ partizione* hd_find_partition(short ch, short drv, int p)
 	if (!pdes_ata->disco[drv].presente) 
 		return 0;
 	int i;
-	for (i = 1, part = pdes_ata->disco[drv].part;
+	for (i = 0, part = pdes_ata->disco[drv].part;
 	     i < p && part != 0;
 	     i++, part = part->next)
 		;
@@ -3926,9 +3932,6 @@ void parse_swap(char* arg, short& channel, short& drive, short& partition)
 
 	partition = strtoi(arg);
 
-	if (partition == 0)
-		goto error;
-
 	log(LOG_INFO, "Opzione -s: swap su %s/%s/%d",
 			(channel ? "secondario" : "primario"),
 			(drive   ? "slave"      : "master"),
@@ -4027,7 +4030,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	pagina* pila_utente;
 	int errore;
 	char *arg, *cont;
-	short swap_ch, swap_drv, swap_part;
+	short swap_ch = -1, swap_drv = -1, swap_part = -1;
 
 	// inizializziamo il log, in modo che resti traccia degli errori
 	log_init();
