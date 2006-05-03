@@ -52,8 +52,8 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 build/parse: util/parse.c util/src.h
 	gcc -o build/parse util/parse.c
 
-build/createimg: util/createimg.cpp
-	g++ -g -Iinclude -o build/createimg util/createimg.cpp
+build/creatimg: util/creatimg.cpp
+	g++ -g -Iinclude -o build/creatimg util/creatimg.cpp
 
 .PHONY: swap
 swap: build/createimg build/utente
