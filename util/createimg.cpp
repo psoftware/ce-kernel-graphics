@@ -3,6 +3,8 @@
 #include <cstring>
 #include "costanti.h"
 #include "elf.h"
+#include "dos.h"
+#include "coff.h"
 
 using namespace std;
 
@@ -272,7 +274,7 @@ EseguibileElf32::EseguibileElf32(FILE* pexe_)
 
 bool EseguibileElf32::init()
 {
-	if (fseek(pexe, 0, SEEK_SET) < 0) 
+	if (fseek(pexe, 0, SEEK_SET) != 0) 
 		return false;
 
 	if (fread(&h, sizeof(Elf32_Ehdr), 1, pexe) < 1)
@@ -293,7 +295,7 @@ bool EseguibileElf32::init()
 
 	// leggiamo la tabella dei segmenti
 	seg_buf = new char[h.e_phnum * h.e_phentsize];
-	if ( fseek(pexe, h.e_phoff, SEEK_SET) < 0 ||
+	if ( fseek(pexe, h.e_phoff, SEEK_SET) != 0 ||
 	     fread(seg_buf, h.e_phentsize, h.e_phnum, pexe) < h.e_phnum)
 	{
 		fprintf(stderr, "Fine prematura del file ELF\n");
@@ -302,7 +304,7 @@ bool EseguibileElf32::init()
 	
 	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
 	sec_buf = new char[h.e_shnum * h.e_shentsize];
-	if ( fseek(pexe, h.e_shoff, SEEK_SET) < 0 ||
+	if ( fseek(pexe, h.e_shoff, SEEK_SET) != 0 ||
 	     fread(sec_buf, h.e_shentsize, h.e_shnum, pexe) < h.e_shnum)
 	{
 		fprintf(stderr, "Fine prematura del file ELF\n");
@@ -312,7 +314,7 @@ bool EseguibileElf32::init()
 	// stringhe
 	Elf32_Shdr* elf_strtab = (Elf32_Shdr*)(sec_buf + h.e_shentsize * h.e_shstrndx);
 	strtab = new char[elf_strtab->sh_size];
-	if ( fseek(pexe, elf_strtab->sh_offset, SEEK_SET) < 0 ||
+	if ( fseek(pexe, elf_strtab->sh_offset, SEEK_SET) != 0 ||
 	     fread(strtab, elf_strtab->sh_size, 1, pexe) < 1)
 	{
 		fprintf(stderr, "Errore nella lettura della tabella delle stringhe\n");
@@ -397,7 +399,7 @@ bool EseguibileElf32::SegmentoElf32::copia_prossima_pagina(pagina* dest)
 	if (finito())
 		return false;
 
-	if (fseek(padre->pexe, curr_offset, SEEK_SET) < 0) {
+	if (fseek(padre->pexe, curr_offset, SEEK_SET) != 0) {
 		fprintf(stderr, "errore nel file ELF\n");
 		exit(EXIT_FAILURE);
 	}
@@ -426,7 +428,7 @@ Eseguibile* InterpreteElf32::interpreta(FILE* pexe)
 
 void scrivi_blocco(FILE* img, block_t b, void* buf)
 {
-	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) < 0 ||
+	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) != 0 ||
 	     fwrite(buf, sizeof(pagina), 1, img) < 1)
 	{
 		fprintf(stderr, "errore nella scrittura dello swap\n");
@@ -436,7 +438,7 @@ void scrivi_blocco(FILE* img, block_t b, void* buf)
 
 void leggi_blocco(FILE* img, block_t b, void* buf)
 {
-	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) < 0 ||
+	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) != 0 ||
 	     fread(buf, sizeof(pagina), 1, img) < 1)
 	{
 		fprintf(stderr, "errore nella lettura dallo swap\n");
@@ -444,7 +446,216 @@ void leggi_blocco(FILE* img, block_t b, void* buf)
 	}
 }
 
-InterpreteElf32 int_elf32;
+// interprete per formato coff-go32-exe
+class InterpreteCoff_go32: public Interprete {
+public:
+	InterpreteCoff_go32();
+	~InterpreteCoff_go32() {}
+	virtual Eseguibile* interpreta(FILE* pexe);
+};
+
+InterpreteCoff_go32::InterpreteCoff_go32()
+{}
+
+class EseguibileCoff_go32: public Eseguibile {
+	FILE *pexe;
+	FILHDR h;
+	AOUTHDR ah;
+	unsigned int soff;
+	char *seg_buf;
+	uint resident_start;
+	uint resident_size;
+	int curr_seg;
+	int curr_resident;
+
+	class SegmentoCoff_go32: public Segmento {
+		EseguibileCoff_go32 *padre;
+		SCNHDR* ph;
+		uint curr_offset;
+		uint curr_vaddr;
+		uint da_leggere;
+	public:
+		SegmentoCoff_go32(EseguibileCoff_go32 *padre_, SCNHDR* ph_);
+		virtual bool scrivibile() const;
+		virtual uint ind_virtuale() const;
+		virtual uint dimensione() const;
+		virtual bool finito() const;
+		virtual bool copia_prossima_pagina(pagina* dest);
+		~SegmentoCoff_go32() {}
+	};
+
+	friend class SegmentoCoff_go32;
+public:
+	EseguibileCoff_go32(FILE* pexe_);
+	bool init();
+	virtual Segmento* prossimo_segmento();
+	virtual void* entry_point() const;
+	virtual bool prossima_resident(uint& start, uint& dim);
+	~EseguibileCoff_go32();
+};
+
+EseguibileCoff_go32::EseguibileCoff_go32(FILE* pexe_)
+	: pexe(pexe_), curr_seg(0), curr_resident(0), seg_buf(NULL)
+{}
+
+	
+
+bool EseguibileCoff_go32::init()
+{
+	DOS_EXE dos;
+
+	if (fseek(pexe, 0, SEEK_SET) != 0)
+		return false;
+
+	if (fread(&dos, sizeof(DOS_EXE), 1, pexe) < 1)
+		return false;
+
+	if (dos.signature != DOS_MAGIC)
+		return false;
+
+	soff = dos.blocks_in_file * 512L;
+	if (dos.bytes_in_last_block)
+		  soff -= (512 - dos.bytes_in_last_block);
+
+	if (fseek(pexe, soff, SEEK_SET) != 0) 
+		return false;
+
+	if (fread(&h, FILHSZ, 1, pexe) < 1)
+		return false;
+
+	// i primi 2 byte devono contenere un valore prestabilito
+	if (h.f_magic != I386MAGIC)
+		return false;
+
+	if (!(h.f_flags & F_EXEC)) 
+		return false;
+
+	// leggiamo l'a.out header
+	if (fread(&ah, 1, h.f_opthdr, pexe) < h.f_opthdr)
+	{
+		fprintf(stderr, "Fine prematura del file COFF-go32\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// controlliamo che sia consistente
+	if (ah.magic != ZMAGIC)
+		return false;
+
+	// leggiamo la tabella delle sezioni
+	seg_buf = new char[h.f_nscns * SCNHSZ];
+	if (fread(seg_buf, SCNHSZ, h.f_nscns, pexe) < h.f_nscns)
+	{
+		fprintf(stderr, "Fine prematura del file COFF-go32\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	return true;
+}
+
+Segmento* EseguibileCoff_go32::prossimo_segmento()
+{
+	while (curr_seg < h.f_nscns) {
+		SCNHDR* ph = (SCNHDR*)(seg_buf + SCNHSZ * curr_seg);
+		curr_seg++;
+		
+		return new SegmentoCoff_go32(this, ph);
+	}
+	return NULL;
+}
+
+void* EseguibileCoff_go32::entry_point() const
+{
+	return (void*)ah.entry;
+}
+
+bool EseguibileCoff_go32::prossima_resident(uint& start, uint& dim)
+{
+	while (curr_resident < h.f_nscns) {
+		SCNHDR* sh = (SCNHDR*)(seg_buf + SCNHSZ * curr_resident);
+
+		curr_resident++;
+
+		if (strncmp("RESIDENT", sh->s_name, 8) != 0)
+			continue;
+
+		start = sh->s_vaddr;
+		dim = sh->s_size;
+		return true;
+	}
+	return false;
+}
+
+EseguibileCoff_go32::~EseguibileCoff_go32()
+{
+	delete[] seg_buf;
+}
+
+EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* padre_, SCNHDR* ph_)
+	: padre(padre_), ph(ph_),
+	  curr_offset(ph->s_scnptr),
+	  curr_vaddr(ph->s_vaddr),
+	  da_leggere((ph->s_flags & STYP_BSS) ? 0 : ph->s_size)
+{
+}
+
+bool EseguibileCoff_go32::SegmentoCoff_go32::scrivibile() const
+{
+	return (ph->s_flags & (STYP_DATA | STYP_BSS));
+}
+
+uint EseguibileCoff_go32::SegmentoCoff_go32::ind_virtuale() const
+{
+	return (ph->s_vaddr);
+}
+
+uint EseguibileCoff_go32::SegmentoCoff_go32::dimensione() const
+{
+	return ph->s_size;
+}
+
+bool EseguibileCoff_go32::SegmentoCoff_go32::finito() const
+{
+	return (da_leggere <= 0);
+}
+
+
+bool EseguibileCoff_go32::SegmentoCoff_go32::copia_prossima_pagina(pagina* dest)
+{
+	if (finito())
+		return false;
+
+	if (fseek(padre->pexe, padre->soff + curr_offset, SEEK_SET) != 0) {
+		fprintf(stderr, "errore nel file COFF-go32\n");
+		exit(EXIT_FAILURE);
+	}
+
+	uint line = curr_vaddr & 0x00000fff;
+
+	size_t curr = (da_leggere > sizeof(pagina) - line ? sizeof(pagina) - line: da_leggere);
+	if (fread(dest->byte + line, 1, curr, padre->pexe) < curr) {
+		fprintf(stderr, "errore nella lettura dal file COFF-go32\n");
+		exit(EXIT_FAILURE);
+	}
+	da_leggere -= curr;
+	curr_offset += curr;
+	curr_vaddr += curr;
+	return true;
+}
+
+Eseguibile* InterpreteCoff_go32::interpreta(FILE* pexe)
+{
+	EseguibileCoff_go32 *pe = new EseguibileCoff_go32(pexe);
+
+	if (pe->init())
+		return pe;
+
+	delete pe;
+	return NULL;
+}
+
+
+InterpreteElf32		int_elf32;
+InterpreteCoff_go32	int_coff_go32;
 	
 
 int main(int argc, char* argv[]) {
@@ -460,8 +671,8 @@ int main(int argc, char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	if ( !(img = fopen(argv[1], "r+")) || 
-	      (fseek(img, 0L, SEEK_END) < 0) )
+	if ( !(img = fopen(argv[1], "rb+")) || 
+	      (fseek(img, 0L, SEEK_END) != 0) )
 	{
 		perror(argv[1]);
 		exit(EXIT_FAILURE);
@@ -484,7 +695,7 @@ int main(int argc, char* argv[]) {
 	superblock.directory = nbmblocks + 1;
 
 
-	if ( !(exe = fopen(argv[2], "r")) ) {
+	if ( !(exe = fopen(argv[2], "rb")) ) {
 		perror(argv[2]);
 		exit(EXIT_FAILURE);
 	}
@@ -542,18 +753,20 @@ int main(int argc, char* argv[]) {
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
 			if (!s->finito()) {
-				if (! bm_alloc(&blocks, b) ) {
-					fprintf(stderr, "spazio insufficiente nello swap\n");
-					exit(EXIT_FAILURE);
+				if (pdes_pag->address == 0) {
+					if (! bm_alloc(&blocks, b) ) {
+						fprintf(stderr, "spazio insufficiente nello swap\n");
+						exit(EXIT_FAILURE);
+					}
+					pdes_pag->address = b;
+				} else {
+					leggi_blocco(img, pdes_pag->address, &pag);
 				}
 				s->copia_prossima_pagina(&pag);
-				pdes_pag->address = b;
 				scrivi_blocco(img, pdes_pag->address, &pag);
-			} else {
-				pdes_pag->address = 0;
-			}
-			pdes_pag->RW = s->scrivibile();
-			pdes_pag->US = 1;
+			} 
+			pdes_pag->RW |= s->scrivibile();
+			pdes_pag->US |= 1;
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 
@@ -598,9 +811,9 @@ int main(int argc, char* argv[]) {
 	superblock.magic[1] = 'E';
 	superblock.magic[2] = 'S';
 	superblock.magic[3] = 'W';
-	if ( fseek(img, 512, SEEK_SET) < 0 ||
+	if ( fseek(img, 512, SEEK_SET) != 0 ||
 	     fwrite(&superblock, sizeof(superblock), 1, img) < 0 ||
-	     fseek(img, SIZE_PAGINA, SEEK_SET) < 0 ||
+	     fseek(img, SIZE_PAGINA, SEEK_SET) != 0 ||
 	     fwrite(blocks.vect, SIZE_PAGINA, nbmblocks, img) < nbmblocks ||
 	     fwrite(&main_dir, sizeof(direttorio), 1, img) < 1 )
 	{

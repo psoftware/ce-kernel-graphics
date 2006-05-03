@@ -1034,6 +1034,7 @@ _salta_a_main:
 	// prepariamo le informazioni che la iret si aspetta nel caso di 
 	// ritorno da livello sistema a livello utente
 	pushl $SEL_DATI_UTENTE		// selettore della nuova pila
+	subl $8, %ebx
 	pushl %ebx			// puntatore alla testa della nuova pila
 	pushl $0x00000200		// eflag (interrupt abilitati)
 	pushl $SEL_CODICE_UTENTE	// selettore del segmento codice 
