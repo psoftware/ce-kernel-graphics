@@ -594,7 +594,7 @@ EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* p
 	: padre(padre_), ph(ph_),
 	  curr_offset(ph->s_scnptr),
 	  curr_vaddr(ph->s_vaddr),
-	  da_leggere(ph->s_flags & STYP_BSS ? curr_vaddr & 0x00000fff : ph->s_size)
+	  da_leggere(ph->s_size)
 {
 }
 
