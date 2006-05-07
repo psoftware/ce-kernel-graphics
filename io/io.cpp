@@ -24,17 +24,16 @@ typedef int* ind_l;		// indirizzo di una parola lunga
 ////////////////////////////////////////////////////////////////////////////////
 
 extern "C" void terminate_p(void);
-extern "C" void sem_ini(int &index_des_s, int val, bool &risu);
+extern "C" int sem_ini(int val);
 extern "C" void sem_wait(int sem);
 extern "C" void sem_signal(int sem);
-extern "C" void activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu);
+extern "C" short activate_p(void f(int), int a, int prio, char liv);
 
 ////////////////////////////////////////////////////////////////////////////////
 //               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
 ////////////////////////////////////////////////////////////////////////////////
 
-extern "C" void activate_pe(void f(int), int a, int prio, char liv,
-	short &identifier, estern_id interf, bool &risu);
+extern "C" short activate_pe(void f(int), int a, int prio, char liv, estern_id interf);
 
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
@@ -321,7 +320,6 @@ const int COM2_IRQ = 4;
 int com_init()
 {
 	des_se *p_des;
-	bool r1, r2;
 	short id;
 	int i, com_base_prio = PRIO_ESTERN_BASE + IRQ_MAX - COM2_IRQ;
 
@@ -330,16 +328,17 @@ int com_init()
 	for(i = 0; i < S; ++i) {
 		p_des = &com[i];
 
-		sem_ini(p_des->mutex, 1, r1);
-		sem_ini(p_des->sincr, 0, r2);
-		if(!r1 || !r2)
+		if ( (p_des->mutex = sem_ini(1)) == 0)
+			return -2;
+		if ( (p_des->sincr = sem_ini(0)) == 0)
 			return -2;
 
-		activate_pe(input_com, i, com_base_prio - i,
-			LIV_SISTEMA, id, com_id[i][0], r1);
-		activate_pe(output_com, i, com_base_prio - i,
-			LIV_SISTEMA, id, com_id[i][1], r2);
-		if(!r1 || !r2)
+		id = activate_pe(input_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][0]);
+		if (id == 0)
+			return -2;
+
+		id = activate_pe(output_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][1]);
+		if (id == 0)
 			return -2;
 	}
 	return 0;
@@ -492,12 +491,10 @@ struct des_vkbd {
 
 bool vkbd_init(des_vkbd* k)
 {
-	bool risu;
-
-	sem_ini(k->mutex, 1, risu);
-	if (!risu) return false;
-	sem_ini(k->intr, 0, risu);
-	if (!risu) return false;
+	if ( (k->mutex = sem_ini(1)) == 0)
+		return false;
+	if ( (k->intr = sem_ini(0)) == 0)
+		return false;
 	k->intr_enabled = false;
 	k->first = k->last = k->nchar = 0;
 	k->flags = 0;
@@ -995,30 +992,26 @@ void estern_kbd(int h)
 int vterm_init()
 {
 	short id;
-	bool r;
-
-
 
 	for (int i = 0; i < N_VTERM; i++) {
 		des_vterm* p_des = &vterm[i];
 
-		sem_ini(p_des->mutex_r, 1, r);
-		if (!r) return -3;
-		sem_ini(p_des->mutex_w, 1, r);
-		if (!r) return -3;
-		sem_ini(p_des->sincr, 0, r);
-		if (!r) return -3;
+		if ( (p_des->mutex_r = sem_ini(1)) == 0)
+			return -3;
+		if ( (p_des->mutex_w = sem_ini(1)) == 0)
+			return -3;
+		if ( (p_des->sincr = sem_ini(0)) == 0)
+			return -3;
 		if (!vkbd_init(&p_des->vkbd))
 			return -3;
 		if (!vmon_init(&p_des->vmon))
 			return -3;
-		activate_p(input_term, i, PRIO_ESTERN_BASE, LIV_SISTEMA, id, r);
-		if (!r) return -3;
+		if ( (id = activate_p(input_term, i, PRIO_ESTERN_BASE, LIV_SISTEMA)) == 0)
+			return -3;
 	}
 
 	vterm_active = &vterm[0];
-	activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ, LIV_SISTEMA, id, tastiera, r);
-	if(!r)
+	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ, LIV_SISTEMA, tastiera)) == 0)
 		return -3;
 
 	abilita_tastiera();

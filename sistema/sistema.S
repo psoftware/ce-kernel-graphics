@@ -1349,11 +1349,11 @@ handler_COM2:
 ////////////////////////////////////////////////////////
         .extern _c_activate_p
 a_activate_p:	// routine int $tipo_a
-	salva_registri
-        copia_param 6 7		// salva_registri ha inserito 7 long in pila
+	salva_reg_rit
+        copia_param 4 6		// salva_registri ha inserito 6 long in pila
         call _c_activate_p
-        addl $24, %esp
-        carica_registri
+        addl $16, %esp
+        carica_reg_rit
         iret
 
         .extern _c_terminate_p
@@ -1379,11 +1379,11 @@ a_give_num:	// routine int $tipo_g
 
 	.extern _c_sem_ini
 a_sem_ini:	// routine int $tipo_si
-	salva_registri
-	copia_param 3 7
+	salva_reg_rit
+	copia_param 1 6
 	call _c_sem_ini
-	addl $12, %esp
-	carica_registri
+	addl $4, %esp
+	carica_reg_rit
 	iret
 
 	.extern _c_sem_wait
@@ -1447,11 +1447,11 @@ a_readlog:	// routine int $tipo_rl
 
 	.extern _c_activate_pe
 a_activate_pe:
-	salva_registri
-        copia_param 7 7		// salva_registri ha inserito 7 long in pila
+	salva_reg_rit
+        copia_param 5 6		// salva_registri ha inserito 7 long in pila
         call _c_activate_pe
-        addl $28, %esp	
-	carica_registri
+        addl $20, %esp	
+	carica_reg_rit
 	iret
 
 

@@ -13,8 +13,7 @@
 //  l' identificatore del nuovo processo e RISU vale FALSE in caso di errore,
 //  true in caso di successo
 //
-extern "C" void activate_p(void f(int), int a, int prio, char liv,
-		short &id, bool &risu);
+extern "C" short activate_p(void f(int), int a, int prio, char liv);
 
 // Termina il processo in esecuzione
 //
@@ -34,7 +33,7 @@ extern "C" void give_num(int &lav);
 // Cerca un descrittore di semaforo non utilizzato e lo inizializza a VAL.
 //  L' indice del semaforo e` ritornato in INDEX_DES_S
 //
-extern "C" void sem_ini(int &index_des_s, int val, bool &risu);
+extern "C" int sem_ini(int val);
 
 // Decrementa il valore del semaforo di cui SEM e` l' indice; se il nuovo
 //  valore e` negativo blocca il processo su SEM

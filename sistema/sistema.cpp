@@ -686,14 +686,14 @@ inline pagina_fisica* pfis(pagina* ppag)
 // (i dieci bit piu' significativi dell'indirizzo)
 short indice_direttorio(void* indirizzo)
 {
-	return (reinterpret_cast<unsigned int>(indirizzo) & 0xffc00000) >> 22;
+	return (uint(indirizzo) & 0xffc00000) >> 22;
 }
 
 // dato un indirizzo virtuale, ne restituisce l'indice nella tabella delle
 // pagine (i bit 12:21 dell'indirizzo)
 short indice_tabella(void* indirizzo)
 {
-	return (reinterpret_cast<unsigned int>(indirizzo) & 0x003ff000) >> 12;
+	return (uint(indirizzo) & 0x003ff000) >> 12;
 }
 
 // dato un puntatore ad un descrittore di tabella, restituisce
@@ -2176,10 +2176,11 @@ extern "C" void schedulatore(void);
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 
 
-extern "C" void
-c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
+extern "C" short
+c_activate_p(void f(int), int a, int prio, char liv)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
+	short id = 0;
 
 	if (esecuzione->identifier != init.identifier) {
 		log(LOG_WARN, "activate_p non chiamata da main");
@@ -2192,10 +2193,8 @@ c_activate_p(void f(int), int a, int prio, char liv, short &id, bool &risu)
 		inserimento_coda(pronti, p);
 		processi++;
 		id = p->identifier;
-		risu = true;
-	} else {
-		risu = false;
 	}
+	return id;
 }
 
 void shutdown()
@@ -2267,10 +2266,10 @@ void aggiungi_pe(proc_elem *p, estern_id interf)
 	}
 }
 
-extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
-	short &identifier, estern_id interf, bool &risu)
+extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, estern_id interf)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
+	short identifier = 0;
 
 	if (esecuzione->identifier != init.identifier) {
 		log(LOG_WARN, "activate_pe non chiamata da main");
@@ -2281,10 +2280,9 @@ extern "C" void c_activate_pe(void f(int), int a, int prio, char liv,
 	if (p != 0) {
 		aggiungi_pe(p, interf); 
 		identifier = p->identifier;
-		risu = true;
-	} else {
-		risu = false;
-	}
+	} 
+
+	return identifier;
 }
 
 // Lo heap utente e' gestito tramite un allocatore a lista, come lo heap di
@@ -2443,23 +2441,22 @@ extern des_sem array_dess[MAX_SEMAFORI];
 unsigned int sem_buf[MAX_SEMAFORI / sizeof(int) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
-extern "C" void c_sem_ini(int &index_des_s, int val, bool &risu)
+extern "C" int c_sem_ini(int val)
 {
 	unsigned int pos;
+	int index_des_s = 0;
 
 	if (esecuzione->identifier != init.identifier) {
 		log(LOG_WARN, "sem_ini non chiamata da main");
 		abort_p();
 	}
 
-	if(!bm_alloc(&sem_bm, pos)) {
-		risu = false;
-		return;
+	if(bm_alloc(&sem_bm, pos)) {
+		index_des_s = pos;
+		array_dess[index_des_s].counter = val;
 	}
 
-	index_des_s = pos;
-	array_dess[index_des_s].counter = val;
-	risu = true;
+	return index_des_s;
 }
 
 extern "C" void c_sem_wait(int sem)
@@ -2623,7 +2620,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema");
+		panic("page fault dal modulo sistema o dal processo main");
 	}
 
 	// anche il caso res == 1, se si presenta, e' indice di un bug nel 
@@ -3231,14 +3228,17 @@ void log_init()
 // di leggere, da livello utente, i messaggi del log
 bool log_init_usr()
 {
-	bool r1, r2;
-	c_sem_ini(log_buf.mutex, 1, r1);
-	c_sem_ini(log_buf.sync, 0, r2);
-	if (!r1 || !r2) {
-		log(LOG_ERR, "Semafori insufficienti in log_init_usr");
-		return false;
-	}
+	if ( (log_buf.mutex = c_sem_ini(1)) == 0)
+		goto error1;
+
+	if ( (log_buf.sync = c_sem_ini(0)) == 0)
+		goto error2;
+
 	return true;
+
+error2:	bm_free(&sem_bm, log_buf.mutex);
+error1: log(LOG_ERR, "Semafori insufficienti in log_init_usr");
+	return false;
 }
 
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
@@ -3857,11 +3857,9 @@ void hd_init()
 			continue;
 		}
 		mask_hd(p_des->indreg.iSTS);
-		bool r1, r2;
-		c_sem_ini(p_des->mutex, 1, r1);
-		c_sem_ini(p_des->sincr, 0, r2);
-		if(!r1 || !r2)
-			panic("\nImpossibile allocare i semafori per l' IO");
+		if ( (p_des->mutex = c_sem_ini(1)) == 0 ||
+		     (p_des->sincr = c_sem_ini(0)) == 0)
+			panic("Impossibile allocare i semafori per l' IO");
 		for (int d = 0; d < 2; d++) {
 			if (p_des->disco[d].presente)
 				leggi_partizioni(i, d);
@@ -4181,6 +4179,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati
 	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
+	// 0 segnala il fallimento della sem_ini
+	bm_set(&sem_bm, 0);
 	log(LOG_INFO, "Semafori: %d", MAX_SEMAFORI);
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
@@ -4220,9 +4220,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 
 	// semaforo per la mutua esclusione nella gestione dei page fault
-	bool risu;
-	c_sem_ini(pf_mutex, 1, risu);
-	if (!risu) {
+	pf_mutex = c_sem_ini(1);
+	if (pf_mutex == 0) {
 		log(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
 		goto error;
 	}

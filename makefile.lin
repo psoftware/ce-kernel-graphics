@@ -9,7 +9,7 @@ CPPFLAGS=-nostdinc -Iinclude -g
 all: build/sistema \
      build/io 	   \
      build/parse   \
-     build/createimg
+     build/creatimg
      
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	ld -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o

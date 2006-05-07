@@ -557,6 +557,9 @@ Segmento* EseguibileCoff_go32::prossimo_segmento()
 	while (curr_seg < h.f_nscns) {
 		SCNHDR* ph = (SCNHDR*)(seg_buf + SCNHSZ * curr_seg);
 		curr_seg++;
+
+		if (ph->s_vaddr == 0)
+			continue;
 		
 		return new SegmentoCoff_go32(this, ph);
 	}

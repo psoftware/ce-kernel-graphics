@@ -277,7 +277,7 @@ void rilascia_righe()
 	}
 }
 
-#define MAIN_HEAD "\nbool ris __attribute__ (( section (\"RESIDENT\") ));\nint main() \n{\n"
+#define MAIN_HEAD "\nint main()\n{\n"
 
 #if defined WIN || defined WIN_XP
 #define MAIN_TAIL "\tbegin_p();\n\n\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"
@@ -303,8 +303,8 @@ void scrivi_utente()
 	fprintf(output, "%s", MAIN_TAIL);
 }
 
-#define GLOB_FMT "short %s __attribute__ (( section (\"RESIDENT\") ));\n"
-#define PROC_FMT "\tactivate_p(%s, %d, %d, %s, %s, ris);\n\n"
+#define GLOB_FMT "short %s;\n"
+#define PROC_FMT "\t%s = activate_p(%s, %d, %d, %s);\n"
 
 #define MAX_INT_LEN 12
 
@@ -325,15 +325,15 @@ void agg_proc(const char *nome_proc, const char *corpo_proc, int par_att,
 		errore("memoria insufficiente");
 
 #if defined WIN || defined WIN_XP
-	sprintf(buf, PROC_FMT, corpo_proc, par_att, prio,
-		liv == 3? "LIV_UTENTE": "LIV_SISTEMA", nome_proc);
+	sprintf(buf, PROC_FMT, nome_proc, corpo_proc, par_att, prio,
+		liv == 3? "LIV_UTENTE": "LIV_SISTEMA");
 	agg_riga(MAIN, buf);
 
 	sprintf(buf, GLOB_FMT, nome_proc);
 	agg_riga(GLOB, buf);
 #else
-	snprintf(buf, dim, PROC_FMT, corpo_proc, par_att, prio,
-		liv == 3? "LIV_UTENTE": "LIV_SISTEMA", nome_proc);
+	snprintf(buf, dim, PROC_FMT, nome_proc, corpo_proc, par_att, prio,
+		liv == 3? "LIV_UTENTE": "LIV_SISTEMA");
 	agg_riga(MAIN, buf);
 
 	snprintf(buf, dim, GLOB_FMT, nome_proc);
@@ -344,7 +344,7 @@ void agg_proc(const char *nome_proc, const char *corpo_proc, int par_att,
 }
 
 #define INT_FMT "int %s;\n"
-#define SEM_FMT "\tsem_ini(%s, %d, ris);\n"
+#define SEM_FMT "\t%s = sem_ini(%d);\n"
 
 void agg_sem(const char *nome_sem, int valore)
 {
@@ -490,7 +490,7 @@ void semaphore()
 
 	emetti("extern int ");
 	emetti(nome_sem);
-	emetti(" __attribute__ (( section (\"RESIDENT\") ));\n");
+	emetti(";\n");
 
 	agg_sem(nome_sem, valore);
 }

@@ -8,8 +8,8 @@ CPPFLAGS=-nostdinc -Iinclude -g
 
 all: build/sistema \
      build/io 	   \
-     build/parse   \
-     build/creatimg
+     build/parse.exe   \
+     build/creatimg.exe
      
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	ld -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
@@ -39,8 +39,8 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.s
 	gcc $(CPPFLAGS) -c utente/utente.s -o utente/uten_s.o
 
-utente/utente.cpp: build/parse utente/prog/* utente/include/*
-	build/parse -o utente/utente.cpp utente/prog/*
+utente/utente.cpp: build/parse.exe utente/prog/*.in utente/include/*.h
+	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
 	gxx $(CXXFLAGS) $(CPPFLAGS) -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
@@ -49,11 +49,11 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 	gxx $(CXXFLAGS) $(CPPFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
 
 # creazione di parse e creatimg
-build/parse: util/parse.c util/src.h
-	gcc -DWIN -o build/parse util/parse.c
+build/parse.exe: util/parse.c util/src.h
+	gcc -DWIN -o build/parse.exe util/parse.c
 
-build/creatimg: util/creatimg.cpp
-	gxx -g -Iinclude -o build/creatimg util/creatimg.cpp
+build/creatimg.exe: util/creatimg.cpp
+	gxx -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
 
 .PHONY: swap
 swap: build/creatimg build/utente
