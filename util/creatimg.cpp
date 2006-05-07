@@ -12,6 +12,7 @@ typedef unsigned int block_t;
 typedef unsigned int uint;
 
 const uint UPB = SIZE_PAGINA / sizeof(uint);
+const uint BPU = sizeof(uint) * 8;
 
 
 // converte v in un indirizzo
@@ -103,7 +104,7 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 {
 	bm->vect = buffer;
 	bm->size = size;
-	unsigned int vecsize = size / sizeof(int) + (size % sizeof(int) ? 1 : 0);
+	unsigned int vecsize = size / BPU + (size % BPU ? 1 : 0);
 
 	for(int i = 0; i < vecsize; ++i)
 		bm->vect[i] = 0;
@@ -686,14 +687,14 @@ int main(int argc, char* argv[]) {
 	}
 
 	long dim = ftell(img) / SIZE_PAGINA;
-
-	int nlong = dim / sizeof(uint) + (dim % sizeof(uint) ? 1 : 0);
-	bm_create(&blocks, new uint[nlong], dim);
+	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
+	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
+	
+	bm_create(&blocks, new uint[nbmblocks * UPB], dim);
 
 	for (int i = 0; i < dim; i++)
 		bm_free(&blocks, i);
 
-	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	for (int i = 0; i <= nbmblocks + 1; i++)
 		bm_set(&blocks, i);
 
@@ -798,6 +799,7 @@ int main(int argc, char* argv[]) {
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
 			pdes_pag->preload = 1;
+			pdes_tab->preload = 1;
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 	}			
@@ -807,10 +809,11 @@ int main(int argc, char* argv[]) {
 		 i < indice_direttorio(a2i(fine_utente_condiviso));
 		 i++)
 	{
-		descrittore_pagina* pdes_pag = &main_dir.entrate[i];
-		pdes_pag->address = 0;
-		pdes_pag->US	 = 1;
-		pdes_pag->RW	 = 1;
+		descrittore_tabella* pdes_tab = &main_dir.entrate[i];
+		pdes_tab->address = 0;
+		pdes_tab->US	  = 1;
+		pdes_tab->RW	  = 1;
+		pdes_tab->preload = 1;
 	}
 		
 	superblock.end = addr(last_address);

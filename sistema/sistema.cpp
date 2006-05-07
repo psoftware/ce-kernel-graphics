@@ -2611,7 +2611,7 @@ struct page_fault_error {
 
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
-	if (eip < fine_codice_sistema) {
+	if (eip < fine_codice_sistema || esecuzione->identifier == init.identifier) {
 		// il sistema non e' progettato per gestire page fault causati 
 		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// si tratta di un bug
