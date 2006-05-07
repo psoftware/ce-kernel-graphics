@@ -136,8 +136,10 @@ struct superblock_t {
 	block_t	bm_start;
 	int	blocks;
 	block_t	directory;
-	void*   entry_point;
-	void*   end;
+	void*   user_entry;
+	void*   user_end;
+	void*	io_entry;
+	void*   io_end;
 	unsigned int	checksum;
 } superblock;
 
@@ -665,17 +667,120 @@ Eseguibile* InterpreteCoff_go32::interpreta(FILE* pexe)
 InterpreteElf32		int_elf32;
 InterpreteCoff_go32	int_coff_go32;
 	
+direttorio main_dir;
+bm_t blocks;
+tabella_pagine tab;
+pagina pag;
+FILE *img;
 
-int main(int argc, char* argv[]) {
+void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
+{
+	FILE* exe;
 
-	bm_t blocks;
-	direttorio main_dir;
-	tabella_pagine tab;
-	pagina pag;
-	FILE *exe, *img;
+	if ( !(exe = fopen(fname, "rb")) ) {
+		perror(fname);
+		exit(EXIT_FAILURE);
+	}
 
-	if (argc < 2) {
-		fprintf(stderr, "Utilizzo: %s <swap> <eseguibile>\n", argv[0]);
+
+	descrittore_tabella* pdes_tab;
+	tabella_pagine* ptabella;
+	descrittore_pagina* pdes_pag;
+
+	Eseguibile *e = NULL;
+	ListaInterpreti* interpreti = ListaInterpreti::instance();
+	interpreti->rewind();
+	while (interpreti->ancora()) {
+		e = interpreti->prossimo()->interpreta(exe);
+		if (e) break;
+	}
+	if (!e) {
+		fprintf(stderr, "Formato del file '%s' non riconosciuto\n", fname);
+		exit(EXIT_FAILURE);
+	}
+
+	entry_point = e->entry_point();
+
+	
+	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
+	last_address = 0;
+	Segmento *s = NULL;
+	while (s = e->prossimo_segmento()) {
+		uint ind_virtuale = s->ind_virtuale();
+		uint dimensione = s->dimensione();
+		uint end_addr = ind_virtuale + dimensione;
+
+		if (end_addr > last_address) 
+			last_address = end_addr;
+
+		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
+		{
+			block_t b;
+			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
+			if (pdes_tab->address == 0) {
+				memset(&tab, 0, sizeof(tabella_pagine));
+			
+				if (! bm_alloc(&blocks, b) ) {
+					fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
+					exit(EXIT_FAILURE);
+				}
+
+				pdes_tab->address = b;
+				pdes_tab->RW	  = 1;
+				pdes_tab->US	  = liv;
+			} else {
+				leggi_blocco(img, pdes_tab->address, &tab);
+			}
+
+			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
+			if (!s->finito()) {
+				if (pdes_pag->address == 0) {
+					if (! bm_alloc(&blocks, b) ) {
+						fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
+						exit(EXIT_FAILURE);
+					}
+					pdes_pag->address = b;
+				} else {
+					leggi_blocco(img, pdes_pag->address, &pag);
+				}
+				s->copia_prossima_pagina(&pag);
+				scrivi_blocco(img, pdes_pag->address, &pag);
+			} 
+			pdes_pag->RW |= s->scrivibile();
+			pdes_pag->US |= liv;
+			scrivi_blocco(img, pdes_tab->address, &tab);
+		}
+
+	}
+	uint start, size;
+	while (e->prossima_resident(start, size)) {
+		for (uint ind_virtuale = start;
+			  ind_virtuale < start + size;
+			  ind_virtuale += sizeof(pagina))
+		{
+			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
+			if (pdes_tab->address == 0) {
+				fprintf(stderr, "Errore interno\n");
+				exit(EXIT_FAILURE);
+			} else {
+				leggi_blocco(img, pdes_tab->address, &tab);
+			}
+
+			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
+			pdes_pag->preload = 1;
+			pdes_tab->preload = 1;
+			scrivi_blocco(img, pdes_tab->address, &tab);
+		}
+	}			
+	
+	fclose(exe);
+}
+
+int main(int argc, char* argv[])
+{
+
+	if (argc < 3) {
+		fprintf(stderr, "Utilizzo: %s <swap> <modulo io> <modulo utente>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -702,109 +807,16 @@ int main(int argc, char* argv[]) {
 	superblock.blocks = dim;
 	superblock.directory = nbmblocks + 1;
 
-
-	if ( !(exe = fopen(argv[2], "rb")) ) {
-		perror(argv[2]);
-		exit(EXIT_FAILURE);
-	}
-
-
-	descrittore_tabella* pdes_tab;
-	tabella_pagine* ptabella;
-	descrittore_pagina* pdes_pag;
-
-	Eseguibile *e = NULL;
-	ListaInterpreti* interpreti = ListaInterpreti::instance();
-	interpreti->rewind();
-	while (interpreti->ancora()) {
-		e = interpreti->prossimo()->interpreta(exe);
-		if (e) break;
-	}
-	if (!e) {
-		fprintf(stderr, "Formato del file eseguibile non riconosciuto\n");
-		exit(EXIT_FAILURE);
-	}
-
-	superblock.entry_point = e->entry_point();
-
 	memset(&main_dir, 0, sizeof(direttorio));
-	
-	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	uint last_address = 0;
-	Segmento *s = NULL;
-	while (s = e->prossimo_segmento()) {
-		uint ind_virtuale = s->ind_virtuale();
-		uint dimensione = s->dimensione();
-		uint end_addr = ind_virtuale + dimensione;
 
-		if (end_addr > last_address) 
-			last_address = end_addr;
+	uint last_address;
+	do_map(argv[2], 0, superblock.io_entry, last_address);
+	superblock.io_end = addr(last_address);
 
-		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
-		{
-			block_t b;
-			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
-			if (pdes_tab->address == 0) {
-				memset(&tab, 0, sizeof(tabella_pagine));
-			
-				if (! bm_alloc(&blocks, b) ) {
-					fprintf(stderr, "spazio insufficiente nello swap\n");
-					exit(EXIT_FAILURE);
-				}
+	do_map(argv[3], 1, superblock.user_entry, last_address);
+	superblock.user_end = addr(last_address);
 
-				pdes_tab->address = b;
-				pdes_tab->RW	  = 1;
-				pdes_tab->US	  = 1;
-			} else {
-				leggi_blocco(img, pdes_tab->address, &tab);
-			}
-
-			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			if (!s->finito()) {
-				if (pdes_pag->address == 0) {
-					if (! bm_alloc(&blocks, b) ) {
-						fprintf(stderr, "spazio insufficiente nello swap\n");
-						exit(EXIT_FAILURE);
-					}
-					pdes_pag->address = b;
-				} else {
-					leggi_blocco(img, pdes_pag->address, &pag);
-				}
-				s->copia_prossima_pagina(&pag);
-				scrivi_blocco(img, pdes_pag->address, &pag);
-			} 
-			pdes_pag->RW |= s->scrivibile();
-			pdes_pag->US |= 1;
-			scrivi_blocco(img, pdes_tab->address, &tab);
-		}
-
-	}
-	// ora settiamo il bit preload per tutte le pagine che devono contenere
-	// la sezione RESIDENT
-
-	// cerchiamo la nostra sezione
-	uint start, size;
-	while (e->prossima_resident(start, size)) {
-		for (uint ind_virtuale = start;
-			  ind_virtuale < start + size;
-			  ind_virtuale += sizeof(pagina))
-		{
-			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
-			if (pdes_tab->address == 0) {
-				fprintf(stderr, "Errore interno\n");
-				exit(EXIT_FAILURE);
-			} else {
-				leggi_blocco(img, pdes_tab->address, &tab);
-			}
-
-			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			pdes_pag->preload = 1;
-			pdes_tab->preload = 1;
-			scrivi_blocco(img, pdes_tab->address, &tab);
-		}
-	}			
-	
-	// infine, le tabelle condivise per lo heap
+	// le tabelle condivise per lo heap
 	for (int i = indice_direttorio(last_address) + 1;
 		 i < indice_direttorio(a2i(fine_utente_condiviso));
 		 i++)
@@ -816,7 +828,6 @@ int main(int argc, char* argv[]) {
 		pdes_tab->preload = 1;
 	}
 		
-	superblock.end = addr(last_address);
 	superblock.magic[0] = 'C';
 	superblock.magic[1] = 'E';
 	superblock.magic[2] = 'S';
@@ -831,7 +842,6 @@ int main(int argc, char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	fclose(img);
-	fclose(exe);
 	return EXIT_SUCCESS;
 }
 

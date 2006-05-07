@@ -2,7 +2,6 @@
 //
 #include "mboot.h"
 #include "costanti.h"
-#include "elf.h"
 
 
 ///////////////////////////////////////////////////
@@ -1197,8 +1196,10 @@ struct superblock_t {
 	unsigned int	bm_start;
 	int		blocks;
 	unsigned int	directory;
-	int		(*entry_point)(int);
-	void*		end;
+	int		(*user_entry)(int);
+	void*		user_end;
+	int		(*io_entry)(int);
+	void*		io_end;
 	unsigned int	checksum;
 };
 
@@ -2636,104 +2637,6 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 	trasferimento(indirizzo_virtuale, errore.write);
 }
 
-/////////////////////////////////////////////////////////////////////////
-// CARICAMENTO DEI MODULI                                              //
-// //////////////////////////////////////////////////////////////////////
-
-
-Elf32_Ehdr* elf32_intestazione(void* start)
-{
-
-	Elf32_Ehdr* elf_h = static_cast<Elf32_Ehdr*>(start);
-
-	// i primi 4 byte devono contenere un valore prestabilito
-	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
-	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
-	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
-	{
-		log(LOG_WARN, "    Formato del modulo non riconosciuto");
-		return 0;
-	}
-
-	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS32  &&  // 32 bit
-	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&  // little endian
-	      elf_h->e_type	       == ET_EXEC     &&  // eseguibile
-	      elf_h->e_machine 	       == EM_386))	  // per Intel x86
-	{ 
-		log(LOG_WARN, "    Il modulo non contiene un esegubile per Intel x86");
-		return 0;
-	}
-
-	return elf_h;
-}
-
-// copia le sezioni (.text, .data) del modulo descritto da *mod agli indirizzi
-// fisici di collegamento (il modulo deve essere in formato ELF32) restituisce
-// l'indirizzo dell'entry point
-void* carica_modulo_io(module_t* mod)
-{
-	Elf32_Phdr* elf_ph;
-
-	// leggiamo l'intestazione del file
-	Elf32_Ehdr* elf_h = elf32_intestazione(mod->mod_start);
-	if (elf_h == 0) return 0;
-
-
-	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
-	void* header_start = add(mod->mod_start, elf_h->e_phoff);
-	for (int i = 0; i < elf_h->e_phnum; i++) {
-		elf_ph = static_cast<Elf32_Phdr*>(add(header_start, elf_h->e_phentsize * i));
-		
-		// ci interessano solo i segmenti di tipo PT_LOAD
-		// (corrispondenti alle sezioni .text e .data)
-		if (elf_ph->p_type != PT_LOAD)
-			continue;
-
-		// ogni entrata della tabella specifica l'indirizzo a cui va
-		// caricato il segmento...
-		if (salta_a(elf_ph->p_vaddr) < 0) {
-			log(LOG_WARN, "    Indirizzo richiesto da '%s' gia' occupato", mod->string);
-			return 0;
-		}
-
-		// ... e lo spazio che deve occupare in memoria
-		if (occupa(elf_ph->p_memsz) == 0) {
-			log(LOG_WARN, "    Memoria insufficiente per '%s'", mod->string);
-			return 0;
-		}
-
-		// ora possiamo copiare il contenuto del segmento di programma
-		// all'indirizzo di memoria precedentemente individuato;
-		// L'entrata corrente della tabella ci dice a che offset
-		// (dall'inizio del modulo) si trova il segmento
-		memcpy(elf_ph->p_vaddr,				// destinazione
-		       add(mod->mod_start, elf_ph->p_offset),	// sorgente
-		       elf_ph->p_filesz);			// quanti byte copiare
-
-
-		// la dimensione del segmento nel modulo (p_filesz) puo' essere
-		// diversa (piu' piccola) della dimensione che il segmento deve
-		// avere in memoria (p_memsz).  Cio' accade perche' i dati
-		// globali che devono essere inizializzati con 0 non vengono
-		// memorizzati nel modulo. Di questi dati, il formato ELF32 (ma
-		// anche altri formati) specifica solo la dimensione
-		// complessiva.  L'inizializzazione a 0 deve essere effettuata
-		// a tempo di caricamento
-		if (elf_ph->p_memsz > elf_ph->p_filesz) {
-			memset(add(elf_ph->p_vaddr, elf_ph->p_filesz),  // indirizzo di partenza
-			       0,				        // valore da scrivere
-			       elf_ph->p_memsz - elf_ph->p_filesz);	// per quanti byte
-		}
-	}
-	// una volta copiati i segmenti di programma all'indirizzo per cui
-	// erano stati collegati, il modulo non ci serve piu'
-	free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-	return elf_h->e_entry;
-}
-
-
-
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 		unsigned eip, unsigned cs, short eflag)
 {
@@ -3967,6 +3870,9 @@ bool crea_spazio_condiviso(void*& last_address)
 	descrittore_tabella *pdes_tab1, *pdes_tab2;
 	tabella_pagine* ptab;
 	direttorio *tmp;
+	const int nspazi = 2;
+	void *inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
+	     *fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
 	
 	// lettura del direttorio principale dallo swap
 	log(LOG_INFO, "lettura del direttorio principale...");
@@ -3978,44 +3884,46 @@ bool crea_spazio_condiviso(void*& last_address)
 	if (!leggi_swap(tmp, swap.sb.directory * 8, sizeof(direttorio), "il direttorio principale"))
 		return false;
 
-	for (void* ind = inizio_utente_condiviso;
-	     	   ind < fine_utente_condiviso;
-	           ind = add(ind, SIZE_SUPERPAGINA))
-	{
-		pdes_tab1 = &tmp->entrate[indice_direttorio(ind)],
-		pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
-		
-		*pdes_tab2 = *pdes_tab1;
+	for (int sp = 0; sp < nspazi; sp++) {
+		for (void* ind = inizio[sp]; ind < fine[sp]; ind = add(ind, SIZE_SUPERPAGINA))
+		{
+			pdes_tab1 = &tmp->entrate[indice_direttorio(ind)];
 
-		last_address = add(ind, SIZE_PAGINA * 1024);
+			if (pdes_tab1->preload == 1) {	  
+				pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
+				*pdes_tab2 = *pdes_tab1;
 
-		ptab = alloca_tabella_condivisa();
-		if (ptab == 0) {
-			log(LOG_ERR, "Impossibile allocare tabella condivisa");
-			return false;
-		}
-		if (! carica_tabella(pdes_tab2, ptab) ) {
-			log(LOG_ERR, "Impossibile caricare tabella condivisa");
-			return false;
-		}
-		pdes_tab2->address	= uint(ptab) >> 12;
-		pdes_tab2->P		= 1;
-		for (int i = 0; i < 1024; i++) {
-			descrittore_pagina* pdes_pag = &ptab->entrate[i];
-			if (pdes_pag->preload == 1) {
-				pagina* pag = alloca_pagina_residente();
-				if (pag == 0) {
-					log(LOG_ERR, "Impossibile allocare pagina residente");
+				last_address = add(ind, SIZE_SUPERPAGINA);
+
+				ptab = alloca_tabella_condivisa();
+				if (ptab == 0) {
+					log(LOG_ERR, "Impossibile allocare tabella condivisa");
 					return false;
 				}
-				if (! carica_pagina(pdes_pag, pag) ) {
-					log(LOG_ERR, "Impossibile caricare pagina residente");
+				if (! carica_tabella(pdes_tab2, ptab) ) {
+					log(LOG_ERR, "Impossibile caricare tabella condivisa");
 					return false;
 				}
-				collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
+				pdes_tab2->address	= uint(ptab) >> 12;
+				pdes_tab2->P		= 1;
+				for (int i = 0; i < 1024; i++) {
+					descrittore_pagina* pdes_pag = &ptab->entrate[i];
+					if (pdes_pag->preload == 1) {
+						pagina* pag = alloca_pagina_residente();
+						if (pag == 0) {
+							log(LOG_ERR, "Impossibile allocare pagina residente");
+							return false;
+						}
+						if (! carica_pagina(pdes_pag, pag) ) {
+							log(LOG_ERR, "Impossibile caricare pagina residente");
+							return false;
+						}
+						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
+					}
+				}
 			}
-		}
 
+		}
 	}
 	delete tmp;
 	return true;
@@ -4084,38 +3992,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	if (max_mem_upper > fine_sistema_privato) {
 		max_mem_upper = fine_sistema_privato;
 		log(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
-	}
-
-	// controlliamo se il boot loader ha caricato dei moduli
-	if (mbi->flags & (1 << 3)) {
-		// se si', calcoliamo prima lo spazio occupato
-		module_t* mod = mbi->mods_addr;
-		for (int i = 0; i < mbi->mods_count; i++) {
-			if (salta_a(mod->mod_start) < 0 ||
-			    occupa(distance(mod->mod_end, mod->mod_start)) == 0) {
-				log(LOG_ERR, "Errore nel caricamento del modulo (lo spazio risulta occupato)");
-				goto error;
-			}
-			mod++;
-		}
-
-		// quindi, ne interpretiamo il contenuto
-		mod = mbi->mods_addr;
-		for (int i = 0; i < mbi->mods_count; i++) {
-			if (str_equal(mod->string, "/io")) {
-				io_entry = (entry_t)carica_modulo_io(mod);
-				if (io_entry == 0) {
-					log(LOG_ERR, "Impossibile caricare il modulo di IO");
-					goto error;
-				}
-				log(LOG_INFO, "Caricato il modulo di IO");
-			} else {
-				free_interna(mod->mod_start, distance(mod->mod_end, mod->mod_start));
-				log(LOG_WARN, "Modulo '%s' non riconosciuto (eliminato)");
-			}
-			mod++;
-		}
-
 	}
 
 
@@ -4199,12 +4075,10 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	if (!swap_init(swap_ch, swap_drv, swap_part))
 			goto error;
 	log(LOG_INFO, "partizione di swap: %d+%d", swap.part->first, swap.part->dim);
-	log(LOG_INFO, "superblocco: bm=%d blocks=%d dir=%d entry=%x end=%x", 
-			swap.sb.bm_start,
+	log(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
 			swap.sb.blocks,
-			swap.sb.directory,
-			swap.sb.entry_point,
-			swap.sb.end);
+			swap.sb.user_entry,
+			swap.sb.io_entry);
 
 
 	// tabelle condivise per lo spazio utente condiviso
@@ -4214,7 +4088,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 
 	// inizializzazione dello heap utente
-	heap.start = allineav(swap.sb.end, sizeof(int));
+	heap.start = allineav(swap.sb.user_end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
 	log(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
@@ -4228,7 +4102,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// inizializzazione del modulo di io
 	log(LOG_INFO, "inizializzazione del modulo di I/O...");
-	errore = io_entry(0);
+	errore = swap.sb.io_entry(0);
 	if (errore < 0) {
 		log(LOG_ERR, "ERRORE dal modulo I/O: %d", -errore);
 		goto error;
@@ -4254,8 +4128,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	des_main.fpu.tr = 0xffff;
 	des_main.liv = LIV_UTENTE;
 
-
-	salta_a_main(swap.sb.entry_point, fine_utente_privato);
+	salta_a_main(swap.sb.user_entry, fine_utente_privato);
 error:
 	panic("Errore di inizializzazione");
 }
