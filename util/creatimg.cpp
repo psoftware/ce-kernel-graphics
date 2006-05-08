@@ -728,6 +728,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 				pdes_tab->address = b;
 				pdes_tab->RW	  = 1;
 				pdes_tab->US	  = liv;
+				pdes_tab->preload = 1;
 			} else {
 				leggi_blocco(img, pdes_tab->address, &tab);
 			}
@@ -748,6 +749,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 			} 
 			pdes_pag->RW |= s->scrivibile();
 			pdes_pag->US |= liv;
+			pdes_pag->preload |= (1 - liv);
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 

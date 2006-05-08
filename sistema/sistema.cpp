@@ -2612,7 +2612,7 @@ struct page_fault_error {
 
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
-	if (eip < fine_codice_sistema || esecuzione->identifier == init.identifier) {
+	if (eip < fine_codice_sistema) {
 		// il sistema non e' progettato per gestire page fault causati 
 		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// si tratta di un bug
@@ -2621,7 +2621,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema o dal processo main");
+		panic("page fault dal modulo sistema");
 	}
 
 	// anche il caso res == 1, se si presenta, e' indice di un bug nel 
@@ -4078,7 +4078,9 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	log(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
 			swap.sb.blocks,
 			swap.sb.user_entry,
-			swap.sb.io_entry);
+			swap.sb.user_end,
+			swap.sb.io_entry,
+			swap.sb.io_end);
 
 
 	// tabelle condivise per lo spazio utente condiviso

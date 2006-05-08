@@ -52,7 +52,7 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 build/parse.exe: util/parse.c util/src.h
 	gcc -DWIN -o build/parse.exe util/parse.c
 
-build/creatimg.exe: util/creatimg.cpp
+build/creatimg.exe: include/costanti.h util/creatimg.cpp
 	gxx -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
 
 .PHONY: swap
