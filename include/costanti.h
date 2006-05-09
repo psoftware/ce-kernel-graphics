@@ -105,11 +105,7 @@ enum estern_id {
 	ata1
 };
 
-#if (__GNUC__ <= 3 )
-	typedef unsigned int size_t;
-#else
-	typedef long unsigned int size_t;
-#endif
+typedef long unsigned int size_t;
 
 
 #endif
