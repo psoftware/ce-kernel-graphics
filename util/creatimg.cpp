@@ -1,12 +1,20 @@
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#if __GNUC__ >= 3
+	#include <cstdio>
+	#include <cstdlib>
+	#include <cstring>
+
+	using namespace std;
+#else
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+#endif
+
 #include "costanti.h"
 #include "elf.h"
 #include "dos.h"
 #include "coff.h"
 
-using namespace std;
 
 typedef unsigned int block_t;
 typedef unsigned int uint;

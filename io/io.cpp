@@ -329,17 +329,17 @@ int com_init()
 		p_des = &com[i];
 
 		if ( (p_des->mutex = sem_ini(1)) == 0)
-			return -2;
+			return -201;
 		if ( (p_des->sincr = sem_ini(0)) == 0)
-			return -2;
+			return -202;
 
 		id = activate_pe(input_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][0]);
 		if (id == 0)
-			return -2;
+			return -203;
 
 		id = activate_pe(output_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][1]);
 		if (id == 0)
-			return -2;
+			return -204;
 	}
 	return 0;
 }
@@ -498,6 +498,7 @@ bool vkbd_init(des_vkbd* k)
 	k->intr_enabled = false;
 	k->first = k->last = k->nchar = 0;
 	k->flags = 0;
+	return true;
 }
 
 void vkbd_wfi(des_vkbd* k)
@@ -799,12 +800,13 @@ void vmon_switch(des_vmon* t)
 	console_sync(t);
 }
 
-int vmon_init(des_vmon* t)
+bool vmon_init(des_vmon* t)
 {
 	t->pos = t->fpos = 0;
 	t->vpos = -1;
 	for (int i = 0; i < VMON_SIZE; i++)
 		t->video[i] = ' ';
+	return true;
 }
 
 void vmon_write_n(des_vmon* t, char vetti[], int quanti)
@@ -997,22 +999,22 @@ int vterm_init()
 		des_vterm* p_des = &vterm[i];
 
 		if ( (p_des->mutex_r = sem_ini(1)) == 0)
-			return -3;
+			return -301;
 		if ( (p_des->mutex_w = sem_ini(1)) == 0)
-			return -3;
+			return -302;
 		if ( (p_des->sincr = sem_ini(0)) == 0)
-			return -3;
+			return -303;
 		if (!vkbd_init(&p_des->vkbd))
-			return -3;
+			return -304;
 		if (!vmon_init(&p_des->vmon))
-			return -3;
+			return -305;
 		if ( (id = activate_p(input_term, i, PRIO_ESTERN_BASE, LIV_SISTEMA)) == 0)
-			return -3;
+			return -306;
 	}
 
 	vterm_active = &vterm[0];
 	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ, LIV_SISTEMA, tastiera)) == 0)
-		return -3;
+		return -307;
 
 	abilita_tastiera();
 	return 0;

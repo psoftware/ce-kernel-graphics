@@ -16,7 +16,7 @@ process big8 body big_c(8), 10, LIV_UTENTE;
 process big9 body big_c(9), 10, LIV_UTENTE;
 
 #define N  9000000
-unsigned int values[N] __attribute__ ((aligned(4096)));
+unsigned int values[N];
 
 process_body big_c(int a)
 {
