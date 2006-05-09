@@ -713,6 +713,8 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 		if (end_addr > last_address) 
 			last_address = end_addr;
 
+		ind_virtuale &= 0xfffff000;
+		end_addr = (end_addr + 0x00000fff) & 0xfffff000;
 		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
 		{
 			block_t b;
