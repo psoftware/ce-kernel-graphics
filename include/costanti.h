@@ -105,7 +105,4 @@ enum estern_id {
 	ata1
 };
 
-typedef long unsigned int size_t;
-
-
 #endif

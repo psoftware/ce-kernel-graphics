@@ -3,6 +3,7 @@
 #include "mboot.h"
 #include "costanti.h"
 
+typedef unsigned int size_t;
 
 ///////////////////////////////////////////////////
 // FUNZIONI PER LA MANIPOLAZIONE DEGLI INDIRIZZI //
@@ -904,7 +905,9 @@ direttorio* alloca_direttorio()
 	// pagina descritta (funzione "indirizzo"), che puntera' ad una "union 
 	// pagina_fisica". Quindi, restituiamo un puntatore al campo di tipo 
 	// "direttorio" all'interno della union
-	return &indirizzoPF(p)->dir;
+	direttorio *pdir = &indirizzoPF(p)->dir;
+	memset(pdir, 0, SIZE_PAGINA);
+	return pdir;
 }
 
 // le tre funzioni per l'allocazione di una tabella differiscono solo per il 
@@ -917,7 +920,9 @@ tabella_pagine* alloca_tabella(cont_pf tipo = TABELLA_PRIVATA)
 	if (p == 0) return 0;
 	p->contenuto = tipo;
 	p->tab.quante = 0;
-	return &indirizzoPF(p)->tab;
+	tabella_pagine *ptab = &indirizzoPF(p)->tab;
+	memset(ptab, 0, SIZE_PAGINA);
+	return ptab;
 }
 
 tabella_pagine* alloca_tabella_condivisa()
