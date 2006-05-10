@@ -906,7 +906,6 @@ direttorio* alloca_direttorio()
 	// pagina_fisica". Quindi, restituiamo un puntatore al campo di tipo 
 	// "direttorio" all'interno della union
 	direttorio *pdir = &indirizzoPF(p)->dir;
-	memset(pdir, 0, SIZE_PAGINA);
 	return pdir;
 }
 
@@ -921,7 +920,6 @@ tabella_pagine* alloca_tabella(cont_pf tipo = TABELLA_PRIVATA)
 	p->contenuto = tipo;
 	p->tab.quante = 0;
 	tabella_pagine *ptab = &indirizzoPF(p)->tab;
-	memset(ptab, 0, SIZE_PAGINA);
 	return ptab;
 }
 
@@ -1891,8 +1889,8 @@ extern proc_elem *esecuzione;
 extern proc_elem *pronti;
 
 // funzioni usate da crea_processo
-pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine);
-pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale);
+pagina* crea_pila_utente(direttorio* pdir);
+pagina* crea_pila_sistema(direttorio* pdir);
 void rilascia_tutto(direttorio* pdir, void* start, int ntab);
 extern "C" int alloca_tss(des_proc* p);
 extern "C" void rilascia_tss(int indice);
@@ -1938,7 +1936,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	// sistema, tramite condivisione delle relative tabelle delle pagine)
 	*pdirettorio = *direttorio_principale;
 	
-	pila_sistema = crea_pila_sistema(pdirettorio, fine_sistema_privato);
+	pila_sistema = crea_pila_sistema(pdirettorio);
 	if (pila_sistema == 0) goto errore5;
 
 	if (liv == LIV_UTENTE) {
@@ -1953,7 +1951,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// passera' ad eseguire la prima istruzione della funzione f,
 		// usando come pila la pila utente (al suo indirizzo virtuale)
 
-		pila_utente = crea_pila_utente(pdirettorio, fine_utente_privato, 64);
+		pila_utente = crea_pila_utente(pdirettorio);
 		if (pila_utente == 0) goto errore6;
 
 		// dobbiamo ora fare in modo che la pila utente si trovi nella
@@ -2042,7 +2040,7 @@ bool crea_dummy()
 }
 
 // creazione della pila utente
-pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
+pagina* crea_pila_utente(direttorio* pdir)
 {
 	pagina* ind_fisico;
 	tabella_pagine* ptab;
@@ -2050,9 +2048,8 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 	descrittore_pagina*  pdes_pag;
 	des_pf*	     ppf;
 
-	int num_tab = ceild(num_pagine, 1024);
-	void *ind = sub(ind_virtuale, num_pagine * SIZE_PAGINA);
-	for (int i = 0; i < num_tab; i++) {
+	void *ind = inizio_utente_privato;
+	for (int i = 0; i < ntab_utente_privato; i++) {
 
 		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		pdes_tab->US	  = 1;
@@ -2065,13 +2062,13 @@ pagina* crea_pila_utente(direttorio* pdir, void* ind_virtuale, int num_pagine)
 		pdes_tab->global  = 0;
 		pdes_tab->preload = 0;
 
-		ind = add(ind, SIZE_PAGINA * 1024);
+		ind = add(ind, SIZE_SUPERPAGINA);
 	}
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	ind = sub(ind_virtuale, SIZE_PAGINA);
+	ind = sub(fine_utente_privato, SIZE_PAGINA);
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		
 	ptab = alloca_tabella();
@@ -2101,7 +2098,7 @@ errore1:	return 0;
 
 // crea la pila sistema di un processo
 // la pila sistema e' grande una sola pagina ed e' sempre residente
-pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale)
+pagina* crea_pila_sistema(direttorio* pdir)
 {
 	pagina* ind_fisico;
 	tabella_pagine* ptab;
@@ -2109,7 +2106,7 @@ pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale)
 	descrittore_pagina*  pdes_pag;
 	des_pf*	     ppf;
 
-	void *ind = sub(ind_virtuale, SIZE_PAGINA);
+	void *ind = sub(fine_sistema_privato, SIZE_PAGINA);
 
 	ptab = alloca_tabella_residente();
 	if (ptab == 0)
@@ -2128,6 +2125,7 @@ pagina* crea_pila_sistema(direttorio* pdir, void* ind_virtuale)
 	if (ind_fisico == 0)
 		goto errore2;
 
+	memset(ptab, 0, SIZE_PAGINA);
 	pdes_pag = &ptab->entrate[indice_tabella(ind)];
 	pdes_pag->address = uint(ind_fisico) >> 12;
 	pdes_pag->pgsz	  = 0;
@@ -4122,7 +4120,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
 	log(LOG_INFO, "salto a livello utente...");
-	pila_utente = crea_pila_utente(direttorio_principale, fine_utente_privato, 1);
+	pila_utente = crea_pila_utente(direttorio_principale);
 	if (pila_utente == 0) {
 		log(LOG_ERR, "Impossibile allocare la pila utente per main");
 		goto error;
