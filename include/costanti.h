@@ -95,14 +95,4 @@ struct log_msg {
 	char msg[LOG_MSG_SIZE];
 };
 
-enum estern_id {
-	tastiera,
-	com1_in,
-	com1_out,
-	com2_in,
-	com2_out,
-	ata0,
-	ata1
-};
-
 #endif

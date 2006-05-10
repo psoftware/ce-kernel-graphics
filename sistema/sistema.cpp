@@ -2232,45 +2232,21 @@ extern "C" void c_abort_p()
 }
 
 // Registrazione processi esterni
-
-const int S = 2; // numero di porte seriali
-const int A = 2; // numero di canali ATA
+const int MAX_IRQ  = 16;
 
 // code dei processi esterni
-proc_elem *pe_tast;
-proc_elem *in_com[S], *out_com[S];
-proc_elem *ata[A];
-
-void aggiungi_pe(proc_elem *p, estern_id interf)
+proc_elem *proc_esterni[MAX_IRQ];
+bool aggiungi_pe(proc_elem *p, int irq)
 {
-	switch(interf) {
-		case tastiera:
-			pe_tast= p;
-			break;
-		case com1_in:
-			in_com[0] = p;
-			break;
-		case com1_out:
-			out_com[0] = p;
-			break;
-		case com2_in:
-			in_com[1] = p;
-			break;
-		case com2_out:
-			out_com[1] = p;
-			break;
-		case ata0:
-			ata[0]=p;
-			break;
-		case ata1:
-			ata[1]=p;
-			break;
-		default:
-			; // activate_pe chiamata con parametri scorretti
-	}
+	if (irq < 0 || irq >= MAX_IRQ || proc_esterni[irq] != 0)
+		return false;
+
+	proc_esterni[irq] = p;
+	return true;
+
 }
 
-extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, estern_id interf)
+extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short identifier = 0;
@@ -2281,8 +2257,7 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, estern_id
 	}
 
 	p = crea_processo(f, a, prio, liv);
-	if (p != 0) {
-		aggiungi_pe(p, interf); 
+	if (p != 0 && aggiungi_pe(p, irq) ) {
 		identifier = p->identifier;
 	} 
 
@@ -3275,9 +3250,8 @@ struct des_ata {		// Descrittore operazione per i canali ATA
 	int sincr;
 };
 
+const int A = 2;
 extern "C" des_ata hd[A];	// 2 canali ATA
-
-const estern_id hd_id[2]= { ata0, ata1 };
 
 extern "C" void go_inouthd(ind_b i_dev_ctl);
 extern "C" void halt_inouthd(ind_b i_dev_ctl);
@@ -3400,6 +3374,7 @@ void starthd_out(des_ata *p_des, short drv, unsigned short vetti[], unsigned int
 errore:
 	panic("Errore nella scrittura");
 }
+
 
 // Primitiva di lettura da hard disk: legge quanti blocchi (max 256, char!)
 //  a partire da primo depositandoli in vetti; il controller usato e ind_ata,

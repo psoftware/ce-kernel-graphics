@@ -33,7 +33,7 @@ extern "C" short activate_p(void f(int), int a, int prio, char liv);
 //               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
 ////////////////////////////////////////////////////////////////////////////////
 
-extern "C" short activate_pe(void f(int), int a, int prio, char liv, estern_id interf);
+extern "C" short activate_pe(void f(int), int a, int prio, char liv, int irq);
 
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
@@ -143,9 +143,9 @@ extern "C" void c_readse_ln(int serial, char vetti[], int &quanti, char &errore)
 	sem_signal(p_des->mutex);
 }
 
-void input_com(int h)
+void estern_com(int h)
 {
-	char c, s;
+	char r, c, s;
 	bool fine;
 	des_se *p_des;
 
@@ -154,39 +154,70 @@ void input_com(int h)
 	for(;;) {
 		fine = false;
 		halt_inputse(p_des->indreg.iIER);
-		inputb(p_des->indreg.iRBR, c);
+
 		inputb(p_des->indreg.iLSR, s);
 
 		p_des->stato = s&0x1e;
 		if(p_des->stato != 0)
 			fine = true;
 		else {
-			if(p_des->funzione == input_n) {
-				*p_des->punt = c;
-				p_des->punt++;
-				p_des->cont--;
-				if(p_des->cont == 0)
-					fine = true;
-			} else if(p_des->funzione == input_ln)
-				if(c == '\r' || c == '\n') {
-					fine = true;
-					p_des->cont = 80 - p_des->cont;
-				} else {
-					*p_des->punt = c;
-					p_des->punt++;
+			inputb(p_des->indreg.iIIR, r);
+			if ((r&0x06) == 0x02) {
+				// uscita
+				if(p_des->funzione == output_n) {
 					p_des->cont--;
 					if(p_des->cont == 0) {
 						fine = true;
-						p_des->cont = 80;
+						halt_outputse(p_des->indreg.iIER);
+					}
+
+					c = *p_des->punt;
+					outputb(c, p_des->indreg.iTHR);
+					p_des->punt++;
+				} else if(p_des->funzione == output_0) {
+					c = *p_des->punt;
+					if(c == 0) {
+						fine = true;
+						halt_outputse(p_des->indreg.iIER);
+					} else {
+						outputb(c, p_des->indreg.iTHR);
+						p_des->cont++;
+						p_des->punt++;
 					}
 				}
-		}
 
-		if(fine == true) {
-			*p_des->punt = 0;	// manca *
-			sem_signal(p_des->sincr);
-		} else
-			go_inputse(p_des->indreg.iIER);
+				if(fine == true)
+					sem_signal(p_des->sincr);
+			} else {
+				// ingresso
+				inputb(p_des->indreg.iRBR, c);
+				if(p_des->funzione == input_n) {
+					*p_des->punt = c;
+					p_des->punt++;
+					p_des->cont--;
+					if(p_des->cont == 0)
+						fine = true;
+				} else if(p_des->funzione == input_ln)
+					if(c == '\r' || c == '\n') {
+						fine = true;
+						p_des->cont = 80 - p_des->cont;
+					} else {
+						*p_des->punt = c;
+						p_des->punt++;
+						p_des->cont--;
+						if(p_des->cont == 0) {
+							fine = true;
+							p_des->cont = 80;
+						}
+					}
+
+				if(fine == true) {
+					*p_des->punt = 0;	// manca *
+					sem_signal(p_des->sincr);
+				} else
+					go_inputse(p_des->indreg.iIER);
+			}
+		}
 
 		nwfi(master); // sia com1 che com2 sono sul master
 	}
@@ -267,61 +298,18 @@ extern "C" void c_writese_0(int serial, char vetto[], int &quanti)
 	sem_signal(p_des->mutex);
 }
 
-void output_com(int h)
-{
-	char c;
-	bool fine;
-	des_se *p_des;
-
-	p_des = &com[h];	// como
-
-	for(;;) {
-		fine = false;
-		if(p_des->funzione == output_n) {
-			p_des->cont--;
-			if(p_des->cont == 0) {
-				fine = true;
-				halt_outputse(p_des->indreg.iIER);
-			}
-
-			c = *p_des->punt;
-			outputb(c, p_des->indreg.iTHR);
-			p_des->punt++;
-		} else if(p_des->funzione == output_0) {
-			c = *p_des->punt;
-			if(c == 0) {
-				fine = true;
-				halt_outputse(p_des->indreg.iIER);
-			} else {
-				outputb(c, p_des->indreg.iTHR);
-				p_des->cont++;
-				p_des->punt++;
-			}
-		}
-
-		if(fine == true)
-			sem_signal(p_des->sincr);
-
-		nwfi(master); // sia com1 che com2 sono sul master
-	}
-}
 
 extern "C" void com_setup(void);
 
-const estern_id com_id[2][2] = {
-	{ com1_in, com1_out },
-	{ com2_in, com2_out }
-};
-
-// Interruzione hardware della seconda interfaccia seriale
+// Interruzioni hardware delle interfacce seriali
 //
-const int COM2_IRQ = 4;
+int com_irq[S] = { 3, 4 };
 
 int com_init()
 {
 	des_se *p_des;
 	short id;
-	int i, com_base_prio = PRIO_ESTERN_BASE + IRQ_MAX - COM2_IRQ;
+	int i, com_base_prio = PRIO_ESTERN_BASE + IRQ_MAX;
 
 	com_setup();
 
@@ -333,13 +321,10 @@ int com_init()
 		if ( (p_des->sincr = sem_ini(0)) == 0)
 			return -202;
 
-		id = activate_pe(input_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][0]);
+		id = activate_pe(estern_com, i, com_base_prio - i, LIV_SISTEMA, com_irq[i]);
 		if (id == 0)
 			return -203;
 
-		id = activate_pe(output_com, i, com_base_prio - i, LIV_SISTEMA, com_id[i][1]);
-		if (id == 0)
-			return -204;
 	}
 	return 0;
 }
@@ -1013,7 +998,7 @@ int vterm_init()
 	}
 
 	vterm_active = &vterm[0];
-	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE + IRQ_MAX - KBD_IRQ, LIV_SISTEMA, tastiera)) == 0)
+	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE, LIV_SISTEMA, KBD_IRQ)) == 0)
 		return -307;
 
 	abilita_tastiera();

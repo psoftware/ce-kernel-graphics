@@ -513,9 +513,19 @@ init_idt:
 
 	// driver/handler
 	carica_gate	0x20		driver_t	LIV_SISTEMA
-	carica_gate	0x21		handler_KBD	LIV_SISTEMA
-	carica_gate	0x23		handler_COM2	LIV_SISTEMA
-	carica_gate	0x24		handler_COM1	LIV_SISTEMA
+	carica_gate	0x21		handler_1	LIV_SISTEMA
+	carica_gate	0x22		handler_2	LIV_SISTEMA
+	carica_gate	0x23		handler_3	LIV_SISTEMA
+	carica_gate	0x24		handler_4	LIV_SISTEMA
+	carica_gate	0x25		handler_5	LIV_SISTEMA
+	carica_gate	0x26		handler_6	LIV_SISTEMA
+	carica_gate	0x27		handler_7	LIV_SISTEMA
+	carica_gate	0x28		handler_8	LIV_SISTEMA
+	carica_gate	0x29		handler_9	LIV_SISTEMA
+	carica_gate	0x2A		handler_10	LIV_SISTEMA
+	carica_gate	0x2B		handler_11	LIV_SISTEMA
+	carica_gate	0x2C		handler_12	LIV_SISTEMA
+	carica_gate	0x2D		handler_13	LIV_SISTEMA
 	carica_gate	0x2E 		driver_hd0 	LIV_SISTEMA
 	carica_gate	0x2F 		driver_hd1 	LIV_SISTEMA
 
@@ -1248,6 +1258,139 @@ driver_t:
 	call carica_stato
 	iret
 
+
+// handler generici
+	.extern _proc_esterni
+handler_1:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 4, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_2:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 8, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_3:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 12, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_4:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 16, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_5:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 20, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_6:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 24, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_7:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 28, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_8:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 32, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_9:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 36, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_10:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 40, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_11:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 44, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_12:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 48, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
+handler_13:
+	call salva_stato
+	call inspronti
+
+	movl _proc_esterni + 52, %eax
+	movl %eax, _esecuzione
+
+	call carica_stato
+	iret
+
 // driver degli hard disk sul canale primario
 	.extern _c_driver_hd
 driver_hd0:
@@ -1286,62 +1429,19 @@ driver_hd1:
 	iret
 	
 
-// handler della tastiera
-	.extern _pe_tast
-handler_KBD:
-	call salva_stato
-	call inspronti
-
-	movl _pe_tast, %eax
-	movl %eax, _esecuzione
-
-	call carica_stato
-	iret
 
 
-// handler delle interfacce seriali
-//
-.set IIR1, 0x03fa
-.set IIR2, 0x02fa
 
-	.extern _in_com, _out_com
-handler_COM1:
-	call salva_stato
-	call inspronti
 
-	movw $IIR1, %dx
-	inb %dx, %al
-	andb $0x06, %al
-	cmpb $0x02, %al
-	jne 1f
-	movl _out_com, %eax
-	jmp 2f
-1:
-	movl _in_com, %eax
-2:
-	movl %eax, _esecuzione
 
-	call carica_stato
-	iret
 
-handler_COM2:
-	call salva_stato
-	call inspronti
 
-	movw $IIR2, %dx
-	inb %dx, %al
-	andb $0x06, %al
-	cmpb $0x02, %al
-	jne 1f
-	movl _out_com + 4, %eax
-	jmp 2f
-1:
-	movl _in_com + 4, %eax
-2:
-	movl %eax, _esecuzione
 
-	call carica_stato
-	iret
+
+
+
+
+
 
 
 ////////////////////////////////////////////////////////
