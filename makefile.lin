@@ -39,7 +39,7 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.s
 	gcc $(CPPFLAGS) -c utente/utente.s -o utente/uten_s.o
 
-utente/utente.cpp: build/parse utente/prog/* utente/include/*
+utente/utente.cpp: build/parse utente/prog/* utente/include/* utente/prog
 	build/parse -o utente/utente.cpp utente/prog/*
 
 utente/uten_cpp.o: utente/utente.cpp

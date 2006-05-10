@@ -7,12 +7,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// Interruzione hardware a priorita' minore 
-//
-const int IRQ_MAX = 15;
-
-// Priorita' base dei processi esterni
-const int PRIO_ESTERN_BASE = 0x400;
+// Priorita' dei processi esterni
+const int PRIO_ESTERN = 0x400;
 
 
 typedef char* ind_b;		// indirizzo di un byte (una porta)
@@ -143,91 +139,7 @@ extern "C" void c_readse_ln(int serial, char vetti[], int &quanti, char &errore)
 	sem_signal(p_des->mutex);
 }
 
-void estern_com(int h)
-{
-	char r, c, s;
-	bool fine;
-	des_se *p_des;
-
-	p_des = &com[h];
-
-	for(;;) {
-		fine = false;
-		halt_inputse(p_des->indreg.iIER);
-
-		inputb(p_des->indreg.iLSR, s);
-
-		p_des->stato = s&0x1e;
-		if(p_des->stato != 0)
-			fine = true;
-		else {
-			inputb(p_des->indreg.iIIR, r);
-			if ((r&0x06) == 0x02) {
-				// uscita
-				if(p_des->funzione == output_n) {
-					p_des->cont--;
-					if(p_des->cont == 0) {
-						fine = true;
-						halt_outputse(p_des->indreg.iIER);
-					}
-
-					c = *p_des->punt;
-					outputb(c, p_des->indreg.iTHR);
-					p_des->punt++;
-				} else if(p_des->funzione == output_0) {
-					c = *p_des->punt;
-					if(c == 0) {
-						fine = true;
-						halt_outputse(p_des->indreg.iIER);
-					} else {
-						outputb(c, p_des->indreg.iTHR);
-						p_des->cont++;
-						p_des->punt++;
-					}
-				}
-
-				if(fine == true)
-					sem_signal(p_des->sincr);
-			} else {
-				// ingresso
-				inputb(p_des->indreg.iRBR, c);
-				if(p_des->funzione == input_n) {
-					*p_des->punt = c;
-					p_des->punt++;
-					p_des->cont--;
-					if(p_des->cont == 0)
-						fine = true;
-				} else if(p_des->funzione == input_ln)
-					if(c == '\r' || c == '\n') {
-						fine = true;
-						p_des->cont = 80 - p_des->cont;
-					} else {
-						*p_des->punt = c;
-						p_des->punt++;
-						p_des->cont--;
-						if(p_des->cont == 0) {
-							fine = true;
-							p_des->cont = 80;
-						}
-					}
-
-				if(fine == true) {
-					*p_des->punt = 0;	// manca *
-					sem_signal(p_des->sincr);
-				} else
-					go_inputse(p_des->indreg.iIER);
-			}
-		}
-
-		nwfi(master); // sia com1 che com2 sono sul master
-	}
-}
-
-// forza l' output del primo byte, sembra che l' interfaccia emulata da
-//  Bochs presenti la richiesta di interruzione solo quando THR si svuota
-//  dopo l' invio del primo byte
-//
-void kickse_out(des_se *p_des)
+void output_com(des_se *p_des)
 {
 	char c = *p_des->punt;
 	bool fine = false;
@@ -254,6 +166,68 @@ void kickse_out(des_se *p_des)
 
 	if(fine == true)
 		sem_signal(p_des->sincr);
+
+}
+
+void input_com(des_se *p_des)
+{
+	char s, c;
+	bool fine = false;
+
+	halt_inputse(p_des->indreg.iIER);
+
+	inputb(p_des->indreg.iLSR, s);
+
+	p_des->stato = s&0x1e;
+	if(p_des->stato != 0)
+		fine = true;
+	else {
+		inputb(p_des->indreg.iRBR, c);
+		if(p_des->funzione == input_n) {
+			*p_des->punt = c;
+			p_des->punt++;
+			p_des->cont--;
+			if(p_des->cont == 0)
+				fine = true;
+		} else if(p_des->funzione == input_ln)
+			if(c == '\r' || c == '\n') {
+				fine = true;
+				p_des->cont = 80 - p_des->cont;
+			} else {
+				*p_des->punt = c;
+				p_des->punt++;
+				p_des->cont--;
+				if(p_des->cont == 0) {
+					fine = true;
+					p_des->cont = 80;
+				}
+			}
+		}
+
+	if(fine == true) {
+		*p_des->punt = 0;	// manca *
+		sem_signal(p_des->sincr);
+	} else
+		go_inputse(p_des->indreg.iIER);
+}
+
+void estern_com(int h)
+{
+	char r;
+	des_se *p_des;
+
+	p_des = &com[h];
+
+	for(;;) {
+		inputb(p_des->indreg.iIIR, r);
+
+		if ((r&0x06) == 0x02) 
+			output_com(p_des);
+		else
+			input_com(p_des);
+
+		nwfi(master); // sia com1 che com2 sono sul master
+	}
 }
 
 void startse_out(des_se *p_des, char vetto[], int quanti, funz op)
@@ -262,9 +236,7 @@ void startse_out(des_se *p_des, char vetto[], int quanti, funz op)
 	p_des->punt = vetto;
 	p_des->funzione = op;
 	go_outputse(p_des->indreg.iIER);
-#ifdef BOCHS
-	kickse_out(p_des);
-#endif
+	output_com(p_des);
 }
 
 extern "C" void c_writese_n(int serial, char vetto[], int quanti)
@@ -303,13 +275,13 @@ extern "C" void com_setup(void);
 
 // Interruzioni hardware delle interfacce seriali
 //
-int com_irq[S] = { 3, 4 };
+int com_irq[S] = { 4, 3 };
 
 int com_init()
 {
 	des_se *p_des;
 	short id;
-	int i, com_base_prio = PRIO_ESTERN_BASE + IRQ_MAX;
+	int i, com_base_prio = PRIO_ESTERN;
 
 	com_setup();
 
@@ -993,12 +965,12 @@ int vterm_init()
 			return -304;
 		if (!vmon_init(&p_des->vmon))
 			return -305;
-		if ( (id = activate_p(input_term, i, PRIO_ESTERN_BASE, LIV_SISTEMA)) == 0)
+		if ( (id = activate_p(input_term, i, PRIO_ESTERN, LIV_SISTEMA)) == 0)
 			return -306;
 	}
 
 	vterm_active = &vterm[0];
-	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN_BASE, LIV_SISTEMA, KBD_IRQ)) == 0)
+	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ)) == 0)
 		return -307;
 
 	abilita_tastiera();

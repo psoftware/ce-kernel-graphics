@@ -2140,6 +2140,17 @@ errore1:	return 0;
 }
 	
 
+void distruggi_processo(proc_elem* p)
+{
+	des_proc* pdes_proc = des_p(p->identifier);
+
+	direttorio* pdirettorio = pdes_proc->cr3;
+	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
+	rilascia_tutto(pdirettorio, inizio_utente_privato,  ntab_utente_privato);
+	rilascia(pdirettorio);
+	rilascia_tss(p->identifier);
+	delete pdes_proc;
+}
 
 // rilascia ntab tabelle (con tutte le pagine da esse puntate) a partire da 
 // quella che mappa l'indirizzo start, nel direttorio pdir
@@ -2209,15 +2220,8 @@ void shutdown()
 
 extern "C" void c_terminate_p()
 {
-	des_proc* pdes_proc = des_p(esecuzione->identifier);
-
-	direttorio* pdirettorio = pdes_proc->cr3;
-	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
-	rilascia_tutto(pdirettorio, inizio_utente_privato,  ntab_utente_privato);
-	rilascia(pdirettorio);
-	rilascia_tss(esecuzione->identifier);
+	distruggi_processo(esecuzione);
 	delete esecuzione;
-	delete pdes_proc;
 	processi--;
 	schedulatore();
 }
@@ -2233,23 +2237,42 @@ extern "C" void c_abort_p()
 
 // Registrazione processi esterni
 const int MAX_IRQ  = 16;
-
-// code dei processi esterni
+proc_elem* const ESTERN_BUSY = (proc_elem*)1;
 proc_elem *proc_esterni[MAX_IRQ];
+proc_elem *proc_esterni_save[MAX_IRQ];
+// primitiva di nucleo usata dal nucleo stesso
+enum controllore { master=0, slave=1 };
+extern "C" void nwfi(controllore c);
+
+void estern_generico(int h)
+{
+	for (;;) {
+		log(LOG_WARN, "Interrupt %d non gestito", h);
+
+		if (h < 8)
+			nwfi(master);
+		else
+			nwfi(slave);
+	}
+}
+
 bool aggiungi_pe(proc_elem *p, int irq)
 {
-	if (irq < 0 || irq >= MAX_IRQ || proc_esterni[irq] != 0)
+	if (irq < 0 || irq >= MAX_IRQ || proc_esterni_save[irq] == 0)
 		return false;
 
 	proc_esterni[irq] = p;
+	distruggi_processo(proc_esterni_save[irq]);
+	delete proc_esterni_save[irq];
+	proc_esterni_save[irq] = 0;
 	return true;
 
 }
 
+
 extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
-	short identifier = 0;
 
 	if (esecuzione->identifier != init.identifier) {
 		log(LOG_WARN, "activate_pe non chiamata da main");
@@ -2257,11 +2280,29 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 	}
 
 	p = crea_processo(f, a, prio, liv);
-	if (p != 0 && aggiungi_pe(p, irq) ) {
-		identifier = p->identifier;
-	} 
+	if (p == 0)
+		goto error1;
+		
+	if (!aggiungi_pe(p, irq) ) 
+		goto error2;
 
-	return identifier;
+	return p->identifier;
+
+error2:	distruggi_processo(p);
+error1:	return 0;
+}
+
+bool init_pe()
+{
+	for (int i = 0; i < MAX_IRQ; i++) {
+		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA);
+		if (p == 0) {
+			log(LOG_ERR, "Impossibile creare i processi esterni generici");
+			return false;
+		}
+		proc_esterni_save[i] = proc_esterni[i] = p;
+	}
+	return true;
 }
 
 // Lo heap utente e' gestito tramite un allocatore a lista, come lo heap di
@@ -3670,6 +3711,8 @@ void hd_reset(des_ata* p_des)
 void hd_init()
 {
 	des_ata *p_des;
+	aggiungi_pe(ESTERN_BUSY, 14);
+	aggiungi_pe(ESTERN_BUSY, 15);
 	for (int i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
 
@@ -4019,6 +4062,10 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	log(LOG_INFO, "Creato il processo dummy");
 
+	if (!init_pe())
+		goto error;
+	log(LOG_INFO, "Creati i processi esterni generici");
+
 	// il primo processo utilizza il direttorio principale e,
 	// inizialmente, si trova a livello sistema (deve eseguire la parte 
 	// rimanente di questa routine, che si trova a livello sistema)
@@ -4040,6 +4087,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
 	attiva_timer(DELAY);
+	aggiungi_pe(ESTERN_BUSY, 0);
 	clocks_per_sec = calibra_tsc();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
 	log(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
