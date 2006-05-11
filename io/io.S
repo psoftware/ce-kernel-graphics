@@ -31,6 +31,7 @@
 .set tipo_wv,   TIPO_WV
 .set tipo_av,   TIPO_AV
 .set tipo_rl,   TIPO_RL
+.set tipo_l,	TIPO_L
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
@@ -229,6 +230,11 @@ _attrvid_n:
 	.global _delay
 _delay:
 	int $tipo_d
+	ret
+
+	.global _log
+_log:
+	int $tipo_l
 	ret
  
 ////////////////////////////////////////////////////////////////////////////////

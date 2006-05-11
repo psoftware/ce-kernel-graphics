@@ -41,6 +41,7 @@
 #define TIPO_WV			0x46
 #define TIPO_AV			0x47
 #define TIPO_AB			0x48
+#define TIPO_L			0x49
 
 #define IO_TIPO_RHDN		0x50
 #define IO_TIPO_WHDN		0x51

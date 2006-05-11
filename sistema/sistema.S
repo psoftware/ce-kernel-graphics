@@ -443,7 +443,7 @@ init_gdt:
 	stosl
 
 
-			//indice	base	limite	P	DPL		TIPO		G
+		//indice	base	limite	P	DPL		TIPO		
 	carica_descr	0	0	0	NON_P	0		0		0
 	carica_descr	1	0	0xfffff	PRES	LIV_SISTEMA	SEG_CODICE	G_PAGINA
 	carica_descr	2	0	0xfffff	PRES	LIV_SISTEMA	SEG_DATI	G_PAGINA
@@ -478,6 +478,7 @@ init_gdt:
 .set tipo_wv, TIPO_WV
 .set tipo_av, TIPO_AV
 .set tipo_ab, TIPO_AB
+.set tipo_l,  TIPO_L
 
 // interruzioni usate dal nucleo stesso (dalle routine della memoria virtuale)
 .set io_tipo_rhdn, IO_TIPO_RHDN
@@ -551,6 +552,7 @@ init_idt:
 	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
 	carica_gate	tipo_av		a_attrvid_n	LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
+	carica_gate	tipo_l		a_log		LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
@@ -1611,6 +1613,15 @@ a_panic:	// routine int $tipo_p
 a_abort_p:
 	call salva_stato
 	call _c_abort_p
+	call carica_stato
+	iret
+
+	.extern _c_log
+a_log:
+	call salva_stato
+	copia_param 3 0
+	call _c_log
+	addl $12, %esp
 	call carica_stato
 	iret
 

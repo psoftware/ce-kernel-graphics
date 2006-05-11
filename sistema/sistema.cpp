@@ -107,7 +107,7 @@ bool str_equal(const char* first, const char* second);
 // funzioni utili alla gestione degli errori
 // 
 // invia un msg al log
-void log(log_sev, const char* fmt, ...);
+void flog(log_sev, const char* fmt, ...);
 // restituisce l'ultimo messaggio inviato al log
 const char* last_log();
 // restituisce l'ultimo messaggio di errore inviato al log
@@ -366,7 +366,7 @@ void free_interna(void* indirizzo, unsigned int quanti)
 	// free: "indirizzo" non deve essere l'indirizzo di partenza di una
 	// zona gia' libera
 	if (scorri == indirizzo) {
-		log(LOG_ERR, "indirizzo = 0x%x", (void*)indirizzo);
+		flog(LOG_ERR, "indirizzo = 0x%x", (void*)indirizzo);
 		panic("double free\n");
 	}
 	// assert(scorri == 0 || scorri > indirizzo)
@@ -838,7 +838,7 @@ bool init_pagine_fisiche()
 	int dimensione = distance(max_mem_upper, mem_upper);
 
 	if (dimensione <= 0) {
-		log(LOG_ERR, "Non ci sono pagine libere");
+		flog(LOG_ERR, "Non ci sono pagine libere");
 		return false;
 	}
 
@@ -1110,7 +1110,7 @@ bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
 		if (pdes_tab->P == 0) {
 			ptab = alloca_tabella_residente();
 			if (ptab == 0) {
-				log(LOG_ERR, "Impossibile allocare le tabelle condivise");
+				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
 			}
 			pdes_tab->address   = uint(ptab) >> 12;
@@ -1230,7 +1230,7 @@ bool leggi_blocco(unsigned int blocco, void* dest)
 	// sa niente dell'esistenza delle partizioni, quindi niente ci 
 	// impedisce di leggere o scrivere, per sbaglio, in un'altra partizione
 	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
-		log(LOG_ERR, "Accesso al di fuori della partizione");
+		flog(LOG_ERR, "Accesso al di fuori della partizione");
 		// fermiamo tutto
 		panic("Errore interno");
 	}
@@ -1238,7 +1238,7 @@ bool leggi_blocco(unsigned int blocco, void* dest)
 	readhd_n(swap.channel, swap.drive, dest, sector, 8, errore);
 
 	if (errore != 0) { 
-		log(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
+		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
 		hd_print_error(swap.channel, swap.drive, blocco * 8, errore);
 		return false;
 	}
@@ -1254,7 +1254,7 @@ bool scrivi_blocco(unsigned int blocco, void* dest)
 	unsigned int sector = blocco * 8 + swap.part->first;
 
 	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
-		log(LOG_ERR, "Accesso al di fuori della partizione");
+		flog(LOG_ERR, "Accesso al di fuori della partizione");
 		// come sopra
 		panic("Errore interno");
 		return false;
@@ -1263,7 +1263,7 @@ bool scrivi_blocco(unsigned int blocco, void* dest)
 	writehd_n(swap.channel, swap.drive, dest, sector, 8, errore);
 
 	if (errore != 0) { 
-		log(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
+		flog(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
 		hd_print_error(swap.channel, swap.drive, blocco * 8, errore);
 		return false;
 	}
@@ -1277,14 +1277,14 @@ bool leggi_swap(void* buf, unsigned int first, unsigned int bytes, const char* m
 	unsigned int sector = first + swap.part->first;
 
 	if (first < 0 || first + bytes > swap.part->dim) {
-		log(LOG_ERR, "Accesso al di fuori della partizione: %d+%d", first, bytes);
+		flog(LOG_ERR, "Accesso al di fuori della partizione: %d+%d", first, bytes);
 		return false;
 	}
 	
 	readhd_n(swap.channel, swap.drive, buf, sector, ceild(bytes, 512), errore);
 
 	if (errore != 0) { 
-		log(LOG_ERR, "\nImpossibile leggere %s", msg);
+		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
 		hd_print_error(swap.channel, swap.drive, sector, errore);
 		return false;
 	}
@@ -1298,18 +1298,18 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	partizione* part;
 
 	if (swap_ch == -1 || swap_drv == -1 || swap_part == -1) {
-		log(LOG_ERR, "Partizione di swap non specificata!");
+		flog(LOG_ERR, "Partizione di swap non specificata!");
 		return false;
 	}
 
 	part = hd_find_partition(swap_ch, swap_drv, swap_part);
 	if (part == 0) {
-		log(LOG_ERR, "Swap: partizione non esistente o non rilevata");
+		flog(LOG_ERR, "Swap: partizione non esistente o non rilevata");
 		return false;
 	}
 		
 	if (swap_part && part->type != 0x3f) {
-		log(LOG_ERR, "Tipo della partizione di swap scorretto (%d)", part->type);
+		flog(LOG_ERR, "Tipo della partizione di swap scorretto (%d)", part->type);
 		return false;
 	}
 
@@ -1318,7 +1318,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	swap.part    = part;
 
 	// lettura del superblocco
-	log(LOG_DEBUG, "lettura del superblocco dall'area di swap...");
+	flog(LOG_DEBUG, "lettura del superblocco dall'area di swap...");
 	if (!leggi_swap(read_buf, 1, sizeof(superblock_t), "il superblocco"))
 		return false;
 
@@ -1329,11 +1329,11 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	    swap.sb.magic[2] != 'S' ||
 	    swap.sb.magic[3] != 'W')
 	{
-		log(LOG_ERR, "Firma errata nel superblocco");
+		flog(LOG_ERR, "Firma errata nel superblocco");
 		return false;
 	}
 
-	log(LOG_DEBUG, "lettura della bitmap dei blocchi...");
+	flog(LOG_DEBUG, "lettura della bitmap dei blocchi...");
 
 	// calcoliamo la dimensione della mappa di bit in pagine/blocchi
 	unsigned int pages = ceild(swap.sb.blocks, SIZE_PAGINA * 8);
@@ -1341,7 +1341,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	// quindi allochiamo in memoria un buffer che possa contenerla
 	unsigned int* buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
 	if (buf == 0) {
-		log(LOG_ERR, "Impossibile allocare la bitmap dei blocchi");
+		flog(LOG_ERR, "Impossibile allocare la bitmap dei blocchi");
 		return false;
 	}
 
@@ -1544,7 +1544,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// tabella e' (sono) di sola lettura, il processo ha commesso un errore 
 	// e va interrotto
 	if (scrittura && pdes_tab->RW == 0) {
-		log(LOG_WARN, "Errore di accesso in scrittura");
+		flog(LOG_WARN, "Errore di accesso in scrittura");
 		goto error1; // Dijkstra se ne faccia una ragione
 	}
 	
@@ -1582,7 +1582,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 	// se l'accesso era in scrittura e la pagina e' di sola lettura, il 
 	// processo utente ha commesso un errore e va interrotto
 	if (scrittura && pdes_pag->RW == 0) {
-		log(LOG_ERR, "Errore di accesso in scrittura");
+		flog(LOG_ERR, "Errore di accesso in scrittura");
 		goto error1;
 	}
 
@@ -1622,7 +1622,7 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 
 error3:	rilascia(ptab);
 error2:	if (pag != 0) rilascia(pag);
-error1: log(LOG_WARN, "page fault non risolubile");
+error1: flog(LOG_WARN, "page fault non risolubile");
 	// anche in caso di errore dobbiamo rilasciare il semaforo di mutua 
 	// esclusione, pena il blocco di tutta la memoria virtuale
 	sem_signal(pf_mutex);
@@ -1644,7 +1644,7 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 	if (pdes_pag->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&swap.free, blocco) ) {
-			log(LOG_WARN, "spazio nello swap insufficiente");
+			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return false;
 		}
 		pdes_pag->address = blocco;
@@ -1666,7 +1666,7 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
 	if (pdes_tab->address == 0) {
 		unsigned int blocco;
 		if (! bm_alloc(&swap.free, blocco)) {
-			log(LOG_WARN, "spazio nello swap insufficiente");
+			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return false;
 		}
 		pdes_tab->address = blocco;
@@ -2032,7 +2032,7 @@ bool crea_dummy()
 {
 	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
 	if (dummy == 0) {
-		log(LOG_ERR, "Impossibile creare il processo dummy");
+		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return false;
 	}
 	inserimento_coda(pronti, dummy);
@@ -2198,7 +2198,7 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	short id = 0;
 
 	if (esecuzione->identifier != init.identifier) {
-		log(LOG_WARN, "activate_p non chiamata da main");
+		flog(LOG_WARN, "activate_p non chiamata da main");
 		abort_p();
 	}
 
@@ -2214,7 +2214,7 @@ c_activate_p(void f(int), int a, int prio, char liv)
 
 void shutdown()
 {
-	log(LOG_INFO, "Tutti i processi sono terminati!");
+	flog(LOG_INFO, "Tutti i processi sono terminati!");
 	asm("1: sti; nop; jmp 1b" : : );
 }
 
@@ -2231,7 +2231,7 @@ extern "C" void c_terminate_p()
 // vuole terminare un processo segnalando che c'e' stato un errore)
 extern "C" void c_abort_p()
 {
-	log(LOG_WARN, "Processo abortito");
+	flog(LOG_WARN, "Processo abortito");
 	c_terminate_p();
 }
 
@@ -2247,7 +2247,7 @@ extern "C" void nwfi(controllore c);
 void estern_generico(int h)
 {
 	for (;;) {
-		log(LOG_WARN, "Interrupt %d non gestito", h);
+		flog(LOG_WARN, "Interrupt %d non gestito", h);
 
 		if (h < 8)
 			nwfi(master);
@@ -2275,7 +2275,7 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
 	if (esecuzione->identifier != init.identifier) {
-		log(LOG_WARN, "activate_pe non chiamata da main");
+		flog(LOG_WARN, "activate_pe non chiamata da main");
 		abort_p();
 	}
 
@@ -2297,7 +2297,7 @@ bool init_pe()
 	for (int i = 0; i < MAX_IRQ; i++) {
 		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA);
 		if (p == 0) {
-			log(LOG_ERR, "Impossibile creare i processi esterni generici");
+			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
 			return false;
 		}
 		proc_esterni_save[i] = proc_esterni[i] = p;
@@ -2434,7 +2434,7 @@ extern "C" void c_mem_free(void *pv)
 extern "C" void c_begin_p()
 {
 	if (esecuzione->identifier != init.identifier) {
-		log(LOG_WARN, "begin_p() non chiamata da main!");
+		flog(LOG_WARN, "begin_p() non chiamata da main!");
 		abort_p();
 	}
 	processi--;
@@ -2467,7 +2467,7 @@ extern "C" int c_sem_ini(int val)
 	int index_des_s = 0;
 
 	if (esecuzione->identifier != init.identifier) {
-		log(LOG_WARN, "sem_ini non chiamata da main");
+		flog(LOG_WARN, "sem_ini non chiamata da main");
 		abort_p();
 	}
 
@@ -2484,7 +2484,7 @@ extern "C" void c_sem_wait(int sem)
 	des_sem *s;
 
 	if(sem < 0 || sem >= MAX_SEMAFORI) {
-		log(LOG_WARN, "semaforo errato: %d", sem);
+		flog(LOG_WARN, "semaforo errato: %d", sem);
 		abort_p();
 	}
 
@@ -2503,7 +2503,7 @@ extern "C" void c_sem_signal(int sem)
 	proc_elem *lavoro;
 
 	if(sem < 0 || sem >= MAX_SEMAFORI) {
-		log(LOG_WARN, "semaforo errato: %d", sem);
+		flog(LOG_WARN, "semaforo errato: %d", sem);
 		abort_p();
 	}
 
@@ -2635,7 +2635,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 		// il sistema non e' progettato per gestire page fault causati 
 		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// si tratta di un bug
-		log(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, indirizzo_virtuale,
+		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, indirizzo_virtuale,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
@@ -2649,7 +2649,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 		panic("descrittore scorretto");
 
 	if (errore.prot == 1) {
-		log(LOG_WARN, "Errore di protezione, il processo verra' terminato");
+		flog(LOG_WARN, "Errore di protezione, il processo verra' terminato");
 		abort_p();
 	}
 
@@ -2659,8 +2659,8 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 		unsigned eip, unsigned cs, short eflag)
 {
-	log(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
-	log(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
+	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
+	flog(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
 	abort_p();
 }
 
@@ -3159,21 +3159,21 @@ bool log_init_usr()
 	return true;
 
 error2:	bm_free(&sem_bm, log_buf.mutex);
-error1: log(LOG_ERR, "Semafori insufficienti in log_init_usr");
+error1: flog(LOG_ERR, "Semafori insufficienti in log_init_usr");
 	return false;
 }
 
+
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
-void log(log_sev sev, const char *fmt, ...)
+extern "C" void c_log(log_sev sev, const char* buf, int quanti)
 {
-	va_list ap;
+	if (quanti > LOG_MSG_SIZE)
+		quanti = LOG_MSG_SIZE;
 
 	log_buf.buf[log_buf.last].sev = sev;
 	log_buf.buf[log_buf.last].identifier = esecuzione->identifier;
-	va_start(ap, fmt);
-	int l = vsnprintf(log_buf.buf[log_buf.last].msg, LOG_MSG_SIZE, fmt, ap);
-	va_end(ap);
-	log_buf.buf[log_buf.last].msg[l] = 0;
+	strncpy(log_buf.buf[log_buf.last].msg, buf, quanti);
+	log_buf.buf[log_buf.last].msg[quanti] = 0;
 
 	log_buf.last = (log_buf.last + 1) % LOG_MSG_NUM;
 	log_buf.nmsg++;
@@ -3188,10 +3188,24 @@ void log(log_sev sev, const char *fmt, ...)
 			s->counter++;
 			rimozione_coda(s->pointer, lavoro);
 			inserimento_coda(pronti, lavoro);
+			schedulatore();
 		}
 	}
-
 }
+
+// log formattato
+void flog(log_sev sev, const char *fmt, ...)
+{
+	va_list ap;
+	char buf[LOG_MSG_SIZE];
+
+	va_start(ap, fmt);
+	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
+	va_end(ap);
+
+	c_log(sev, buf, l);
+}
+
 
 // restituisce un puntatore all'ultimo messaggio inviato al log
 const char* last_log()
@@ -3343,26 +3357,26 @@ void hd_print_error(int i, int d, int sect, short error)
 	if (error == D_ERR_NONE)
 		return;
 
-	log(LOG_ERR, "Errore su hard disk:");
+	flog(LOG_ERR, "Errore su hard disk:");
 	if (i < 0 || i > A || d < 0 || d > 2) {
-		log(LOG_ERR, "valori errati (%d, %d)");
+		flog(LOG_ERR, "valori errati (%d, %d)");
 	} else {
-		log(LOG_ERR, "%s/%s: ", (i ? "secondario" : "primario"), (d ? "slave"      : "master"));
+		flog(LOG_ERR, "%s/%s: ", (i ? "secondario" : "primario"), (d ? "slave"      : "master"));
 		switch (error) {
 		case D_ERR_PRESENCE:
-			log(LOG_ERR, "assente o non rilevato");
+			flog(LOG_ERR, "assente o non rilevato");
 			break;
 		case D_ERR_BOUNDS:
-			log(LOG_ERR, "accesso al settore %d fuori dal range [0, %d)", sect, p->disco[d].tot_sett);
+			flog(LOG_ERR, "accesso al settore %d fuori dal range [0, %d)", sect, p->disco[d].tot_sett);
 			break;
 		case D_ERR_GENERIC:
-			log(LOG_ERR, "errore generico (DRQ=0)");
+			flog(LOG_ERR, "errore generico (DRQ=0)");
 			break;
 		default:
 			if (error & 4) 
-				log(LOG_ERR, "comando abortito");
+				flog(LOG_ERR, "comando abortito");
 			else
-				log(LOG_ERR, "error register = %d", error);
+				flog(LOG_ERR, "error register = %d", error);
 			break;
 		}
 	}
@@ -3541,7 +3555,7 @@ extern "C" void c_driver_hd(int ind_ata)
 		}
 		break;
 	default:
-		log(LOG_WARN, "Comando sconosciuto: %d", curr_cmd);
+		flog(LOG_WARN, "Comando sconosciuto: %d", curr_cmd);
 		fine = true;
 		break;
 	}
@@ -3769,7 +3783,7 @@ void hd_init()
 				*ptr++ = (char)(st_sett[j]);
 			}
 			*ptr = 0;
-			log(LOG_INFO, "  - %s%s: %s - (%d)",
+			flog(LOG_INFO, "  - %s%s: %s - (%d)",
 				(i ? "S" : "P"), (d ? "S" : "M"),
 				serial,
 				p_des->disco[d].tot_sett);
@@ -3806,7 +3820,7 @@ void parse_swap(char* arg, short& channel, short& drive, short& partition)
 	// il primo carattere indica il canale (primaprio/secondario)
 	switch (*arg) {
 	case '\0':
-		log(LOG_WARN, "Opzione -s: manca l'argomento");
+		flog(LOG_WARN, "Opzione -s: manca l'argomento");
 		goto error;
 	case 'P':
 	case 'p':
@@ -3819,7 +3833,7 @@ void parse_swap(char* arg, short& channel, short& drive, short& partition)
 		channel = 1;
 		break;
 	default:
-		log(LOG_WARN, "Opzione -s: il canale deve essere 'P' o 'S'");
+		flog(LOG_WARN, "Opzione -s: il canale deve essere 'P' o 'S'");
 		goto error;
 	}
 
@@ -3828,7 +3842,7 @@ void parse_swap(char* arg, short& channel, short& drive, short& partition)
 	// il secondo carattere indica il dispositivo (master/slave)
 	switch (*arg) {
 	case '\0':
-		log(LOG_WARN, "Opzione -s: parametro incompleto");
+		flog(LOG_WARN, "Opzione -s: parametro incompleto");
 		goto error;
 	case 'M':
 	case 'm':
@@ -3841,20 +3855,20 @@ void parse_swap(char* arg, short& channel, short& drive, short& partition)
 		drive = 1;
 		break;
 	default:
-		log(LOG_WARN, "Opzione -s: il drive deve essere 'M' o 'S'");
+		flog(LOG_WARN, "Opzione -s: il drive deve essere 'M' o 'S'");
 		goto error;
 	}
 
 	arg++;
 
 	if (*arg == '\0') {
-		log(LOG_WARN, "Opzione -s: manca il numero di partizione");
+		flog(LOG_WARN, "Opzione -s: manca il numero di partizione");
 		goto error;
 	}
 
 	partition = strtoi(arg);
 
-	log(LOG_INFO, "Opzione -s: swap su %s/%s/%d",
+	flog(LOG_INFO, "Opzione -s: swap su %s/%s/%d",
 			(channel ? "secondario" : "primario"),
 			(drive   ? "slave"      : "master"),
 			partition);
@@ -3896,10 +3910,10 @@ bool crea_spazio_condiviso(void*& last_address)
 	     *fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
 	
 	// lettura del direttorio principale dallo swap
-	log(LOG_INFO, "lettura del direttorio principale...");
+	flog(LOG_INFO, "lettura del direttorio principale...");
 	tmp = new direttorio;
 	if (tmp == 0) {
-		log(LOG_ERR, "memoria insufficiente");
+		flog(LOG_ERR, "memoria insufficiente");
 		return false;
 	}
 	if (!leggi_swap(tmp, swap.sb.directory * 8, sizeof(direttorio), "il direttorio principale"))
@@ -3918,11 +3932,11 @@ bool crea_spazio_condiviso(void*& last_address)
 
 				ptab = alloca_tabella_condivisa();
 				if (ptab == 0) {
-					log(LOG_ERR, "Impossibile allocare tabella condivisa");
+					flog(LOG_ERR, "Impossibile allocare tabella condivisa");
 					return false;
 				}
 				if (! carica_tabella(pdes_tab2, ptab) ) {
-					log(LOG_ERR, "Impossibile caricare tabella condivisa");
+					flog(LOG_ERR, "Impossibile caricare tabella condivisa");
 					return false;
 				}
 				pdes_tab2->address	= uint(ptab) >> 12;
@@ -3932,11 +3946,11 @@ bool crea_spazio_condiviso(void*& last_address)
 					if (pdes_pag->preload == 1) {
 						pagina* pag = alloca_pagina_residente();
 						if (pag == 0) {
-							log(LOG_ERR, "Impossibile allocare pagina residente");
+							flog(LOG_ERR, "Impossibile allocare pagina residente");
 							return false;
 						}
 						if (! carica_pagina(pdes_pag, pag) ) {
-							log(LOG_ERR, "Impossibile caricare pagina residente");
+							flog(LOG_ERR, "Impossibile caricare pagina residente");
 							return false;
 						}
 						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
@@ -3968,12 +3982,12 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	init.priority   = 0;
 	esecuzione = &init;
 
-	log(LOG_INFO, "Nucleo di Calcolatori Elettronici, v1.0");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v1.0");
 
 	// controlliamo di essere stati caricati
 	// da un bootloader che rispetti lo standard multiboot
 	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-		log(LOG_ERR, "Numero magico non valido: 0x%x", magic);
+		flog(LOG_ERR, "Numero magico non valido: 0x%x", magic);
 		goto error;
 	}
 
@@ -3983,11 +3997,11 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
 	} else {
-		log(LOG_WARN, "Quantita' di memoria sconosciuta, assumo 32 MiB");
+		flog(LOG_WARN, "Quantita' di memoria sconosciuta, assumo 32 MiB");
 		max_mem_lower = addr(639 * 1024);
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
-	log(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, uint(max_mem_upper) >> 20 );
+	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, uint(max_mem_upper) >> 20 );
 	
 	// interpretiamo i parametri
 	for (arg = str_token(mbi->cmdline, &cont);
@@ -4004,7 +4018,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 			parse_swap(&arg[2], swap_ch, swap_drv, swap_part);
 			break;
 		default:
-			log(LOG_WARN, "Opzione sconosciuta: '%s'", arg[1]);
+			flog(LOG_WARN, "Opzione sconosciuta: '%s'", arg[1]);
 		}
 	}
 	
@@ -4012,14 +4026,14 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// 1GiB di memoria fisica
 	if (max_mem_upper > fine_sistema_privato) {
 		max_mem_upper = fine_sistema_privato;
-		log(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
+		flog(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
 	}
 
 
 	// il resto della memoria e' per le pagine fisiche
 	if (!init_pagine_fisiche())
 		goto error;
-	log(LOG_INFO, "Pagine fisiche: %d", num_pagine_fisiche);
+	flog(LOG_INFO, "Pagine fisiche: %d", num_pagine_fisiche);
 
 
 	// il direttorio principale viene utilizzato fino a quando non creiamo
@@ -4027,7 +4041,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// direttori dei nuovi processi.
 	direttorio_principale = alloca_direttorio();
 	if (direttorio_principale == 0) {
-		log(LOG_ERR, "Impossibile allocare il direttorio principale");
+		flog(LOG_ERR, "Impossibile allocare il direttorio principale");
 		goto error;
 	}
 		
@@ -4036,14 +4050,14 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// memoria fisica in memoria virtuale
 	if (!mappa_mem_fisica(direttorio_principale, max_mem_upper))
 		goto error;
-	log(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
+	flog(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
 
 	carica_cr3(direttorio_principale);
 	// avendo predisposto il direttorio in modo che tutta la memoria fisica
 	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
 	// la paginazione, sicuri che avremo continuita' di indirizzamento
 	attiva_paginazione();
-	log(LOG_INFO, "Paginazione attivata");
+	flog(LOG_INFO, "Paginazione attivata");
 
 	// quando abbiamo finito di usare la struttura dati passataci dal boot
 	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
@@ -4055,16 +4069,16 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 
 	// inizializziamo il controllore delle interruzioni [vedi sistema.S]
 	init_8259();
-	log(LOG_INFO, "Controllore delle interruzioni inizializzato");
+	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	
 	// processo dummy
 	if (!crea_dummy())
 		goto error;
-	log(LOG_INFO, "Creato il processo dummy");
+	flog(LOG_INFO, "Creato il processo dummy");
 
 	if (!init_pe())
 		goto error;
-	log(LOG_INFO, "Creati i processi esterni generici");
+	flog(LOG_INFO, "Creati i processi esterni generici");
 
 	// il primo processo utilizza il direttorio principale e,
 	// inizialmente, si trova a livello sistema (deve eseguire la parte 
@@ -4075,33 +4089,33 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	trasforma_in_processo();
 
 	// da qui in poi, e' il processo init che esegue
-	log(LOG_INFO, "Creato il processo main");
+	flog(LOG_INFO, "Creato il processo main");
 	
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati
 	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
 	// 0 segnala il fallimento della sem_ini
 	bm_set(&sem_bm, 0);
-	log(LOG_INFO, "Semafori: %d", MAX_SEMAFORI);
+	flog(LOG_INFO, "Semafori: %d", MAX_SEMAFORI);
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
-	attiva_timer(DELAY);
 	aggiungi_pe(ESTERN_BUSY, 0);
+	attiva_timer(DELAY);
 	clocks_per_sec = calibra_tsc();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
-	log(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
+	flog(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
 
 	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
 	// swap
-	log(LOG_INFO, "inizializzazione e riconoscimento hard disk...");
+	flog(LOG_INFO, "inizializzazione e riconoscimento hard disk...");
 	hd_init();
 
 	// inizializzazione dello swap
 	if (!swap_init(swap_ch, swap_drv, swap_part))
 			goto error;
-	log(LOG_INFO, "partizione di swap: %d+%d", swap.part->first, swap.part->dim);
-	log(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
+	flog(LOG_INFO, "partizione di swap: %d+%d", swap.part->first, swap.part->dim);
+	flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
 			swap.sb.blocks,
 			swap.sb.user_entry,
 			swap.sb.user_end,
@@ -4110,7 +4124,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 
 
 	// tabelle condivise per lo spazio utente condiviso
-	log(LOG_INFO, "creazione o lettura delle tabelle condivise...");
+	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	void* last_address;
 	if (!crea_spazio_condiviso(last_address))
 		goto error;
@@ -4118,21 +4132,21 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// inizializzazione dello heap utente
 	heap.start = allineav(swap.sb.user_end, sizeof(int));
 	heap.dimensione = distance(last_address, heap.start);
-	log(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
+	flog(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 
 	// semaforo per la mutua esclusione nella gestione dei page fault
 	pf_mutex = c_sem_ini(1);
 	if (pf_mutex == 0) {
-		log(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
+		flog(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
 		goto error;
 	}
 
 	// inizializzazione del modulo di io
-	log(LOG_INFO, "inizializzazione del modulo di I/O...");
+	flog(LOG_INFO, "inizializzazione del modulo di I/O...");
 	errore = swap.sb.io_entry(0);
 	if (errore < 0) {
-		log(LOG_ERR, "ERRORE dal modulo I/O: %d", -errore);
+		flog(LOG_ERR, "ERRORE dal modulo I/O: %d", -errore);
 		goto error;
 	}
 
@@ -4142,10 +4156,10 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
-	log(LOG_INFO, "salto a livello utente...");
+	flog(LOG_INFO, "salto a livello utente...");
 	pila_utente = crea_pila_utente(direttorio_principale);
 	if (pila_utente == 0) {
-		log(LOG_ERR, "Impossibile allocare la pila utente per main");
+		flog(LOG_ERR, "Impossibile allocare la pila utente per main");
 		goto error;
 	}
 	des_main.esp0 = add(&stack, SIZE_PAGINA);
