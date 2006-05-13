@@ -608,9 +608,9 @@ struct descrittore_pagina {
 	unsigned int A:		1;	// Accessed
 	unsigned int D:		1;	// Dirty
 	unsigned int pgsz:	1;	// non visto a lezione
-	unsigned int global:	1;	// non visto a lezione
 	// fine byte di accesso
-
+	
+	unsigned int global:	1;	// non visto a lezione
 	unsigned int avail:	3;	// non usati
 
 	unsigned int address:	20;	// indirizzo fisico/blocco
@@ -1032,7 +1032,7 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 // il numero del blocco della pagina nello swap
 descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_virtuale)
 {
-	
+
 	descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind_virtuale)];
 
 	// mapping inverso
@@ -1388,11 +1388,15 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 // piu' di 32 intervalli di timer (1.6 secondi in questo sistema) avranno il 
 // contatore a 0 e saranno quindi indifferenti dal punto di vista del 
 // rimpiazzamento.
+bool creato_spazio_condiviso = false;
 void aggiorna_statistiche()
 {
 	des_pf *ppf1, *ppf2;
 	tabella_pagine* ptab;
 	descrittore_pagina* pp;
+
+	if (!creato_spazio_condiviso)
+		return;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
@@ -2509,7 +2513,7 @@ struct des_sem {
 extern des_sem array_dess[MAX_SEMAFORI];
 
 // bitmap per l'allocazione dei semafori
-unsigned int sem_buf[MAX_SEMAFORI / sizeof(int) + 1];
+unsigned int sem_buf[MAX_SEMAFORI / (sizeof(int) * 8) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
 extern "C" int c_sem_ini(int val)
@@ -2641,7 +2645,7 @@ struct des_log {
 	int nmsg;		  // numero di messaggi
 	int mutex;
 	int sync;
-} log_buf;
+} log_buf; 
 
 // legge un messaggio dal log, bloccandosi se non ve ne sono
 extern "C" void c_readlog(log_msg& m)
@@ -3155,7 +3159,7 @@ extern "C" void c_panic(const char *msg,
 	}
 
 	// in cima scriviamo il messaggio
-	c_writevid_n(nl++, "PANIC", 5);
+	c_writevid_n(nl++ * 80, "PANIC", 5);
 	c_writevid_n(nl++ * 80, msg, strlen(msg));
 	c_writevid_n(nl++ * 80, "ultimo errore:", 14);
 	c_writevid_n(nl++ * 80, last_log_err(), strlen(last_log_err()));
@@ -3186,19 +3190,9 @@ extern "C" void c_panic(const char *msg,
 // GESTIONE DEL LOG
 /////////////////////////////////////////////////////////////////////////
 
-// log_init viene chiamata in fase di inizializzazione, in modo che il codice 
-// di inizializzazione possa inviare messaggi al log relativi allo stato di 
-// avanzamento, e agli eventuali errori, della procedura di inizializzazione 
-// stessa
-void log_init()
-{
-	log_buf.first = log_buf.last = 0;
-	log_buf.nmsg = 0;
-}
-
-// log_init_usr viene chiamata successivamente, prima di passare a livello 
-// utente, per inizializzare i semafori necessari alla primitiva che permette 
-// di leggere, da livello utente, i messaggi del log
+// log_init_usr viene chiamata prima di passare a livello utente, per 
+// inizializzare i semafori necessari alla primitiva che permette di leggere, 
+// da livello utente, i messaggi del log
 bool log_init_usr()
 {
 	if ( (log_buf.mutex = c_sem_ini(1)) == 0)
@@ -3218,6 +3212,8 @@ error1: flog(LOG_ERR, "Semafori insufficienti in log_init_usr");
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
 extern "C" void c_log(log_sev sev, const char* buf, int quanti)
 {
+	static int num = 0;
+
 	if (quanti > LOG_MSG_SIZE)
 		quanti = LOG_MSG_SIZE;
 
@@ -3232,7 +3228,7 @@ extern "C" void c_log(log_sev sev, const char* buf, int quanti)
 		log_buf.first = (log_buf.first + 1) % LOG_MSG_NUM;
 		log_buf.nmsg--;
 	}
-	if (log_buf.nmsg > 0) {
+	if (log_buf.sync && log_buf.nmsg > 0) {
 		proc_elem* lavoro;
 		des_sem *s = &array_dess[log_buf.sync];
 		if (s->counter < 0) {
@@ -3959,6 +3955,7 @@ bool crea_spazio_condiviso(void*& last_address)
 	const int nspazi = 2;
 	void *inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
 	     *fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
+
 	
 	// lettura del direttorio principale dallo swap
 	flog(LOG_INFO, "lettura del direttorio principale...");
@@ -3969,6 +3966,7 @@ bool crea_spazio_condiviso(void*& last_address)
 	}
 	if (!leggi_swap(tmp, swap.sb.directory * 8, sizeof(direttorio), "il direttorio principale"))
 		return false;
+	
 
 	for (int sp = 0; sp < nspazi; sp++) {
 		for (void* ind = inizio[sp]; ind < fine[sp]; ind = add(ind, SIZE_SUPERPAGINA))
@@ -3991,27 +3989,26 @@ bool crea_spazio_condiviso(void*& last_address)
 					return false;
 				}
 				pdes_tab2->address	= uint(ptab) >> 12;
-				if (pdes_tab1->US == 0) {
-					for (int i = 0; i < 1024; i++) {
-						descrittore_pagina* pdes_pag = &ptab->entrate[i];
-						if (pdes_pag->P == 1) {
-							pagina* pag = alloca_pagina_residente();
-							if (pag == 0) {
-								flog(LOG_ERR, "Impossibile allocare pagina residente");
-								return false;
-							}
-							if (! carica_pagina(pdes_pag, pag) ) {
-								flog(LOG_ERR, "Impossibile caricare pagina residente");
-								return false;
-							}
-							collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
+				for (int i = 0; i < 1024; i++) {
+					descrittore_pagina* pdes_pag = &ptab->entrate[i];
+					if (pdes_pag->P == 1) {
+						pagina* pag = alloca_pagina_residente();
+						if (pag == 0) {
+							flog(LOG_ERR, "Impossibile allocare pagina residente");
+							return false;
 						}
+						if (! carica_pagina(pdes_pag, pag) ) {
+							flog(LOG_ERR, "Impossibile caricare pagina residente");
+							return false;
+						}
+						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
 					}
 				}
 			}
 		}
 	}
 	delete tmp;
+	creato_spazio_condiviso = true;
 	return true;
 }
 
@@ -4024,9 +4021,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	char *arg, *cont;
 	short swap_ch = -1, swap_drv = -1, swap_part = -1;
 
-	// inizializziamo il log, in modo che resti traccia degli errori
-	log_init();
-	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
 	init.identifier = alloca_tss(&des_main);
@@ -4127,6 +4121,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	flog(LOG_INFO, "Creato il processo dummy");
 
+	// processi esterni generici
 	if (!init_pe())
 		goto error;
 	flog(LOG_INFO, "Creati i processi esterni generici");
@@ -4173,7 +4168,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 			swap.sb.io_entry,
 			swap.sb.io_end);
 
-
+	
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	void* last_address;
@@ -4201,6 +4196,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	}
 
+
+
 	// inizializzazione del meccanismo di lettura del log
 	if (!log_init_usr())
 		goto error;
@@ -4225,3 +4222,4 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 error:
 	panic("Errore di inizializzazione");
 }
+

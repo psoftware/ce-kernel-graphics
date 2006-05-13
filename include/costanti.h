@@ -97,7 +97,7 @@ enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
 struct log_msg {
 	log_sev sev;
 	short	identifier;
-	char msg[LOG_MSG_SIZE];
+	char msg[LOG_MSG_SIZE + 1];
 };
 
 #endif
