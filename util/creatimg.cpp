@@ -48,8 +48,7 @@ struct descrittore_pagina {
 	unsigned int global:	1;	// non visto a lezione
 	// fine byte di accesso
 
-	unsigned int avail:	2;	// non usato
-	unsigned int preload:	1;	// la pag. deve essere precaricata
+	unsigned int avail:	3;	// non usato
 
 	unsigned int address:	20;	// indirizzo fisico/blocco
 };
@@ -166,7 +165,6 @@ class Eseguibile {
 public:
 	virtual Segmento* prossimo_segmento() = 0;
 	virtual void* entry_point() const = 0;
-	virtual bool prossima_resident(uint& start, uint& dim) = 0;
 	virtual ~Eseguibile() {}
 };
 
@@ -245,11 +243,7 @@ class EseguibileElf32: public Eseguibile {
 	Elf32_Ehdr h;
 	char *seg_buf;
 	char *sec_buf;
-	char *strtab;
-	uint resident_start;
-	uint resident_size;
 	int curr_seg;
-	int curr_resident;
 
 	class SegmentoElf32: public Segmento {
 		EseguibileElf32 *padre;
@@ -272,13 +266,12 @@ public:
 	bool init();
 	virtual Segmento* prossimo_segmento();
 	virtual void* entry_point() const;
-	virtual bool prossima_resident(uint& start, uint& dim);
 	~EseguibileElf32();
 };
 
 EseguibileElf32::EseguibileElf32(FILE* pexe_)
-	: pexe(pexe_), curr_seg(0), curr_resident(0),
-	  seg_buf(NULL), sec_buf(NULL), strtab(NULL)
+	: pexe(pexe_), curr_seg(0),
+	  seg_buf(NULL), sec_buf(NULL) 
 {}
 
 	
@@ -321,16 +314,6 @@ bool EseguibileElf32::init()
 		fprintf(stderr, "Fine prematura del file ELF\n");
 		exit(EXIT_FAILURE);
 	}
-	// dobbiamo cariare anche la sezione contenente la tabella delle 
-	// stringhe
-	Elf32_Shdr* elf_strtab = (Elf32_Shdr*)(sec_buf + h.e_shentsize * h.e_shstrndx);
-	strtab = new char[elf_strtab->sh_size];
-	if ( fseek(pexe, elf_strtab->sh_offset, SEEK_SET) != 0 ||
-	     fread(strtab, elf_strtab->sh_size, 1, pexe) < 1)
-	{
-		fprintf(stderr, "Errore nella lettura della tabella delle stringhe\n");
-		exit(EXIT_FAILURE);
-	}
 
 	return true;
 }
@@ -354,28 +337,10 @@ void* EseguibileElf32::entry_point() const
 	return h.e_entry;
 }
 
-bool EseguibileElf32::prossima_resident(uint& start, uint& dim)
-{
-	while (curr_resident < h.e_shnum) {
-		Elf32_Shdr* sh = (Elf32_Shdr*)(sec_buf + h.e_shentsize * curr_resident);
-
-		curr_resident++;
-
-		if (strcmp("RESIDENT", strtab + sh->sh_name) != 0)
-			continue;
-
-		start = a2i(sh->sh_addr);
-		dim = sh->sh_size;
-		return true;
-	}
-	return false;
-}
-
 EseguibileElf32::~EseguibileElf32()
 {
 	delete[] seg_buf;
 	delete[] sec_buf;
-	delete[] strtab;
 }
 
 EseguibileElf32::SegmentoElf32::SegmentoElf32(EseguibileElf32* padre_, Elf32_Phdr* ph_)
@@ -474,10 +439,7 @@ class EseguibileCoff_go32: public Eseguibile {
 	AOUTHDR ah;
 	unsigned int soff;
 	char *seg_buf;
-	uint resident_start;
-	uint resident_size;
 	int curr_seg;
-	int curr_resident;
 
 	class SegmentoCoff_go32: public Segmento {
 		EseguibileCoff_go32 *padre;
@@ -501,12 +463,11 @@ public:
 	bool init();
 	virtual Segmento* prossimo_segmento();
 	virtual void* entry_point() const;
-	virtual bool prossima_resident(uint& start, uint& dim);
 	~EseguibileCoff_go32();
 };
 
 EseguibileCoff_go32::EseguibileCoff_go32(FILE* pexe_)
-	: pexe(pexe_), curr_seg(0), curr_resident(0), seg_buf(NULL)
+	: pexe(pexe_), curr_seg(0), seg_buf(NULL)
 {}
 
 	
@@ -582,22 +543,6 @@ void* EseguibileCoff_go32::entry_point() const
 	return (void*)ah.entry;
 }
 
-bool EseguibileCoff_go32::prossima_resident(uint& start, uint& dim)
-{
-	while (curr_resident < h.f_nscns) {
-		SCNHDR* sh = (SCNHDR*)(seg_buf + SCNHSZ * curr_resident);
-
-		curr_resident++;
-
-		if (strncmp("RESIDENT", sh->s_name, 8) != 0)
-			continue;
-
-		start = sh->s_vaddr;
-		dim = sh->s_size;
-		return true;
-	}
-	return false;
-}
 
 EseguibileCoff_go32::~EseguibileCoff_go32()
 {
@@ -738,7 +683,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 				pdes_tab->address = b;
 				pdes_tab->RW	  = 1;
 				pdes_tab->US	  = liv;
-				pdes_tab->preload = 1;
+				pdes_tab->P	   = 1;
 			} else {
 				leggi_blocco(img, pdes_tab->address, &tab);
 			}
@@ -759,32 +704,11 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 			} 
 			pdes_pag->RW |= s->scrivibile();
 			pdes_pag->US |= liv;
-			pdes_pag->preload |= (1 - liv);
+			pdes_pag->P  |= (1 - liv);
 			scrivi_blocco(img, pdes_tab->address, &tab);
 		}
 
 	}
-	uint start, size;
-	while (e->prossima_resident(start, size)) {
-		for (uint ind_virtuale = start;
-			  ind_virtuale < start + size;
-			  ind_virtuale += sizeof(pagina))
-		{
-			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
-			if (pdes_tab->address == 0) {
-				fprintf(stderr, "Errore interno\n");
-				exit(EXIT_FAILURE);
-			} else {
-				leggi_blocco(img, pdes_tab->address, &tab);
-			}
-
-			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			pdes_pag->preload = 1;
-			pdes_tab->preload = 1;
-			scrivi_blocco(img, pdes_tab->address, &tab);
-		}
-	}			
-	
 	fclose(exe);
 }
 
@@ -837,7 +761,7 @@ int main(int argc, char* argv[])
 		pdes_tab->address = 0;
 		pdes_tab->US	  = 1;
 		pdes_tab->RW	  = 1;
-		pdes_tab->preload = 1;
+		pdes_tab->P       = 1;
 	}
 		
 	superblock.magic[0] = 'C';

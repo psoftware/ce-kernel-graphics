@@ -5,7 +5,7 @@ process __logger_p0 body __logger_main(11), 201, LIV_UTENTE;
 process __logger_p1 body __logger_reader(11), 200, LIV_UTENTE;
 process __logger_p2 body __logger_ctrl(11), 200, LIV_UTENTE;
 
-log_msg __logger_buf __attribute__ (( section("RESIDENT") ));
+log_msg __logger_buf;
 
 char *__logger_sev_names[] = { "DBG", "INF", "WRN", "ERR" };
 
@@ -58,6 +58,9 @@ process_body __logger_main(int a)
 process_body __logger_reader(int a)
 {
 
+	if (resident(&__logger_buf, sizeof(__logger_buf)) < sizeof(__logger_buf))
+		goto out;
+
 	while (!__logger_quit) {
 		readlog(__logger_buf);
 		if (!__logger_quit) {
@@ -65,6 +68,8 @@ process_body __logger_reader(int a)
 			__logger_send_cmd(NEW_MSG);
 		}
 	}
+
+out:
 	printf(a, "*** logger (reader) terminato ***\n");
 }
 

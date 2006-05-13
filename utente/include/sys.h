@@ -100,6 +100,8 @@ struct log_msg {
 };
 extern "C" void readlog(log_msg& m);
 
+extern "C" int resident(void* start, int quanti);
+
 // Costanti
 //
 const int LIV_SISTEMA = 0, LIV_UTENTE = 3;

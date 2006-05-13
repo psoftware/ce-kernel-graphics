@@ -468,6 +468,7 @@ init_gdt:
 .set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
 .set tipo_rl, TIPO_RL
+.set tipo_r, TIPO_R
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 .set tipo_ae, TIPO_AE
@@ -542,6 +543,7 @@ init_idt:
 	carica_gate	tipo_mf		a_mem_free	LIV_UTENTE
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
+	carica_gate	tipo_r		a_resident	LIV_UTENTE
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
@@ -1435,21 +1437,6 @@ driver_hd1:
 	iret
 	
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ////////////////////////////////////////////////////////
 // a_primitive                                        //
 ////////////////////////////////////////////////////////
@@ -1544,6 +1531,15 @@ a_readlog:	// routine int $tipo_rl
 	call _c_readlog
 	addl $4, %esp
 	carica_registri
+	iret
+
+	.extern _c_resident
+a_resident:	// routine int $tipo_r
+	salva_reg_rit
+	copia_param 2 6
+	call _c_resident
+	addl $8, %esp
+	carica_reg_rit
 	iret
 
 

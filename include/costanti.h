@@ -20,6 +20,9 @@
 #define SIZE_DESS		64
 #define DELAY			59659		
 
+#define MAX_PRIORITY		0x7ffffff
+#define MIN_PRIORITY		0x8000000
+
 
 #define TIPO_A			0x30
 #define TIPO_T			0x31
@@ -32,6 +35,7 @@
 #define TIPO_MF			0x38
 #define TIPO_D			0x39
 #define TIPO_RL			0x3a
+#define TIPO_R			0x3b
 
 #define TIPO_AE			0x40
 #define TIPO_NWFI		0x41

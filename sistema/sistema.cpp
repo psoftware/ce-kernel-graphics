@@ -579,20 +579,6 @@ void operator delete[](void* p)
 /////////////////////////////////////////////////////////////////////////
 // PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
-// Il descrittore di pagina (o di tabella) prevede 3 bit che sono lasciati a 
-// disposizione del programmatore di sistema. In questo sistema, ne e' stato 
-// usato uno, denominato "preload" (precarica). Il suo significato e' il 
-// seguente: una pagina virtuale (o tabella) il cui descrittore contiene il bit 
-// "preload" pari a 1 e' esclusa dal meccanismo del rimpiazzamento: la pagina 
-// viene precaricata dallo swap al momento della creazione del processo, e poi 
-// non potra' essere rimpiazzata.  Tale meccanismo serve a realizzare le pagine 
-// "residenti", che si rendono necessarie soprattutto per il processo che 
-// esegue la funzione "main" (tale processo puo' invocare le primitive 
-// activate_p e sem_ini, che prevedono dei parametri formali di ritorno; i 
-// parametri attuali sono scritti dal nucleo e devono trovarsi in pagine non 
-// rimpiazzabili e precaricate, altrimenti il nucleo stesso potrebbe causare 
-// dei page fault)
-//
 // una pagina virtuale non presente, il cui descrittore contiene il campo 
 // address pari a 0, non possiede inizialmente un blocco in memoria di massa.  
 // Se, e quando, tale pagina verra' realmente acceduta, un nuovo blocco verra' 
@@ -625,8 +611,7 @@ struct descrittore_pagina {
 	unsigned int global:	1;	// non visto a lezione
 	// fine byte di accesso
 
-	unsigned int avail:	2;	// non usati
-	unsigned int preload:	1;	// la pag. deve essere precaricata
+	unsigned int avail:	3;	// non usati
 
 	unsigned int address:	20;	// indirizzo fisico/blocco
 };
@@ -1813,6 +1798,71 @@ error:
 	panic("Impossibile rimpiazzare pagine");
 }
 
+extern "C" int c_resident(void* start, int quanti)
+{
+	int da_fare;
+	void *vero_start, *last, *indirizzo_virtuale;
+	direttorio *pdir;
+
+
+	vero_start = addr(uint(start) & ~(SIZE_PAGINA - 1));
+	da_fare = ceild(distance(start, vero_start), SIZE_PAGINA);
+	last = add(vero_start, da_fare * SIZE_PAGINA);
+
+	sem_wait(pf_mutex);
+
+	pdir = leggi_cr3();
+
+	indirizzo_virtuale = vero_start;
+	while(indirizzo_virtuale < start)
+	{
+		descrittore_tabella *pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
+		tabella_pagine *ptab;
+
+		if (pdes_tab->P == 1) {
+			ptab = tabella_puntata(pdes_tab);
+		} else {
+			ptab = alloca_tabella();
+			if (ptab == 0) 
+				ptab = rimpiazzamento_tabella();
+			if (! carica_tabella(pdes_tab, ptab) )
+				goto error;
+			collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
+		} 
+			
+		for (int i = indice_tabella(indirizzo_virtuale); i < 1024 && indirizzo_virtuale < last; i++)
+		{
+			descrittore_pagina *pdes_pag =
+				&ptab->entrate[i];
+			pagina *pag;
+
+			if (pdes_pag->P == 0) {
+				pag = alloca_pagina_residente();
+				if (pag == 0)  
+					pag = rimpiazzamento_pagina(ptab);
+				if (! carica_pagina(pdes_pag, pag) ) 
+					goto error;
+				collega_pagina(ptab, pag, indirizzo_virtuale);
+				pdes_pag->D = 0;
+			} else {
+				pag = pagina_puntata(pdes_pag);
+				des_pf *ppf = strutturaPF(pfis(pag));
+				ppf->contenuto = PAGINA_RESIDENTE;
+			}
+			indirizzo_virtuale = add(indirizzo_virtuale, SIZE_PAGINA);
+		}
+	}
+
+error:
+	sem_signal(pf_mutex);
+
+	if (indirizzo_virtuale > add(start, quanti))
+		indirizzo_virtuale = add(start, quanti);
+
+	return distance(indirizzo_virtuale, start);
+}
+
+
 //////////////////////////////////////////////////////////////////////////////////
 // CREAZIONE PROCESSI                                                           //
 //////////////////////////////////////////////////////////////////////////////////
@@ -2060,7 +2110,6 @@ pagina* crea_pila_utente(direttorio* pdir)
 		pdes_tab->D	  = 0;
 		pdes_tab->A	  = 0;
 		pdes_tab->global  = 0;
-		pdes_tab->preload = 0;
 
 		ind = add(ind, SIZE_SUPERPAGINA);
 	}
@@ -2433,11 +2482,13 @@ extern "C" void c_mem_free(void *pv)
 
 extern "C" void c_begin_p()
 {
+
 	if (esecuzione->identifier != init.identifier) {
 		flog(LOG_WARN, "begin_p() non chiamata da main!");
 		abort_p();
 	}
 	processi--;
+	esecuzione->priority = MIN_PRIORITY;
         schedulatore();
 }
 
@@ -2471,7 +2522,7 @@ extern "C" int c_sem_ini(int val)
 		abort_p();
 	}
 
-	if(bm_alloc(&sem_bm, pos)) {
+	if (bm_alloc(&sem_bm, pos)) {
 		index_des_s = pos;
 		array_dess[index_des_s].counter = val;
 	}
@@ -3924,7 +3975,7 @@ bool crea_spazio_condiviso(void*& last_address)
 		{
 			pdes_tab1 = &tmp->entrate[indice_direttorio(ind)];
 
-			if (pdes_tab1->preload == 1) {	  
+			if (pdes_tab1->P == 1) {	  
 				pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
 				*pdes_tab2 = *pdes_tab1;
 
@@ -3940,24 +3991,24 @@ bool crea_spazio_condiviso(void*& last_address)
 					return false;
 				}
 				pdes_tab2->address	= uint(ptab) >> 12;
-				pdes_tab2->P		= 1;
-				for (int i = 0; i < 1024; i++) {
-					descrittore_pagina* pdes_pag = &ptab->entrate[i];
-					if (pdes_pag->preload == 1) {
-						pagina* pag = alloca_pagina_residente();
-						if (pag == 0) {
-							flog(LOG_ERR, "Impossibile allocare pagina residente");
-							return false;
+				if (pdes_tab1->US == 0) {
+					for (int i = 0; i < 1024; i++) {
+						descrittore_pagina* pdes_pag = &ptab->entrate[i];
+						if (pdes_pag->P == 1) {
+							pagina* pag = alloca_pagina_residente();
+							if (pag == 0) {
+								flog(LOG_ERR, "Impossibile allocare pagina residente");
+								return false;
+							}
+							if (! carica_pagina(pdes_pag, pag) ) {
+								flog(LOG_ERR, "Impossibile caricare pagina residente");
+								return false;
+							}
+							collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
 						}
-						if (! carica_pagina(pdes_pag, pag) ) {
-							flog(LOG_ERR, "Impossibile caricare pagina residente");
-							return false;
-						}
-						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
 					}
 				}
 			}
-
 		}
 	}
 	delete tmp;
@@ -3979,7 +4030,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
 	init.identifier = alloca_tss(&des_main);
-	init.priority   = 0;
+	init.priority   = MAX_PRIORITY;
 	esecuzione = &init;
 
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v1.0");
