@@ -7,7 +7,6 @@ CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude -g
 
 all: build/sistema \
-     build/io 	   \
      build/parse   \
      build/creatimg
      
@@ -25,7 +24,7 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	gcc $(CPPFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h sistema/elf.h include/costanti.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
 	g++ $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
@@ -56,8 +55,8 @@ build/creatimg: include/costanti.h util/creatimg.cpp
 	g++ -g -Iinclude -o build/creatimg util/creatimg.cpp
 
 .PHONY: swap
-swap: build/createimg build/utente
-	build/createimg $(SWAP) build/utente
+swap: build/creatimg build/io build/utente
+	build/creatimg $(SWAP) build/io build/utente
 	
 
 clean:

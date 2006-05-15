@@ -15,10 +15,10 @@ semaphore semaforo_1 value 1;
 /*
  * Processi che eseguono pa
  */
-process proc_pa_1 body pa(0), 10, LIV_UTENTE;
-process proc_pa_2 body pa(1), 10, LIV_UTENTE;
-process proc_pa_3 body pa(2), 10, LIV_UTENTE;
-process proc_pa_4 body pa(3), 10, LIV_UTENTE; 
+process proc_pa_1 body pa(1), 10, LIV_UTENTE;
+process proc_pa_2 body pa(2), 10, LIV_UTENTE;
+process proc_pa_3 body pa(3), 10, LIV_UTENTE;
+process proc_pa_4 body pa(4), 10, LIV_UTENTE; 
 
 #define BUFSIZE 20
 char a_buf[BUFSIZE];

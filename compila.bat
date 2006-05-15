@@ -1,6 +1,7 @@
 set START_SISTEMA=0x00100000
 set START_IO=0x40000000
 set START_UTENTE=0x80000000
+set SWAP=swap.img
 
 set CPPFLAGS=-nostdinc -Iinclude -g -fno-builtin
 
@@ -24,3 +25,6 @@ build\parse -o utente\utente.cpp utente\prog\*.in
 gcc %CPPFLAGS% -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
 gcc %CPPFLAGS% -Iutente/include -c utente/lib.cpp -o utente/lib.o
 ld -nostdlib -o build/utente -Ttext %START_UTENTE% utente/uten_cpp.o utente/uten_s.o utente/lib.o
+
+rem creazione dello swap
+build\creatimg %SWAP% build\io build\utente

@@ -83,7 +83,7 @@ unsigned int ceild(unsigned int v, unsigned int q)
 	return v / q + (v % q != 0 ? 1 : 0);
 }
 
-// restituisce il valore di v allineato a un multiplo di a
+// restituisce il valore di "v" allineato a un multiplo di "a"
 inline unsigned int allinea(unsigned int v, unsigned int a)
 {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
@@ -106,13 +106,13 @@ bool str_equal(const char* first, const char* second);
 
 // funzioni utili alla gestione degli errori
 // 
-// invia un msg al log
+// invia un messaggio formatto al log
 void flog(log_sev, const char* fmt, ...);
 // restituisce l'ultimo messaggio inviato al log
 const char* last_log();
 // restituisce l'ultimo messaggio di errore inviato al log
 const char* last_log_err();
-// invia mgs al log, quindi blocca il sistema
+// blocca il sistema, stampando msg e altre informazioni di debug
 extern "C" void panic(const char *msg);
 // termina forzatamente un processo
 extern "C" void abort_p();
@@ -130,29 +130,21 @@ extern "C" void abort_p();
 // indirizzo occupato dal sistema stesso (e' il linker, tramite il simbolo
 // predefinito "_end", che ci permette di conoscere, staticamente, questo
 // indirizzo [vedi sistema.S])
-// 2) di seguito al sistema, il boostrap loader ha caricato i moduli, e ha
-// passato la lista dei descrittori di moduli tramite il registro %ebx.
-// Scorrendo tale lista, facciamo avanzare il puntatore mem_upper oltre lo
-// spazio occupato dai moduli
-// 3) il modulo di io deve essere ricopiato all'indirizzo a cui e' stato
-// collegato (molto probabilmente diverso dall'indirizzo a cui il bootloader lo
-// ha caricato, in quanto il bootloader non interpreta il contenuto dei
-// moduli). Nel ricopiarlo, viene occupata ulteriore memoria fisica.
-// 4) di seguito al modulo io (ricopiato), viene allocato l'array di 
-// descrittori di pagine fisiche [vedi avanti], la cui dimensione e' calcolata 
-// dinamicamente, in base al numero di pagine fisiche rimanenti dopo le 
-// operazioni precedenti.
-// 5) tutta la memoria fisica restante, a partire dal primo indirizzo multiplo
+// 2) di seguito al modulo sistema, viene allocato l'array di descrittori di 
+// pagine fisiche [vedi avanti], la cui dimensione e' calcolata dinamicamente, 
+// in base al numero di pagine fisiche rimanenti.
+// 3) tutta la memoria fisica restante, a partire dal primo indirizzo multiplo
 // di 4096, viene usata per le pagine fisiche, destinate a contenere
 // descrittori, tabelle e pagine virtuali.
 //
 // Durante queste operazioni, si vengono a scoprire regioni di memoria fisica
-// non utilizzate (ad esempio, quando si fa avanzare mem_upper, al passo 3, per
-// portarsi all'inizio dell'indirizzo di collegamento del modulo io). Queste
-// regioni, man mano che vengono scoperte, vengono aggiunte allo heap di
-// sistema. Nella seconda fase, il sistema usa lo heap cosi' ottenuto per
-// allocare la memoria richiesta dall'operatore new (ad es., per "new
-// richiesta").
+// non utilizzate (per esempio, il modulo sistema viene caricato in memoria a 
+// partire dall'indirizzo 0x100000, corrispondente a 1 MiB, quindi il primo 
+// mega byte, esclusa la zona dedicata alla memoria video, risulta 
+// inutilizzato) Queste regioni, man mano che vengono scoperte, vengono 
+// aggiunte allo heap di sistema. Nella seconda fase, il sistema usa lo heap 
+// cosi' ottenuto per allocare la memoria richiesta dall'operatore new (per 
+// es., per "new richiesta").
 
 // indirizzo fisico del primo byte non riferibile in memoria inferiore e
 // superiore (rappresentano la memoria fisica installata sul sistema)
@@ -472,44 +464,44 @@ void operator delete[](void* p)
 //
 // SPAZIO VIRTUALE DI UN PROCESSO:
 // Ogni processo possiede un proprio spazio di indirizzamento, suddiviso in 
-// quattro parti (di 1 Giga Byte ciascuna):
+// cinque parti:
 // - sistema/condivisa: contiene l'immagine di tutta la memoria fisica
 // installata nel sistema
 // - sistema/privata: contiene la pila sistema del processo
+// - io/condiviso: contiene l'immagine del modulo io
 // - utente/condivisa: contiene l'immagine dei corpi di tutti i processi, dei 
 // dati globali e dello heap
 // - utente/privata: contiene la pila utente del processo
-// Le parti sistema non sono gestite tramite memoria virtuale (i bit P sono 
-// permanentemente a 1 o a 0) e sono accessibili solo da livello di privilegio 
-// sistema. Le parti utente sono gestite tramite memoria virtuale e sono 
-// accessibili da livello utente.
+// Le parti sistema e io non sono gestite tramite memoria virtuale (i bit P 
+// sono permanentemente a 1 o a 0) e sono accessibili solo da livello di 
+// privilegio sistema. Le parti utente sono gestite tramite memoria virtuale e 
+// sono accessibili da livello utente.
 // Le parti condivise sono comuni a tutti i processi. La condivisione viene 
 // realizzata esclusivamente condividendo le tabelle delle pagine: i direttori 
-// di tutti i processi puntano alle stesse tabelle nelle entrate numero 0-255 
-// (relative alla parte sistema/condivisa) e nelle entrate numero 512-767 
-// (relative alla parte utente/condivisa). In questo modo, ogni pagina (sia 
-// essa appartenende ad uno spazio privato che ad uno spazio condiviso) e' 
-// puntata sempre da una sola tabella. Cio' semplifica la gestione della 
-// memoria virtuale: per rimuovere o aggiungere una pagina e' necessario 
-// modificare una sola entrata (altrimenti, per rimuovere o aggiungere una 
-// pagina di uno spazio condiviso, sarebbe necessario modificare le entrate 
-// relative alla pagina in tutte le tabelle, di tutti i processi, che la 
-// puntano). Inoltre, le tabelle condivise sono sempre preallocate e non 
+// di tutti i processi puntano alle stesse tabelle nelle entrate relative alla 
+// parte sistema/condivisa, io/condivisa e utente/condivisa.  In questo modo, 
+// ogni pagina (sia essa appartenende ad uno spazio privato che ad uno spazio 
+// condiviso) e' puntata sempre da una sola tabella. Cio' semplifica la 
+// gestione della memoria virtuale: per rimuovere o aggiungere una pagina e' 
+// necessario modificare una sola entrata (altrimenti, per rimuovere o 
+// aggiungere una pagina di uno spazio condiviso, sarebbe necessario modificare 
+// le entrate relative alla pagina in tutte le tabelle, di tutti i processi, 
+// che la puntano). Inoltre, le tabelle condivise sono sempre preallocate e non 
 // rimpiazzabili (altrimenti, per aggiungere o rimuovere una tabella condivisa, 
 // sarebbe necessario modificare l'entrata relativa nel direttorio di ogni 
 // processo).
 //
 // MEMORIA FISICA:
 // La memoria fisica e' suddivisa in due parti: la prima parte contiene il 
-// codice e le strutture dati, statiche e dinamiche, del nucleo e del modulo di 
-// io, mentre la seconda parte e' suddivisa in pagine fisiche, destinate a 
-// contenere i direttori, le tabelle delle pagine e le pagine virtuali dei 
-// processi. Poiche' l'intera memoria fisica (sia la prima che la seconda 
-// parte) e' mappata nello spazio sistema/condiviso di ogni processo, il nucleo 
-// e il modulo di io (sia il codice che le strutture dati) sono mappati, agli 
-// stessi indirizzi, nello spazio virtuale di ogni processo. In questo modo, 
-// ogni volta che un processo passa ad eseguire una routine di nucleo (o di io) 
-// (per effetto di una interruzione software, esterna o di una eccezione), la
+// codice e le strutture dati, statiche e dinamiche, del nucleo, mentre la 
+// seconda parte e' suddivisa in pagine fisiche, destinate a contenere i 
+// direttori, le tabelle delle pagine, le pagine del modulo io e le pagine 
+// virtuali dei processi.  Poiche' l'intera memoria fisica (sia la prima che la 
+// seconda parte) e' mappata nello spazio sistema/condiviso di ogni processo, 
+// il nucleo (sia il codice che le strutture dati) e' mappato, agli stessi 
+// indirizzi, nello spazio virtuale di ogni processo.  In questo modo, ogni 
+// volta che un processo passa ad eseguire una routine di nucleo  (per effetto 
+// di una interruzione software, esterna o di una eccezione), la
 // routine puo' continuare ad utilizzare il direttorio del processo e avere 
 // accesso al proprio codice e alle proprie strutture dati.
 // La seconda parte della memoria fisica e' gestita tramite una struttra dati 
@@ -537,8 +529,8 @@ void operator delete[](void* p)
 // pagine) contiene il numero del blocco della pagina nello swap (analogamente 
 // per le tabelle non presenti) e le informazioni necessarie alla corretta 
 // creazione del descrittore di pagina, qualora la pagina dovesse essere 
-// caricata in memoria fisica (in particolare, i valori da assegnare ai bit RW, 
-// PCD e PWT). Quando una pagina V, non presente, viene resa presente, 
+// caricata in memoria fisica (in particolare, i valori da assegnare ai bit US, 
+// RW, PCD e PWT). Quando una pagina V, non presente, viene resa presente, 
 // caricandola in una pagina fisica F, l'informazione del blocco associato alla 
 // pagina viene ricopiata nel descrittore della pagina fisica F (altrimenti, 
 // poiche' nel descrittore verra' scritto il byte di accesso e l'indirizzo di 
@@ -549,36 +541,44 @@ void operator delete[](void* p)
 // 
 // CREAZIONE DELLO SPAZIO VIRTUALE DI UN PROCESSO:
 // Inizialmente, lo swap contiene esclusivamente l'immagine della parte 
-// utente/condivisa, uguale per tutti i processi. Lo swap contiene, infatti, un 
-// solo direttorio, di cui sono significative solo le entrate numero 512-767, 
-// le relative tabelle e le pagine puntate da tali tabelle.
+// utente/condivisa e io/condivisa, uguale per tutti i processi. Lo swap 
+// contiene, infatti, un solo direttorio, di cui sono significative solo le 
+// entrate relative a tali parti, le corrispondenti tabelle e le pagine puntate 
+// da tali tabelle.
 //
 // All'avvio del sistema, viene creato un direttorio principale, nel seguente 
 // modo:
-// - le entrate da 0 a 255 (massimo), corrispondenti allo spazio 
-// sistema/condiviso, vengono fatte puntare a tabelle, opportunamente create, 
-// che mappano tutta la memoria fisica in memoria virtuale
-// - le entrate da 512 a 768 (massimo), corrispondenti allo spazio 
-// utente/condiviso, vengono copiate dalle corrispondenti entrate che si 
-// trovano nel direttorio nello swap. Le tabelle puntate da tali entrate 
-// vengono tutte caricate in memoria fisica
+// - le entrate corrispondenti allo spazio sistema/condiviso, vengono fatte 
+// puntare a tabelle, opportunamente create, che mappano tutta la memoria 
+// fisica in memoria virtuale
+// - le entrate corrispondenti agli spazi io/condiviso e utente/condiviso, 
+// vengono copiate dalle corrispondenti entrate che si trovano nel direttorio 
+// nello swap. Le tabelle puntate da tali entrate vengono tutte caricate in 
+// memoria fisica, cosi' come le pagine puntate dalle tabelle relative allo 
+// spazio io/condiviso
 // - le rimanenti entrate sono non significative
 //
 // Ogni volta che viene creato un nuovo processo, il suo direttorio viene prima 
 // copiato dal direttorio principale (in questo modo, il nuovo processo 
 // condividera' con tutti gli altri processi le tabelle, e quindi le pagine, 
-// degli spazio sistema e utente condivisi). Gli spazi privati (sistema e 
+// degli spazio sistema, io e utente condivisi). Gli spazi privati (sistema e 
 // utente), che sono inizialmente vuoti (fatta eccezione per alcune parole 
 // lunghe) vengono creati dinamicamente, allocando nuove tabelle e lo spazio 
-// nello swap per le corrispondenti pagine. Se non si facesse cosi', lo swap 
-// dovrebbe essere preparato conoscendo a priori il numero di processi che 
-// verranno creati al momento dell'esecuzione di main.
+// nello swap per le corrispondenti pagine. Se la creazione degli spazio 
+// privati di un processo non fosse effettuata durante la creazione del 
+// processo stesso, lo swap dovrebbe essere preparato conoscendo a priori il 
+// numero di processi che verranno creati al momento dell'esecuzione di main.
 //
 
 
 /////////////////////////////////////////////////////////////////////////
 // PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
+// Vengono qui definite le strutture dati utilizzate per la gestione della 
+// paginazione. Alcune (descrittore_pagina, descrittore_tabella, direttorio, 
+// tabella_pagina) hanno una struttura che e' dettata dall'hardware.
+//
+// In questa implementazione, viene utilizzata la seguente ottimizzazione:
 // una pagina virtuale non presente, il cui descrittore contiene il campo 
 // address pari a 0, non possiede inizialmente un blocco in memoria di massa.  
 // Se, e quando, tale pagina verra' realmente acceduta, un nuovo blocco verra' 
@@ -596,7 +596,8 @@ void operator delete[](void* p)
 //
 // Se il descrittore di una tabella delle pagine possiede il campo address pari 
 // a 0, e' come se tutte le pagine puntate dalla tabella avessero il campo 
-// address pari a 0
+// address pari a 0 (quindi, la tabella stessa verra' creata dinamicamente, se 
+// necessario)
 
 struct descrittore_pagina {
 	// byte di accesso
@@ -698,11 +699,11 @@ pagina* pagina_puntata(descrittore_pagina* pdes_pag)
 }
 
 // il direttorio principale contiene i puntatori a tutte le tabelle condivise 
-// (sia dello spazio sistema che dello spazio utente). Viene usato nella fase 
-// inziale, quando ancora non e' stato creato alcun processo e dal processo 
-// main.  Inoltre, ogni volta che viene creato un nuovo processo, il direttorio 
-// del processo viene inzialmente copiato dal direttorio principale (in modo 
-// che il nuovo processo condivida tutte le tabelle condivise)
+// (degli spazi sistema, io e utente). Viene usato  nella fase inziale, quando 
+// ancora non e' stato creato alcun processo e dal processo main.  Inoltre, 
+// ogni volta che viene creato un nuovo processo, il direttorio del processo 
+// viene inzialmente copiato dal direttorio principale (in modo che il nuovo 
+// processo condivida tutte le tabelle condivise)
 direttorio* direttorio_principale;
 
 // carica un nuovo valore in cr3 [vedi sistema.S]
@@ -1152,6 +1153,8 @@ bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
 // (l'indirizzo di main)
 // - l'indirizzo virtuale successivo all'ultima istruzione del programma 
 // contenuto nello swap (serve come indirizzo di partenza dello heap utente)
+// - l'indirizzo virtuale dell'entry point del modulo io contenuto nello swap
+// - l'indirizzo virtuale successivo all'ultimo byte occupato dal modulo io
 // - checksum: somma dei valori precedenti (serve ad essere ragionevolmente 
 // sicuri che quello che abbiamo letto dall'hard disk e' effettivamente un 
 // superblocco di questo sistema, e che il superblocco stesso non e' stato 
@@ -1193,11 +1196,11 @@ struct superblock_t {
 
 // descrittore di swap (vedi sopra)
 struct des_swap {
-	short channel;
-	short drive;
-	partizione* part;
-	bm_t free;
-	superblock_t sb;
+	short channel;		// canale: 0 = primario, 1 = secondario
+	short drive;		// dispositivo: 0 = master, 1 = slave
+	partizione* part;	// partizione all'interno del dispositivo
+	bm_t free;		// bitmap dei blocchi liberi
+	superblock_t sb;	// contenuto del superblocco 
 } swap; 	// c'e' un unico oggetto swap
 
 
@@ -1282,6 +1285,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	char read_buf[512];
 	partizione* part;
 
+	// l'utente *deve* specificare una partizione
 	if (swap_ch == -1 || swap_drv == -1 || swap_part == -1) {
 		flog(LOG_ERR, "Partizione di swap non specificata!");
 		return false;
@@ -1293,6 +1297,8 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 		return false;
 	}
 		
+	// se la partizione non comprende l'intero hard disk (swap_part > 0), 
+	// controlliamo che abbia il tipo giusto
 	if (swap_part && part->type != 0x3f) {
 		flog(LOG_ERR, "Tipo della partizione di swap scorretto (%d)", part->type);
 		return false;
@@ -1309,6 +1315,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 
 	swap.sb = *reinterpret_cast<superblock_t*>(read_buf);
 
+	// controlliamo che il superblocco contenga la firma di riconoscimento
 	if (swap.sb.magic[0] != 'C' ||
 	    swap.sb.magic[1] != 'E' ||
 	    swap.sb.magic[2] != 'S' ||
@@ -1388,15 +1395,11 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 // piu' di 32 intervalli di timer (1.6 secondi in questo sistema) avranno il 
 // contatore a 0 e saranno quindi indifferenti dal punto di vista del 
 // rimpiazzamento.
-bool creato_spazio_condiviso = false;
 void aggiorna_statistiche()
 {
 	des_pf *ppf1, *ppf2;
 	tabella_pagine* ptab;
 	descrittore_pagina* pp;
-
-	if (!creato_spazio_condiviso)
-		return;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
@@ -1802,17 +1805,30 @@ error:
 	panic("Impossibile rimpiazzare pagine");
 }
 
+// primtiva che permette di rendere alcune pagine residenti (il programmatore 
+// deve usarla, ad esempio, quando un certo buffer di I/O deve trovarsi 
+// permanentemente in memoria fisica).
+// La primitiva carica tutte le pagine (e le relative tabelle) che contengono i 
+// byte nell'intervallo [start, start + quanti) e le marca come residenti (non 
+// rimpiazzabili). Restituisce il numero di byte che e' riuscita a rendere 
+// residenti (potrebbero essere meno di "quanti", in caso di errore)
 extern "C" int c_resident(void* start, int quanti)
 {
 	int da_fare;
 	void *vero_start, *last, *indirizzo_virtuale;
 	direttorio *pdir;
+	des_pf *ppf;
 
 
+	// calcoliamo l'indirizzo della pagina che contiene "start"
 	vero_start = addr(uint(start) & ~(SIZE_PAGINA - 1));
+	// quindi il numero di pagine da rendere residenti
 	da_fare = ceild(distance(start, vero_start), SIZE_PAGINA);
+	// e l'indirizzo del primo byte che non sara' reso residente
 	last = add(vero_start, da_fare * SIZE_PAGINA);
 
+	// accesso in mutua esclusione con la routine di trasferimento
+	// (entrambe manipolano le stesse strutture dati)
 	sem_wait(pf_mutex);
 
 	pdir = leggi_cr3();
@@ -1829,8 +1845,10 @@ extern "C" int c_resident(void* start, int quanti)
 			ptab = alloca_tabella();
 			if (ptab == 0) 
 				ptab = rimpiazzamento_tabella();
-			if (! carica_tabella(pdes_tab, ptab) )
-				goto error;
+			if (! carica_tabella(pdes_tab, ptab) ) {
+				rilascia(ptab);
+				goto out;
+			}
 			collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
 		} 
 			
@@ -1841,23 +1859,30 @@ extern "C" int c_resident(void* start, int quanti)
 			pagina *pag;
 
 			if (pdes_pag->P == 0) {
-				pag = alloca_pagina_residente();
+				pag = alloca_pagina_virtuale();
 				if (pag == 0)  
 					pag = rimpiazzamento_pagina(ptab);
-				if (! carica_pagina(pdes_pag, pag) ) 
-					goto error;
+				if (! carica_pagina(pdes_pag, pag) ) {
+					rilascia(pag);
+					goto out;
+				}
 				collega_pagina(ptab, pag, indirizzo_virtuale);
 				pdes_pag->D = 0;
 			} else {
 				pag = pagina_puntata(pdes_pag);
-				des_pf *ppf = strutturaPF(pfis(pag));
-				ppf->contenuto = PAGINA_RESIDENTE;
 			}
+			// marchiamo la pagina come residente
+			ppf = strutturaPF(pfis(pag));
+			ppf->contenuto = PAGINA_RESIDENTE;
+
+			// prossimo indirizzo virtuale da considerare
 			indirizzo_virtuale = add(indirizzo_virtuale, SIZE_PAGINA);
 		}
 	}
 
-error:
+out:
+	// qualunque cosa sia accaduta, rilasciamo il semaforo di mutua 
+	// esclusione
 	sem_signal(pf_mutex);
 
 	if (indirizzo_virtuale > add(start, quanti))
@@ -2103,6 +2128,9 @@ pagina* crea_pila_utente(direttorio* pdir)
 	des_pf*	     ppf;
 
 	void *ind = inizio_utente_privato;
+	// prepariamo i descrittori di tabella per tutto lo spazio 
+	// utente/privato. Viene usata l'ottimizzazione address = 0
+	// (le tabelle verranno create solo se effettivamente utilizzate)
 	for (int i = 0; i < ntab_utente_privato; i++) {
 
 		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
@@ -2125,14 +2153,19 @@ pagina* crea_pila_utente(direttorio* pdir)
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		
 	ptab = alloca_tabella();
-	if (ptab == 0) goto errore1;
+	if (ptab == 0)
+		// non possiamo rimpiazzare, in quanto la routine di 
+		// rimpiazzamento e' potenzialmente bloccante
+		goto errore1;
 	if (! carica_tabella(pdes_tab, ptab) ) 
 		goto errore2;
 
 	pdes_tab = collega_tabella(pdir, ptab, indice_direttorio(ind));
 
 	ind_fisico = alloca_pagina_virtuale();
-	if (ind_fisico == 0) goto errore2;
+	if (ind_fisico == 0)
+		// come sopra
+		goto errore2;
 	pdes_pag = &ptab->entrate[indice_tabella(ind)];
 	if (! carica_pagina(pdes_pag, ind_fisico) )
 		goto errore3;
@@ -2140,7 +2173,9 @@ pagina* crea_pila_utente(direttorio* pdir)
 
 	pdes_pag->D		= 1; // verra' modificata
 
-	// restituiamo un puntatore alla pila creata
+	// restituiamo un puntatore all'ultima pagina della pila creata
+	// (in modo che crea_processo possa scrivervi le parole lunghe di 
+	// inizializzazione)
 	return ind_fisico;
 
 errore3:	rilascia(ind_fisico);
@@ -2159,10 +2194,14 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	descrittore_pagina*  pdes_pag;
 	des_pf*	     ppf;
 
+	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
+	// dello spazio sistema/privato
 	void *ind = sub(fine_sistema_privato, SIZE_PAGINA);
 
 	ptab = alloca_tabella_residente();
 	if (ptab == 0)
+		// non possiamo rimpiazzare, in quanto la routine di 
+		// rimpiazzamento e' potenzialmente bloccante
 		goto errore1;
 
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
@@ -2176,6 +2215,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 
 	ind_fisico = alloca_pagina_residente();
 	if (ind_fisico == 0)
+		// come sopra
 		goto errore2;
 
 	memset(ptab, 0, SIZE_PAGINA);
@@ -2192,7 +2232,8 @@ errore2: 	rilascia(ptab);
 errore1:	return 0;
 }
 	
-
+// rilascia tutte le strutture dati private associate al processo puntato da 
+// "p" (tranne il proc_elem puntato da "p" stesso)
 void distruggi_processo(proc_elem* p)
 {
 	des_proc* pdes_proc = des_p(p->identifier);
@@ -2250,6 +2291,8 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short id = 0;
 
+	// per semplificare l'implementazione, imponiamo che solo main possa 
+	// creare nuovi processi
 	if (esecuzione->identifier != init.identifier) {
 		flog(LOG_WARN, "activate_p non chiamata da main");
 		abort_p();
@@ -2265,6 +2308,8 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	return id;
 }
 
+// non viene eseguito un vero shutdown, ma si blocca semplicemente il 
+// processore
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
@@ -2297,6 +2342,12 @@ proc_elem *proc_esterni_save[MAX_IRQ];
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
 
+// inizialmente, tutti gli interrupt esterni sono associati ad una istanza di 
+// questo processo esterno generico, che si limita ad inviare un messaggio al 
+// log ogni volta che viene attivato. Successivamente, la routine di 
+// inizializzazione del modulo di I/O provvedera' a sostituire i processi 
+// esterni generici con i processi esterni effettivi, per quelle periferiche 
+// che il modulo di I/O e' in grado di gestire.
 void estern_generico(int h)
 {
 	for (;;) {
@@ -2309,6 +2360,9 @@ void estern_generico(int h)
 	}
 }
 
+// associa il processo esterno puntato da "p" all'interrupt "irq".
+// Fallisce se un processo esterno (non generico) era gia' stato associato a 
+// quello stesso interrupt
 bool aggiungi_pe(proc_elem *p, int irq)
 {
 	if (irq < 0 || irq >= MAX_IRQ || proc_esterni_save[irq] == 0)
@@ -2327,6 +2381,7 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
+	// assumiamo che solo main possa chiamare activate_pe
 	if (esecuzione->identifier != init.identifier) {
 		flog(LOG_WARN, "activate_pe non chiamata da main");
 		abort_p();
@@ -2345,6 +2400,8 @@ error2:	distruggi_processo(p);
 error1:	return 0;
 }
 
+// init_pe viene chiamata in fase di inizializzazione, ed associa una istanza 
+// di processo esterno generico ad ogni interrupt
 bool init_pe()
 {
 	for (int i = 0; i < MAX_IRQ; i++) {
@@ -2484,6 +2541,8 @@ extern "C" void c_mem_free(void *pv)
 }
 
 
+// begin_p deve essere chiamata da main, e fa partire la gestione dei processi 
+extern "C" void attiva_timer(unsigned long delay);
 extern "C" void c_begin_p()
 {
 
@@ -2494,6 +2553,7 @@ extern "C" void c_begin_p()
 	processi--;
 	esecuzione->priority = MIN_PRIORITY;
         schedulatore();
+	attiva_timer(DELAY);
 }
 
 extern "C" int c_give_num()
@@ -2516,6 +2576,11 @@ extern des_sem array_dess[MAX_SEMAFORI];
 unsigned int sem_buf[MAX_SEMAFORI / (sizeof(int) * 8) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
+// alloca un nuovo semaforo e ne restiutisce l'indice (da usare con sem_wait e 
+// sem_signal). Se non ci sono piu' semafori disponibili, restituisce l'indice 
+// 0 (NOTA: la firma della funzione e' diversa da quella del testo, in quanto 
+// sono stati eliminati i parametri di ritorno. Il testo verra' aggiornato alla 
+// prossima edizione).
 extern "C" int c_sem_ini(int val)
 {
 	unsigned int pos;
@@ -2684,6 +2749,13 @@ struct page_fault_error {
 	unsigned int pad   : 28; // bit non significativi
 };
 
+
+// c_page_fault viene chiamata dal gestore dell'eccezione di page fault (in 
+// sistema.S), che provvede a salvare in pila il valore del registro %cr2. Tale 
+// valore viene qui letto nel parametro "indirizzo_virtuale". "errore" e' il 
+// codice di errore descritto prima, mentre "eip" e' l'indirizzo 
+// dell'istruzione che ha causato il fault. Sia "errore" che "eip" vengono 
+// salvati in pila dal microprogramma di gestione dell'eccezione
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
 	if (eip < fine_codice_sistema) {
@@ -2703,14 +2775,20 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 	if (errore.res == 1)
 		panic("descrittore scorretto");
 
+	// l'errore di protezione non puo' essere risolto: il processo ha 
+	// tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
+	// sistema)
 	if (errore.prot == 1) {
 		flog(LOG_WARN, "Errore di protezione, il processo verra' terminato");
 		abort_p();
 	}
 
+	// in tutti gli altri casi, proviamo a trasferire la pagina mancante
 	trasferimento(indirizzo_virtuale, errore.write);
 }
 
+// gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
+// sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 		unsigned eip, unsigned cs, short eflag)
 {
@@ -2800,6 +2878,7 @@ extern "C" void c_driver_t(void)
 {
 	richiesta *p;
 
+	// conta il numero di interruzioni di timer ricevute
 	ticks++;
 
 	if(descrittore_timer != 0)
@@ -2853,12 +2932,12 @@ void *memset(void *dest, int c, unsigned int n)
         return dest;
 }
 
-typedef char *va_list;
 
 // Versione semplificata delle macro per manipolare le liste di parametri
 //  di lunghezza variabile; funziona solo se gli argomenti sono di
 //  dimensione multipla di 4, ma e' sufficiente per le esigenze di printk.
 //
+typedef char *va_list;
 #define va_start(ap, last_req) (ap = (char *)&(last_req) + sizeof(last_req))
 #define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
 #define va_end(ap)
@@ -3109,6 +3188,8 @@ unsigned char *VIDEO_MEM_BASE = (unsigned char *)0x000b8000;
 const int VIDEO_MEM_SIZE = 0x00000fa0;
 
 
+// copia in memoria video, a partire dall'offset "off" (in caratteri) i 
+// "quanti" caratteri puntati da "vett"
 extern "C" void c_writevid_n(int off, const char* vett, int quanti)
 {
 	unsigned char* start = VIDEO_MEM_BASE + off * 2, *stop;
@@ -3124,6 +3205,9 @@ extern "C" void c_writevid_n(int off, const char* vett, int quanti)
 		*ptr = *vett++;
 }
 
+// imposta "quanti" caratteri in memoria video, a partire dall'offset "off", 
+// con colore "fgcol" e sfondo "bgcol". Se "blink" e' true, i caratteri saranno 
+// lampeggianti
 extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink)
 {
 	unsigned char* start = VIDEO_MEM_BASE + off * 2 + 1, *stop;
@@ -3140,7 +3224,13 @@ extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned c
 		*ptr = attr;
 }
 
+// la funzione backtrace stampa su video gli indirizzi di ritorno dei record di 
+// attivazione presenti sulla pila sistema
 extern "C" void backtrace(int off);
+
+// panic mostra un'insieme di informazioni di debug sul video e blocca il 
+// sistema. I parametri "eip1", "cs", "eflags" e "eip2" sono in pila per 
+// effetto della chiamata di sistema
 extern "C" void c_panic(const char *msg,
 		        unsigned int	 eip1,
 			unsigned short	 cs,
@@ -3300,14 +3390,10 @@ extern "C" void outputbuffw(unsigned short *a, ind_b reg,short n);
 #define HD_DRV_MASTER 0
 #define HD_DRV_SLAVE 1
 enum hd_cmd {			// Comandi per i controllori degli hard disk
-	NONE=0x00,
-	IDENTIFY=0xEC,
-	SET_FEATURES=0xEF,
-	SET_MULT_MODE=0xC6,
-	WRITE_SECT=0x30,
-	READ_SECT=0x20,
-	HD_SEEK=0x70,
-	DIAGN=0x90
+	NONE		= 0x00,
+	IDENTIFY	= 0xEC,
+	WRITE_SECT	= 0x30,
+	READ_SECT	= 0x20
 };
 
 struct interfata_reg {
@@ -3619,6 +3705,8 @@ extern "C" void c_driver_hd(int ind_ata)
 	schedulatore();
 }
 
+// descrittore di partizione. Le uniche informazioni che ci interessano sono 
+// "offset" e "sectors"
 struct des_part {
 	unsigned int active	: 8;
 	unsigned int head_start	: 8;
@@ -3932,7 +4020,7 @@ error:
 // timer
 extern unsigned long ticks;
 extern unsigned long clocks_per_usec;
-extern "C" void attiva_timer(unsigned long delay);
+extern "C" void disattiva_timer();
 extern "C" unsigned long  calibra_tsc();
 
 // inizializzazione del modulo di I/O
@@ -4008,10 +4096,11 @@ bool crea_spazio_condiviso(void*& last_address)
 		}
 	}
 	delete tmp;
-	creato_spazio_condiviso = true;
 	return true;
 }
 
+// routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
+// caricato in memoria l'immagine del modulo sistema
 extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	des_proc* pdes_proc;
@@ -4149,6 +4238,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	aggiungi_pe(ESTERN_BUSY, 0);
 	attiva_timer(DELAY);
 	clocks_per_sec = calibra_tsc();
+	disattiva_timer();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
 	flog(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
 

@@ -7,7 +7,6 @@ CXXFLAGS=-fno-exceptions -fno-rtti -g
 CPPFLAGS=-nostdinc -Iinclude -g
 
 all: build/sistema \
-     build/io 	   \
      build/parse.exe   \
      build/creatimg.exe
      
@@ -39,7 +38,7 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.s
 	gcc $(CPPFLAGS) -c utente/utente.s -o utente/uten_s.o
 
-utente/utente.cpp: build/parse.exe utente/prog/*.in utente/include/*.h
+utente/utente.cpp: build/parse.exe utente/prog utente/prog/*.in utente/include/*.h
 	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
@@ -56,8 +55,8 @@ build/creatimg.exe: include/costanti.h util/creatimg.cpp
 	gxx -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
 
 .PHONY: swap
-swap: build/creatimg build/utente
-	build/creatimg $(SWAP) build/utente
+swap: build/creatimg build/io build/utente
+	build\creatimg $(SWAP) build\io build\utente
 	
 
 clean:

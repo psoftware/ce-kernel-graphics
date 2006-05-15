@@ -943,6 +943,20 @@ _attiva_timer:
 	leave
 	ret
 
+	.global _disattiva_timer
+_disattiva_timer:
+	pushl %ebp
+	movl %esp, %ebp
+        pushl %eax
+	
+	inb $OCW1M, %al
+	orb $0b00000001, %al
+	outb %al, $OCW1M
+
+        popl %eax
+	leave
+	ret
+
 // alcune periferiche (in particolare gli hard disk che rispettano lo standard 
 // ATA) richiedono il rispetto di alcune temporizzazioni. Per esempio, e' 
 // richiesta un'attesa di 400 nanosecondi prima del test del bit BSY nel 

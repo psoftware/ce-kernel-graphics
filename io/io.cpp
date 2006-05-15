@@ -995,7 +995,7 @@ int vterm_init()
 		}
 	}
 
-	vterm_active = &vterm[0];
+	vterm_switch(0);
 	if ( (id = activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ)) == 0) {
 		flog(LOG_ERR, "vterm: impossibile creare estern_kbd");
 		return -307;

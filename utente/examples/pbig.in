@@ -20,26 +20,26 @@ unsigned int values[N];
 
 process_body big_c(int a)
 {
-	printf(0, "&values = %x\n", values);
-	printf(0, "scrivo i valori\n");
+	printf(1, "&values = %x\n", values);
+	printf(1, "scrivo i valori\n");
 	for (int i = 0; i < N; i++) {
 		values[i] = i;
-		if (i % 65536 == 0) printf(0, "%d", a);
+		if (i % 65536 == 0) printf(1, "%d", a);
 	}
-	printf(0, "\nora li sommo\n");
+	printf(1, "\nora li sommo\n");
 	unsigned int sum = 0;
 	for (int i = 0; i < N; i++) {
 		if (values[i] != i) {
-			printf(0, "(ERRORE:%d != %d)", i, values[i]);
+			printf(1, "(ERRORE:%d != %d)", i, values[i]);
 			for (int j = 0; j < 1023; j++)
 				if (values[j] + 1 != values[j + 1]) {
-					printf(0, "(v[%d] = %d)", j + 1, values[j + 1]);
+					printf(1, "(v[%d] = %d)", j + 1, values[j + 1]);
 				}
 			terminate_p();
 		}
 		sum += values[i];
-		if (i % 65536 == 0) printf(0, "%d", a);
+		if (i % 65536 == 0) printf(1, "%d", a);
 	}
-	printf(0, "\nsomma: %d\n", sum);
+	printf(1, "\nsomma: %d\n", sum);
 }
 

@@ -1,9 +1,9 @@
 #include <sys.h>
 #include <lib.h>
 
-process __logger_p0 body __logger_main(11), 201, LIV_UTENTE;
-process __logger_p1 body __logger_reader(11), 200, LIV_UTENTE;
-process __logger_p2 body __logger_ctrl(11), 200, LIV_UTENTE;
+process __logger_p0 body __logger_main(0), 201, LIV_UTENTE;
+process __logger_p1 body __logger_reader(0), 200, LIV_UTENTE;
+process __logger_p2 body __logger_ctrl(0), 200, LIV_UTENTE;
 
 log_msg __logger_buf;
 

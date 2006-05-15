@@ -16,8 +16,8 @@ semaphore syncr value 0;
 /*
  * Processi lettore e scrittore
  */
-process scrittore body pms(0), 10, LIV_UTENTE;
-process lettore   body pml(0), 5, LIV_UTENTE;
+process scrittore body pms(10), 10, LIV_UTENTE;
+process lettore   body pml(10), 5, LIV_UTENTE;
 
 struct messaggio {
 	char *msg;
