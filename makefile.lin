@@ -58,7 +58,6 @@ build/creatimg: include/costanti.h util/creatimg.cpp
 swap: build/creatimg build/io build/utente
 	build/creatimg $(SWAP) build/io build/utente
 	
-
 clean:
 	rm -f sistema/*.o io/*.o utente/*.o 
 

@@ -1514,6 +1514,8 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
 
 // indirizzo_virtale e' l'indirizzo non tradotto. scrittura ci dice se 
 // l'accesso che ha causato il fault era in scrittura
+int off = 0;
+extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink);
 void trasferimento(void* indirizzo_virtuale, bool scrittura)
 {
 	descrittore_pagina* pdes_pag;
@@ -2790,8 +2792,12 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
-		unsigned eip, unsigned cs, short eflag)
+		void* eip, unsigned cs, short eflag)
 {
+	if (eip < fine_codice_sistema) {
+		flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, eip, errore);
+		panic("eccezione dal modulo sistema");
+	}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
 	abort_p();
@@ -3300,7 +3306,7 @@ error1: flog(LOG_ERR, "Semafori insufficienti in log_init_usr");
 
 
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
-extern "C" void c_log(log_sev sev, const char* buf, int quanti)
+void do_log(log_sev sev, const char* buf, int quanti)
 {
 	static int num = 0;
 
@@ -3325,9 +3331,14 @@ extern "C" void c_log(log_sev sev, const char* buf, int quanti)
 			s->counter++;
 			rimozione_coda(s->pointer, lavoro);
 			inserimento_coda(pronti, lavoro);
-			schedulatore();
 		}
 	}
+}
+extern "C" void c_log(log_sev sev, const char* buf, int quanti)
+{
+	inserimento_coda(pronti, esecuzione);
+	do_log(sev, buf, quanti);
+	schedulatore();
 }
 
 // log formattato
@@ -3340,7 +3351,7 @@ void flog(log_sev sev, const char *fmt, ...)
 	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
 	va_end(ap);
 
-	c_log(sev, buf, l);
+	do_log(sev, buf, l);
 }
 
 
