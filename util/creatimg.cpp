@@ -752,7 +752,23 @@ int main(int argc, char* argv[])
 	do_map(argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = addr(last_address);
 
-	// le tabelle condivise per lo heap
+	// le tabelle condivise per lo heap:
+	// - prima, eventuali descrittori di pagina nell'ultima tabella 
+	// utilizzata:
+	descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(last_address)];
+	if (pdes_tab->P) {
+		tabella_pagine tab;
+		leggi_blocco(img, pdes_tab->address, &tab);
+		for (int i = indice_tabella(last_address) + 1; i < 1024; i++) {
+			descrittore_pagina *pdes_pag = &tab.entrate[i];
+			pdes_pag->address = 0;
+			pdes_pag->US	  = 1;
+			pdes_pag->RW	  = 1;
+			pdes_pag->P	  = 0;
+		}
+		scrivi_blocco(img, pdes_tab->address, &tab);
+	}
+	// - quindi, i rimanenti descrittori di tabella:
 	for (int i = indice_direttorio(last_address) + 1;
 		 i < indice_direttorio(a2i(fine_utente_condiviso));
 		 i++)
