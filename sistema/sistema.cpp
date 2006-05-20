@@ -1825,7 +1825,7 @@ extern "C" int c_resident(void* start, int quanti)
 	// calcoliamo l'indirizzo della pagina che contiene "start"
 	vero_start = addr(uint(start) & ~(SIZE_PAGINA - 1));
 	// quindi il numero di pagine da rendere residenti
-	da_fare = ceild(distance(start, vero_start), SIZE_PAGINA);
+	da_fare = ceild(distance(start, vero_start) + quanti, SIZE_PAGINA);
 	// e l'indirizzo del primo byte che non sara' reso residente
 	last = add(vero_start, da_fare * SIZE_PAGINA);
 
