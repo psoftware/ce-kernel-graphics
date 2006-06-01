@@ -6,6 +6,7 @@ process __logger_p1 body __logger_reader(0), 200, LIV_UTENTE;
 process __logger_p2 body __logger_ctrl(0), 200, LIV_UTENTE;
 
 log_msg __logger_buf;
+log_msg __logger_msg;
 
 char *__logger_sev_names[] = { "DBG", "INF", "WRN", "ERR" };
 
@@ -20,6 +21,7 @@ void __logger_send_cmd(__logger_cmd_types cmd)
 	sem_wait(__logger_mutex);
 	sem_wait(__logger_non_busy);
 	__logger_cmd = cmd;
+	__logger_msg = __logger_buf;
 	sem_signal(__logger_new_cmd);
 	sem_signal(__logger_mutex);
 }
@@ -34,7 +36,6 @@ __logger_cmd_types __logger_recv_cmd()
 }
 
 bool __logger_quit = false;
-log_msg __logger_msg;
 
 process_body __logger_main(int a)
 {
@@ -64,7 +65,6 @@ process_body __logger_reader(int a)
 	while (!__logger_quit) {
 		readlog(__logger_buf);
 		if (!__logger_quit) {
-			__logger_msg = __logger_buf;
 			__logger_send_cmd(NEW_MSG);
 		}
 	}
