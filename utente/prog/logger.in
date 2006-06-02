@@ -26,11 +26,12 @@ void __logger_send_cmd(__logger_cmd_types cmd)
 	sem_signal(__logger_mutex);
 }
 
-__logger_cmd_types __logger_recv_cmd()
+__logger_cmd_types __logger_recv_cmd(log_msg& msg)
 {
 	__logger_cmd_types work;
 	sem_wait(__logger_new_cmd);
 	work = __logger_cmd;
+	msg = __logger_msg;
 	sem_signal(__logger_non_busy);
 	return work;
 }
@@ -40,14 +41,15 @@ bool __logger_quit = false;
 process_body __logger_main(int a)
 {
 	__logger_cmd_types my_cmd;
+	log_msg my_msg;
 
 	while (!__logger_quit) {
-		my_cmd = __logger_recv_cmd();
+		my_cmd = __logger_recv_cmd(my_msg);
 		switch (my_cmd) {
 		case NEW_MSG:
-			printf(a, "%s %d\t%s\n", __logger_sev_names[__logger_msg.sev],
-						 __logger_msg.identifier,
-						 __logger_msg.msg);
+			printf(a, "%s %d\t%s\n", __logger_sev_names[my_msg.sev],
+						 my_msg.identifier,
+						 my_msg.msg);
 			break;
 		default:
 			break;
