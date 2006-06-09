@@ -26,7 +26,6 @@
 
 #define TIPO_A			0x30
 #define TIPO_T			0x31
-#define TIPO_B			0x32
 #define TIPO_G			0x33
 #define TIPO_SI			0x34
 #define TIPO_W			0x35

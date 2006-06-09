@@ -19,12 +19,6 @@ extern "C" short activate_p(void f(int), int a, int prio, char liv);
 //
 extern "C" void terminate_p();
 
-// Chiamata da main(), trasforma il programma nel processo a piu` bassa
-//  priorita`, lo inserisce nella coda dei pronti, seleziona il processo a
-//  priorita` maggiore e lo mette in esecuzione
-//
-extern "C" void begin_p();
-
 // Ritorna il valore della variabile di nucleo processi, contenente il numero di
 //  processi creati mediante activate_p e non terminati con terminate_p
 //

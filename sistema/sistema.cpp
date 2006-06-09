@@ -1280,9 +1280,9 @@ bool leggi_swap(void* buf, unsigned int first, unsigned int bytes, const char* m
 }
 
 // inizializzazione del descrittore di swap
+char read_buf[512];
 bool swap_init(int swap_ch, int swap_drv, int swap_part)
 {
-	char read_buf[512];
 	partizione* part;
 
 	// l'utente *deve* specificare una partizione
@@ -2119,6 +2119,18 @@ bool crea_dummy()
 	inserimento_coda(pronti, dummy);
 	return true;
 }
+void main_proc(int n);
+bool crea_main()
+{
+	proc_elem* m = crea_processo(main_proc, 0, MAX_PRIORITY, LIV_SISTEMA);
+	if (m == 0) {
+		flog(LOG_ERR, "Impossibile creare il processo main");
+		return false;
+	}
+	processi = 1;
+	inserimento_coda(pronti, m);
+	return true;
+}
 
 // creazione della pila utente
 pagina* crea_pila_utente(direttorio* pdir)
@@ -2293,13 +2305,6 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short id = 0;
 
-	// per semplificare l'implementazione, imponiamo che solo main possa 
-	// creare nuovi processi
-	if (esecuzione->identifier != init.identifier) {
-		flog(LOG_WARN, "activate_p non chiamata da main");
-		abort_p();
-	}
-
 	p = crea_processo(f, a, prio, liv);
 
 	if (p != 0) {
@@ -2382,12 +2387,6 @@ bool aggiungi_pe(proc_elem *p, int irq)
 extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
-
-	// assumiamo che solo main possa chiamare activate_pe
-	if (esecuzione->identifier != init.identifier) {
-		flog(LOG_WARN, "activate_pe non chiamata da main");
-		abort_p();
-	}
 
 	p = crea_processo(f, a, prio, liv);
 	if (p == 0)
@@ -2543,21 +2542,6 @@ extern "C" void c_mem_free(void *pv)
 }
 
 
-// begin_p deve essere chiamata da main, e fa partire la gestione dei processi 
-extern "C" void attiva_timer(unsigned long delay);
-extern "C" void c_begin_p()
-{
-
-	if (esecuzione->identifier != init.identifier) {
-		flog(LOG_WARN, "begin_p() non chiamata da main!");
-		abort_p();
-	}
-	processi--;
-	esecuzione->priority = MIN_PRIORITY;
-        schedulatore();
-	attiva_timer(DELAY);
-}
-
 extern "C" int c_give_num()
 {
         return processi;
@@ -2587,11 +2571,6 @@ extern "C" int c_sem_ini(int val)
 {
 	unsigned int pos;
 	int index_des_s = 0;
-
-	if (esecuzione->identifier != init.identifier) {
-		flog(LOG_WARN, "sem_ini non chiamata da main");
-		abort_p();
-	}
 
 	if (bm_alloc(&sem_bm, pos)) {
 		index_des_s = pos;
@@ -4031,6 +4010,7 @@ error:
 // timer
 extern unsigned long ticks;
 extern unsigned long clocks_per_usec;
+extern "C" void attiva_timer(unsigned int count);
 extern "C" void disattiva_timer();
 extern "C" unsigned long  calibra_tsc();
 
@@ -4042,18 +4022,20 @@ entry_t io_entry = 0;
 extern "C" void init_8259();
 
 // gestione processi
-extern "C" void trasforma_in_processo();
-extern "C" void salta_a_main(entry_t user_entry, void* stack);
-extern void* stack;
+extern "C" void salta_a_main();
+extern "C" void salta_a_utente(entry_t user_entry, void* stack);
+void main_proc(int n);
 
 bool crea_spazio_condiviso(void*& last_address)
 {
-	descrittore_tabella *pdes_tab1, *pdes_tab2;
+	descrittore_tabella *pdes_tab1, *pdes_tab2, *pdes_tab3;
 	tabella_pagine* ptab;
-	direttorio *tmp;
+	direttorio *tmp, *main_dir;
 	const int nspazi = 2;
 	void *inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
 	     *fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
+
+	main_dir = des_p(esecuzione->identifier)->cr3;
 
 	
 	// lettura del direttorio principale dallo swap
@@ -4074,6 +4056,7 @@ bool crea_spazio_condiviso(void*& last_address)
 
 			if (pdes_tab1->P == 1) {	  
 				pdes_tab2 = &direttorio_principale->entrate[indice_direttorio(ind)];
+				pdes_tab3 = &main_dir->entrate[indice_direttorio(ind)];
 				*pdes_tab2 = *pdes_tab1;
 
 				last_address = add(ind, SIZE_SUPERPAGINA);
@@ -4103,27 +4086,27 @@ bool crea_spazio_condiviso(void*& last_address)
 						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
 					}
 				}
+				*pdes_tab3 = *pdes_tab2;
 			}
 		}
 	}
 	delete tmp;
+	carica_cr3(leggi_cr3());
 	return true;
 }
+
+short swap_ch = -1, swap_drv = -1, swap_part = -1;
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
 extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	des_proc* pdes_proc;
-	unsigned long clocks_per_sec;
-	pagina* pila_utente;
-	int errore;
 	char *arg, *cont;
-	short swap_ch = -1, swap_drv = -1, swap_part = -1;
 
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
-	init.identifier = alloca_tss(&des_main);
+	init.identifier = 0;
 	init.priority   = MAX_PRIORITY;
 	esecuzione = &init;
 
@@ -4210,7 +4193,13 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
 	// specificare un puntatore non valido
 	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
-	
+
+	// inizializziamo la mappa di bit che serve a tenere traccia dei
+	// semafori allocati
+	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
+	// 0 segnala il fallimento della sem_ini
+	bm_set(&sem_bm, 0);
+	flog(LOG_INFO, "Semafori: %d", MAX_SEMAFORI);
 
 	// inizializziamo il controllore delle interruzioni [vedi sistema.S]
 	init_8259();
@@ -4229,29 +4218,34 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// il primo processo utilizza il direttorio principale e,
 	// inizialmente, si trova a livello sistema (deve eseguire la parte 
 	// rimanente di questa routine, che si trova a livello sistema)
-	des_main.cr3 = direttorio_principale;
-	des_main.liv = LIV_SISTEMA;
-	processi++;
-	trasforma_in_processo();
+	if (!crea_main())
+		goto error;
 
-	// da qui in poi, e' il processo init che esegue
+	// da qui in poi, e' il processo main che esegue
 	flog(LOG_INFO, "Creato il processo main");
-	
-	// inizializziamo la mappa di bit che serve a tenere traccia dei
-	// semafori allocati
-	bm_create(&sem_bm, sem_buf, MAX_SEMAFORI);
-	// 0 segnala il fallimento della sem_ini
-	bm_set(&sem_bm, 0);
-	flog(LOG_INFO, "Semafori: %d", MAX_SEMAFORI);
+
+	schedulatore();
+	salta_a_main();
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
+error:
+	panic("Errore di inizializzazione");
+}
+
+void main_proc(int n)
+{
+	unsigned long clocks_per_sec;
+	int errore;
+	pagina* pila_utente;
+	des_proc *my_des = des_p(esecuzione->identifier);
+
 	aggiungi_pe(ESTERN_BUSY, 0);
 	attiva_timer(DELAY);
 	clocks_per_sec = calibra_tsc();
-	disattiva_timer();
 	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
 	flog(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
+	disattiva_timer();
 
 	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
 	// swap
@@ -4297,8 +4291,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	}
 
-
-
 	// inizializzazione del meccanismo di lettura del log
 	if (!log_init_usr())
 		goto error;
@@ -4306,21 +4298,21 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
 	flog(LOG_INFO, "salto a livello utente...");
-	pila_utente = crea_pila_utente(direttorio_principale);
+	pila_utente = crea_pila_utente(my_des->cr3);
 	if (pila_utente == 0) {
 		flog(LOG_ERR, "Impossibile allocare la pila utente per main");
 		goto error;
 	}
-	des_main.esp0 = add(&stack, SIZE_PAGINA);
-	des_main.ss0 = SEL_DATI_SISTEMA;
-	des_main.ds  = SEL_DATI_UTENTE;
-	des_main.es  = SEL_DATI_UTENTE;
-	des_main.fpu.cr = 0x037f;
-	des_main.fpu.tr = 0xffff;
-	des_main.liv = LIV_UTENTE;
+	my_des->esp0 = fine_sistema_privato;
+	my_des->ss0 = SEL_DATI_SISTEMA;
+	my_des->ds  = SEL_DATI_UTENTE;
+	my_des->es  = SEL_DATI_UTENTE;
+	my_des->fpu.cr = 0x037f;
+	my_des->fpu.tr = 0xffff;
+	my_des->liv = LIV_UTENTE;
 
-	salta_a_main(swap.sb.user_entry, fine_utente_privato);
+	attiva_timer(DELAY);
+	salta_a_utente(swap.sb.user_entry, fine_utente_privato);
 error:
 	panic("Errore di inizializzazione");
 }
-

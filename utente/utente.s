@@ -6,7 +6,6 @@
 
 .set tipo_a, 0x30
 .set tipo_t, 0x31
-.set tipo_b, 0x32
 .set tipo_g, 0x33
 .set tipo_si, 0x34
 .set tipo_w, 0x35
@@ -34,11 +33,6 @@ _activate_p:
 	.global _terminate_p
 _terminate_p:
 	int $tipo_t
-	ret
-
-	.global _begin_p
-_begin_p:
-	int $tipo_b
 	ret
 
 	.global _give_num

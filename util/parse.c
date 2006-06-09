@@ -280,9 +280,9 @@ void rilascia_righe()
 #define MAIN_HEAD "\nint main()\n{\n"
 
 #if defined WIN || defined WIN_XP
-#define MAIN_TAIL "\tbegin_p();\n\n\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"
+#define MAIN_TAIL "\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"
 #else
-#define MAIN_TAIL "\tbegin_p();\n}\n"
+#define MAIN_TAIL "\tterminate_p();\n}\n"
 #endif
 
 void scrivi_utente()

@@ -459,7 +459,6 @@ init_gdt:
 // Tipi delle primitive di sistema
 .set tipo_a, TIPO_A
 .set tipo_t, TIPO_T
-.set tipo_b, TIPO_B
 .set tipo_g, TIPO_G
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
@@ -534,7 +533,6 @@ init_idt:
 	// primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
 	carica_gate	tipo_t		a_terminate_p	LIV_UTENTE
-	carica_gate	tipo_b		a_begin_p	LIV_UTENTE
 	carica_gate	tipo_g		a_give_num	LIV_UTENTE
 	carica_gate	tipo_si		a_sem_ini	LIV_UTENTE
 	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
@@ -1031,15 +1029,14 @@ _calibra_tsc:
 // (il processo main) che, quindi, puo' invocare le primitive di sistema, anche 
 // bloccanti (in particolare, e' necessario invocare le primitive per leggere 
 // le informazioni iniziali dallo swap)
-	.global _trasforma_in_processo
-_trasforma_in_processo:
+	.global _salta_a_main
+_salta_a_main:
 	// creiamo in pila la struttura che la salva_stato e la successiva iret 
 	// si aspettano
 	popl %eax			// indirizzo di ritorno in %eax		
 	pushl $0x00000200		// eflag, IF=1
 	pushl $SEL_CODICE_SISTEMA	// cs
 	pushl %eax			// eip
-	call salva_stato		// inizializziamo il descrittore di processo
 	call carica_stato		// carichiamo tr
 	iret				// torniamo al chiamante "trasformati" in processo
 
@@ -1050,8 +1047,20 @@ _trasforma_in_processo:
 // e' usare una iret, preparando opportunamente le informazioni in pila.
 // La funzione richiede due parametri: l'entry point di main e l'indirizzo 
 // della pila utente
-	.global _salta_a_main
-_salta_a_main:
+	.global _salta_a_utente
+_salta_a_utente:
+        movl _esecuzione, %edx
+	movl $0, %ebx
+        movw (%edx), %bx		// esecuzione->identifier in ebx
+	
+	movl %ebx, %ecx			
+	shll $3, %ecx			// trasformo indice->selettore
+
+        leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
+	estrai_base			// ind. del TSS in %ebx
+        andl $0xfffffdff, 4(%eax)       // bit busy del TSS a zero
+
+       	ltr %cx				// nuovo valore in TR
 	movw $SEL_DATI_UTENTE, %ax	// sostituiamo i selettori dati sistema
 					// con selettori dati utente
 	movw %ax, %ds
@@ -1467,13 +1476,6 @@ a_activate_p:	// routine int $tipo_a
 a_terminate_p:	// routine int $tipo_t
         call salva_stato
         call _c_terminate_p
-        call carica_stato
-	iret
-
-        .extern _c_begin_p
-a_begin_p:	// routine int $tipo_b
-	call salva_stato
-        call _c_begin_p
         call carica_stato
 	iret
 
