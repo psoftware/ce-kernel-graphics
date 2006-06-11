@@ -1507,7 +1507,7 @@ extern "C" void sem_wait(int);
 extern "C" void sem_signal(int);
 
 // funzioni usate dalla routine di trasferimento
-tabella_pagine* rimpiazzamento_tabella();
+tabella_pagine* rimpiazzamento_tabella(cont_pf tipo = TABELLA_PRIVATA);
 pagina* 	rimpiazzamento_pagina(tabella_pagine* escludi);
 bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag);
 bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
@@ -1516,20 +1516,16 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
 // l'accesso che ha causato il fault era in scrittura
 int off = 0;
 extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink);
-void trasferimento(void* indirizzo_virtuale, bool scrittura)
+void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
 {
 	descrittore_pagina* pdes_pag;
 	pagina* pag = 0;
 	
-	// mutua esclusione
-	sem_wait(pf_mutex);
-
 	// in questa realizzazione, si accede all direttorio e alle tabelle 
 	// tramite un indirizzo virtuale uguale al loro indirizzo fisico (in 
 	// virtu' del fatto che la memoria fisica e' stata mappata in memoria 
 	// virtuale)
-	direttorio* pdir = leggi_cr3(); // direttorio del processo
-
+	
 	// ricaviamo per prima cosa il descrittore di tabella interessato dal 
 	// fault
 	descrittore_tabella* pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
@@ -1553,8 +1549,11 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		// non ve ne sono, dobbiamo invocare la routine di 
 		// rimpiazzamento per creare lo spazio
 		ptab = alloca_tabella();
-		if (ptab == 0) 
+		if (ptab == 0) {
 			ptab = rimpiazzamento_tabella();
+			if (ptab == 0)
+				goto error1;
+		}
 
 		// ora possiamo caricare la tabella (operazione bloccante: 
 		// verra' schedulato un altro processo e, quindi, gli interrupt 
@@ -1592,11 +1591,14 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 		// ve ne sono, dobbiamo invocare la routine di rimpiazzamento 
 		// per creare lo spazio
 		pag = alloca_pagina_virtuale();
-		if (pag == 0)  
+		if (pag == 0) {
 			// passiamo l'indirizzo di ptab alla routine di 
 			// rimpiazzamento. In nessun caso la routine deve 
 			// scegliere ptab come pagina da rimpiazzare.
 			pag = rimpiazzamento_pagina(ptab);
+			if (pag == 0)
+				goto error2;
+		}
 		
 		
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
@@ -1607,20 +1609,18 @@ void trasferimento(void* indirizzo_virtuale, bool scrittura)
 
 		// infine colleghiamo la pagina
 		collega_pagina(ptab, pag, indirizzo_virtuale);
-		pdes_pag->D = 0; // appena caricata
+		pdes_pag->D = (scrittura ? 1 : 0);
 
 
+	} else {
+		pag = pagina_puntata(pdes_pag);
 	}
-	sem_signal(pf_mutex);
-	return;
+	return pag;
 
 error3:	rilascia(ptab);
 error2:	if (pag != 0) rilascia(pag);
 error1: flog(LOG_WARN, "page fault non risolubile");
-	// anche in caso di errore dobbiamo rilasciare il semaforo di mutua 
-	// esclusione, pena il blocco di tutta la memoria virtuale
-	sem_signal(pf_mutex);
-	abort_p();
+	return 0;
 }
 
 // carica la pagina descritta da pdes_pag in memoria fisica,
@@ -1688,14 +1688,29 @@ des_pf* rimpiazzamento();
 
 // funzioni di comodo per il rimpiazzamento, specializzate per le
 // tabelle e per le pagine
-tabella_pagine* rimpiazzamento_tabella()
+direttorio* rimpiazzamento_direttorio()
 {
 	des_pf *ppf = rimpiazzamento();
 
 	if (ppf == 0) return 0;
 
-	ppf->contenuto = TABELLA_PRIVATA;
+	ppf->contenuto = DIRETTORIO;
+	return &indirizzoPF(ppf)->dir;
+}
+
+tabella_pagine* rimpiazzamento_tabella(cont_pf tipo)
+{
+	des_pf *ppf = rimpiazzamento();
+
+	if (ppf == 0) return 0;
+
+	ppf->contenuto = tipo;
 	return &indirizzoPF(ppf)->tab;
+}
+
+tabella_pagine* rimpiazzamento_tabella_residente()
+{
+	rimpiazzamento_tabella(TABELLA_RESIDENTE);
 }
 
 pagina* rimpiazzamento_pagina(tabella_pagine* escludi) 
@@ -1716,6 +1731,16 @@ pagina* rimpiazzamento_pagina(tabella_pagine* escludi)
 
 	ppf->contenuto = PAGINA;
 
+	return &indirizzoPF(ppf)->pag;
+}
+
+pagina* rimpiazzamento_pagina_residente() 
+{
+	des_pf *ppf = rimpiazzamento();
+	
+	if (ppf == 0) return 0;
+
+	ppf->contenuto = PAGINA_RESIDENTE;
 	return &indirizzoPF(ppf)->pag;
 }
 
@@ -1804,7 +1829,8 @@ des_pf* rimpiazzamento()
 	return vittima;
 
 error:
-	panic("Impossibile rimpiazzare pagine");
+	flog(LOG_WARN, "Impossibile rimpiazzare pagine");
+	return 0;
 }
 
 // primtiva che permette di rendere alcune pagine residenti (il programmatore 
@@ -2009,7 +2035,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	// pagina fisica per il direttorio del processo
 	pdirettorio = alloca_direttorio();
-	if (pdirettorio == 0) goto errore4;
+	if (pdirettorio == 0) {
+		pdirettorio = rimpiazzamento_direttorio();
+		if (pdirettorio == 0)
+			goto errore4;
+	}
 
 	// il direttorio viene inizialmente copiato dal direttorio principale
 	// (in questo modo, il nuovo processo acquisisce automaticamente gli
@@ -2088,7 +2118,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	return p;
 
-errore6:	rilascia_tutto(pdirettorio, inizio_sistema_privato, dim_sistema_privato);
+errore6:	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
 errore5:	rilascia(pdirettorio);
 errore4:	rilascia_tss(identifier);
 errore3:	delete pdes_proc;
@@ -2135,19 +2165,17 @@ bool crea_main()
 // creazione della pila utente
 pagina* crea_pila_utente(direttorio* pdir)
 {
-	pagina* ind_fisico;
-	tabella_pagine* ptab;
+	void *ind_virtuale; 
+	pagina *ind_fisico;
 	descrittore_tabella* pdes_tab;
-	descrittore_pagina*  pdes_pag;
-	des_pf*	     ppf;
 
-	void *ind = inizio_utente_privato;
+	ind_virtuale = inizio_utente_privato;
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
 	for (int i = 0; i < ntab_utente_privato; i++) {
 
-		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
+		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
 		pdes_tab->US	  = 1;
 		pdes_tab->RW	  = 1;
 		pdes_tab->address = 0;
@@ -2156,46 +2184,17 @@ pagina* crea_pila_utente(direttorio* pdir)
 		pdes_tab->D	  = 0;
 		pdes_tab->A	  = 0;
 		pdes_tab->global  = 0;
+		pdes_tab->P	  = 0;
 
-		ind = add(ind, SIZE_SUPERPAGINA);
+		ind_virtuale = add(ind_virtuale, SIZE_SUPERPAGINA);
 	}
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	ind = sub(fine_utente_privato, SIZE_PAGINA);
-	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
-		
-	ptab = alloca_tabella();
-	if (ptab == 0)
-		// non possiamo rimpiazzare, in quanto la routine di 
-		// rimpiazzamento e' potenzialmente bloccante
-		goto errore1;
-	if (! carica_tabella(pdes_tab, ptab) ) 
-		goto errore2;
-
-	pdes_tab = collega_tabella(pdir, ptab, indice_direttorio(ind));
-
-	ind_fisico = alloca_pagina_virtuale();
-	if (ind_fisico == 0)
-		// come sopra
-		goto errore2;
-	pdes_pag = &ptab->entrate[indice_tabella(ind)];
-	if (! carica_pagina(pdes_pag, ind_fisico) )
-		goto errore3;
-	collega_pagina(ptab, ind_fisico, ind);
-
-	pdes_pag->D		= 1; // verra' modificata
-
-	// restituiamo un puntatore all'ultima pagina della pila creata
-	// (in modo che crea_processo possa scrivervi le parole lunghe di 
-	// inizializzazione)
+	ind_virtuale = sub(fine_utente_privato, SIZE_PAGINA);
+	ind_fisico  = reinterpret_cast<pagina*>(trasferimento(pdir, ind_virtuale, true));
 	return ind_fisico;
-
-errore3:	rilascia(ind_fisico);
-errore2:	rilascia(ptab);
-errore1:	return 0;
-
 }
 
 // crea la pila sistema di un processo
@@ -2213,10 +2212,11 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	void *ind = sub(fine_sistema_privato, SIZE_PAGINA);
 
 	ptab = alloca_tabella_residente();
-	if (ptab == 0)
-		// non possiamo rimpiazzare, in quanto la routine di 
-		// rimpiazzamento e' potenzialmente bloccante
-		goto errore1;
+	if (ptab == 0) {
+		ptab = rimpiazzamento_tabella_residente();
+		if (ptab == 0)
+			goto errore1;
+	}
 
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 	pdes_tab->address = uint(ptab) >> 12;
@@ -2228,9 +2228,11 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	pdes_tab->P	  = 1;
 
 	ind_fisico = alloca_pagina_residente();
-	if (ind_fisico == 0)
-		// come sopra
-		goto errore2;
+	if (ind_fisico == 0) {
+		ind_fisico = rimpiazzamento_pagina_residente();
+		if (ind_fisico == 0)
+			goto errore2;
+	}
 
 	memset(ptab, 0, SIZE_PAGINA);
 	pdes_pag = &ptab->entrate[indice_tabella(ind)];
@@ -2305,6 +2307,8 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short id = 0;
 
+	sem_wait(pf_mutex);
+
 	p = crea_processo(f, a, prio, liv);
 
 	if (p != 0) {
@@ -2312,6 +2316,9 @@ c_activate_p(void f(int), int a, int prio, char liv)
 		processi++;
 		id = p->identifier;
 	}
+
+	sem_signal(pf_mutex);
+
 	return id;
 }
 
@@ -2388,6 +2395,8 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
+	sem_wait(pf_mutex);
+
 	p = crea_processo(f, a, prio, liv);
 	if (p == 0)
 		goto error1;
@@ -2395,10 +2404,13 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 	if (!aggiungi_pe(p, irq) ) 
 		goto error2;
 
+	sem_signal(pf_mutex);
+
 	return p->identifier;
 
 error2:	distruggi_processo(p);
-error1:	return 0;
+error1:	sem_signal(pf_mutex);
+	return 0;
 }
 
 // init_pe viene chiamata in fase di inizializzazione, ed associa una istanza 
@@ -2765,7 +2777,14 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 	}
 
 	// in tutti gli altri casi, proviamo a trasferire la pagina mancante
-	trasferimento(indirizzo_virtuale, errore.write);
+	sem_wait(pf_mutex);
+	void *v = trasferimento(leggi_cr3(), indirizzo_virtuale, errore.write);
+	sem_signal(pf_mutex);
+
+	if (v == 0) {
+		flog(LOG_WARN, "Page fault non risolubile");
+		abort_p();
+	}
 }
 
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
