@@ -2335,6 +2335,7 @@ extern "C" void c_terminate_p()
 	distruggi_processo(esecuzione);
 	delete esecuzione;
 	processi--;
+	flog(LOG_INFO, "Processo terminato");
 	schedulatore();
 }
 
@@ -4239,17 +4240,14 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// rimanente di questa routine, che si trova a livello sistema)
 	if (!crea_main())
 		goto error;
-
-	// da qui in poi, e' il processo main che esegue
 	flog(LOG_INFO, "Creato il processo main");
 
+	// da qui in poi, e' il processo main che esegue
 	schedulatore();
 	salta_a_main();
 
-	// attiviamo il timer e calibriamo il contatore per i microdelay
-	// (necessari nella corretta realizzazione del driver dell'hard disk)
 error:
-	panic("Errore di inizializzazione");
+	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
 }
 
 void main_proc(int n)
@@ -4259,6 +4257,8 @@ void main_proc(int n)
 	pagina* pila_utente;
 	des_proc *my_des = des_p(esecuzione->identifier);
 
+	// attiviamo il timer e calibriamo il contatore per i microdelay
+	// (necessari nella corretta realizzazione del driver dell'hard disk)
 	aggiungi_pe(ESTERN_BUSY, 0);
 	attiva_timer(DELAY);
 	clocks_per_sec = calibra_tsc();
