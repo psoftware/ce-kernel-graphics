@@ -3867,7 +3867,7 @@ void hd_reset(des_ata* p_des)
 
 // Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
 // 
-void hd_init()
+bool hd_init()
 {
 	des_ata *p_des;
 	aggiungi_pe(ESTERN_BUSY, 14);
@@ -3942,12 +3942,16 @@ void hd_init()
 		mask_hd(p_des->indreg.iSTS);
 		if ( (p_des->mutex = c_sem_ini(1)) == 0 ||
 		     (p_des->sincr = c_sem_ini(0)) == 0)
-			panic("Impossibile allocare i semafori per l' IO");
+		{
+			flog(LOG_ERR, "Impossibile allocare i semafori per l'hard disk");
+			return false;
+		}
 		for (int d = 0; d < 2; d++) {
 			if (p_des->disco[d].presente)
 				leggi_partizioni(i, d);
 		}
 	}
+	return true;
 }
 
 
@@ -4269,7 +4273,8 @@ void main_proc(int n)
 	// inizializziamo il driver dell'hard disk, in modo da poter leggere lo 
 	// swap
 	flog(LOG_INFO, "inizializzazione e riconoscimento hard disk...");
-	hd_init();
+	if (!hd_init())
+		goto error;
 
 	// inizializzazione dello swap
 	if (!swap_init(swap_ch, swap_drv, swap_part))
