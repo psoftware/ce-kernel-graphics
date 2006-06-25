@@ -1516,10 +1516,11 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
 // l'accesso che ha causato il fault era in scrittura
 int off = 0;
 extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink);
-void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
+void* trasferimento(direttorio* pdir, void* indirizzo_virtuale)
 {
 	descrittore_pagina* pdes_pag;
 	pagina* pag = 0;
+	tabella_pagine* ptab;
 	
 	// in questa realizzazione, si accede all direttorio e alle tabelle 
 	// tramite un indirizzo virtuale uguale al loro indirizzo fisico (in 
@@ -1530,19 +1531,7 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
 	// fault
 	descrittore_tabella* pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
 
-	// se l'accesso era in scrittura e (tutte le pagine puntate da) la 
-	// tabella e' (sono) di sola lettura, il processo ha commesso un errore 
-	// e va interrotto
-	if (scrittura && pdes_tab->RW == 0) {
-		flog(LOG_WARN, "Errore di accesso in scrittura");
-		goto error1; // Dijkstra se ne faccia una ragione
-	}
-	
-	tabella_pagine* ptab;
-	if (pdes_tab->P == 1) {
-		// la tabella e' presente
-		ptab = tabella_puntata(pdes_tab);
-	} else {
+	if (pdes_tab->P == 0) {
 		// la tabella e' assente
 		
 		// proviamo ad allocare una pagina fisica per la tabella. Se 
@@ -1563,7 +1552,10 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
 		
 		// e collegarla al direttorio
 		collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
-	} 
+	} else {
+		// la tabella e' presente
+		ptab = tabella_puntata(pdes_tab);
+	}
 	// ora ptab punta alla tabella delle pagine (sia se era gia' presente, 
 	// sia se e' stata appena caricata)
 	
@@ -1571,14 +1563,6 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
 	// ricaviamo il descrittore di pagina interessato dal fault
 	pdes_pag = &ptab->entrate[indice_tabella(indirizzo_virtuale)];
 	
-
-	// se l'accesso era in scrittura e la pagina e' di sola lettura, il 
-	// processo utente ha commesso un errore e va interrotto
-	if (scrittura && pdes_pag->RW == 0) {
-		flog(LOG_ERR, "Errore di accesso in scrittura");
-		goto error1;
-	}
-
 	// dobbiamo controllare che la pagina sia effettivamente assente
 	// (scenario: un processo P1 causa un page fault su una pagina p, si
 	// blocca per caricarla e viene schedulato P2, che causa un page fault 
@@ -1609,9 +1593,6 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale, bool scrittura)
 
 		// infine colleghiamo la pagina
 		collega_pagina(ptab, pag, indirizzo_virtuale);
-		pdes_pag->D = (scrittura ? 1 : 0);
-
-
 	} else {
 		pag = pagina_puntata(pdes_pag);
 	}
@@ -2168,6 +2149,7 @@ pagina* crea_pila_utente(direttorio* pdir)
 	void *ind_virtuale; 
 	pagina *ind_fisico;
 	descrittore_tabella* pdes_tab;
+	descrittore_pagina* pdes_pag;
 
 	ind_virtuale = inizio_utente_privato;
 	// prepariamo i descrittori di tabella per tutto lo spazio 
@@ -2193,7 +2175,12 @@ pagina* crea_pila_utente(direttorio* pdir)
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
 	ind_virtuale = sub(fine_utente_privato, SIZE_PAGINA);
-	ind_fisico  = reinterpret_cast<pagina*>(trasferimento(pdir, ind_virtuale, true));
+	ind_fisico  = reinterpret_cast<pagina*>(trasferimento(pdir, ind_virtuale));
+	if (ind_fisico != 0) {
+		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
+		pdes_pag = &tabella_puntata(pdes_tab)->entrate[indice_tabella(ind_virtuale)];
+		pdes_pag->D = 1;
+	}
 	return ind_fisico;
 }
 
@@ -2752,7 +2739,7 @@ struct page_fault_error {
 // salvati in pila dal microprogramma di gestione dell'eccezione
 extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
 {
-	if (eip < fine_codice_sistema) {
+	if (eip < fine_codice_sistema || errore.res == 1) {
 		// il sistema non e' progettato per gestire page fault causati 
 		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// si tratta di un bug
@@ -2763,23 +2750,19 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 			errore.res   ? "bit riservato"	: "");
 		panic("page fault dal modulo sistema");
 	}
-
-	// anche il caso res == 1, se si presenta, e' indice di un bug nel 
-	// sistema
-	if (errore.res == 1)
-		panic("descrittore scorretto");
-
 	// l'errore di protezione non puo' essere risolto: il processo ha 
 	// tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
 	// sistema)
 	if (errore.prot == 1) {
-		flog(LOG_WARN, "Errore di protezione, il processo verra' terminato");
+		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, indirizzo_virtuale,
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema");
 		abort_p();
 	}
 
 	// in tutti gli altri casi, proviamo a trasferire la pagina mancante
 	sem_wait(pf_mutex);
-	void *v = trasferimento(leggi_cr3(), indirizzo_virtuale, errore.write);
+	void *v = trasferimento(leggi_cr3(), indirizzo_virtuale);
 	sem_signal(pf_mutex);
 
 	if (v == 0) {
