@@ -373,6 +373,9 @@ carica_stato:
 	movl $0, %ebx
         movw (%edx), %bx		// esecuzione->identifier in ebx
 	
+	movl %ebx, %ecx			
+	shll $3, %ecx			// trasformo indice->selettore
+
         leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
 	estrai_base			// ind. del TSS in %ebx
         andl $0xfffffdff, 4(%eax)       // bit busy del TSS a zero
