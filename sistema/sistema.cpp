@@ -627,7 +627,7 @@ struct direttorio {
 }; 
 
 // Una tabella delle pagine e' un vettore di 1024 descrittori di pagina
-struct tabella_pagine {
+struct tabella {
 	descrittore_pagina  entrate[1024];
 };
 
@@ -645,7 +645,7 @@ struct pagina {
 // unione di questi tre tipi 
 union pagina_fisica {
 	direttorio	dir;
-	tabella_pagine	tab;
+	tabella		tab;
 	pagina		pag;
 };
 
@@ -658,7 +658,7 @@ inline pagina_fisica* pfis(direttorio* pdir)
 	return reinterpret_cast<pagina_fisica*>(pdir);
 }
 
-inline pagina_fisica* pfis(tabella_pagine* ptab)
+inline pagina_fisica* pfis(tabella* ptab)
 {
 	return reinterpret_cast<pagina_fisica*>(ptab);
 }
@@ -685,9 +685,9 @@ short indice_tabella(void* indirizzo)
 // dato un puntatore ad un descrittore di tabella, restituisce
 // un puntatore alla tabella puntata
 // (campo address del descrittore esteso a 32 bit aggiungendo 12 bit a 0)
-tabella_pagine* tabella_puntata(descrittore_tabella* pdes_tab)
+tabella* tabella_puntata(descrittore_tabella* pdes_tab)
 {
-	return reinterpret_cast<tabella_pagine*>(pdes_tab->address << 12);
+	return reinterpret_cast<tabella*>(pdes_tab->address << 12);
 }
 
 // dato un puntatore ad un descrittore di pagina, restituisce
@@ -748,28 +748,23 @@ extern "C" void attiva_paginazione();
 enum cont_pf {
 	LIBERA,			// pagina allocabile
 	DIRETTORIO,		// direttorio delle tabelle
-	TABELLA_PRIVATA,	// tabella appartenente a un solo processo
-	TABELLA_CONDIVISA,	// tabella appartenente a piu' processi
-				// (non rimpiazzabile, ma che punta a pagine
-				// rimpiazzabili)
-	TABELLA_RESIDENTE,	// tabella non rimpiazzabile, che punta a 
-				// a pagine non rimpiazzabili
-	PAGINA,			// pagina rimpiazzabile
-	PAGINA_RESIDENTE };	// pagina non rimpiazzabile
+	TABELLA,		// tabella delle pagine
+	PAGINA_VIRTUALE };	// pagina rimpiazzabile
 
 // descrittore di pagina fisica
 struct des_pf {
 	cont_pf		contenuto;	// uno dei valori precedenti
+	bool		residente;
 	unsigned int	contatore;	// contatore per le statistiche LRU/LFU
 	union {
 		struct { // informazioni relative a una pagina
 			unsigned int	blocco;		// blocco in memoria di massa
-			tabella_pagine*	tabella;	// tabella che punta alla pagina
+			tabella*	ptab;		// tabella che punta alla pagina
 			void*		ind_virtuale;   // indirizzo virtuale della pagina
 		} pag;
 		struct { // informazioni relative a una tabella
 			unsigned int	blocco;		// blocco in memoria di massa
-			direttorio*     dir;		// direttorio che punta alla tabella
+			direttorio*     pdir;		// direttorio che punta alla tabella
 			short		indice;		// indice della tab nel direttorio
 			short		quante;		// numero di pagine puntate
 		} tab;
@@ -865,7 +860,7 @@ bool init_pagine_fisiche()
 // funzione di allocazione generica di una pagina
 // Nota: restituisce un puntatore al *descrittore* della pagina, non alla 
 // pagina
-des_pf* alloca_pagina()
+des_pf* alloca_pagina_fisica()
 {
 	des_pf* p = pagine_libere;
 	if (p != 0)
@@ -883,9 +878,10 @@ des_pf* alloca_pagina()
 // corretto)
 direttorio* alloca_direttorio()
 {
-	des_pf* p = alloca_pagina();
+	des_pf* p = alloca_pagina_fisica();
 	if (p == 0) return 0;
 	p->contenuto = DIRETTORIO;
+	p->residente = true;
 
 	// tramite il descrittore puntato da "p", calcoliamo l'indirizzo della 
 	// pagina descritta (funzione "indirizzo"), che puntera' ad una "union 
@@ -899,44 +895,29 @@ direttorio* alloca_direttorio()
 // valore da scrivere nel campo tipo. Poiche' e' buona norma di programmazione 
 // evitare il copia e incolla, ne definiamo una sola, parametrizzata sul tipo.  
 // Le altre si limitano a richiamare questa con il tipo corretto
-tabella_pagine* alloca_tabella(cont_pf tipo = TABELLA_PRIVATA)
+tabella* alloca_tabella(bool residente = false)
 {
-	des_pf* p = alloca_pagina();
+	des_pf* p = alloca_pagina_fisica();
 	if (p == 0) return 0;
-	p->contenuto = tipo;
+	p->contenuto = TABELLA;
+	p->residente = residente;
 	p->tab.quante = 0;
-	tabella_pagine *ptab = &indirizzoPF(p)->tab;
+	tabella *ptab = &indirizzoPF(p)->tab;
 	return ptab;
 }
 
-tabella_pagine* alloca_tabella_condivisa()
-{
-	return alloca_tabella(TABELLA_CONDIVISA);
-}
-
-tabella_pagine* alloca_tabella_residente()
-{
-	return alloca_tabella(TABELLA_RESIDENTE);
-}
-
-
 // analogo discorso per le pagine
-pagina* alloca_pagina_virtuale(cont_pf tipo = PAGINA)
+pagina* alloca_pagina_virtuale(bool residente = false)
 {
-	des_pf* p = alloca_pagina();
+	des_pf* p = alloca_pagina_fisica();
 	if (p == 0) return 0;
-	p->contenuto = tipo;
+	p->contenuto = PAGINA_VIRTUALE;
+	p->residente = residente;
 	return &indirizzoPF(p)->pag;
 }
-
-pagina* alloca_pagina_residente()
-{
-	return alloca_pagina_virtuale(PAGINA_RESIDENTE);
-}
-
 // rende libera la pagina associata al descrittore di pagina fisica puntato da
 // "p"
-void rilascia_pagina(des_pf* p)
+void rilascia_pagina_fisica(des_pf* p)
 {
 	p->contenuto = LIBERA;
 	p->avl.prossima_libera = pagine_libere;
@@ -952,19 +933,19 @@ void rilascia_pagina(des_pf* p)
 inline
 void rilascia(direttorio* d)
 {
-	rilascia_pagina(strutturaPF(pfis(d)));
+	rilascia_pagina_fisica(strutturaPF(pfis(d)));
 }
 
 inline
-void rilascia(tabella_pagine* d)
+void rilascia(tabella* d)
 {
-	rilascia_pagina(strutturaPF(pfis(d)));
+	rilascia_pagina_fisica(strutturaPF(pfis(d)));
 }
 
 inline
 void rilascia(pagina* d)
 {
-	rilascia_pagina(strutturaPF(pfis(d)));
+	rilascia_pagina_fisica(strutturaPF(pfis(d)));
 }
 
 // funzioni che aggiornano sia le strutture dati della paginazione che
@@ -976,14 +957,14 @@ void rilascia(pagina* d)
 // NOTA: si suppone che la tabella non fosse precedentemente collegata, e 
 // quindi che il corrispondente descrittore di tabella nel direttorio contenga
 // il numero del blocco della tabella nello swap
-descrittore_tabella* collega_tabella(direttorio* pdir, tabella_pagine* ptab, short indice)
+descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indice)
 {
 	descrittore_tabella* pdes_tab = &pdir->entrate[indice];
 
 	// mapping inverso:
 	// ricaviamo il descrittore della pagina fisica che contiene la tabella
 	des_pf* ppf  = strutturaPF(pfis(ptab));
-	ppf->tab.dir    = pdir;
+	ppf->tab.pdir   = pdir;
 	ppf->tab.indice = indice;
 	ppf->tab.quante = 0; // inizialmente, nessuna pagina e' presente
 	
@@ -1031,14 +1012,14 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 // NOTA: si suppone che la pagina non fosse precedentemente collegata, e quindi 
 // che il corrispondente descrittore di pagina nella tabella contenga
 // il numero del blocco della pagina nello swap
-descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_virtuale)
+descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, void* ind_virtuale)
 {
 
 	descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind_virtuale)];
 
 	// mapping inverso
 	des_pf* ppf = strutturaPF(pfis(pag));
-	ppf->pag.tabella	= ptab;
+	ppf->pag.ptab	= ptab;
 	ppf->pag.ind_virtuale   = ind_virtuale;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
 	// delle pagine
@@ -1062,7 +1043,7 @@ descrittore_pagina* collega_pagina(tabella_pagine* ptab, pagina* pag, void* ind_
 // scollega la pagina di indirizzo virtuale "ind_virtuale" dalla tabella 
 // puntata da "ptab". Aggiorna anche il contatore di pagine nel descrittore di 
 // pagina fisica corrispondente alla tabella
-descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale)
+descrittore_pagina* scollega_pagina_virtuale(tabella* ptab, void* ind_virtuale)
 {
 
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
@@ -1088,13 +1069,13 @@ descrittore_pagina* scollega_pagina(tabella_pagine* ptab, void* ind_virtuale)
 bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
 {
 	descrittore_tabella* pdes_tab;
-	tabella_pagine* ptab;
+	tabella* ptab;
 	descrittore_pagina *pdes_pag;
 
 	for (void* ind = addr(0); ind < max_mem; ind = add(ind, SIZE_PAGINA)) {
 		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		if (pdes_tab->P == 0) {
-			ptab = alloca_tabella_residente();
+			ptab = alloca_tabella(true);
 			if (ptab == 0) {
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
@@ -1398,7 +1379,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 void aggiorna_statistiche()
 {
 	des_pf *ppf1, *ppf2;
-	tabella_pagine* ptab;
+	tabella* ptab;
 	descrittore_pagina* pp;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
@@ -1406,22 +1387,17 @@ void aggiorna_statistiche()
 
 		// la variabile check ci dice se dobbiamo o non dobbiamo 
 		// scorrere le entrate della pagina fisica i-esima
-		bool check = false;
+		bool check;
 		switch (ppf1->contenuto) {
-		case PAGINA:
-		case LIBERA:
-			// queste non vanno controllate perche' non ha senso
-		case TABELLA_RESIDENTE:
-			// queste non vanno controllate perche' puntano a 
-			// pagine non rimpiazzabili
-			break;
-		case TABELLA_PRIVATA:
-		case TABELLA_CONDIVISA:
+		case TABELLA:
 			// vedi NOTA 3
 			check = ppf1->tab.quante > 0;
 			break;
 		case DIRETTORIO:
 			check = true;
+			break;
+		default:
+			check = false;
 			break;
 		}
 		if (check) {
@@ -1507,20 +1483,18 @@ extern "C" void sem_wait(int);
 extern "C" void sem_signal(int);
 
 // funzioni usate dalla routine di trasferimento
-tabella_pagine* rimpiazzamento_tabella(cont_pf tipo = TABELLA_PRIVATA);
-pagina* 	rimpiazzamento_pagina(tabella_pagine* escludi);
-bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag);
-bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab);
+tabella* rimpiazzamento_tabella(bool residente = false);
+pagina*  rimpiazzamento_pagina_virtuale(tabella* escludi, bool residente = false);
+bool	 carica_pagina_virtuale(descrittore_pagina* pdes_pag, pagina* pag);
+bool	 carica_tabella(descrittore_tabella* pdes_tab, tabella* ptab);
 
 // indirizzo_virtale e' l'indirizzo non tradotto. scrittura ci dice se 
 // l'accesso che ha causato il fault era in scrittura
-int off = 0;
-extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink);
 void* trasferimento(direttorio* pdir, void* indirizzo_virtuale)
 {
 	descrittore_pagina* pdes_pag;
 	pagina* pag = 0;
-	tabella_pagine* ptab;
+	tabella* ptab;
 	
 	// in questa realizzazione, si accede all direttorio e alle tabelle 
 	// tramite un indirizzo virtuale uguale al loro indirizzo fisico (in 
@@ -1579,7 +1553,7 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale)
 			// passiamo l'indirizzo di ptab alla routine di 
 			// rimpiazzamento. In nessun caso la routine deve 
 			// scegliere ptab come pagina da rimpiazzare.
-			pag = rimpiazzamento_pagina(ptab);
+			pag = rimpiazzamento_pagina_virtuale(ptab);
 			if (pag == 0)
 				goto error2;
 		}
@@ -1588,11 +1562,11 @@ void* trasferimento(direttorio* pdir, void* indirizzo_virtuale)
 		// proviamo a caricare la pagina (operazione bloccante: verra' 
 		// schedulato un altro processo e, quindi, gli interrupt 
 		// verrano riabilitati)
-		if (! carica_pagina(pdes_pag, pag) ) 
+		if (! carica_pagina_virtuale(pdes_pag, pag) ) 
 			goto error2;
 
 		// infine colleghiamo la pagina
-		collega_pagina(ptab, pag, indirizzo_virtuale);
+		collega_pagina_virtuale(ptab, pag, indirizzo_virtuale);
 	} else {
 		pag = pagina_puntata(pdes_pag);
 	}
@@ -1606,7 +1580,7 @@ error1: flog(LOG_WARN, "page fault non risolubile");
 
 // carica la pagina descritta da pdes_pag in memoria fisica,
 // all'indirizzo pag
-bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
+bool carica_pagina_virtuale(descrittore_pagina* pdes_pag, pagina* pag)
 {
 	// come detto precedentemente, trattiamo in modo speciale il caso in 
 	// cui la pagina da caricare abbia address == 0: in questo caso, la 
@@ -1631,7 +1605,7 @@ bool carica_pagina(descrittore_pagina* pdes_pag, pagina* pag)
 
 // carica la tabella descritta da pdes_tab in memoria fisica, all'indirizzo
 // ptab
-bool carica_tabella(descrittore_tabella* pdes_tab, tabella_pagine* ptab)
+bool carica_tabella(descrittore_tabella* pdes_tab, tabella* ptab)
 {
 	// anche per le tabelle vale il caso speciale in cui address == 0: la 
 	// tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
@@ -1676,52 +1650,38 @@ direttorio* rimpiazzamento_direttorio()
 	if (ppf == 0) return 0;
 
 	ppf->contenuto = DIRETTORIO;
+	ppf->residente = true;
 	return &indirizzoPF(ppf)->dir;
 }
 
-tabella_pagine* rimpiazzamento_tabella(cont_pf tipo)
+tabella* rimpiazzamento_tabella(bool residente)
 {
 	des_pf *ppf = rimpiazzamento();
 
 	if (ppf == 0) return 0;
 
-	ppf->contenuto = tipo;
+	ppf->contenuto = TABELLA;
+	ppf->residente = residente;
 	return &indirizzoPF(ppf)->tab;
 }
 
-tabella_pagine* rimpiazzamento_tabella_residente()
-{
-	rimpiazzamento_tabella(TABELLA_RESIDENTE);
-}
-
-pagina* rimpiazzamento_pagina(tabella_pagine* escludi) 
+pagina* rimpiazzamento_pagina_virtuale(tabella* escludi, bool residente) 
 {
 	// Per impedire che venga scelta la tabella "escludi", la rendiamo 
 	// temporaneamente residente
 	des_pf *p = strutturaPF(pfis(escludi));
-	cont_pf save = p->contenuto;
-	p->contenuto = TABELLA_RESIDENTE;
+	bool save = p->residente;
+	p->residente = true;
 
 	des_pf *ppf = rimpiazzamento();
 	
-	// ripristiniamo il vecchio contenuto del decrittore di "escludi" 
-	// (potra' essere TABELLA_PRIVATA o TABELLA_CONDIVISA)
-	p->contenuto = save;
+	p->residente = save;
 
 	if (ppf == 0) return 0;
 
-	ppf->contenuto = PAGINA;
+	ppf->contenuto = PAGINA_VIRTUALE;
+	ppf->residente = residente;
 
-	return &indirizzoPF(ppf)->pag;
-}
-
-pagina* rimpiazzamento_pagina_residente() 
-{
-	des_pf *ppf = rimpiazzamento();
-	
-	if (ppf == 0) return 0;
-
-	ppf->contenuto = PAGINA_RESIDENTE;
 	return &indirizzoPF(ppf)->pag;
 }
 
@@ -1741,9 +1701,7 @@ des_pf* rimpiazzamento()
 	// scorriamo tutti i descrittori di pagina fisica alla ricerca della 
 	// prima pagina che contiene una pagina virtuale o una tabella privata
 	int i = 0;
-	while (i < num_pagine_fisiche &&
-	       pagine_fisiche[i].contenuto != PAGINA &&
-	       pagine_fisiche[i].contenuto != TABELLA_PRIVATA)
+	while (i < num_pagine_fisiche && pagine_fisiche[i].residente)
 		i++;
 
 	// se non ce ne sono, la situazione e' critica
@@ -1757,15 +1715,17 @@ des_pf* rimpiazzamento()
 	vittima = &pagine_fisiche[i];
 	for (i++; i < num_pagine_fisiche; i++) {
 		ppf = &pagine_fisiche[i];
+		if (ppf->residente)
+			continue;
 		switch (ppf->contenuto) {
-		case PAGINA:
+		case PAGINA_VIRTUALE:
 			// se e' una pagina virtuale, dobbiamo preferirla a una 
 			// tabella, in caso di uguaglianza nei contatori
 			if (ppf->contatore < vittima->contatore ||
-			    ppf->contatore == vittima->contatore && vittima->contenuto == TABELLA_PRIVATA) 
+			    ppf->contatore == vittima->contatore && vittima->contenuto == TABELLA) 
 				vittima = ppf;
 			break;
-		case TABELLA_PRIVATA:
+		case TABELLA:
 			if (ppf->contatore < vittima->contatore)
 				vittima = ppf;
 			break;
@@ -1778,11 +1738,11 @@ des_pf* rimpiazzamento()
 
 	// assert (vittima != 0);
 
-	if (vittima->contenuto == TABELLA_PRIVATA) {
+	if (vittima->contenuto == TABELLA) {
 		// usiamo le informazioni nel mapping inverso per ricavare 
 		// subito l'entrata nel direttorio da modificare
 		descrittore_tabella *pdes_tab =
-			scollega_tabella(vittima->tab.dir, vittima->tab.indice);
+			scollega_tabella(vittima->tab.pdir, vittima->tab.indice);
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
@@ -1791,13 +1751,13 @@ des_pf* rimpiazzamento()
 	} else {
 		// usiamo le informazioni nel mapping inverso per ricavare 
 		// subito l'entrata nel direttorio da modificare
-		tabella_pagine* ptab = vittima->pag.tabella;
+		tabella* ptab = vittima->pag.ptab;
 
 		// dobbiamo rendere la pagina non presente prima di cominciare 
 		// a salvarla nello swap (altrimenti, qualche altro processo 
 		// potrebbe cercare di scrivervi mentre e' ancora in corso 
 		// l'operazione di salvataggio)
-		descrittore_pagina* pdes_pag = scollega_pagina(ptab, vittima->pag.ind_virtuale);
+		descrittore_pagina* pdes_pag = scollega_pagina_virtuale(ptab, vittima->pag.ind_virtuale);
 		invalida_entrata_TLB(vittima->pag.ind_virtuale);
 
 		if (pdes_pag->D == 1) {
@@ -1846,7 +1806,7 @@ extern "C" int c_resident(void* start, int quanti)
 	while(indirizzo_virtuale < start)
 	{
 		descrittore_tabella *pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
-		tabella_pagine *ptab;
+		tabella *ptab;
 
 		if (pdes_tab->P == 1) {
 			ptab = tabella_puntata(pdes_tab);
@@ -1870,19 +1830,19 @@ extern "C" int c_resident(void* start, int quanti)
 			if (pdes_pag->P == 0) {
 				pag = alloca_pagina_virtuale();
 				if (pag == 0)  
-					pag = rimpiazzamento_pagina(ptab);
-				if (! carica_pagina(pdes_pag, pag) ) {
+					pag = rimpiazzamento_pagina_virtuale(ptab);
+				if (! carica_pagina_virtuale(pdes_pag, pag) ) {
 					rilascia(pag);
 					goto out;
 				}
-				collega_pagina(ptab, pag, indirizzo_virtuale);
+				collega_pagina_virtuale(ptab, pag, indirizzo_virtuale);
 				pdes_pag->D = 0;
 			} else {
 				pag = pagina_puntata(pdes_pag);
 			}
 			// marchiamo la pagina come residente
 			ppf = strutturaPF(pfis(pag));
-			ppf->contenuto = PAGINA_RESIDENTE;
+			ppf->residente = true;
 
 			// prossimo indirizzo virtuale da considerare
 			indirizzo_virtuale = add(indirizzo_virtuale, SIZE_PAGINA);
@@ -2189,7 +2149,7 @@ pagina* crea_pila_utente(direttorio* pdir)
 pagina* crea_pila_sistema(direttorio* pdir)
 {
 	pagina* ind_fisico;
-	tabella_pagine* ptab;
+	tabella* ptab;
 	descrittore_tabella* pdes_tab;
 	descrittore_pagina*  pdes_pag;
 	des_pf*	     ppf;
@@ -2198,9 +2158,9 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	// dello spazio sistema/privato
 	void *ind = sub(fine_sistema_privato, SIZE_PAGINA);
 
-	ptab = alloca_tabella_residente();
+	ptab = alloca_tabella(true);
 	if (ptab == 0) {
-		ptab = rimpiazzamento_tabella_residente();
+		ptab = rimpiazzamento_tabella(true);
 		if (ptab == 0)
 			goto errore1;
 	}
@@ -2214,9 +2174,9 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	pdes_tab->pgsz    = 0;
 	pdes_tab->P	  = 1;
 
-	ind_fisico = alloca_pagina_residente();
+	ind_fisico = alloca_pagina_virtuale(true);
 	if (ind_fisico == 0) {
-		ind_fisico = rimpiazzamento_pagina_residente();
+		ind_fisico = rimpiazzamento_pagina_virtuale(ptab, true);
 		if (ind_fisico == 0)
 			goto errore2;
 	}
@@ -2259,7 +2219,7 @@ void rilascia_tutto(direttorio* pdir, void* start, int ntab)
 	{
 		descrittore_tabella* pdes_tab = &pdir->entrate[i];
 		if (pdes_tab->P == 1) {
-			tabella_pagine* ptab = tabella_puntata(pdes_tab);
+			tabella* ptab = tabella_puntata(pdes_tab);
 			for (int k = 0; k < 1024; k++) {
 				descrittore_pagina* pdes_pag = &ptab->entrate[k];
 				if (pdes_pag->P == 1)
@@ -2663,7 +2623,7 @@ extern "C" bool c_verifica_area(void *area, unsigned int dim, bool write)
 			return false;
 		if (pdes_tab->P == 0)
 			continue;
-		tabella_pagine *ptab = tabella_puntata(pdes_tab);
+		tabella *ptab = tabella_puntata(pdes_tab);
 		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
 		if (liv == LIV_UTENTE && pdes_pag->US == 0)
 			return false;
@@ -4036,7 +3996,7 @@ void main_proc(int n);
 bool crea_spazio_condiviso(void*& last_address)
 {
 	descrittore_tabella *pdes_tab1, *pdes_tab2, *pdes_tab3;
-	tabella_pagine* ptab;
+	tabella* ptab;
 	direttorio *tmp, *main_dir;
 	const int nspazi = 2;
 	void *inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
@@ -4068,7 +4028,7 @@ bool crea_spazio_condiviso(void*& last_address)
 
 				last_address = add(ind, SIZE_SUPERPAGINA);
 
-				ptab = alloca_tabella_condivisa();
+				ptab = alloca_tabella(true);
 				if (ptab == 0) {
 					flog(LOG_ERR, "Impossibile allocare tabella condivisa");
 					return false;
@@ -4081,16 +4041,16 @@ bool crea_spazio_condiviso(void*& last_address)
 				for (int i = 0; i < 1024; i++) {
 					descrittore_pagina* pdes_pag = &ptab->entrate[i];
 					if (pdes_pag->P == 1) {
-						pagina* pag = alloca_pagina_residente();
+						pagina* pag = alloca_pagina_virtuale(true);
 						if (pag == 0) {
 							flog(LOG_ERR, "Impossibile allocare pagina residente");
 							return false;
 						}
-						if (! carica_pagina(pdes_pag, pag) ) {
+						if (! carica_pagina_virtuale(pdes_pag, pag) ) {
 							flog(LOG_ERR, "Impossibile caricare pagina residente");
 							return false;
 						}
-						collega_pagina(ptab, pag, add(ind, i * SIZE_PAGINA));
+						collega_pagina_virtuale(ptab, pag, add(ind, i * SIZE_PAGINA));
 					}
 				}
 				*pdes_tab3 = *pdes_tab2;
