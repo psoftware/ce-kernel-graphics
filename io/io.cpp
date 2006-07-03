@@ -1202,5 +1202,6 @@ void flog(log_sev sev, const char *fmt, ...)
 	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
 	va_end(ap);
 
-	log(sev, buf, l);
+	if (l > 1)
+		log(sev, buf, l - 1);
 }
