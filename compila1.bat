@@ -1,6 +1,6 @@
 set START_SISTEMA=0x00100000
 
-set CPPFLAGS=-nostdinc -Iinclude -g -fno-builtin
+set CPPFLAGS=-nostdinc -Iinclude -g -fno-builtin -fcall-saved-edi -fcall-saved-esi -fcall-saved-ebx
 
 rem creazione di parse e creatimg
 gcc -DWIN -o build/parse.exe util/parse.c

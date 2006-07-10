@@ -1,6 +1,6 @@
 set START_UTENTE=0x80000000
 
-set CPPFLAGS=-nostdinc -Iinclude -g -fno-builtin
+set CPPFLAGS=-nostdinc -Iinclude -g -fno-builtin -fcall-saved-edi -fcall-saved-esi -fcall-saved-ebx
 
 rem compilazione di utente
 gcc %CPPFLAGS% -c utente/utente.s -o utente/uten_s.o
