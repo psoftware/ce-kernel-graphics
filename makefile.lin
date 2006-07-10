@@ -38,8 +38,8 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.s
 	gcc $(CPPFLAGS) -c utente/utente.s -o utente/uten_s.o
 
-utente/utente.cpp: build/parse utente/prog/* utente/include/* utente/prog
-	build/parse -o utente/utente.cpp utente/prog/*
+utente/utente.cpp: build/parse utente/prog/*.in utente/include/* utente/prog
+	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
 	g++ $(CXXFLAGS) $(CPPFLAGS) -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o

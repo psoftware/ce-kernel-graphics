@@ -1,4 +1,4 @@
-#define MAX_SEMAFORI		100
+#define MAX_SEMAFORI		4096
 
 #define SEL_CODICE_SISTEMA	8
 #define SEL_DATI_SISTEMA 	16
@@ -41,8 +41,6 @@
 #define TIPO_VA			0x42
 #define TIPO_FG			0x44
 #define TIPO_P			0x45
-#define TIPO_WV			0x46
-#define TIPO_AV			0x47
 #define TIPO_AB			0x48
 #define TIPO_L			0x49
 
@@ -53,9 +51,17 @@
 #define IO_TIPO_RSELN		0x61
 #define IO_TIPO_WSEN		0x62
 #define IO_TIPO_WSE0		0x63
-#define IO_TIPO_TR		0x64
-#define IO_TIPO_TRL		0x65
-#define IO_TIPO_TW		0x66
+#define IO_TIPO_RKBD		0x64
+#define IO_TIPO_IKBD		0x65
+#define IO_TIPO_WFIKBD		0x66
+#define IO_TIPO_SKBD		0x67
+#define IO_TIPO_SMON		0x68
+#define IO_TIPO_WMON		0x69
+#define IO_TIPO_CMON		0x6a
+#define IO_TIPO_GMON		0x6b
+#define IO_TIPO_LKBD		0x6c
+#define IO_TIPO_KMON		0x6d
+
 
 #define BLK_SIZE 512			// Dimensione del blocco (HD e FD)
 #define H_BLK_SIZE (BLK_SIZE / 2)	// Meta' dimensione blocco (short int)

@@ -17,6 +17,7 @@
 .set tipo_s,  TIPO_S
 .set tipo_nd, TIPO_ND
 .set tipo_d,  TIPO_D
+.set tipo_l,	TIPO_L
 
 // Tipi delle interruzioni usate per interfacciarsi al modulo
 //  sistema
@@ -28,10 +29,7 @@
 .set tipo_p,    TIPO_P
 .set tipo_ab,   TIPO_AB
 .set tipo_fg,   TIPO_FG
-.set tipo_wv,   TIPO_WV
-.set tipo_av,   TIPO_AV
 .set tipo_rl,   TIPO_RL
-.set tipo_l,	TIPO_L
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
@@ -41,9 +39,16 @@
 .set io_tipo_rseln, IO_TIPO_RSELN
 .set io_tipo_wsen,  IO_TIPO_WSEN
 .set io_tipo_wse0,  IO_TIPO_WSE0
-.set io_tipo_tr,    IO_TIPO_TR
-.set io_tipo_trl,   IO_TIPO_TRL
-.set io_tipo_tw,    IO_TIPO_TW
+.set io_tipo_rkbd,  IO_TIPO_RKBD		
+.set io_tipo_ikbd,  IO_TIPO_IKBD		
+.set io_tipo_skbd,  IO_TIPO_SKBD		
+.set io_tipo_wfikbd, IO_TIPO_WFIKBD
+.set io_tipo_smon,  IO_TIPO_SMON		
+.set io_tipo_wmon,  IO_TIPO_WMON		
+.set io_tipo_cmon,  IO_TIPO_CMON		
+.set io_tipo_gmon,  IO_TIPO_GMON		
+.set io_tipo_lkbd,  IO_TIPO_LKBD
+.set io_tipo_kmon,  IO_TIPO_KMON		
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,6 +104,33 @@
 	popl %edx
 	popl %ecx
 	popl %eax
+.endm
+
+// salvataggio dei registri in pila per chiamate di sistema che ritornano
+//  un valore in eax, che non viene salvato
+.macro salva_reg_rit
+
+	pushl %ecx
+	pushl %edx
+	pushl %ebx
+	pushl %esi
+	pushl %edi
+	pushl %ebp
+
+.endm
+
+
+// ripristino dei registri (tutti meno eax) dalla pila (duale rispetto a
+//  salva_reg_rit)
+.macro carica_reg_rit
+
+	popl %ebp
+	popl %edi
+	popl %esi
+	popl %ebx
+	popl %edx
+	popl %ecx
+
 .endm
 
 // Chiama _fill_gate con i parametri specificati
@@ -215,16 +247,6 @@ _abort_p:
 	.global _fill_gate
 _fill_gate:
 	int $tipo_fg
-	ret
-
-	.global _writevid_n
-_writevid_n:
-	int $tipo_wv
-	ret
-
-	.global _attrvid_n
-_attrvid_n:
-	int $tipo_av
 	ret
 
 	.global _delay
@@ -532,36 +554,39 @@ _com_setup:
 
 // Abilitazione del controllore delle interruzioni ad inoltrare le richieste
 //  provenienti dalla tastera
-	.global _abilita_tastiera
-_abilita_tastiera:
+	.global _kbd_enable
+_kbd_enable:
 	inb $OCW1M, %al
 	andb $0b11111101, %al
 	outb %al, $OCW1M
 	ret
 
-// indirizzi delle porte del controllore della tastiera
-.set KBD_RBR, 0x60
-.set KBD_PORT_B, 0x61
-.set KBD_STR, 0x64
+.macro wait_kbd
+1:	inb $0x64, %al	  // leggi stato
+	testb $0x02, %al  // busy?
+	jnz 1b
+.endm
 
-// lettura di un codice dalla tastiera
-	.global _kbd_read
-_kbd_read:
+	.global _kbd_set_leds
+_kbd_set_leds:
 	pushl %ebp
-	movl %esp, %ebp
-	pushl %ebx
-	
-	inb $KBD_RBR, %al
-	movb %al, %bl
-	inb $KBD_PORT_B, %al
-	movb %al, %ah
-	orb $0x80, %al
-	outb %al, $KBD_PORT_B
-	movb %ah, %al
-	outb %al, $KBD_PORT_B
-	movb %bl, %al
+	movl  %esp, %ebp
+	pushl %eax
 
-	popl %ebx
+	wait_kbd
+	movb $0xad, %al // disabilita tastiera
+	outb %al, $0x64
+	wait_kbd
+	movb $0xed, %al   // comando "set led"
+	outb %al, $0x60
+	wait_kbd
+	movb 8(%ebp), %al // stato dei led
+	outb %al, $0x60
+	wait_kbd
+	movb $0xae, %al // abilita tastiera
+	outb %al, $0x64
+	
+	popl %eax
 	leave
 	ret
 
@@ -569,8 +594,31 @@ _kbd_read:
 // della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
+.set CUR_START, 0x0a
 .set ADD_P, 0x03d4
 .set DAT_P, 0x03d5
+
+	.global _console_set_cursor_size
+_console_set_cursor_size:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %edx
+	pushl %eax
+
+	movw $ADD_P, %dx
+	movb $CUR_START, %al
+	outb %al, %dx
+	movw $DAT_P, %dx
+	movl 8(%ebp), %eax
+	andb $0x1f, %al
+	outb %al, %dx
+
+	popl %eax
+	popl %edx
+	leave
+	ret
+
+	
 
 // visualizza il cursore nella posizione passata come parametro
 	.global _console_cursor
@@ -611,10 +659,16 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rseln	a_readse_ln
 	fill_io_gate	io_tipo_wsen	a_writese_n
 	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_tr	a_readvterm_n
-	fill_io_gate	io_tipo_trl	a_readvterm_ln
-	fill_io_gate	io_tipo_tw	a_writevterm_n
-	
+	fill_io_gate	io_tipo_rkbd	a_vkbd_read
+	fill_io_gate	io_tipo_ikbd	a_vkbd_intr_enable
+	fill_io_gate	io_tipo_skbd	a_vkbd_switch
+	fill_io_gate	io_tipo_wfikbd	a_vkbd_wfi
+	fill_io_gate	io_tipo_smon	a_vmon_switch
+	fill_io_gate	io_tipo_wmon	a_vmon_write_n
+	fill_io_gate	io_tipo_cmon	a_vmon_setcursor
+	fill_io_gate	io_tipo_gmon	a_vmon_getsize
+	fill_io_gate	io_tipo_lkbd	a_vkbd_leds
+	fill_io_gate	io_tipo_kmon	a_vmon_cursor_shape
 	leave
 	ret
 
@@ -662,32 +716,102 @@ a_writese_0:
 	carica_registri
 	iret
 
-	.global a_readvterm_n
-	.extern _c_readvterm_n
-a_readvterm_n:	// routine int $io_tipo_tr
+	.global a_vkbd_read
+	.extern _c_vkbd_read	
+a_vkbd_read:
+	salva_reg_rit
+	copia_param 1 6
+	call _c_vkbd_read
+	addl $4, %esp
+	carica_reg_rit
+	iret
+
+	.global a_vkbd_intr_enable
+	.extern _c_vkbd_intr_enable
+a_vkbd_intr_enable:
+	salva_registri
+	copia_param 2 7
+	call _c_vkbd_intr_enable
+	addl $8, %esp
+	carica_registri
+	iret
+
+	.global a_vkbd_switch
+	.extern _c_vkbd_switch
+a_vkbd_switch:
+	salva_registri
+	copia_param 1 7
+	call _c_vkbd_switch
+	addl $4, %esp
+	carica_registri
+	iret
+
+	.global a_vkbd_wfi
+	.extern _c_vkbd_wfi
+a_vkbd_wfi:
+	salva_registri
+	copia_param 1 7
+	call _c_vkbd_wfi
+	addl $4, %esp
+	carica_registri
+	iret
+
+	.global a_vmon_switch
+	.extern _c_vmon_switch
+a_vmon_switch:
+	salva_registri
+	copia_param 1 7
+	call _c_vmon_switch
+	addl $4, %esp
+	carica_registri
+	iret
+
+	.global a_vmon_write_n
+	.extern _c_vmon_write_n
+a_vmon_write_n:
 	salva_registri
 	copia_param 4 7
-	call _c_readvterm_n
+	call _c_vmon_write_n
 	addl $16, %esp
 	carica_registri
 	iret
 
-	.global a_readvterm_ln
-	.extern _c_readvterm_ln
-a_readvterm_ln:	// routine int $io_tipo_trl
+	.global a_vmon_setcursor
+	.extern _c_vmon_setcursor
+a_vmon_setcursor:
 	salva_registri
-	copia_param 4 7
-	call _c_readvterm_ln
-	addl $16, %esp
+	copia_param 2 7
+	call _c_vmon_setcursor
+	addl $8, %esp
 	carica_registri
 	iret
 
-	.global a_writevterm_n
-	.extern _c_writevterm_n
-a_writevterm_n: // routine int $io_tipo_tw
+	.global a_vmon_getsize
+	.extern _c_vmon_getsize
+a_vmon_getsize:
+	salva_reg_rit
+	copia_param 3 6
+	call _c_vmon_getsize
+	addl $12, %esp
+	carica_reg_rit
+	iret
+
+	.global a_vkbd_leds
+	.extern _c_vkbd_leds
+a_vkbd_leds:
 	salva_registri
 	copia_param 3 7
- 	call _c_writevterm_n
- 	addl $12, %esp
- 	carica_registri
+	call _c_vkbd_leds
+	addl $12, %esp
+	carica_registri
+	iret
+
+	.global a_vmon_cursorshape
+	.extern _c_vmon_cursorshape
+a_vmon_cursor_shape:
+	salva_reg_rit
+	copia_param 2 6
+	call _c_vmon_cursor_shape
+	addl $8, %esp
+	carica_reg_rit
 	iret

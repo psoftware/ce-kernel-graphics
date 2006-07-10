@@ -280,7 +280,7 @@ _backtrace:
 	pushl %eax
 	pushl $buf_backtrace
 	pushl off_backtrace
-	call _c_writevid_n
+	call _writevid_n
 	addl $12, %esp
 	addl $10, off_backtrace
 	
@@ -475,8 +475,6 @@ init_gdt:
 .set tipo_va, TIPO_VA
 .set tipo_fg, TIPO_FG
 .set tipo_p, TIPO_P
-.set tipo_wv, TIPO_WV
-.set tipo_av, TIPO_AV
 .set tipo_ab, TIPO_AB
 .set tipo_l,  TIPO_L
 
@@ -542,6 +540,7 @@ init_idt:
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
 	carica_gate	tipo_r		a_resident	LIV_UTENTE
+	carica_gate	tipo_l		a_log		LIV_UTENTE
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
@@ -549,10 +548,7 @@ init_idt:
 	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
-	carica_gate	tipo_wv		a_writevid_n	LIV_SISTEMA
-	carica_gate	tipo_av		a_attrvid_n	LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
-	carica_gate	tipo_l		a_log		LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
@@ -1076,26 +1072,6 @@ _salta_a_utente:
 	pushl $0x00000200		// eflag (interrupt abilitati)
 	pushl $SEL_CODICE_UTENTE	// selettore del segmento codice 
 	pushl %eax			// nuovo eip
-	iret
-
-
-// console
-	.extern _c_writevid_n
-a_writevid_n:
-	salva_registri
-	copia_param 3 7
-	call _c_writevid_n
-	addl $12, %esp
-	carica_registri
-	iret
-
-	.extern _c_attrvid_n
-a_attrvid_n:
-	salva_registri
-	copia_param 5 7
-	call _c_attrvid_n
-	addl $20, %esp
-	carica_registri
 	iret
 
 

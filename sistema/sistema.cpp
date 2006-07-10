@@ -2262,6 +2262,7 @@ c_activate_p(void f(int), int a, int prio, char liv)
 		inserimento_coda(pronti, p);
 		processi++;
 		id = p->identifier;
+		flog(LOG_INFO, "proc=%d entry=%x(%d) prio=%d liv=%d", id, f, a, prio, liv);
 	}
 
 	sem_signal(pf_mutex);
@@ -2352,6 +2353,8 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 		
 	if (!aggiungi_pe(p, irq) ) 
 		goto error2;
+
+	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d irq=%d", p->identifier, f, a, prio, liv, irq);
 
 	sem_signal(pf_mutex);
 
@@ -3139,7 +3142,7 @@ const int VIDEO_MEM_SIZE = 0x00000fa0;
 
 // copia in memoria video, a partire dall'offset "off" (in caratteri) i 
 // "quanti" caratteri puntati da "vett"
-extern "C" void c_writevid_n(int off, const char* vett, int quanti)
+extern "C" void writevid_n(int off, const char* vett, int quanti)
 {
 	unsigned char* start = VIDEO_MEM_BASE + off * 2, *stop;
 
@@ -3152,25 +3155,6 @@ extern "C" void c_writevid_n(int off, const char* vett, int quanti)
 
 	for (unsigned char* ptr = start; ptr < stop; ptr += 2)
 		*ptr = *vett++;
-}
-
-// imposta "quanti" caratteri in memoria video, a partire dall'offset "off", 
-// con colore "fgcol" e sfondo "bgcol". Se "blink" e' true, i caratteri saranno 
-// lampeggianti
-extern "C" void c_attrvid_n(int off, int quanti, unsigned char bgcol, unsigned char fgcol, bool blink)
-{
-	unsigned char* start = VIDEO_MEM_BASE + off * 2 + 1, *stop;
-	unsigned char attr = (fgcol & 0xf) | ((bgcol & 0x7) << 4) | (blink ? 0x80 : 0x00);
-
-	if (start < VIDEO_MEM_BASE)
-		return;
-
-	stop = (start + quanti * 2 > VIDEO_MEM_BASE + VIDEO_MEM_SIZE) ? 
-			VIDEO_MEM_BASE + VIDEO_MEM_SIZE :
-			start + quanti * 2;
-
-	for (unsigned char* ptr = start; ptr < stop; ptr += 2)
-		*ptr = attr;
 }
 
 // la funzione backtrace stampa su video gli indirizzi di ritorno dei record di 
@@ -3198,10 +3182,10 @@ extern "C" void c_panic(const char *msg,
 	}
 
 	// in cima scriviamo il messaggio
-	c_writevid_n(nl++ * 80, "PANIC", 5);
-	c_writevid_n(nl++ * 80, msg, strlen(msg));
-	c_writevid_n(nl++ * 80, "ultimo errore:", 14);
-	c_writevid_n(nl++ * 80, last_log_err(), strlen(last_log_err()));
+	writevid_n(nl++ * 80, "PANIC", 5);
+	writevid_n(nl++ * 80, msg, strlen(msg));
+	writevid_n(nl++ * 80, "ultimo errore:", 14);
+	writevid_n(nl++ * 80, last_log_err(), strlen(last_log_err()));
 
 	nl++;
 
@@ -3209,15 +3193,15 @@ extern "C" void c_panic(const char *msg,
 	// scriviamo lo stato dei registri
 	l = snprintf(buf, 80, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
 		 p->eax, p->ebx, p->ecx, p->edx);
-	c_writevid_n(nl++ * 80, buf, l);
+	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
 		 p->esi, p->edi, p->ebp, p->esp);
-	c_writevid_n(nl++ * 80, buf, l);
+	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
 			cs, p->ds, p->es, p->fs, p->gs, p->ss);
-	c_writevid_n(nl++ * 80, buf, l);
+	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "EIP=%x  EFLAGS=%x", eip2, eflags);
-	c_writevid_n(nl++ * 80, buf, l);
+	writevid_n(nl++ * 80, buf, l);
 
 	nl++;
 

@@ -15,6 +15,7 @@
 .set tipo_d, 0x39
 .set tipo_rl, 0x3a
 .set tipo_r, 0x3b
+.set tipo_l, 0x49
 
 .set io_tipo_rsen, 0x60
 .set io_tipo_rseln, 0x61
@@ -23,6 +24,16 @@
 .set io_tipo_tr, 0x64
 .set io_tipo_trl, 0x65
 .set io_tipo_tw, 0x66
+.set io_tipo_rkbd, 0x64
+.set io_tipo_ikbd, 0x65
+.set io_tipo_wfikbd, 0x66
+.set io_tipo_skbd, 0x67
+.set io_tipo_smon, 0x68
+.set io_tipo_wmon, 0x69
+.set io_tipo_cmon, 0x6a
+.set io_tipo_gmon, 0x6b
+.set io_tipo_lkbd, 0x6c
+.set io_tipo_kmon, 0x6d
 
 	.text
 	.global _activate_p
@@ -90,19 +101,54 @@ _writese_0:
 	int $io_tipo_wse0
 	ret
 
-	.global _readvterm_n
-_readvterm_n:
-	int $io_tipo_tr
+	.global _vkbd_read
+_vkbd_read:
+	int $io_tipo_rkbd
 	ret
 
-	.global _readvterm_ln
-_readvterm_ln:
-	int $io_tipo_trl
+	.global _vkbd_intr_enable	
+_vkbd_intr_enable:
+	int $io_tipo_ikbd
 	ret
 
-	.global _writevterm_n
-_writevterm_n:
-	int $io_tipo_tw
+	.global _vkbd_wfi
+_vkbd_wfi:
+	int $io_tipo_wfikbd
+	ret
+
+	.global _vkbd_switch
+_vkbd_switch:
+	int $io_tipo_skbd
+	ret
+
+	.global _vmon_switch
+_vmon_switch:
+	int $io_tipo_smon
+	ret
+
+	.global _vmon_write_n
+_vmon_write_n:
+	int $io_tipo_wmon
+	ret
+
+	.global _vmon_setcursor
+_vmon_setcursor:
+	int $io_tipo_cmon
+	ret
+
+	.global _vmon_getsize
+_vmon_getsize:
+	int $io_tipo_gmon
+	ret
+
+	.global _vmon_cursor_shape
+_vmon_cursor_shape:
+	int $io_tipo_kmon
+	ret
+
+	.global _vkbd_leds
+_vkbd_leds:
+	int $io_tipo_lkbd
 	ret
 
 	.global _readlog
@@ -114,6 +160,12 @@ _readlog:
 _resident:
 	int $tipo_r
 	ret
+
+	.global _log
+_log:
+	int $tipo_l
+	ret
+
 
 	.global start, _start
 start:

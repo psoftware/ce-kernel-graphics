@@ -1,5 +1,6 @@
 #include <sys.h>
 #include <lib.h>
+#include <colors.h>
 
 process __logger_p0 body __logger_main(0), 201, LIV_UTENTE;
 process __logger_p1 body __logger_reader(0), 200, LIV_UTENTE;
@@ -9,6 +10,8 @@ log_msg __logger_buf;
 log_msg __logger_msg;
 
 char *__logger_sev_names[] = { "DBG", "INF", "WRN", "ERR" };
+int __logger_sev_fgcol[]  = { COL_BLUE, COL_GREEN, COL_RED, COL_BLACK };
+int __logger_sev_bgcol[]  = { COL_BLACK, COL_BLACK, COL_BLACK, COL_RED };
 
 enum __logger_cmd_types { NEW_MSG, QUIT } __logger_cmd;
 
@@ -43,10 +46,16 @@ process_body __logger_main(int a)
 	__logger_cmd_types my_cmd;
 	log_msg my_msg;
 
+	if (!vterm_setresident(a)) {
+		flog(LOG_WARN, "log di sistema non residente");
+	}
+
 	while (!__logger_quit) {
 		my_cmd = __logger_recv_cmd(my_msg);
 		switch (my_cmd) {
 		case NEW_MSG:
+			vterm_setcolor(a, __logger_sev_fgcol[my_msg.sev],
+					  __logger_sev_bgcol[my_msg.sev]);
 			printf(a, "%s %d\t%s\n", __logger_sev_names[my_msg.sev],
 						 my_msg.identifier,
 						 my_msg.msg);
@@ -81,7 +90,7 @@ process_body __logger_ctrl(int a)
 {
 	
 	for (;;) {
-		readvterm_n(a, &__logger_ctrl_buf, 1, false);
+		readvterm_n(a, &__logger_ctrl_buf, 1, VTERM_NOECHO);
 		switch (__logger_ctrl_buf) {
 		case 'q':
 			__logger_quit = true;

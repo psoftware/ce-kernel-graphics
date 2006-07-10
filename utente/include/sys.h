@@ -75,14 +75,20 @@ extern "C" void writese_0(int serial, char vetto[], int &quanti);
 //
 extern "C" void writese_n(int serial, char vetto[], int quanti);
 
-// Legge QUANTI caratteri dal terminale TERM e li mette in VETTI
-//
-extern "C" void readvterm_n(int term, char vetti[], int quanti, bool echo = true);
-extern "C" void readvterm_ln(int term, char vetti[], int &quanti, bool echo = true);
+const unsigned int VKBD_LED_SCROLLOCK = 1L;
+const unsigned int VKBD_LED_NUMLOCK   = 2L;
+const unsigned int VKBD_LED_CAPSLOCK  = 4L;
 
-// Scrive QUANTI caratteri sul terminale TERM, prelevandoli da VETTI
-//
-extern "C" void writevterm_n(int term, char vetti[], int quanti, bool echo = true);
+extern "C" void vkbd_wfi(int v);
+extern "C" unsigned short vkbd_read(int v);
+extern "C" void vkbd_intr_enable(int v, bool enable);
+extern "C" void vkbd_switch(int v);
+extern "C" void vkbd_leds(int v, unsigned char led, bool on);
+extern "C" void vmon_switch(int v);
+extern "C" void vmon_write_n(int v, unsigned int off, unsigned short vetti[], int quanti);
+extern "C" void vmon_setcursor(int v, unsigned int off);
+extern "C" bool vmon_getsize(int v, unsigned int& maxx, unsigned int& maxy);
+extern "C" bool vmon_cursor_shape(int v, int shape);
 
 const unsigned int LOG_MSG_SIZE = 72;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
@@ -93,6 +99,7 @@ struct log_msg {
 	char msg[LOG_MSG_SIZE];
 };
 extern "C" void readlog(log_msg& m);
+extern "C" void log(log_sev sev, const char* msg, int quanti);
 
 extern "C" int resident(void* start, int quanti);
 

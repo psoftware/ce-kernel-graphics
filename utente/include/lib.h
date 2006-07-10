@@ -1,5 +1,6 @@
 #ifndef _LIB_H_
 #define _LIB_H_
+#include <sys.h>
 
 typedef char *va_list;
 
@@ -27,6 +28,24 @@ int printf(int term, const char *fmt, ...);
 extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
 extern "C" void *memset(void *dest, int c, unsigned int n);
+
+extern bool lib_init();
+extern void flog(log_sev sev, const char* fmt, ...);
+extern void writevterm_n(int vterm, const char* vetto, int quanti);
+extern void vterm_setcolor(int vterm, int fgcol, int bgcol, bool blink = false);
+extern bool vterm_setresident(int vterm);
+extern void vterm_clear(int vterm);
+
+struct vterm_edit_status {
+	int validi;
+	int cursore;
+	int posizione;
+};
+
+#define VTERM_NOECHO ((vterm_edit_status*)1)
+
+extern int readvterm_n(int vterm, char* vetti, int quanti, vterm_edit_status* stat = 0);
+extern int readvterm_ln(int vterm, char* vetti, int quanti, vterm_edit_status* stat = 0);
 
 #endif
 
