@@ -749,7 +749,7 @@ enum cont_pf {
 	LIBERA,			// pagina allocabile
 	DIRETTORIO,		// direttorio delle tabelle
 	TABELLA,		// tabella delle pagine
-	PAGINA_VIRTUALE };	// pagina rimpiazzabile
+	PAGINA_VIRTUALE };	// pagina virtuale
 
 // descrittore di pagina fisica
 struct des_pf {
@@ -2277,22 +2277,23 @@ void shutdown()
 	asm("1: sti; nop; jmp 1b" : : );
 }
 
-extern "C" void c_terminate_p()
+extern "C" void c_terminate_p(proc_elem *p)
 {
-	distruggi_processo(esecuzione);
-	delete esecuzione;
+	distruggi_processo(p);
 	processi--;
-	flog(LOG_INFO, "Processo terminato");
-	schedulatore();
+	flog(LOG_INFO, "Processo %d terminato", p->identifier);
+	delete p;
 }
 
 
 // come la terminate_p, ma invia anche un warning al log (da invocare quando si 
 // vuole terminare un processo segnalando che c'e' stato un errore)
-extern "C" void c_abort_p()
+extern "C" void c_abort_p(proc_elem *p)
 {
-	flog(LOG_WARN, "Processo abortito");
-	c_terminate_p();
+	distruggi_processo(p);
+	processi--;
+	flog(LOG_WARN, "Processo %d abortito", p->identifier);
+	delete p;
 }
 
 // Registrazione processi esterni

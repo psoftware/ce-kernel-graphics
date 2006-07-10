@@ -3,7 +3,7 @@ START_IO=        0x00200000
 START_UTENTE=	 0x80000000
 SWAP=
 
-CXXFLAGS=-fno-exceptions -fno-rtti -g
+CXXFLAGS=-fno-exceptions -fno-rtti -g -fcall-saved-edi -fcall-saved-esi -fcall-saved-ebx
 CPPFLAGS=-nostdinc -Iinclude -g
 
 all: build/sistema \
