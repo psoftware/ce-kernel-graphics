@@ -2278,23 +2278,27 @@ void shutdown()
 	asm("1: sti; nop; jmp 1b" : : );
 }
 
-extern "C" void c_terminate_p(proc_elem *p)
+extern "C" void c_terminate_p()
 {
+	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
 	flog(LOG_INFO, "Processo %d terminato", p->identifier);
 	delete p;
+	schedulatore();
 }
 
 
 // come la terminate_p, ma invia anche un warning al log (da invocare quando si 
 // vuole terminare un processo segnalando che c'e' stato un errore)
-extern "C" void c_abort_p(proc_elem *p)
+extern "C" void c_abort_p()
 {
+	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
 	flog(LOG_WARN, "Processo %d abortito", p->identifier);
 	delete p;
+	schedulatore();
 }
 
 // Registrazione processi esterni

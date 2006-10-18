@@ -1450,13 +1450,9 @@ a_activate_p:	// routine int $tipo_a
 
         .extern _c_terminate_p
 a_terminate_p:	// routine int $tipo_t
-	movl _esecuzione, %eax
-	movl %eax, _esecuzione_save
-	call _schedulatore
-	call carica_stato
-	pushl _esecuzione_save
+	movl $terminate_stack_end, %esp
         call _c_terminate_p
-	addl $4, %esp
+	call carica_stato
 	iret
 
         .extern _c_give_num
@@ -1603,13 +1599,9 @@ a_panic:	// routine int $tipo_p
 
 	.extern _c_abort_p
 a_abort_p:
-	movl _esecuzione, %eax
-	movl %eax, _esecuzione_save
-	call _schedulatore
-	call carica_stato
-	pushl _esecuzione_save
+	movl $terminate_stack_end, %esp
         call _c_abort_p
-	addl $4, %esp
+	call carica_stato
 	iret
 
 	.extern _c_log
@@ -2111,5 +2103,6 @@ idt:
 	.global _stack
 _stack:
 	.space STACK_SIZE, 0
-_esecuzione_save:
-	.long 0
+terminate_stack:
+	.space STACK_SIZE, 0
+terminate_stack_end:
