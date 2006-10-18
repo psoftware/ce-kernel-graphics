@@ -1233,7 +1233,7 @@ int readvterm_n(int term, char vetti[], int quanti, struct vterm_edit_status* st
 	startvterm_in(p_des, vetti, quanti, input_n, stat);
 	sem_wait(p_des->sincr);
 	letti = p_des->letti;
-	if (stat) 
+	if (stat && stat != VTERM_NOECHO) 
 		*stat = p_des->stat;
 	sem_signal(p_des->mutex_r);
 	return letti;
@@ -1254,7 +1254,7 @@ int readvterm_ln(int term, char vetti[], int quanti, struct vterm_edit_status* s
 	startvterm_in(p_des, vetti, quanti, input_ln, stat);
 	sem_wait(p_des->sincr);
 	letti = p_des->letti;
-	if (stat) 
+	if (stat && stat != VTERM_NOECHO) 
 		*stat = p_des->stat;
 	sem_signal(p_des->mutex_r);
 	return letti;
