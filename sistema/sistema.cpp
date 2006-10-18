@@ -2750,7 +2750,6 @@ extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 	}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
-	abort_p();
 }
 
 //////////////////////////////////////////////////////////////////////////////

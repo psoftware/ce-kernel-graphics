@@ -1200,9 +1200,7 @@ simd_exc:
 comm_exc:
 	call _gestore_eccezioni
 	addl $8, %esp
-	call _c_terminate_p
-	call carica_stato
-	iret
+	jump a_abort_p
 
 //////////////////////////////////////////////////////////
 // primitive richiamate dal nucleo stesso (page fault)  //
