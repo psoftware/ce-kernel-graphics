@@ -17,7 +17,7 @@
 #define SIZE_PAGINA		4096
 #define SIZE_SUPERPAGINA	(SIZE_PAGINA * 1024)
 #define SIZE_DESP		216
-#define SIZE_DESS		64
+#define SIZE_DESS		8
 #define DELAY			59659		
 
 #define MAX_PRIORITY		0x7ffffff

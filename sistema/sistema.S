@@ -2030,8 +2030,6 @@ _fine_codice_sistema:
 _esecuzione:	.long 0
 .global		_pronti
 _pronti:	.long 0
-.global		_array_dess
-_array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
 // Descrittore Hard Disk
 	.global _hd
 _hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
@@ -2086,6 +2084,9 @@ idt_pointer:
 	.word 0x7FF			// limite della IDT (256 entrate)
 	.long idt			// base della IDT
 
+.bss
+.global		_array_dess
+_array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
 .balign 16
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 

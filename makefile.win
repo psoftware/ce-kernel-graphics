@@ -55,7 +55,7 @@ build/creatimg.exe: include/costanti.h util/creatimg.cpp
 	gxx -DWIN -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
 
 .PHONY: swap
-swap: build/creatimg build/io build/utente
+swap: build/creatimg.exe build/io build/utente
 	build\creatimg $(SWAP) build\io build\utente
 	
 
