@@ -1,4 +1,4 @@
-#if __GNUC__ >= 3
+#if __GNUC__ >= 3 && !defined(WIN)
 	#include <cstdio>
 	#include <cstdlib>
 	#include <cstring>

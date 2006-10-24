@@ -105,4 +105,10 @@ struct log_msg {
 	char msg[LOG_MSG_SIZE + 1];
 };
 
+#ifdef WIN
+	typedef long unsigned int size_t;
+#else
+	typedef unsigned int size_t;
+#endif
+
 #endif

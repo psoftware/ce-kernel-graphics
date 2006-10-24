@@ -1,10 +1,10 @@
 START_SISTEMA=   0x00100000
-START_IO=        0x00200000
+START_IO=        0x40000000
 START_UTENTE=	 0x80000000
 SWAP=
 
 CXXFLAGS=-fno-exceptions -fno-rtti -g -fcall-saved-edi -fcall-saved-esi -fcall-saved-ebx
-CPPFLAGS=-nostdinc -Iinclude -g
+CPPFLAGS=-DWIN -nostdinc -Iinclude -g
 
 all: build/sistema \
      build/parse.exe   \
@@ -24,7 +24,7 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	gcc $(CPPFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h sistema/elf.h include/costanti.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
 	gxx $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
@@ -38,7 +38,7 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.s
 	gcc $(CPPFLAGS) -c utente/utente.s -o utente/uten_s.o
 
-utente/utente.cpp: build/parse.exe utente/prog utente/prog/*.in utente/include/*.h
+utente/utente.cpp: build/parse.exe utente/prog/*.in utente/include/*.h utente/prog
 	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
@@ -52,7 +52,7 @@ build/parse.exe: util/parse.c util/src.h
 	gcc -DWIN -o build/parse.exe util/parse.c
 
 build/creatimg.exe: include/costanti.h util/creatimg.cpp
-	gxx -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
+	gxx -DWIN -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
 
 .PHONY: swap
 swap: build/creatimg build/io build/utente
