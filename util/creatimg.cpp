@@ -12,8 +12,8 @@
 
 #include "costanti.h"
 #include "interp.h"
+#include "swap.h"
 
-typedef unsigned int block_t;
 typedef unsigned int uint;
 
 const uint UPB = SIZE_PAGINA / sizeof(uint);
@@ -135,49 +135,13 @@ void bm_free(bm_t *bm, unsigned int pos)
 	bm_clear(bm, pos);
 }
 
-struct superblock_t {
-	char	magic[4];
-	block_t	bm_start;
-	int	blocks;
-	block_t	directory;
-	void*   user_entry;
-	void*   user_end;
-	void*	io_entry;
-	void*   io_end;
-	unsigned int	checksum;
-} superblock;
-
-
-
-void scrivi_blocco(FILE* img, block_t b, void* buf)
-{
-	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) != 0 ||
-	     fwrite(buf, sizeof(pagina), 1, img) < 1)
-	{
-		fprintf(stderr, "errore nella scrittura dello swap\n");
-		exit(EXIT_FAILURE);
-	}
-}
-
-void leggi_blocco(FILE* img, block_t b, void* buf)
-{
-	if ( fseek(img, b * SIZE_PAGINA, SEEK_SET) != 0 ||
-	     fread(buf, sizeof(pagina), 1, img) < 1)
-	{
-		fprintf(stderr, "errore nella lettura dallo swap\n");
-		exit(EXIT_FAILURE);
-	}
-}
-
-
-	
+superblock_t superblock;
 direttorio main_dir;
 bm_t blocks;
 tabella_pagine tab;
 pagina pag;
-FILE *img;
 
-void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
+void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_address)
 {
 	FILE* exe;
 
@@ -236,7 +200,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 				pdes_tab->US	  = liv;
 				pdes_tab->P	   = 1;
 			} else {
-				leggi_blocco(img, pdes_tab->address, &tab);
+				swap->leggi_blocco(pdes_tab->address, &tab);
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
@@ -248,15 +212,15 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 					}
 					pdes_pag->address = b;
 				} else {
-					leggi_blocco(img, pdes_pag->address, &pag);
+					swap->leggi_blocco(pdes_pag->address, &pag);
 				}
 				s->copia_prossima_pagina(&pag);
-				scrivi_blocco(img, pdes_pag->address, &pag);
+				swap->scrivi_blocco(pdes_pag->address, &pag);
 			} 
 			pdes_pag->RW |= s->scrivibile();
 			pdes_pag->US |= liv;
 			pdes_pag->P  |= (1 - liv);
-			scrivi_blocco(img, pdes_tab->address, &tab);
+			swap->scrivi_blocco(pdes_tab->address, &tab);
 		}
 
 	}
@@ -265,20 +229,25 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 
 int main(int argc, char* argv[])
 {
+	Swap *swap = NULL;
 
 	if (argc < 3) {
 		fprintf(stderr, "Utilizzo: %s <swap> <modulo io> <modulo utente>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
-	if ( !(img = fopen(argv[1], "rb+")) || 
-	      (fseek(img, 0L, SEEK_END) != 0) )
-	{
-		perror(argv[1]);
+	ListaTipiSwap* tipiswap = ListaTipiSwap::instance();
+	tipiswap->rewind();
+	while (tipiswap->ancora()) {
+		swap = tipiswap->prossimo()->apri(argv[1]);
+		if (swap) break;
+	}
+	if (!swap) {
+		fprintf(stderr, "Dispositivo swap '%s' non riconosciuto\n", argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
-	long dim = ftell(img) / SIZE_PAGINA;
+	long dim = swap->dimensione() / SIZE_PAGINA;
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	
@@ -297,10 +266,10 @@ int main(int argc, char* argv[])
 	memset(&main_dir, 0, sizeof(direttorio));
 
 	uint last_address;
-	do_map(argv[2], 0, superblock.io_entry, last_address);
+	do_map(swap, argv[2], 0, superblock.io_entry, last_address);
 	superblock.io_end = addr(last_address);
 
-	do_map(argv[3], 1, superblock.user_entry, last_address);
+	do_map(swap, argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = addr(last_address);
 
 	// le tabelle condivise per lo heap:
@@ -309,7 +278,7 @@ int main(int argc, char* argv[])
 	descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(last_address)];
 	if (pdes_tab->P) {
 		tabella_pagine tab;
-		leggi_blocco(img, pdes_tab->address, &tab);
+		swap->leggi_blocco(pdes_tab->address, &tab);
 		for (int i = indice_tabella(last_address) + 1; i < 1024; i++) {
 			descrittore_pagina *pdes_pag = &tab.entrate[i];
 			pdes_pag->address = 0;
@@ -317,7 +286,7 @@ int main(int argc, char* argv[])
 			pdes_pag->RW	  = 1;
 			pdes_pag->P	  = 0;
 		}
-		scrivi_blocco(img, pdes_tab->address, &tab);
+		swap->scrivi_blocco(pdes_tab->address, &tab);
 	}
 	// - quindi, i rimanenti descrittori di tabella:
 	for (int i = indice_direttorio(last_address) + 1;
@@ -335,16 +304,13 @@ int main(int argc, char* argv[])
 	superblock.magic[1] = 'E';
 	superblock.magic[2] = 'S';
 	superblock.magic[3] = 'W';
-	if ( fseek(img, 512, SEEK_SET) != 0 ||
-	     fwrite(&superblock, sizeof(superblock), 1, img) < 0 ||
-	     fseek(img, SIZE_PAGINA, SEEK_SET) != 0 ||
-	     fwrite(blocks.vect, SIZE_PAGINA, nbmblocks, img) < nbmblocks ||
-	     fwrite(&main_dir, sizeof(direttorio), 1, img) < 1 )
+	if ( !swap->scrivi_superblocco(superblock) ||
+	     !swap->scrivi_bitmap(blocks.vect, nbmblocks) ||
+	     !swap->scrivi_blocco(superblock.directory, &main_dir))
 	{
 		fprintf(stderr, "errore nella creazione dello swap\n");
 		exit(EXIT_FAILURE);
 	}
-	fclose(img);
 	return EXIT_SUCCESS;
 }
 
