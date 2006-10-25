@@ -51,15 +51,27 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 build/parse: util/parse.c util/src.h
 	gcc -o build/parse util/parse.c
 
-build/creatimg: include/costanti.h util/creatimg.cpp
-	g++ -g -Iinclude -o build/creatimg util/creatimg.cpp
+util/coff.o: util/interp.h util/coff.h util/dos.h util/coff.cpp
+	g++ -c -g -Iinclude -o util/coff.o util/coff.cpp
+
+util/elf.o:  util/interp.h util/elf.h util/elf.cpp
+	g++ -c -g -Iinclude -o util/elf.o util/elf.cpp
+
+util/interp.o: util/interp.h util/interp.cpp
+	g++ -c -g -Iinclude -o util/interp.o util/interp.cpp
+
+util/creatimg.o: util/interp.h util/creatimg.cpp
+	g++ -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
+
+build/creatimg: util/creatimg.o util/elf.o util/coff.o util/interp.o
+	g++ -g -o build/creatimg util/creatimg.o util/elf.o util/coff.o util/interp.o
 
 .PHONY: swap
 swap: build/creatimg build/io build/utente
 	build/creatimg $(SWAP) build/io build/utente
 	
 clean:
-	rm -f sistema/*.o io/*.o utente/*.o 
+	rm -f sistema/*.o io/*.o utente/*.o util/*.o
 
 reset: clean
 	rm -f build/* swap
