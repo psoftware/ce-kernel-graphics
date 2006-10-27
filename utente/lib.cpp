@@ -1116,7 +1116,7 @@ void vterm_setcolor(int term, int fgcol, int bgcol, bool blink)
 
 	des_vterm *t = &vterm[term];
 
-	t->attr = (fgcol & 0xff) | (bgcol & 0x7f) << 8 | (blink ? 0x80 : 0x00);
+	t->attr = (fgcol & 0xf) | (bgcol & 0x7) << 4 | (blink ? 0x80 : 0x00);
 }
 
 static
