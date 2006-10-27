@@ -124,7 +124,8 @@ Segmento* EseguibileCoff_go32::prossimo_segmento()
 		SCNHDR* ph = (SCNHDR*)(seg_buf + SCNHSZ * curr_seg);
 		curr_seg++;
 
-		if (ph->s_vaddr == 0)
+		if (ph->s_vaddr == 0 ||
+		   ph->s_flags != STYP_TEXT && ph->s_flags != STYP_DATA && ph->s_flags != STYP_BSS)
 			continue;
 		
 		return new SegmentoCoff_go32(this, ph);
