@@ -3669,7 +3669,7 @@ bool leggi_partizioni(short ind_ata, short drv)
 	partizione *estesa, **ptail;
 	des_ata* p_des = &hd[ind_ata];
 	static char buf[512];
-	short settore;
+	unsigned int settore;
 	partizione* pp;
 
 	// lettura del Master Boot Record (LBA = 0)
