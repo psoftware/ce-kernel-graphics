@@ -1786,6 +1786,8 @@ extern "C" int c_resident(void* start, int quanti)
 	direttorio *pdir;
 	des_pf *ppf;
 
+	if (quanti <= 0)
+		return 0;
 
 	// calcoliamo l'indirizzo della pagina che contiene "start"
 	vero_start = addr(uint(start) & ~(SIZE_PAGINA - 1));
@@ -1801,7 +1803,7 @@ extern "C" int c_resident(void* start, int quanti)
 	pdir = leggi_cr3();
 
 	indirizzo_virtuale = vero_start;
-	while(indirizzo_virtuale < start)
+	while(indirizzo_virtuale < last)
 	{
 		descrittore_tabella *pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
 		tabella *ptab;
