@@ -51,8 +51,29 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 build/parse.exe: util/parse.c util/src.h
 	gcc -DWIN -o build/parse.exe util/parse.c
 
-build/creatimg.exe: include/costanti.h util/creatimg.cpp
-	gxx -DWIN -g -Iinclude -o build/creatimg.exe util/creatimg.cpp
+util/coff.o: include/costanti.h util/interp.h util/coff.h util/dos.h util/coff.cpp
+	gxx -DWIN -c -g -Iinclude -o util/coff.o util/coff.cpp
+
+util/elf.o:  include/costanti.h util/interp.h util/elf.h util/elf.cpp
+	gxx -DWIN -c -g -Iinclude -o util/elf.o util/elf.cpp
+
+util/interp.o: include/costanti.h util/interp.h util/interp.cpp
+	gxx -DWIN -c -g -Iinclude -o util/interp.o util/interp.cpp
+
+util/swap.o: include/costanti.h util/swap.h util/swap.cpp
+	gxx -DWIN -c -g -Iinclude -o util/swap.o util/swap.cpp
+
+util/fswap.o: include/costanti.h util/swap.h util/fswap.cpp
+	gxx -DWIN -c -g -Iinclude -o util/fswap.o util/fswap.cpp
+
+util/doswap.o: include/costanti.h util/swap.h util/doswap.cpp
+	gxx -DWIN -c -g -Iinclude -o util/doswap.o util/doswap.cpp
+
+util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
+	gxx -DWIN -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
+
+build/creatimg.exe: util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o util/doswap.o
+	gxx -DWIN -g -o build/creatimg.exe util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o util/doswap.o
 
 .PHONY: swap
 swap: build/creatimg.exe build/io build/utente
@@ -63,6 +84,7 @@ clean:
 	del sistema\*.o
 	del io\*.o
 	del utente\*.o 
+	del util\*.o
 
 reset: clean
 	del build\*

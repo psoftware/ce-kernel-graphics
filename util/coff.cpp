@@ -14,6 +14,8 @@
 #include "coff.h"
 #include "dos.h"
 
+typedef unsigned int uint;
+
 // interprete per formato coff-go32-exe
 class InterpreteCoff_go32: public Interprete {
 public:

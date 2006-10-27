@@ -13,6 +13,8 @@
 #include "interp.h"
 #include "elf.h"
 
+typedef unsigned int uint;
+
 // interprete per formato elf
 class InterpreteElf32: public Interprete {
 public:
