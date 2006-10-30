@@ -1270,7 +1270,8 @@ handler_1:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 4, %eax
+	movl $1, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1280,7 +1281,8 @@ handler_2:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 8, %eax
+	movl $2, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1290,7 +1292,8 @@ handler_3:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 12, %eax
+	movl $3, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1300,7 +1303,8 @@ handler_4:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 16, %eax
+	movl $4, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1310,7 +1314,8 @@ handler_5:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 20, %eax
+	movl $5, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1320,7 +1325,8 @@ handler_6:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 24, %eax
+	movl $6, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1330,7 +1336,8 @@ handler_7:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 28, %eax
+	movl $7, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1340,7 +1347,8 @@ handler_8:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 32, %eax
+	movl $8, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1350,7 +1358,8 @@ handler_9:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 36, %eax
+	movl $9, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1360,7 +1369,8 @@ handler_10:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 40, %eax
+	movl $10, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1370,7 +1380,8 @@ handler_11:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 44, %eax
+	movl $11, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1380,7 +1391,8 @@ handler_12:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 48, %eax
+	movl $12, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato
@@ -1390,7 +1402,8 @@ handler_13:
 	call salva_stato
 	call inspronti
 
-	movl _proc_esterni + 52, %eax
+	movl $13, %ecx
+	movl _a_p(, %ecx, 4), %eax
 	movl %eax, _esecuzione
 
 	call carica_stato

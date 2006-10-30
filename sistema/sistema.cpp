@@ -2304,8 +2304,8 @@ extern "C" void c_abort_p()
 // Registrazione processi esterni
 const int MAX_IRQ  = 16;
 proc_elem* const ESTERN_BUSY = (proc_elem*)1;
-proc_elem *proc_esterni[MAX_IRQ];
-proc_elem *proc_esterni_save[MAX_IRQ];
+proc_elem *a_p[MAX_IRQ];
+proc_elem *a_p_save[MAX_IRQ];
 // primitiva di nucleo usata dal nucleo stesso
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
@@ -2333,13 +2333,13 @@ void estern_generico(int h)
 // quello stesso interrupt
 bool aggiungi_pe(proc_elem *p, int irq)
 {
-	if (irq < 0 || irq >= MAX_IRQ || proc_esterni_save[irq] == 0)
+	if (irq < 0 || irq >= MAX_IRQ || a_p_save[irq] == 0)
 		return false;
 
-	proc_esterni[irq] = p;
-	distruggi_processo(proc_esterni_save[irq]);
-	delete proc_esterni_save[irq];
-	proc_esterni_save[irq] = 0;
+	a_p[irq] = p;
+	distruggi_processo(a_p_save[irq]);
+	delete a_p_save[irq];
+	a_p_save[irq] = 0;
 	return true;
 
 }
@@ -2379,7 +2379,7 @@ bool init_pe()
 			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
 			return false;
 		}
-		proc_esterni_save[i] = proc_esterni[i] = p;
+		a_p_save[i] = a_p[i] = p;
 	}
 	return true;
 }
