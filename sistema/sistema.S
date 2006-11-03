@@ -802,8 +802,8 @@ _outputb:
 	ret
 
 // legge una sequenza di parole da una porta di I/O
-	.global _inputbuffw
-_inputbuffw:
+	.global _inputbw
+_inputbw:
 	pushl %eax
 	pushl %edx
 	pushl %edi
@@ -823,8 +823,8 @@ _inputbuffw:
 	ret
 
 // scrive una sequenza di parole in una porta di I/O
-	.global _outputbuffw
-_outputbuffw:
+	.global _outputbw
+_outputbw:
 	pushl %eax
 	pushl %edx
 	pushl %esi

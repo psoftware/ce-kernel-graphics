@@ -63,8 +63,7 @@
 #define IO_TIPO_KMON		0x6d
 
 
-#define BLK_SIZE 512			// Dimensione del blocco (HD e FD)
-#define H_BLK_SIZE (BLK_SIZE / 2)	// Meta' dimensione blocco (short int)
+#define DIM_BLOCK 512			// Dimensione del blocco (HD e FD)
 
 #define D_TIMEOUT 0x7FFF		// Timeout per l'accesso ai dischi
 #define D_ERR_NONE 0x00

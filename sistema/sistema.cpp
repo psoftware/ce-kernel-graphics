@@ -3310,15 +3310,15 @@ const char* last_log_err()
 ///////////////////////////////////////////////////////////////////////////////////////
 // DRIVER SWAP                                                                      
 ///////////////////////////////////////////////////////////////////////////////////////
-typedef char *ind_b;	// indirizzo di una porta
+typedef char *ind_b;	// indirizzo di una porta a 8 bit
 // ingresso di un byte da una porta di IO
 extern "C" void inputb(ind_b reg, char &a);
 // uscita di un byte su una porta di IO
 extern "C" void outputb(char a, ind_b reg);
 // ingresso di una stringa di word da un buffer di IO
-extern "C" void inputbuffw(ind_b reg, unsigned short *a,short n);
+extern "C" void inputbw(ind_b reg, unsigned short *a,short n);
 // uscita di una stringa di word su un buffer di IO
-extern "C" void outputbuffw(unsigned short *a, ind_b reg,short n);
+extern "C" void outputbw(unsigned short *a, ind_b reg,short n);
 
 #define STRICT_ATA
 
@@ -3396,25 +3396,26 @@ extern "C" void hd_write_address(des_ata *p, unsigned int primo);
 extern "C" void hd_write_command(hd_cmd cmd, ind_b i_drv_cmd);
 
 
-bool hd_check_status(des_ata* p_des, int drv)
+// seleziona il dispostivo drv e controlla che la selezione abbia avuto 
+// successo
+bool hd_sel_drv(des_ata* p_des, int drv)
 {
 	char stato;
 	int curr_drv;
-	for (int i = 0; i < 2; i++) {
-		do {
-			inputb(p_des->indreg.iSTS, stato);
-		} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
 
-		hd_read_device(p_des->indreg.iDRV_HD, curr_drv);
+	hd_select_device(drv, p_des->indreg.iDRV_HD);
 
-		if  (curr_drv == drv) 
-			return true;
+	do {
+		inputb(p_des->indreg.iSTS, stato);
+	} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
 
-		hd_select_device(drv, p_des->indreg.iDRV_HD);
-	}
-	return false;
+	hd_read_device(p_des->indreg.iDRV_HD, curr_drv);
+
+	return  (curr_drv == drv);
 }
 
+// aspetta finche' non e' possibile leggere dal registro dei dati
+// (DRQ deve essere 1, BSY 0 e ERR 0)
 bool hd_wait_data(des_ata* p_des)
 {
 	char stato;
@@ -3426,6 +3427,8 @@ bool hd_wait_data(des_ata* p_des)
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
 }
 
+// invia al log di sistema un messaggio che spiega l'errore passato come 
+// argomento
 void hd_print_error(int i, int d, int sect, short error)
 {
 	des_ata* p = &hd[i];
@@ -3457,21 +3460,28 @@ void hd_print_error(int i, int d, int sect, short error)
 	}
 }
 
-
 // Avvio delle operazioni di lettura da hard disk
+bool gohd_input(des_ata* p_des, int drv, unsigned int primo, unsigned char quanti)
+{
+	if (!hd_sel_drv(p_des, drv))		// selezione del drive
+		return false;
+	hd_write_address(p_des, primo);			// parametri: primo settore
+	outputb(quanti, p_des->indreg.iSTCOUNT);	// parametri: quanti settori
+	go_inouthd(p_des->indreg.iDEV_CTRL);		// abilita interruzioni	
+	hd_write_command(READ_SECT, p_des->indreg.iCMD);// invia comando
+	return true;
+}
+
+
+// inizializza il descrittore d'operazione e avvia la lettura
 void starthd_in(des_ata *p_des, short drv, unsigned short vetti[], unsigned int primo, unsigned char quanti)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
 	p_des->comando = READ_SECT;
 	p_des->errore = D_ERR_NONE;
-	if (!hd_check_status(p_des, drv))		// selezione del drive
-		goto errore; 	
-	hd_write_address(p_des, primo);			// parametri: primo settore
-	outputb(quanti, p_des->indreg.iSTCOUNT);	// parametri: quanti settori
-	go_inouthd(p_des->indreg.iDEV_CTRL);		// abilita interruzioni	
-	umask_hd(p_des->indreg.iSTS);			// abilita int. nel PIC
-	hd_write_command(READ_SECT, p_des->indreg.iCMD);// invia comando
+	if (!gohd_input(p_des, drv, primo, quanti))
+		goto errore;
 	return;
 
 errore:
@@ -3479,26 +3489,30 @@ errore:
 }
 
 // Avvio delle operazioni di scrittura su hard disk
-void starthd_out(des_ata *p_des, short drv, unsigned short vetti[], unsigned int primo, unsigned char quanti)	
-{	char stato;				
-	bool ris;
-	p_des->cont = quanti;
-	p_des->punt = vetti;
-	p_des->comando = WRITE_SECT;
-	p_des->errore = D_ERR_NONE;
-
-	if (!hd_check_status(p_des, drv))		// selezione del drive
-		goto errore;
+bool gohd_output(des_ata *p_des, int drv, unsigned short vetto[], unsigned int primo, unsigned char quanti)
+{
+	if (!hd_sel_drv(p_des, drv))		// selezione del drive
+		return false;
 	hd_write_address(p_des, primo);			// invio parametri (primo settore)
 	outputb(quanti, p_des->indreg.iSTCOUNT);	// invio parametri (quanti settori)
 	go_inouthd(p_des->indreg.iDEV_CTRL);		// abilita interruzioni
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);// invia comando
 	if (!hd_wait_data(p_des))
+		return false;
+	outputbw(vetto, p_des->indreg.iDATA, DIM_BLOCK / 2);
+	return true;
+}
+
+// inizializza il descrittore d'operazione e avvia la scrittura
+void starthd_out(des_ata *p_des, short drv, unsigned short vetto[], unsigned int primo, unsigned char quanti)	
+{	char stato;				
+	bool ris;
+	p_des->cont = quanti;
+	p_des->punt = vetto + DIM_BLOCK / 2;
+	p_des->comando = WRITE_SECT;
+	p_des->errore = D_ERR_NONE;
+	if (!gohd_output(p_des, drv, vetto, primo, quanti))
 		goto errore;
-	outputbuffw(vetti, p_des->indreg.iDATA, H_BLK_SIZE);
-	p_des->punt += H_BLK_SIZE;
-	p_des->cont--;
-	umask_hd(p_des->indreg.iSTS);
 	return;
 
 errore:
@@ -3583,69 +3597,43 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], un
 	sem_signal(p_des->mutex);
 }
 
-// driver per l'hard disk, valido sia per l'ingresso che per l'uscita
-extern "C" void c_driver_hd(int ind_ata)
-{
-	des_ata *p_des;
-	int drv;
-	hd_cmd curr_cmd;
-	proc_elem* lavoro;
-	bool fine;
+
+
+extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
+{	
+	proc_elem* lavoro; des_sem* s; des_ata* p_des;
 	char stato;
-
-	p_des = &hd[ind_ata];	
-
-	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
-
-	curr_cmd = p_des->comando;	
-	p_des->comando = NONE;	
-	fine = false;
-	switch (curr_cmd) {
-	case WRITE_SECT:
-		if (p_des->cont == 0)
-			fine = true;
-		else {
-			if (!hd_wait_data(p_des)) {
-				inputb(p_des->indreg.iERROR, p_des->errore);
-				fine = true;
-			}
-			outputbuffw(p_des->punt, p_des->indreg.iDATA, H_BLK_SIZE);
-			p_des->comando = WRITE_SECT;
-			p_des->punt += H_BLK_SIZE;
-			p_des->cont--;
-		}
-		break;
-	case READ_SECT:
-		if (!hd_wait_data(p_des)) {
-			inputb(p_des->indreg.iERROR, p_des->errore);
-			fine = true;
-		}
-		inputbuffw(p_des->indreg.iDATA, p_des->punt, H_BLK_SIZE);
-		p_des->cont--;
-		if (p_des->cont == 0)
-			fine = true;
-		else {
-			p_des->comando = READ_SECT;
-			p_des->punt += H_BLK_SIZE;
-		}
-		break;
-	default:
-		flog(LOG_WARN, "Comando sconosciuto: %d", curr_cmd);
-		fine = true;
-		break;
-	}
-	if (fine == true) {
-		mask_hd(p_des->indreg.iSTS);
+	p_des = &hd[ata];
+	p_des->cont--; 
+	p_des->errore = D_ERR_NONE;
+	if (p_des->cont == 0) {	
 		halt_inouthd(p_des->indreg.iDEV_CTRL);	
-		des_sem* s = &array_dess[p_des->sincr];
+		s = &array_dess[p_des->sincr];
 		s->counter++;
 		if (s->counter <= 0) {
 			rimozione_coda(s->pointer, lavoro);
 			inserimento_coda(pronti, lavoro);
 		}
-	}	
+	}
+	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
+	if (p_des->comando == READ_SECT) { 
+		if (!hd_wait_data(p_des)) 
+			inputb(p_des->indreg.iERROR, p_des->errore);
+		else
+			inputbw(p_des->indreg.iDATA, p_des->punt, DIM_BLOCK / 2);
+	} else {
+		if (p_des->cont != 0) {
+			if (!hd_wait_data(p_des)) 
+				inputb(p_des->indreg.iERROR, p_des->errore);
+			else
+				outputbw(p_des->punt, p_des->indreg.iDATA, DIM_BLOCK / 2);
+		}
+	}
+	p_des->punt += DIM_BLOCK / 2;
 	schedulatore();
 }
+
+
 
 // descrittore di partizione. Le uniche informazioni che ci interessano sono 
 // "offset" e "sectors"
@@ -3847,13 +3835,13 @@ bool hd_init()
 			if (!p_des->disco[d].presente) 
 				continue;
 			halt_inouthd(p_des->indreg.iDEV_CTRL);	
-			if (!hd_check_status(p_des, d))
+			if (!hd_sel_drv(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
 			if (!hd_wait_data(p_des))
 				goto error;
 			inputb(p_des->indreg.iSTS, stato); // ack
-			inputbuffw(p_des->indreg.iDATA, st_sett, H_BLK_SIZE);
+			inputbw(p_des->indreg.iDATA, st_sett, DIM_BLOCK / 2);
 			p_des->disco[d].tot_sett = (st_sett[61] << 16) + st_sett[60];
 			for (int j = 27; j <= 46; j++) {
 				*ptr++ = (char)(st_sett[j] >> 8);
@@ -3871,7 +3859,8 @@ bool hd_init()
 			p_des->disco[d].presente = false;
 			continue;
 		}
-		mask_hd(p_des->indreg.iSTS);
+		//mask_hd(p_des->indreg.iSTS);
+		umask_hd(p_des->indreg.iSTS);			// abilita int. nel PIC
 		if ( (p_des->mutex = c_sem_ini(1)) == 0 ||
 		     (p_des->sincr = c_sem_ini(0)) == 0)
 		{
