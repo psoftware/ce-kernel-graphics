@@ -629,8 +629,6 @@ void vterm_edit_eof(des_vterm *t, char c)
 	vterm_move_cursor(t, t->append_off);
 	t->letti += t->cont;
 	t->funzione = none;
-	if (t->echo)
-		sem_signal(t->mutex_w);
 	sem_signal(t->sincr);
 }
 
