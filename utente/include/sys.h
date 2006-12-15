@@ -83,6 +83,7 @@ extern "C" void vkbd_wfi(int v);
 extern "C" unsigned short vkbd_read(int v);
 extern "C" void vkbd_intr_enable(int v, bool enable);
 extern "C" void vkbd_switch(int v);
+extern "C" void vkbd_send(int v, unsigned short code, bool clear = false);
 extern "C" void vkbd_leds(int v, unsigned char led, bool on);
 extern "C" void vmon_switch(int v);
 extern "C" void vmon_write_n(int v, unsigned int off, unsigned short vetti[], int quanti);

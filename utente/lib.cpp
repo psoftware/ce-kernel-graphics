@@ -180,6 +180,8 @@ struct vterm_map {
 #define VTERM_MODIF_CTRL	4U
 #define VTERM_MODIF_ALT		8U
 
+#define VTERM_SHUTDOWN		0xffff
+
 char vterm_decode_map[4][64] = {
   // tasto senza modificatori
  { 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=',
@@ -902,7 +904,8 @@ void vterm_scrlock(des_vterm* t, int v, unsigned short code)
 	sem_signal(t->mutex_w);
 }
 void vterm_sysrq(des_vterm*, int v, unsigned short code)
-{ }
+{
+}
 
 const int N_VTERM = 100;
 
@@ -921,6 +924,9 @@ void input_term(int h)
 
 	for(;;) {
 		code = vkbd_read(p_des->vkbd);
+
+		if (code == VTERM_SHUTDOWN)
+			terminate_p();
 		
 		bool ext = (code & 0xff00) == 0xe000;
 		char c = (code & 0x007f);
@@ -1372,6 +1378,12 @@ bool vterm_init()
 
 	vterm_switch(0);
 	return true;
+}
+
+
+void vterm_shutdown()
+{
+	vkbd_send(-1, VTERM_SHUTDOWN, true);
 }
 
 bool lib_init()

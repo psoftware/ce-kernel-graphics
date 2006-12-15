@@ -61,6 +61,7 @@
 #define IO_TIPO_GMON		0x6b
 #define IO_TIPO_LKBD		0x6c
 #define IO_TIPO_KMON		0x6d
+#define IO_TIPO_PKBD		0x6e
 
 
 #define DIM_BLOCK 512			// Dimensione del blocco (HD e FD)

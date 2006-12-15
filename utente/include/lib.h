@@ -35,6 +35,7 @@ extern void writevterm_n(int vterm, const char* vetto, int quanti);
 extern void vterm_setcolor(int vterm, int fgcol, int bgcol, bool blink = false);
 extern bool vterm_setresident(int vterm);
 extern void vterm_clear(int vterm);
+extern void vterm_shutdown();
 
 struct vterm_edit_status {
 	int validi;

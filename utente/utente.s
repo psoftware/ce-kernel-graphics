@@ -34,6 +34,7 @@
 .set io_tipo_gmon, 0x6b
 .set io_tipo_lkbd, 0x6c
 .set io_tipo_kmon, 0x6d
+.set io_tipo_pkbd, 0x6e
 
 	.text
 	.global _activate_p
@@ -114,6 +115,11 @@ _vkbd_intr_enable:
 	.global _vkbd_wfi
 _vkbd_wfi:
 	int $io_tipo_wfikbd
+	ret
+
+	.global _vkbd_send
+_vkbd_send:
+	int $io_tipo_pkbd
 	ret
 
 	.global _vkbd_switch

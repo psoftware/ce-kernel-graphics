@@ -49,6 +49,7 @@
 .set io_tipo_gmon,  IO_TIPO_GMON		
 .set io_tipo_lkbd,  IO_TIPO_LKBD
 .set io_tipo_kmon,  IO_TIPO_KMON		
+.set io_tipo_pkbd,  IO_TIPO_PKBD
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -669,6 +670,7 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_gmon	a_vmon_getsize
 	fill_io_gate	io_tipo_lkbd	a_vkbd_leds
 	fill_io_gate	io_tipo_kmon	a_vmon_cursor_shape
+	fill_io_gate	io_tipo_pkbd	a_vkbd_send
 	leave
 	ret
 
@@ -814,4 +816,14 @@ a_vmon_cursor_shape:
 	call _c_vmon_cursor_shape
 	addl $8, %esp
 	carica_reg_rit
+	iret
+
+	.global a_vkbd_send
+	.extern _c_vkbd_send
+a_vkbd_send:
+	salva_registri
+	copia_param 3 7
+	call _c_vkbd_send
+	addl $12, %esp
+	carica_registri
 	iret

@@ -92,7 +92,9 @@ process_body __logger_ctrl(int a)
 	for (;;) {
 		readvterm_n(a, &__logger_ctrl_buf, 1, VTERM_NOECHO);
 		switch (__logger_ctrl_buf) {
-		case 'q':
+		case 'Q':
+			vterm_shutdown();
+			delay(5);
 			__logger_quit = true;
 			__logger_send_cmd(QUIT);
 			*(int *)0 = 1;

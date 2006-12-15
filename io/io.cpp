@@ -416,7 +416,7 @@ inline int circular_sum(int p1, int p2, int mod)
 
 
 const unsigned int VKBD_BUF_SIZE = 20;
-const unsigned int MAX_VKBD = 12;
+const int MAX_VKBD = 12;
 
 struct des_vkbd {
 	int mutex;
@@ -475,12 +475,16 @@ extern "C" void c_vkbd_wfi(int v)
 	sem_signal(k->mutex);
 }
 
-void vkbd_nuovo_car(des_vkbd* k, unsigned short code)
+
+void vkbd_nuovo_car(des_vkbd* k, unsigned short code, bool clear = false)
 {
 	sem_wait(k->mutex);
 
-	if (k->nchar >= VKBD_BUF_SIZE)
+	if (!clear && k->nchar >= VKBD_BUF_SIZE)
 		goto out;
+
+	if (clear) 
+		k->first = k->last = k->nchar = 0;
 
 	k->buf[k->last] = code;
 	k->last = circular_sum(k->last, 1, VKBD_BUF_SIZE);
@@ -501,6 +505,26 @@ void vkbd_putchar(unsigned short code)
 {
 	if (vkbd_active)
 		vkbd_nuovo_car(vkbd_active, code);
+}
+
+extern "C" void c_vkbd_send(int v, unsigned short code, bool clear)
+{
+	if (v < -1 || v >= MAX_VKBD) {
+		flog(LOG_WARN, "vkbd inesistente: %d", v);
+		abort_p();
+	}
+
+	des_vkbd *k;
+
+	if (v == -1) {
+		for (int i = 0; i < MAX_VKBD; i++) {
+			k = &array_desvkbd[i];
+			vkbd_nuovo_car(k, code, clear);
+		}
+	} else {
+		k = &array_desvkbd[v];
+		vkbd_nuovo_car(k, code, clear);
+	}
 }
 
 extern "C" unsigned short c_vkbd_read(int v)
