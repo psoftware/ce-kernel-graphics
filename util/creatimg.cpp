@@ -135,6 +135,8 @@ void bm_free(bm_t *bm, unsigned int pos)
 	bm_clear(bm, pos);
 }
 
+#define CHECKSW(f, b, d)	do { if (!swap->f(b, d)) { fprintf(stderr, "blocco %d: " #f " fallita\n", b); exit(EXIT_FAILURE); } } while(0)
+
 superblock_t superblock;
 direttorio main_dir;
 bm_t blocks;
@@ -200,7 +202,7 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 				pdes_tab->US	  = liv;
 				pdes_tab->P	   = 1;
 			} else {
-				swap->leggi_blocco(pdes_tab->address, &tab);
+				CHECKSW(leggi_blocco, pdes_tab->address, &tab);
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
@@ -212,20 +214,23 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 					}
 					pdes_pag->address = b;
 				} else {
-					swap->leggi_blocco(pdes_pag->address, &pag);
+					CHECKSW(leggi_blocco, pdes_pag->address, &pag);
 				}
 				s->copia_prossima_pagina(&pag);
-				swap->scrivi_blocco(pdes_pag->address, &pag);
+				CHECKSW(scrivi_blocco, pdes_pag->address, &pag);
 			} 
 			pdes_pag->RW |= s->scrivibile();
 			pdes_pag->US |= liv;
 			pdes_pag->P  |= (1 - liv);
-			swap->scrivi_blocco(pdes_tab->address, &tab);
+			CHECKSW(scrivi_blocco, pdes_tab->address, &tab);
 		}
 
 	}
 	fclose(exe);
 }
+
+
+
 
 int main(int argc, char* argv[])
 {
@@ -278,7 +283,7 @@ int main(int argc, char* argv[])
 	descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(last_address)];
 	if (pdes_tab->P) {
 		tabella_pagine tab;
-		swap->leggi_blocco(pdes_tab->address, &tab);
+		CHECKSW(leggi_blocco, pdes_tab->address, &tab);
 		for (int i = indice_tabella(last_address) + 1; i < 1024; i++) {
 			descrittore_pagina *pdes_pag = &tab.entrate[i];
 			pdes_pag->address = 0;
@@ -286,7 +291,7 @@ int main(int argc, char* argv[])
 			pdes_pag->RW	  = 1;
 			pdes_pag->P	  = 0;
 		}
-		swap->scrivi_blocco(pdes_tab->address, &tab);
+		CHECKSW(scrivi_blocco, pdes_tab->address, &tab);
 	}
 	// - quindi, i rimanenti descrittori di tabella:
 	for (int i = indice_direttorio(last_address) + 1;

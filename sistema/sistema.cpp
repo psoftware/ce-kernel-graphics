@@ -2734,7 +2734,6 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 	sem_signal(pf_mutex);
 
 	if (v == 0) {
-		flog(LOG_WARN, "Page fault non risolubile");
 		abort_p();
 	}
 }
