@@ -319,7 +319,7 @@ bool DOSwap::leggi(unsigned int off, void* buf, unsigned int size)
 	const int STEP = 3;
 	char work[BPS];
 
-	if (off + size > p.dim)
+	if (off + size > p.dim * BPS)
 		return false;
 
 	unsigned int fsec = off / BPS;
@@ -352,10 +352,10 @@ bool DOSwap::leggi(unsigned int off, void* buf, unsigned int size)
 
 bool DOSwap::scrivi(unsigned int off, const void* buf, unsigned int size)
 {
-	const int STEP = 3 * BPS;
+	const int STEP = 3;
 	char work[BPS];
 
-	if (off + size > p.dim)
+	if (off + size > p.dim * BPS)
 		return false;
 
 	unsigned int fsec = off / BPS;
