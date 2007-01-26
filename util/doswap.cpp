@@ -94,7 +94,7 @@ Swap* TipoDOSwap::apri(const char *nome)
 		scan = scan->next;
 		i++;
 	}
-	if (i < part || !scan || scan->dim == 0)
+	if (i < part || !scan || scan->dim == 0 || scan->type != 0x3f)
 		return NULL;
 
 	return new DOSwap(scan, drv + 0x80);
