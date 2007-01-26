@@ -90,8 +90,10 @@ Swap* TipoDOSwap::apri(const char *nome)
 		part = atoi(sep + 1);
 	partizione *scan = partizioni[drv];
 	int i = 0;
-	while (i < part && scan)
+	while (i < part && scan) {
 		scan = scan->next;
+		i++;
+	}
 	if (i < part || !scan || scan->dim == 0)
 		return NULL;
 
