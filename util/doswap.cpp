@@ -321,13 +321,12 @@ bool DOSwap::leggi(unsigned int off, void* buf, unsigned int size)
 	const int STEP = 3;
 	char work[BPS];
 
-	off += p.first;
-
 	if (off + size > p.dim * BPS)
 		return false;
 
 	unsigned int fsec = off / BPS;
 	unsigned int skip = off - fsec * BPS;
+	fsec += p.first;
 	if (skip) {
 		if (lba_biosdisk(bios_disk, _DISK_READ, fsec, 1, work))
 			return false;
@@ -359,13 +358,13 @@ bool DOSwap::scrivi(unsigned int off, const void* buf, unsigned int size)
 	const int STEP = 3;
 	char work[BPS];
 
-	off += p.first;
 
 	if (off + size > p.dim * BPS)
 		return false;
 
 	unsigned int fsec = off / BPS;
 	unsigned int skip = off - fsec * BPS;
+	fsec += p.first;
 	if (skip) {
 		if (lba_biosdisk(bios_disk, _DISK_READ, fsec, 1, work))
 			return false;
