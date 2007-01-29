@@ -178,16 +178,17 @@ _kbd:	.long	0x60		// kbd.indreg.iRBR
 	.long	0		// kbd.punt
 	.long	0		// kbd.shift
 	// tabella di conversione
+	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
+	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
+	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x1C
 	// senza shift
-	.byte 0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-','=', '\b', '\t'
-        .byte 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', 0
-        .byte 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\'
-        .byte 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, 0, 0, ' '
+        .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
+        .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
+        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', '\r'
 	// con shift
- 	.byte  0, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0, 0
-        .byte 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0, 0
-        .byte 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0, '|'
-        .byte 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, 0, 0, ' '
+        .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
+        .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
+        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\r'
 
 // Descrittore del video
 	.global _vid		

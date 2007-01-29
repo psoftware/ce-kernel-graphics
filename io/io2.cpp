@@ -320,7 +320,7 @@ struct interfkbd_reg {
 	ind_b iRBR;
 };
 
-const int MAX_CODE = 57; 
+const int MAX_CODE = 27; 
 
 struct des_kbd {
 	interfkbd_reg indreg;
@@ -328,7 +328,9 @@ struct des_kbd {
 	int sincr;
 	char* punt;
 	int shift;
-	char ascii[2][MAX_CODE];
+	char tab[MAX_CODE];
+	char tabmin[MAX_CODE];
+	char tabmai[MAX_CODE];
 };
 
 extern "C" des_kbd kbd;
@@ -357,33 +359,57 @@ extern "C" void c_readkbd(char* pc)
 	sem_signal(p_des->mutex);
 }
 
+unsigned char converti(des_kbd* p_des, unsigned char c) {
+	char cc;
+	int pos = 0;
+	while (pos < MAX_CODE && p_des->tab[pos] != c)
+		pos++;
+	if (pos == MAX_CODE)
+		return 0;
+	if (p_des->shift)
+		cc = p_des->tabmai[pos];
+	else
+		cc = p_des->tabmin[pos];
+	return cc;
+}
+
+
 void estern_kbd(int h)
 {
 	des_kbd *p_des = &kbd;
 	unsigned char c;
-	bool bcode;
+	bool fine;
 
 	for(;;) {
 		halt_inputkbd();
 
 		inputb(p_des->indreg.iRBR, c);
-		bcode = c & 0x80;
-		c &= ~0x80;
 		
-		if (!bcode && c > 0 && c <= MAX_CODE || c == 0x2a) {
-			if (c == 0x2a) 
-				p_des->shift = bcode ? 0 : 1;
-			else {
-				c = p_des->ascii[p_des->shift][c];
-				if (c == '\n')
-					writevid('\r');
-				writevid(c);
-				*p_des->punt = c;
-				sem_signal(p_des->sincr);
+		fine = false;
+		switch (c) {
+		case 0x2a: // left shift make code
+			p_des->shift = 1;
+			break;
+		case 0xaa: // left shift break code
+			p_des->shift = 0;
+			break;
+		default:
+			if (c < 0x80) {
+				c = converti(p_des, c);
+				if (c != 0) {
+					if (c == '\r')
+						writevid('\n');
+					writevid(c);
+					*p_des->punt = c;
+					fine = true;
+				}
 			}
-		} else {
-			go_inputkbd();
+			break;
 		}
+		if (fine) 
+			sem_signal(p_des->sincr);
+		else
+			go_inputkbd();
 		nwfi(master);
 	}
 }
