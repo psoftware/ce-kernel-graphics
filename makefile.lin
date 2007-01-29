@@ -16,6 +16,9 @@ build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 build/io: io/io_s.o io/io_cpp.o
 	ld -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
 
+build/io2: io/io2_s.o io/io2_cpp.o
+	ld -nostdlib -o build/io2 -Ttext $(START_IO) io/io2_s.o io/io2_cpp.o
+
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	ld -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
 
@@ -33,6 +36,13 @@ io/io_s.o: io/io.S include/costanti.h
 
 io/io_cpp.o: io/io.cpp include/costanti.h
 	g++ $(CPPFLAGS) $(CXXFLAGS) -c io/io.cpp -o io/io_cpp.o
+
+# compilazione di io2.s e io2.cpp
+io/io2_s.o: io/io2.S include/costanti.h
+	gcc $(CPPFLAGS) -c io/io2.S -o io/io2_s.o
+
+io/io2_cpp.o: io/io2.cpp include/costanti.h
+	g++ $(CPPFLAGS) $(CXXFLAGS) -c io/io2.cpp -o io/io2_cpp.o
 
 # compilazione di utente.s e utente.cpp
 utente/uten_s.o: utente/utente.s

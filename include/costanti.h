@@ -57,6 +57,7 @@
 #define IO_TIPO_SKBD		0x67
 #define IO_TIPO_SMON		0x68
 #define IO_TIPO_WMON		0x69
+#define IO_TIPO_WVID		IO_TIPO_WMON
 #define IO_TIPO_CMON		0x6a
 #define IO_TIPO_GMON		0x6b
 #define IO_TIPO_LKBD		0x6c

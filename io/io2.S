@@ -178,6 +178,18 @@ _kbd:	.long	0x60		// kbd.indreg.iRBR
 	.long	0		// kbd.punt
 	.long	0		// kbd.shift
 	// tabella di conversione
+	// senza shift
+	.byte '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-','='
+        .byte 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'
+        .byte 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''
+        .byte '`', '\\'
+        .byte 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'
+	// con shift
+ 	.byte  '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+'
+        .byte 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}'
+        .byte 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"'
+        .byte '~', '|'
+        .byte 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?'
 
 // Descrittore del video
 	.global _vid		
@@ -268,7 +280,12 @@ _delay:
 _log:
 	int $tipo_l
 	ret
- 
+
+	.global _writevid
+_writevid:
+	int $io_tipo_wvid
+	ret
+
 ////////////////////////////////////////////////////////////////////////////////
 //                         FUNZIONI DI SUPPORTO                               //
 ////////////////////////////////////////////////////////////////////////////////
@@ -562,6 +579,16 @@ _com_setup:
 
 	ret
 
+	.global _go_inputkbd
+_go_inputkbd:
+	# TODO
+	ret
+
+	.global _halt_inputkbd
+_halt_inputkbd:
+	# TODO
+	ret
+
 // Abilitazione del controllore delle interruzioni ad inoltrare le richieste
 //  provenienti dalla tastiera
 	.global _kbd_enable
@@ -581,8 +608,8 @@ _kbd_enable:
 
 
 // visualizza il cursore nella posizione passata come parametro
-	.global _console_cursor
-_console_cursor:
+	.global _show_cursor
+_show_cursor:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %edx
@@ -619,7 +646,7 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rseln	a_readse_ln
 	fill_io_gate	io_tipo_wsen	a_writese_n
 	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_rkbd	a_readbkd
+	fill_io_gate	io_tipo_rkbd	a_readkbd
 	fill_io_gate	io_tipo_wvid	a_writevid
 	leave
 	ret
@@ -681,7 +708,7 @@ a_readkbd:
 a_writevid:
 	salva_registri
 	copia_param 1 7
-	call _c_vmon_switch
+	call _c_writevid
 	addl $4, %esp
 	carica_registri
 	iret

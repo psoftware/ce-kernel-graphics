@@ -38,8 +38,7 @@ extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void abort_p();
 
-extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
-extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char fg, bool blink);
+extern "C" void writevid(char pc);
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -321,13 +320,13 @@ struct interfkbd_reg {
 	ind_b iRBR;
 };
 
-const int MAX_CODE = 10; // FIXME
+const int MAX_CODE = 47; 
 
 struct des_kbd {
 	interfkbd_reg indreg;
 	int mutex;
 	int sincr;
-	ind_b punt;
+	char* punt;
 	int shift;
 	char ascii[MAX_CODE][2];
 };
@@ -335,12 +334,20 @@ struct des_kbd {
 extern "C" des_kbd kbd;
 
 extern "C" void abilita_tastiera(void);
+extern "C" void halt_inputkbd();
+extern "C" void go_inputkbd();
+
+void startkbd_in(des_kbd* p_des, char* pc)
+{
+	p_des->punt = pc;
+	go_inputkbd();
+}
 
 extern "C" void c_readkbd(char* pc)
 {
 	des_kbd *p_des;
 
-	if(!verifica_area(c, 1, true))
+	if(!verifica_area(pc, 1, true))
 		abort_p();
 
 	p_des = &kbd;
@@ -363,11 +370,11 @@ void estern_kbd(int h)
 		bcode = c & 0x80;
 		c &= ~0x80;
 		
-		if (!bcode || c == 0x2a) {
+		if (!bcode && c >0 && c <= MAX_CODE || c == 0x2a) {
 			if (c == 0x2a) 
-				shift = bcode ? 0 : 1;
+				p_des->shift = bcode ? 0 : 1;
 			else {
-				c = ascii[c][shift];
+				c = p_des->ascii[c][p_des->shift];
 				if (c == '\n')
 					writevid('\r');
 				writevid(c);
@@ -426,26 +433,26 @@ extern "C" des_vid vid;
 
 extern "C" void show_cursor(int x, int y);
 
-bool vmon_init()
+bool vid_init()
 {
 	des_vid *p_des = &vid;
 	if ( (p_des->mutex = sem_ini(1)) == 0) {
 		flog(LOG_ERR, "vid: impossibile creare mutex");
 		return false;
 	}
-	for (int i = 0; i < VIDEO_SIZE) 
-		video[i] = ' ' | p_des->attr << 8;
+	for (int i = 0; i < VIDEO_SIZE; i++) 
+		p_des->video[i] = ' ' | p_des->attr << 8;
 	show_cursor(p_des->x, p_des->y);
-	flog(LOG_INFO, "vid: video inizializzato", MAX_VKBD);
+	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
 }
 
 void scroll(des_vid *p_des)
 {
 	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
-		video[i] = video[i + COLS];
+		p_des->video[i] = p_des->video[i + COLS];
 	for (int i = 0; i < COLS; i++)
-		video[VIDEO_SIZE - COLS + i] = ' ' | p_des->attr << 8;
+		p_des->video[VIDEO_SIZE - COLS + i] = ' ' | p_des->attr << 8;
 	p_des->y--;
 }
 
@@ -464,7 +471,7 @@ extern "C" void c_writevid(char c)
 			scroll(p_des);
 		break;
 	default:
-		video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
+		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
 		p_des->x++;
 		if (p_des->x >= COLS) {
 			p_des->x = 0;
@@ -675,11 +682,11 @@ extern "C" int cmain(void)
 	fill_io_gates();
 	if (!kbd_init())
 		return -1;
-	if (!vkbd_init())
+	if (!kbd_init())
 		return -2;
 	if (!com_init())
 		return -3;
-	if (!vmon_init())
+	if (!vid_init())
 		return -4;
 
 	return 0;
