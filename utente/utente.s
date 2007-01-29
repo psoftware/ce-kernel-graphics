@@ -30,6 +30,7 @@
 .set io_tipo_skbd, 0x67
 .set io_tipo_smon, 0x68
 .set io_tipo_wmon, 0x69
+.set io_tipo_wvid, 0x69
 .set io_tipo_cmon, 0x6a
 .set io_tipo_gmon, 0x6b
 .set io_tipo_lkbd, 0x6c
@@ -100,6 +101,16 @@ _writese_n:
 	.global _writese_0
 _writese_0:
 	int $io_tipo_wse0
+	ret
+
+	.global _readkbd
+_readkbd:
+	int $io_tipo_rkbd
+	ret
+
+	.global _writevid
+_writevid:
+	int $io_tipo_wvid
 	ret
 
 	.global _vkbd_read

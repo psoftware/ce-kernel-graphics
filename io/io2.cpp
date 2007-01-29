@@ -320,7 +320,7 @@ struct interfkbd_reg {
 	ind_b iRBR;
 };
 
-const int MAX_CODE = 47; 
+const int MAX_CODE = 57; 
 
 struct des_kbd {
 	interfkbd_reg indreg;
@@ -328,7 +328,7 @@ struct des_kbd {
 	int sincr;
 	char* punt;
 	int shift;
-	char ascii[MAX_CODE][2];
+	char ascii[2][MAX_CODE];
 };
 
 extern "C" des_kbd kbd;
@@ -370,11 +370,11 @@ void estern_kbd(int h)
 		bcode = c & 0x80;
 		c &= ~0x80;
 		
-		if (!bcode && c >0 && c <= MAX_CODE || c == 0x2a) {
+		if (!bcode && c > 0 && c <= MAX_CODE || c == 0x2a) {
 			if (c == 0x2a) 
 				p_des->shift = bcode ? 0 : 1;
 			else {
-				c = p_des->ascii[c][p_des->shift];
+				c = p_des->ascii[p_des->shift][c];
 				if (c == '\n')
 					writevid('\r');
 				writevid(c);
@@ -431,7 +431,7 @@ struct des_vid {
 
 extern "C" des_vid vid;
 
-extern "C" void show_cursor(int x, int y);
+extern "C" void show_cursor(int offset);
 
 bool vid_init()
 {
@@ -442,7 +442,7 @@ bool vid_init()
 	}
 	for (int i = 0; i < VIDEO_SIZE; i++) 
 		p_des->video[i] = ' ' | p_des->attr << 8;
-	show_cursor(p_des->x, p_des->y);
+	show_cursor(p_des->y * COLS + p_des->x);
 	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
 }
@@ -481,7 +481,7 @@ extern "C" void c_writevid(char c)
 			scroll(p_des);
 		break;
 	}
-	show_cursor(p_des->x, p_des->y);
+	show_cursor(p_des->y * COLS + p_des->x);
 	sem_signal(p_des->mutex);
 }
 
@@ -682,8 +682,6 @@ extern "C" int cmain(void)
 	fill_io_gates();
 	if (!kbd_init())
 		return -1;
-	if (!kbd_init())
-		return -2;
 	if (!com_init())
 		return -3;
 	if (!vid_init())

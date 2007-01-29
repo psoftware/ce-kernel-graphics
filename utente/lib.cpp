@@ -337,9 +337,9 @@ vterm_map vterm_maps[128] = {
 	{ vterm_decode, 20 }, // 0x17 i
 	{ vterm_decode, 21 }, // 0x18 o
 	{ vterm_decode, 22 }, // 0x19 p
-	{ vterm_decode, 23 }, // 0x1a {
-	{ vterm_decode, 24 }, // 0x1b }
-	{ vterm_decode, 61 }, // 0x1c 
+	{ vterm_decode, 23 }, // 0x1a [
+	{ vterm_decode, 24 }, // 0x1b ]
+	{ vterm_decode, 61 }, // 0x1c enter
 	{ vterm_modif,  VTERM_MODIF_CTRL }, // 0x1d Lctrl
 	{ vterm_decode, 25 }, // 0x1e a
 	{ vterm_decode, 26 }, // 0x1f s

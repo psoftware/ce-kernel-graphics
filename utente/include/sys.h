@@ -104,6 +104,9 @@ extern "C" void log(log_sev sev, const char* msg, int quanti);
 
 extern "C" int resident(void* start, int quanti);
 
+extern "C" void readkbd(char* pc);
+extern "C" void writevid(char c);
+
 // Costanti
 //
 const int LIV_SISTEMA = 0, LIV_UTENTE = 3;

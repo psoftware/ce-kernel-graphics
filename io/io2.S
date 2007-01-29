@@ -179,25 +179,23 @@ _kbd:	.long	0x60		// kbd.indreg.iRBR
 	.long	0		// kbd.shift
 	// tabella di conversione
 	// senza shift
-	.byte '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-','='
-        .byte 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'
-        .byte 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''
-        .byte '`', '\\'
-        .byte 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'
+	.byte 0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-','=', '\b', '\t'
+        .byte 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', 0
+        .byte 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\'
+        .byte 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, 0, 0, ' '
 	// con shift
- 	.byte  '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+'
-        .byte 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}'
-        .byte 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"'
-        .byte '~', '|'
-        .byte 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?'
+ 	.byte  0, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0, 0
+        .byte 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0, 0
+        .byte 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0, '|'
+        .byte 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, 0, 0, ' '
 
 // Descrittore del video
 	.global _vid		
-_vid:	.long	0xb80000	// vid.video
+_vid:	.long	0xb8000 	// vid.video
 	.long	0		// vid.x
 	.long	0		// vid.y
 	.long	0		// vid.mutex
-	.byte	0		// vid.attr FIXME
+	.byte	0x4f		// vid.attr FIXME
 	.byte	0,0,0		// padding
 
 
@@ -698,9 +696,11 @@ a_writese_0:
 	.global a_readkbd
 	.extern _c_readkbd
 a_readkbd:
-	salva_reg_rit
+	salva_registri
+	copia_param 1 7
 	call _c_readkbd
-	carica_reg_rit
+	addl $4, %esp
+	carica_registri
 	iret
 
 	.global a_writevid
