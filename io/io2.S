@@ -193,11 +193,11 @@ _kbd:	.long	0x60		// kbd.indreg.iRBR
 // Descrittore del video
 	.global _vid		
 _vid:	.long	0xb8000 	// vid.video
-	.long	0		// vid.x
-	.long	0		// vid.y
 	.long	0		// vid.mutex
-	.byte	0x4f		// vid.attr FIXME
-	.byte	0,0,0		// padding
+	.byte	0x4b		// vid.attr FIXME
+	.byte	0		// vid.x
+	.byte   0		// vid.y
+	.byte	0		// padding
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -601,39 +601,40 @@ _kbd_enable:
 // della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
-.set CUR_START, 0x0a
-.set ADD_P, 0x03d4
-.set DAT_P, 0x03d5
+.set IND, 0x03d4
+.set DAT, 0x03d5
 
 
 // visualizza il cursore nella posizione passata come parametro
-	.global _show_cursor
-_show_cursor:
+	.global _cursore
+_cursore:
 	pushl %ebp
 	movl %esp, %ebp
-	pushl %edx
 	pushl %eax
-
-	movw $ADD_P, %dx
-	movb $CUR_HIGH, %al
-	outb %al, %dx
-	movw $DAT_P, %dx
-	movw 8(%ebp), %ax
-	movb %ah, %al
-	outb %al, %dx
-	movw $ADD_P, %dx
-	movb $CUR_LOW, %al
-	outb %al, %dx
-	movw $DAT_P, %dx
-	movw 8(%ebp), %ax
-	outb %al, %dx
-
-	popl %eax
-	popl %edx
+	pushl %ebx
+	pushl %edx
+	movb  $80, %al
+	mulb  12(%ebp)
+	addb  8(%ebp), %al
+	adcb  $0, %ah
+	movw  %ax, %bx 	
+	movw  $IND, %dx
+	movb  $CUR_HIGH, %al
+	outb  %al, %dx
+	movw  $DAT, %dx
+	movb  %bh, %al
+	outb  %al, %dx
+	movw  $IND, %dx
+	movb  $CUR_LOW, %al
+	outb  %al, %dx
+	movw  $DAT, %dx
+	movb  %bl, %al
+	outb  %al, %dx
+	popl  %edx
+	popl  %ebx
+	popl  %eax
 	leave
 	ret
-
-
 
 // Inizializzazione dei gate per le primitive di IO
 	.global _fill_io_gates

@@ -450,14 +450,14 @@ const int VIDEO_SIZE = COLS * ROWS;
 // descrittore di monitor
 struct des_vid {
 	unsigned short* video;
-	int x, y;
 	int mutex;
 	unsigned char attr;
+	char x, y;
 };
 
 extern "C" des_vid vid;
 
-extern "C" void show_cursor(int offset);
+extern "C" void cursore(char x, char y);
 
 bool vid_init()
 {
@@ -467,8 +467,8 @@ bool vid_init()
 		return false;
 	}
 	for (int i = 0; i < VIDEO_SIZE; i++) 
-		p_des->video[i] = ' ' | p_des->attr << 8;
-	show_cursor(p_des->y * COLS + p_des->x);
+		p_des->video[i] = 0 | p_des->attr << 8;
+	cursore(p_des->x, p_des->y);
 	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
 }
@@ -507,7 +507,7 @@ extern "C" void c_writevid(char c)
 			scroll(p_des);
 		break;
 	}
-	show_cursor(p_des->y * COLS + p_des->x);
+	cursore(p_des->x, p_des->y);
 	sem_signal(p_des->mutex);
 }
 
