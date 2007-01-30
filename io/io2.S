@@ -172,29 +172,31 @@ _com:	.long	0x03f8		// com[0].indreg.iRBR
 // Descrittore della tastiera
 	.global _kbd		
 _kbd:	.long	0x60		// kbd.indreg.iRBR
-	// interrupt?
+	.long	0x64		// kbd.indreg.iCMR
 	.long	0		// kbd.mutex
 	.long	0		// kbd.sincr
 	.long	0		// kbd.punt
 	.long	0		// kbd.shift
-	// tabella di conversione
+	// tab
 	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
 	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
 	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x1C
-	// senza shift
+	// tabmin
         .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
         .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
         .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', '\r'
-	// con shift
+	// tabmai
         .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
         .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
         .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\r'
 
 // Descrittore del video
 	.global _vid		
-_vid:	.long	0xb8000 	// vid.video
+_vid:	.long	0x03D4		// vid.indreg.iIND
+	.long	0x03D5		// vid.indreg.iDAT
+	.long	0xb8000 	// vid.video
 	.long	0		// vid.mutex
-	.byte	0x4b		// vid.attr FIXME
+	.byte   0x4b		// vid.attr
 	.byte	0		// vid.x
 	.byte   0		// vid.y
 	.byte	0		// padding
@@ -578,14 +580,59 @@ _com_setup:
 
 	ret
 
+.set KBD_WCB,	0x60
+.set KBD_RCB,	0x20
+
+.macro wait_kbd_out
+1:	inb $0x64, %al	  // leggi stato
+	testb $0x02, %al  // busy?
+	jnz 1b
+.endm
+
 	.global _go_inputkbd
 _go_inputkbd:
-	# TODO
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movw 12(%ebp), %dx
+	movb $KBD_WCB, %al
+	outb %al, %dx
+	movw 8(%ebp), %dx
+	movb $0x61, %al
+	outb %al, %dx
+	movw 12(%ebp), %dx
+1:	inb %dx, %al	
+	testb $0x02, %al
+	jnz 1b
+
+	popl %eax
+	leave
+	ret
+	
+	
 	ret
 
 	.global _halt_inputkbd
 _halt_inputkbd:
-	# TODO
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movw 12(%ebp), %dx
+	movb $KBD_WCB, %al
+	outb %al, %dx
+	movw 8(%ebp), %dx
+	movb $0x60, %al
+	outb %al, %dx
+	movw 12(%ebp), %dx
+1:	inb %dx, %al	 
+	testb $0x02, %al 
+	jnz 1b
+
+	popl %eax
+	leave
+	ret
 	ret
 
 // Abilitazione del controllore delle interruzioni ad inoltrare le richieste
@@ -601,7 +648,6 @@ _kbd_enable:
 // della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
-.set IND, 0x03d4
 .set DAT, 0x03d5
 
 
@@ -614,20 +660,20 @@ _cursore:
 	pushl %ebx
 	pushl %edx
 	movb  $80, %al
-	mulb  12(%ebp)
-	addb  8(%ebp), %al
+	mulb  20(%ebp)
+	addb  16(%ebp), %al
 	adcb  $0, %ah
 	movw  %ax, %bx 	
-	movw  $IND, %dx
+	movw  8(%ebp), %dx
 	movb  $CUR_HIGH, %al
 	outb  %al, %dx
-	movw  $DAT, %dx
+	movw  12(%ebp), %dx
 	movb  %bh, %al
 	outb  %al, %dx
-	movw  $IND, %dx
+	movw  8(%ebp), %dx
 	movb  $CUR_LOW, %al
 	outb  %al, %dx
-	movw  $DAT, %dx
+	movw  12(%ebp), %dx
 	movb  %bl, %al
 	outb  %al, %dx
 	popl  %edx

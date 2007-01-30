@@ -316,18 +316,19 @@ bool com_init()
 //                         GESTIONE DELLA TASTIERA                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-struct interfkbd_reg {
-	ind_b iRBR;
-};
-
 const int MAX_CODE = 27; 
+
+struct interfkbd_reg {
+	union { ind_b iRBR; ind_b iTBR; };
+	union { ind_b iCMR; ind_b iSTR; };
+};
 
 struct des_kbd {
 	interfkbd_reg indreg;
 	int mutex;
 	int sincr;
 	char* punt;
-	int shift;
+	bool shift;
 	char tab[MAX_CODE];
 	char tabmin[MAX_CODE];
 	char tabmai[MAX_CODE];
@@ -336,13 +337,13 @@ struct des_kbd {
 extern "C" des_kbd kbd;
 
 extern "C" void abilita_tastiera(void);
-extern "C" void halt_inputkbd();
-extern "C" void go_inputkbd();
+extern "C" void halt_inputkbd(interfkbd_reg indreg);
+extern "C" void go_inputkbd(interfkbd_reg indreg);
 
 void startkbd_in(des_kbd* p_des, char* pc)
 {
 	p_des->punt = pc;
-	go_inputkbd();
+	go_inputkbd(p_des->indreg);
 }
 
 extern "C" void c_readkbd(char* pc)
@@ -381,17 +382,17 @@ void estern_kbd(int h)
 	bool fine;
 
 	for(;;) {
-		halt_inputkbd();
+		halt_inputkbd(p_des->indreg);
 
 		inputb(p_des->indreg.iRBR, c);
 		
 		fine = false;
 		switch (c) {
 		case 0x2a: // left shift make code
-			p_des->shift = 1;
+			p_des->shift = true;
 			break;
 		case 0xaa: // left shift break code
-			p_des->shift = 0;
+			p_des->shift = false;
 			break;
 		default:
 			if (c < 0x80) {
@@ -409,7 +410,7 @@ void estern_kbd(int h)
 		if (fine) 
 			sem_signal(p_des->sincr);
 		else
-			go_inputkbd();
+			go_inputkbd(p_des->indreg);
 		nwfi(master);
 	}
 }
@@ -447,8 +448,13 @@ const int COLS = 80;
 const int ROWS = 25;
 const int VIDEO_SIZE = COLS * ROWS;
 
+struct interfvid_reg {
+	ind_b iIND, iDAT;
+};
+
 // descrittore di monitor
 struct des_vid {
+	interfvid_reg indreg;
 	unsigned short* video;
 	int mutex;
 	unsigned char attr;
@@ -457,7 +463,7 @@ struct des_vid {
 
 extern "C" des_vid vid;
 
-extern "C" void cursore(char x, char y);
+extern "C" void cursore(ind_b iIND, ind_b iDAT, char x, char y);
 
 bool vid_init()
 {
@@ -468,7 +474,8 @@ bool vid_init()
 	}
 	for (int i = 0; i < VIDEO_SIZE; i++) 
 		p_des->video[i] = 0 | p_des->attr << 8;
-	cursore(p_des->x, p_des->y);
+	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
+		p_des->x, p_des->y);
 	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
 }
@@ -478,7 +485,7 @@ void scroll(des_vid *p_des)
 	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
 		p_des->video[i] = p_des->video[i + COLS];
 	for (int i = 0; i < COLS; i++)
-		p_des->video[VIDEO_SIZE - COLS + i] = ' ' | p_des->attr << 8;
+		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
 	p_des->y--;
 }
 
@@ -507,7 +514,8 @@ extern "C" void c_writevid(char c)
 			scroll(p_des);
 		break;
 	}
-	cursore(p_des->x, p_des->y);
+	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
+		p_des->x, p_des->y);
 	sem_signal(p_des->mutex);
 }
 
