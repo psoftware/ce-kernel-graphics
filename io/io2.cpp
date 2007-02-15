@@ -313,10 +313,10 @@ bool com_init()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE DELLA TASTIERA                            //
+//                         GESTIONE DELLA CONSOLE                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-const int MAX_CODE = 27; 
+const int MAX_CODE = 29; 
 
 struct interfkbd_reg {
 	union { ind_b iRBR; ind_b iTBR; };
@@ -325,42 +325,67 @@ struct interfkbd_reg {
 
 struct des_kbd {
 	interfkbd_reg indreg;
-	int mutex;
-	int sincr;
 	char* punt;
+	int cont;
 	bool shift;
 	char tab[MAX_CODE];
 	char tabmin[MAX_CODE];
 	char tabmai[MAX_CODE];
 };
 
-extern "C" des_kbd kbd;
+const int COLS = 80;
+const int ROWS = 25;
+const int VIDEO_SIZE = COLS * ROWS;
+
+struct interfvid_reg {
+	ind_b iIND, iDAT;
+};
+
+struct des_vid {
+	interfvid_reg indreg;
+	unsigned short* video;
+	unsigned char attr;
+	char x, y;
+};
+
+struct des_console {
+	int mutex;
+	int sincr;
+	des_kbd kbd;
+	des_vid vid;
+};
+
+extern "C" des_console console;
 
 extern "C" void abilita_tastiera(void);
 extern "C" void halt_inputkbd(interfkbd_reg indreg);
 extern "C" void go_inputkbd(interfkbd_reg indreg);
+void writevid_n(const char* c, int quanti);
 
-void startkbd_in(des_kbd* p_des, char* pc)
+void startkbd_in(des_kbd* p_des, char* buff)
 {
-	p_des->punt = pc;
+	p_des->punt = buff;
+	p_des->cont = 80;
 	go_inputkbd(p_des->indreg);
 }
 
-extern "C" void c_readkbd(char* pc)
+extern "C" void c_readconsole(char* buff, int& quanti)
 {
-	des_kbd *p_des;
+	des_console *p_des;
 
-	if(!verifica_area(pc, 1, true))
+	if(!verifica_area(buff, 80, true) ||
+	   !verifica_area(&quanti, 1, true))
 		abort_p();
 
-	p_des = &kbd;
+	p_des = &console;
 	sem_wait(p_des->mutex);
-	startkbd_in(p_des, pc);
+	startkbd_in(&p_des->kbd, buff);
 	sem_wait(p_des->sincr);
+	quanti = p_des->kbd.cont;
 	sem_signal(p_des->mutex);
 }
 
-unsigned char converti(des_kbd* p_des, unsigned char c) {
+char converti(des_kbd* p_des, unsigned char c) {
 	char cc;
 	int pos = 0;
 	while (pos < MAX_CODE && p_des->tab[pos] != c)
@@ -377,40 +402,57 @@ unsigned char converti(des_kbd* p_des, unsigned char c) {
 
 void estern_kbd(int h)
 {
-	des_kbd *p_des = &kbd;
+	des_console *p_des = &console;
 	unsigned char c;
+	char a;
 	bool fine;
 
 	for(;;) {
-		halt_inputkbd(p_des->indreg);
+		halt_inputkbd(p_des->kbd.indreg);
 
-		inputb(p_des->indreg.iRBR, c);
+		inputb(p_des->kbd.indreg.iRBR, c);
 		
 		fine = false;
 		switch (c) {
 		case 0x2a: // left shift make code
-			p_des->shift = true;
+			p_des->kbd.shift = true;
 			break;
 		case 0xaa: // left shift break code
-			p_des->shift = false;
+			p_des->kbd.shift = false;
 			break;
 		default:
 			if (c < 0x80) {
-				c = converti(p_des, c);
-				if (c != 0) {
-					if (c == '\r')
-						writevid('\n');
-					writevid(c);
-					*p_des->punt = c;
+				a = converti(&p_des->kbd, c);
+				if (a == 0)
+					break;
+				if (a == '\b') {
+					if (p_des->kbd.cont < 80) {
+						p_des->kbd.punt--;
+						p_des->kbd.cont++;
+						writevid_n("\b \b", 3);
+					}
+				} else if (a == '\r' || a == '\n') {
 					fine = true;
+					p_des->kbd.cont = 80 - p_des->kbd.cont;
+					*p_des->kbd.punt = 0;
+					writevid_n("\r\n", 2);
+				} else {
+					*p_des->kbd.punt = a;
+					p_des->kbd.punt++;
+					p_des->kbd.cont--;
+					writevid_n(&a, 1);
+					if (p_des->kbd.cont == 0) {
+						fine = true;
+						p_des->kbd.cont = 80;
+					}
 				}
 			}
 			break;
 		}
-		if (fine) 
+		if (fine == true) 
 			sem_signal(p_des->sincr);
 		else
-			go_inputkbd(p_des->indreg);
+			go_inputkbd(p_des->kbd.indreg);
 		nwfi(master);
 	}
 }
@@ -421,15 +463,7 @@ extern "C" void kbd_enable();
 
 bool kbd_init()
 {
-	des_kbd *p_des = &kbd;
-	if ( (p_des->mutex = sem_ini(1)) == 0) {
-		flog(LOG_ERR, "kbd: impossibile creare mutex");
-		return false;
-	}
-	if ( (p_des->sincr = sem_ini(0)) == 0) {
-		flog(LOG_ERR, "kbd: impossibile creare sincr");
-		return false;
-	}
+	des_kbd *p_des = &console.kbd;
 	if (activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ) == 0) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
@@ -440,44 +474,33 @@ bool kbd_init()
 	return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//  MONITOR 								     //
-///////////////////////////////////////////////////////////////////////////////
-
-const int COLS = 80;
-const int ROWS = 25;
-const int VIDEO_SIZE = COLS * ROWS;
-
-struct interfvid_reg {
-	ind_b iIND, iDAT;
-};
-
-// descrittore di monitor
-struct des_vid {
-	interfvid_reg indreg;
-	unsigned short* video;
-	int mutex;
-	unsigned char attr;
-	char x, y;
-};
-
 extern "C" des_vid vid;
 
 extern "C" void cursore(ind_b iIND, ind_b iDAT, char x, char y);
 
 bool vid_init()
 {
-	des_vid *p_des = &vid;
-	if ( (p_des->mutex = sem_ini(1)) == 0) {
-		flog(LOG_ERR, "vid: impossibile creare mutex");
-		return false;
-	}
+	des_vid *p_des = &console.vid;
 	for (int i = 0; i < VIDEO_SIZE; i++) 
 		p_des->video[i] = 0 | p_des->attr << 8;
 	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
 		p_des->x, p_des->y);
 	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
+}
+
+bool console_init() {
+	des_console *p_des = &console;
+
+	if ( (p_des->mutex = sem_ini(1)) == 0) {
+		flog(LOG_ERR, "kbd: impossibile creare mutex");
+		return false;
+	}
+	if ( (p_des->sincr = sem_ini(0)) == 0) {
+		flog(LOG_ERR, "kbd: impossibile creare sincr");
+		return false;
+	}
+	return kbd_init() && vid_init();
 }
 
 void scroll(des_vid *p_des)
@@ -489,11 +512,8 @@ void scroll(des_vid *p_des)
 	p_des->y--;
 }
 
-
-extern "C" void c_writevid(char c)
-{
-	des_vid *p_des = &vid;
-	sem_wait(p_des->mutex);
+void writechar(char c) {
+	des_vid* p_des = &console.vid;
 	switch (c) {
 	case '\r':
 		p_des->x = 0;
@@ -502,6 +522,15 @@ extern "C" void c_writevid(char c)
 		p_des->y++;
 		if (p_des->y >= ROWS)
 			scroll(p_des);
+		break;
+	case '\b':
+		if (p_des->x > 0 || p_des->y > 0) {
+			p_des->x--;
+			if (p_des->x < 0) {
+				p_des->x = COLS - 1;
+				p_des->y--;
+			}
+		}
 		break;
 	default:
 		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
@@ -516,6 +545,23 @@ extern "C" void c_writevid(char c)
 	}
 	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
 		p_des->x, p_des->y);
+}
+
+void writevid_n(const char* buff, int quanti)
+{
+	for (int i = 0; i < quanti; i++) 
+		writechar(buff[i]);
+}
+
+extern "C" void c_writeconsole(char* buff)
+{
+	des_console *p_des = &console;
+	sem_wait(p_des->mutex);
+	while (*buff != 0) {
+		writechar(*buff);
+		buff++;
+	}
+	writevid_n("\r\n", 2);
 	sem_signal(p_des->mutex);
 }
 
@@ -714,12 +760,10 @@ extern "C" int cmain(void)
 	int error;
 
 	fill_io_gates();
-	if (!kbd_init())
+	if (!console_init())
 		return -1;
 	if (!com_init())
 		return -3;
-	if (!vid_init())
-		return -4;
 
 	return 0;
 }

@@ -103,13 +103,13 @@ _writese_0:
 	int $io_tipo_wse0
 	ret
 
-	.global _readkbd
-_readkbd:
+	.global _readconsole
+_readconsole:
 	int $io_tipo_rkbd
 	ret
 
-	.global _writevid
-_writevid:
+	.global _writeconsole
+_writeconsole:
 	int $io_tipo_wvid
 	ret
 

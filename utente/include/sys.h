@@ -104,8 +104,8 @@ extern "C" void log(log_sev sev, const char* msg, int quanti);
 
 extern "C" int resident(void* start, int quanti);
 
-extern "C" void readkbd(char* pc);
-extern "C" void writevid(char c);
+extern "C" void readconsole(char* buff, int& quanti);
+extern "C" void writeconsole(char* buff);
 
 // Costanti
 //

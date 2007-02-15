@@ -169,33 +169,33 @@ _com:	.long	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].funzione
 	.long	0		// com[1].stato
 
-// Descrittore della tastiera
-	.global _kbd		
-_kbd:	.long	0x60		// kbd.indreg.iRBR
+// descrittore console
+	.global _console		
+_console:
+	.long	0		// mutex
+	.long	0		// sincr
+	// descrittore tastiera
+	.long	0x60		// kbd.indreg.iRBR
 	.long	0x64		// kbd.indreg.iCMR
-	.long	0		// kbd.mutex
-	.long	0		// kbd.sincr
 	.long	0		// kbd.punt
-	.long	0		// kbd.shift
+	.long   0		// kbd.cont
+	.byte	0		// kbd.shift
 	// tab
 	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
 	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
-	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x1C
+	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x39, 0x1C, 0x0e
 	// tabmin
         .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
         .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
-        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', '\r'
+        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '\r', '\b'
 	// tabmai
         .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
         .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
-        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', '\r'
-
-// Descrittore del video
-	.global _vid		
-_vid:	.long	0x03D4		// vid.indreg.iIND
+        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\n', '\b'
+	// Descrittore del video
+	.long	0x03D4		// vid.indreg.iIND
 	.long	0x03D5		// vid.indreg.iDAT
 	.long	0xb8000 	// vid.video
-	.long	0		// vid.mutex
 	.byte   0x4b		// vid.attr
 	.byte	0		// vid.x
 	.byte   0		// vid.y
@@ -692,8 +692,8 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rseln	a_readse_ln
 	fill_io_gate	io_tipo_wsen	a_writese_n
 	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_rkbd	a_readkbd
-	fill_io_gate	io_tipo_wvid	a_writevid
+	fill_io_gate	io_tipo_rkbd	a_readconsole
+	fill_io_gate	io_tipo_wvid	a_writeconsole
 	leave
 	ret
 
@@ -741,22 +741,22 @@ a_writese_0:
 	carica_registri
 	iret
 
-	.global a_readkbd
-	.extern _c_readkbd
-a_readkbd:
+	.global a_readconsole
+	.extern _c_readconsole
+a_readconsole:
 	salva_registri
-	copia_param 1 7
-	call _c_readkbd
-	addl $4, %esp
+	copia_param 2 7
+	call _c_readconsole
+	addl $8, %esp
 	carica_registri
 	iret
 
-	.global a_writevid
-	.extern _c_writevid
-a_writevid:
+	.global a_writeconsole
+	.extern _c_writeconsole
+a_writeconsole:
 	salva_registri
 	copia_param 1 7
-	call _c_writevid
+	call _c_writeconsole
 	addl $4, %esp
 	carica_registri
 	iret
