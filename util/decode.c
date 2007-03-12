@@ -81,12 +81,12 @@ int main(int argc, char* argv[])
 	case 'b':
 		record = 0;
 		last_bit = -1;
-		while(record <= 4096) {
-			if (record < 4096 && (bit = get_bit()) == last_bit)
+		while(record <= 4096*32) {
+			if (record < 4096*32 && (bit = get_bit()) == last_bit)
 				count[bit]++;
 			else {
 				if (last_bit >= 0) {
-					printf("%4d+%4d: %s\n", record-count[last_bit], count[last_bit],
+					printf("%6d+%6d: %s\n", record-count[last_bit], count[last_bit],
 							last_bit ? "liberi" : "occupati");
 					count[last_bit] = 0;
 				}
