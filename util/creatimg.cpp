@@ -284,7 +284,8 @@ int main(int argc, char* argv[])
 	if (pdes_tab->P) {
 		tabella_pagine tab;
 		CHECKSW(leggi_blocco, pdes_tab->address, &tab);
-		for (int i = indice_tabella(last_address) + 1; i < 1024; i++) {
+		int primo_indice = indice_tabella(last_address) + (last_address % SIZE_PAGINA ? 1 : 0);
+		for (int i = primo_indice; i < 1024; i++) {
 			descrittore_pagina *pdes_pag = &tab.entrate[i];
 			pdes_pag->address = 0;
 			pdes_pag->US	  = 1;
