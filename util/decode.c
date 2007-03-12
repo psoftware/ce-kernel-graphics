@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 struct descrittore_pagina {
 	// byte di accesso
@@ -10,23 +11,94 @@ struct descrittore_pagina {
 	unsigned int A:		1;	// Accessed
 	unsigned int D:		1;	// Dirty
 	unsigned int pgsz:	1;	// non visto a lezione
-	unsigned int global:	1;	// non visto a lezione
 	// fine byte di accesso
 
-	unsigned int avail:	2;	// non usato
-	unsigned int preload:	1;	// la pag. deve essere precaricata
+	unsigned int global:	1;	// non visto a lezione
+	unsigned int avail:	3;	// non usato
 
 	unsigned int address:	20;	// indirizzo fisico/blocco
 };
 
-int main()
+struct superblock_t {
+	char		magic[4];
+	unsigned int	bm_start;
+	int		blocks;
+	unsigned int	directory;
+	int		(*user_entry)(int);
+	void*		user_end;
+	int		(*io_entry)(int);
+	void*		io_end;
+	unsigned int	checksum;
+};
+
+int get_bit() {
+	static int nbit = 0;
+	static unsigned int bitmap = 0;
+	int bit;
+	if (nbit == 0) {
+		fread(&bitmap, sizeof(bitmap), 1, stdin);
+		nbit = sizeof(bitmap) * 8;
+	}
+	bit = bitmap & 1;
+	bitmap >>= 1;
+	nbit--;
+	return bit;
+}
+
+int main(int argc, char* argv[])
 {
 	struct descrittore_pagina p;
+	struct superblock_t sb;
+	char buf[512];
 	int record = 0;
+	int count[2];
+	int bit, last_bit;
 
-	while (fread(&p, sizeof(p), 1, stdin)) {
-		printf("%4d: P=%d RW=%d US=%d preload=%d address=%d\n",
-			record++, p.P, p.RW, p.US, p.preload, p.address);
+	if (argc != 2) {
+		fprintf(stderr, "Uso: %s [p|s|b]\n", argv[0]);
+		exit(1);
+	}
+	switch (argv[1][0]) {
+	case 'p':
+		while (fread(&p, sizeof(p), 1, stdin)) {
+			printf("%4d: P=%d RW=%d US=%d address=%d\n",
+				record++, p.P, p.RW, p.US, p.address);
+		}
+		break;
+	case 's':
+		fread(buf, 512, 1, stdin);
+		fread(&sb, sizeof(sb), 1, stdin);
+		printf("magic: %c%c%c%c\n", sb.magic[0], sb.magic[1], sb.magic[2], sb.magic[3]);
+		printf("bm_start: %d\n", sb.bm_start);
+		printf("blocks: %d\n", sb.blocks);
+		printf("directory: %d\n", sb.directory);
+		printf("user_entry: %x\n", sb.user_entry);
+		printf("user_end: %x\n", sb.user_end);
+		printf("io_entry: %x\n", sb.io_entry);
+		printf("io_end: %x\n", sb.io_end);
+		printf("checksum: %u\n", sb.checksum);
+		break;
+	case 'b':
+		record = 0;
+		last_bit = -1;
+		while(record <= 4096) {
+			if (record < 4096 && (bit = get_bit()) == last_bit)
+				count[bit]++;
+			else {
+				if (last_bit >= 0) {
+					printf("%4d+%4d: %s\n", record-count[last_bit], count[last_bit],
+							last_bit ? "liberi" : "occupati");
+					count[last_bit] = 0;
+				}
+				last_bit = bit;
+				count[last_bit] = 1;
+			}
+			record++;
+		}
+		break;
+	default:
+		fprintf(stderr, "Tipo non riconosciuto: '%s'\n", argv[1]);
+		exit(1);
 	}
 	return 0;
 }
