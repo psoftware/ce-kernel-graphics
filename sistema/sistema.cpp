@@ -3,48 +3,14 @@
 #include "mboot.h"
 #include "costanti.h"
 
-///////////////////////////////////////////////////
-// FUNZIONI PER LA MANIPOLAZIONE DEGLI INDIRIZZI //
-///////////////////////////////////////////////////
+// definiamo il tipo "addr" (indirizzo) come un unsigned long
+typedef unsigned long addr;
 
-// purtroppo, lo standard C++ non prevede tipi predefiniti che possano essere 
-// usati come "indirizzi di memoria". I candidati sono "void*", "char*" e 
-// "unsigned int", ma "char*" e "unsigned int" costringono a continui 
-// reinterpet_cast, mentre "void*" non puo' essere usato in espressioni 
-// aritmetiche. Come compromesso, si e' deciso di usare "void*" come
-// tipo per gli indirizzi (per ridurre al minimo la necessita' dei cast) e di 
-// definire le seguenti funzioni per svolgere le elementari funzioni arimetiche
-
-
-
-// converte v in un indirizzo
-inline void* addr(unsigned int v)
+// funzione che permette di convertire un qualunque puntatore
+// in un indirizzo
+addr toaddr(void* v)
 {
-	return reinterpret_cast<void*>(v);
-}
-
-// converte un indirizzo in un unsigned int
-inline unsigned int uint(const void* v)
-{
-	return reinterpret_cast<unsigned int>(v);
-}
-
-// somma v byte all'indirizzo a
-inline void* add(const void* a, unsigned int v)
-{
-	return addr(uint(a) + v);
-};
-
-// sottrae v byte all'indirizzo a
-inline void* sub(const void* a, unsigned int v)
-{
-	return addr(uint(a) - v);
-}
-
-// calcola il numero di byte tra a1 (incluso) e a2 (escluso)
-inline int distance(const void* a1, const void* a2)
-{
-	return uint(a1) - uint(a2);
+	return reinterpret_cast<addr>(v);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -85,12 +51,6 @@ unsigned int ceild(unsigned int v, unsigned int q)
 inline unsigned int allinea(unsigned int v, unsigned int a)
 {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
-}
-
-// lo stesso, ma per un indirizzo
-inline void* allineav(void* v, unsigned int a)
-{
-	return reinterpret_cast<void*>(allinea(reinterpret_cast<unsigned int>(v), a));
 }
 
 // funzioni per la manipolazione di stringhe
@@ -150,15 +110,15 @@ extern "C" void abort_p();
 // memoria fisica installata. Per motivi storici, non tutto il mega byte e' 
 // disponibile (ad esempio, verso la fine, troviamo la memoria video).
 // La "memoria superiore" e' quella successiva al primo megabyte
-void* max_mem_lower;
-void* max_mem_upper;
+addr max_mem_lower;
+addr max_mem_upper;
 
 // indirizzo fisico del primo byte non occupato
-extern void* mem_upper;
+extern addr mem_upper;
 
 // forward declaration
 // (assegna quanti byte, a partire da indirizzo, allo heap di sistema)
-void free_interna(void* indirizzo, unsigned int quanti);
+void free_interna(addr indirizzo, unsigned int quanti);
 
 // allocazione sequenziale, da usare durante la fase di inizializzazione.  Si
 // mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
@@ -167,10 +127,10 @@ void free_interna(void* indirizzo, unsigned int quanti);
 // (max_mem_upper). Se il puntatore viene fatto avanzare tramite la funzione
 // 'salta_a', i byte "saltati" vengono dati all'allocatore a lista
 // tramite la funzione "free_interna"
-void* occupa(unsigned int quanti)
+addr occupa(unsigned int quanti)
 {
-	void* p = 0;
-	void* appoggio = add(mem_upper, quanti);
+	addr p = 0;
+	addr appoggio = mem_upper + quanti;
 	if (appoggio <= max_mem_upper) {
 		p = mem_upper;
 		mem_upper = appoggio;
@@ -179,11 +139,11 @@ void* occupa(unsigned int quanti)
 		  // "quanti" byte in avanti
 }
 
-int salta_a(void* indirizzo)
+int salta_a(addr indirizzo)
 {
 	int saltati = -1;
 	if (indirizzo >= mem_upper && indirizzo < max_mem_upper) {
-		saltati = distance(indirizzo, mem_upper);
+		saltati = indirizzo - mem_upper;
 		free_interna(mem_upper, saltati);
 		mem_upper = indirizzo;
 	}
@@ -251,7 +211,7 @@ void* malloc(unsigned int quanti)
 
 			// il nuovo descrittore verra' scritto nei primi byte 
 			// della zona da creare (quindi, "dim" byte dopo "p")
-			des_mem* nuovo = static_cast<des_mem*>(add(p, dim));
+			des_mem* nuovo = reinterpret_cast<des_mem*>(addr(p) + dim);
 
 			// aggiustiamo le dimensioni della vecchia e della nuova zona
 			nuovo->dimensione = scorri->dimensione - dim - sizeof(des_mem);
@@ -307,7 +267,7 @@ void free(void* p)
 	if (p == 0) return;
 	
 	// recuperiamo l'indirizzo del descrittore della zona
-	des_mem* des = static_cast<des_mem*>(p) - 1;
+	des_mem* des = reinterpret_cast<des_mem*>(p) - 1;
 
 	// se non troviamo questo valore, vuol dire che un qualche errore grave
 	// e' stato commesso (free su un puntatore non restituito da malloc,
@@ -319,7 +279,7 @@ void free(void* p)
 	// la zona viene liberata tramite la funzione "free_interna", che ha
 	// bisogno dell'indirizzo di partenza e della dimensione della zona
 	// comprensiva del suo descrittore
-	free_interna(des, des->dimensione + sizeof(des_mem));
+	free_interna(toaddr(des), des->dimensione + sizeof(des_mem));
 }
 
 
@@ -332,7 +292,7 @@ void free(void* p)
 // esse.
 // free_interna puo' essere usata anche in fase di inizializzazione, per
 // definire le zone di memoria fisica che verranno utilizzate dall'allocatore
-void free_interna(void* indirizzo, unsigned int quanti)
+void free_interna(addr indirizzo, unsigned int quanti)
 {
 
 	// non e' un errore invocare free_interna con "quanti" uguale a 0
@@ -346,7 +306,7 @@ void free_interna(void* indirizzo, unsigned int quanti)
 	// indirizzo di partenza (tale ordinamento serve a semplificare la
 	// successiva operazione di riunificazione)
 	des_mem *prec = 0, *scorri = memlibera;
-	while (scorri != 0 && scorri < indirizzo) {
+	while (scorri != 0 && toaddr(scorri) < indirizzo) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
@@ -355,8 +315,8 @@ void free_interna(void* indirizzo, unsigned int quanti)
 	// in alcuni casi, siamo in grado di riconoscere l'errore di doppia
 	// free: "indirizzo" non deve essere l'indirizzo di partenza di una
 	// zona gia' libera
-	if (scorri == indirizzo) {
-		flog(LOG_ERR, "indirizzo = 0x%x", (void*)indirizzo);
+	if (toaddr(scorri) == indirizzo) {
+		flog(LOG_ERR, "indirizzo = 0x%x", indirizzo);
 		panic("double free\n");
 	}
 	// assert(scorri == 0 || scorri > indirizzo)
@@ -364,11 +324,11 @@ void free_interna(void* indirizzo, unsigned int quanti)
 	// verifichiamo che la zona possa essere unificata alla zona che la
 	// precede.  Cio' e' possibile se tale zona esiste e il suo ultimo byte
 	// e' contiguo al primo byte della nuova zona
-	if (prec != 0 && add(prec + 1, prec->dimensione) == indirizzo) {
+	if (prec != 0 && toaddr(prec + 1) + prec->dimensione == indirizzo) {
 
 		// controlliamo se la zona e' unificabile anche alla eventuale
 		// zona che la segue
-		if (scorri != 0 && add(indirizzo, quanti) == scorri) {
+		if (scorri != 0 && indirizzo + quanti == toaddr(scorri)) {
 			
 			// in questo caso le tre zone diventano una sola, di
 			// dimensione pari alla somma delle tre, piu' il
@@ -385,7 +345,7 @@ void free_interna(void* indirizzo, unsigned int quanti)
 			prec->dimensione += quanti;
 		}
 
-	} else if (scorri != 0 && add(indirizzo, quanti) == scorri) {
+	} else if (scorri != 0 && indirizzo + quanti == toaddr(scorri)) {
 
 		// la zona non e' unificabile con quella che la precede, ma e'
 		// unificabile con quella che la segue. L'unificazione deve
@@ -400,7 +360,7 @@ void free_interna(void* indirizzo, unsigned int quanti)
 		// allochiamo il nuovo descrittore all'inizio della nuova zona
 		// (se quanti < sizeof(des_mem), tale descrittore va a
 		// sovrapporsi parzialmente al descrittore puntato da scorri)
-		des_mem* nuovo = static_cast<des_mem*>(indirizzo);
+		des_mem* nuovo = reinterpret_cast<des_mem*>(indirizzo);
 
 		// quindi copiamo il descrittore della zona seguente nel nuovo
 		// descrittore. Il campo next del nuovo descrittore e'
@@ -422,7 +382,7 @@ void free_interna(void* indirizzo, unsigned int quanti)
 		// non e' tale da contenere il descrittore (nel qual caso, la
 		// zona viene ignorata)
 
-		des_mem* nuovo = static_cast<des_mem*>(indirizzo);
+		des_mem* nuovo = reinterpret_cast<des_mem*>(indirizzo);
 		nuovo->dimensione = quanti - sizeof(des_mem);
 
 		// inseriamo "nuovo" in lista, tra "prec" e "scorri"
@@ -638,46 +598,36 @@ struct pagina {
 	};
 };
 
-// una pagina fisica occupata puo' contenere un direttorio, una tabella delle
-// pagine o una pagina virtuale.  Definiamo allora pagina_fisica come una
-// unione di questi tre tipi 
-union pagina_fisica {
-	direttorio	dir;
-	tabella		tab;
-	pagina		pag;
-};
 
-// dato un puntatore a un direttorio, a una tabella delle pagine o a una pagina
-// virtuale, possiamo aver bisogno di un puntatore alla pagina fisica che li
-// contiene (poiche' gli indirizzi di partenza coincidono, si tratta solo di 
-// eseguire una conversione di tipo)
-inline pagina_fisica* pfis(direttorio* pdir)
+// funzioni di comodo, che convertono un indirizzo in un
+// puntatore ad uno dei tipi definiti precedentemente
+inline direttorio* todir(addr a)
 {
-	return reinterpret_cast<pagina_fisica*>(pdir);
+	return reinterpret_cast<direttorio*>(a);
 }
 
-inline pagina_fisica* pfis(tabella* ptab)
+inline tabella* totab(addr a)
 {
-	return reinterpret_cast<pagina_fisica*>(ptab);
+	return reinterpret_cast<tabella*>(a);
 }
 
-inline pagina_fisica* pfis(pagina* ppag)
+inline pagina* topag(addr a)
 {
-	return reinterpret_cast<pagina_fisica*>(ppag);
+	return reinterpret_cast<pagina*>(a);
 }
 
 // dato un indirizzo virtuale, ne restituisce l'indice nel direttorio
 // (i dieci bit piu' significativi dell'indirizzo)
-short indice_direttorio(void* indirizzo)
+short indice_direttorio(addr indirizzo)
 {
-	return (uint(indirizzo) & 0xffc00000) >> 22;
+	return (indirizzo & 0xffc00000) >> 22;
 }
 
 // dato un indirizzo virtuale, ne restituisce l'indice nella tabella delle
 // pagine (i bit 12:21 dell'indirizzo)
-short indice_tabella(void* indirizzo)
+short indice_tabella(addr indirizzo)
 {
-	return (uint(indirizzo) & 0x003ff000) >> 12;
+	return (indirizzo & 0x003ff000) >> 12;
 }
 
 // dato un puntatore ad un descrittore di tabella, restituisce
@@ -758,7 +708,7 @@ struct des_pf {
 		struct { // informazioni relative a una pagina
 			unsigned int	blocco;		// blocco in memoria di massa
 			tabella*	ptab;		// tabella che punta alla pagina
-			void*		ind_virtuale;   // indirizzo virtuale della pagina
+			addr		ind_virtuale;   // indirizzo virtuale della pagina
 		} pag;
 		struct { // informazioni relative a una tabella
 			unsigned int	blocco;		// blocco in memoria di massa
@@ -767,7 +717,7 @@ struct des_pf {
 			short		quante;		// numero di pagine puntate
 		} tab;
 		struct  { // informazioni relative a una pagina libera
-			des_pf*		prossima_libera;
+			int		prossima_libera;
 		} avl;
 		// non ci sono informazioni aggiuntive per una pagina 
 		// contenente un direttorio
@@ -782,25 +732,33 @@ des_pf* pagine_fisiche;
 unsigned long num_pagine_fisiche;
 
 // testa della lista di pagine fisiche libere
-des_pf* pagine_libere = 0;
+int pagine_libere = -1;
 
 // indirizzo fisico della prima pagina fisica
 // (necessario per calcolare l'indirizzo del descrittore associato ad una data
 // pagina fisica e viceversa)
-pagina_fisica* prima_pagina;
+addr prima_pf;
 
 // restituisce l'indirizzo fisico della pagina fisica associata al descrittore
-// passato come argomento
-pagina_fisica* indirizzoPF(des_pf* p)
+// il cui indice e' passato come argomento
+addr indirizzo_pf(int indice)
 {
-	return static_cast<pagina_fisica*>(add(prima_pagina, (p - pagine_fisiche) * SIZE_PAGINA));
+	return prima_pf + indice * SIZE_PAGINA;
 }
 
-// dato l'indirizzo di una pagina fisica, restituisce un puntatore al
-// descrittore associato
-des_pf* strutturaPF(pagina_fisica* pagina)
+// dato l'indirizzo di una pagina fisica, restituisce l'indice
+// del descrittore associato
+int indice_pf(addr pagina)
 {
-	return &pagine_fisiche[distance(pagina, prima_pagina) / SIZE_PAGINA];
+	return (pagina - prima_pf) / SIZE_PAGINA;
+}
+
+// overloading della funzione indice_pf, da usare
+// quando l'indirizzo della pagina e' disponibile
+// sotto forma di puntatore
+int indice_pf(void* pagina)
+{
+	return indice_pf(toaddr(pagina));
 }
 
 // init_pagine_fisiche viene chiamata in fase di inizalizzazione.  Tutta la
@@ -811,10 +769,10 @@ bool init_pagine_fisiche()
 {
 
 	// allineamo mem_upper alla linea, per motivi di efficienza
-	salta_a(allineav(mem_upper, sizeof(int)));
+	salta_a(allinea(mem_upper, sizeof(int)));
 
 	// calcoliamo quanta memoria principale rimane
-	int dimensione = distance(max_mem_upper, mem_upper);
+	int dimensione = max_mem_upper - mem_upper;
 
 	if (dimensione <= 0) {
 		flog(LOG_ERR, "Non ci sono pagine libere");
@@ -826,31 +784,30 @@ bool init_pagine_fisiche()
 	unsigned int quante = dimensione / (SIZE_PAGINA + sizeof(des_pf));
 
 	// allochiamo i corrispondenti descrittori di pagina fisica
-	pagine_fisiche = static_cast<des_pf*>(occupa(sizeof(des_pf) * quante));
+	pagine_fisiche = reinterpret_cast<des_pf*>(occupa(sizeof(des_pf) * quante));
 
 	// riallineamo mem_upper a un multiplo di pagina
-	salta_a(allineav(mem_upper, SIZE_PAGINA));
+	salta_a(allinea(mem_upper, SIZE_PAGINA));
 
 	// ricalcoliamo quante col nuovo mem_upper, per sicurezza
 	// (sara' minore o uguale al precedente)
-	quante = distance(max_mem_upper, mem_upper) / SIZE_PAGINA;
+	quante = (max_mem_upper - mem_upper) / SIZE_PAGINA;
 
 	// occupiamo il resto della memoria principale con le pagine fisiche;
 	// ricordiamo l'indirizzo della prima pagina fisica e il loro numero
-	prima_pagina = static_cast<pagina_fisica*>(occupa(quante * SIZE_PAGINA));
+	prima_pf = occupa(quante * SIZE_PAGINA);
 	num_pagine_fisiche = quante;
 
 	// se resta qualcosa (improbabile), lo diamo all'allocatore a lista
 	salta_a(max_mem_upper);
 
 	// costruiamo la lista delle pagine fisiche libere
-	des_pf* p = 0;
-	for (int i = quante - 1; i >= 0; i--) {
+	pagine_libere = 0;
+	for (int i = 0; i < quante - 1; i++) {
 		pagine_fisiche[i].contenuto = LIBERA;
-		pagine_fisiche[i].avl.prossima_libera = p;
-		p = &pagine_fisiche[i];
+		pagine_fisiche[i].avl.prossima_libera = i + 1;
 	}
-	pagine_libere = &pagine_fisiche[0];
+	pagine_fisiche[quante - 1].avl.prossima_libera = -1;
 
 	return true;
 }
@@ -858,11 +815,11 @@ bool init_pagine_fisiche()
 // funzione di allocazione generica di una pagina
 // Nota: restituisce un puntatore al *descrittore* della pagina, non alla 
 // pagina
-des_pf* alloca_pagina_fisica()
+int alloca_pagina_fisica()
 {
-	des_pf* p = pagine_libere;
-	if (p != 0)
-		pagine_libere = pagine_libere->avl.prossima_libera;
+	int p = pagine_libere;
+	if (pagine_libere != -1)
+		pagine_libere = pagine_fisiche[pagine_libere].avl.prossima_libera;
 	return p;
 }
 
@@ -876,8 +833,9 @@ des_pf* alloca_pagina_fisica()
 // corretto)
 direttorio* alloca_direttorio()
 {
-	des_pf* p = alloca_pagina_fisica();
-	if (p == 0) return 0;
+	int i = alloca_pagina_fisica();
+	if (i == -1) return 0;
+	des_pf *p = &pagine_fisiche[i];
 	p->contenuto = DIRETTORIO;
 	p->residente = true;
 
@@ -885,66 +843,54 @@ direttorio* alloca_direttorio()
 	// pagina descritta (funzione "indirizzo"), che puntera' ad una "union 
 	// pagina_fisica". Quindi, restituiamo un puntatore al campo di tipo 
 	// "direttorio" all'interno della union
-	direttorio *pdir = &indirizzoPF(p)->dir;
+	direttorio *pdir = todir(indirizzo_pf(i));
 	return pdir;
 }
 
-// le tre funzioni per l'allocazione di una tabella differiscono solo per il 
-// valore da scrivere nel campo tipo. Poiche' e' buona norma di programmazione 
-// evitare il copia e incolla, ne definiamo una sola, parametrizzata sul tipo.  
-// Le altre si limitano a richiamare questa con il tipo corretto
 tabella* alloca_tabella(bool residente = false)
 {
-	des_pf* p = alloca_pagina_fisica();
-	if (p == 0) return 0;
+	int i = alloca_pagina_fisica();
+	if (i == -1) return 0;
+	des_pf *p = &pagine_fisiche[i];
 	p->contenuto = TABELLA;
 	p->residente = residente;
 	p->tab.quante = 0;
-	tabella *ptab = &indirizzoPF(p)->tab;
+	tabella *ptab = totab(indirizzo_pf(i));
 	return ptab;
 }
 
-// analogo discorso per le pagine
 pagina* alloca_pagina_virtuale(bool residente = false)
 {
-	des_pf* p = alloca_pagina_fisica();
-	if (p == 0) return 0;
+	int i = alloca_pagina_fisica();
+	if (i == -1) return 0;
+	des_pf *p = &pagine_fisiche[i];
 	p->contenuto = PAGINA_VIRTUALE;
 	p->residente = residente;
-	return &indirizzoPF(p)->pag;
+	pagina* ppag = topag(indirizzo_pf(i));
+	return ppag;
 }
 // rende libera la pagina associata al descrittore di pagina fisica puntato da
 // "p"
-void rilascia_pagina_fisica(des_pf* p)
+void rilascia_pagina_fisica(int i)
 {
+	des_pf* p = &pagine_fisiche[i];
 	p->contenuto = LIBERA;
 	p->avl.prossima_libera = pagine_libere;
-	pagine_libere = p;
+	pagine_libere = i;
 }
 
-// funzioni di comodo per il rilascio di una pagina fisica
+// funzione di comodo per il rilascio di una pagina fisica
 // dato un puntatore a un direttorio, a una tabella o ad una pagina, ne 
 // calcolano prima l'indirizzo della pagina fisica che le contiene (semplice 
 // conversione di tipo) tramite la funzione "pfis", quindi l'indirizzo del 
 // descrittore di pagina fisica associato (funzione "struttura") e, infine, 
 // invocano la funzione "rilascia_pagina" generica.
 inline
-void rilascia(direttorio* d)
+void rilascia(void* d)
 {
-	rilascia_pagina_fisica(strutturaPF(pfis(d)));
+	rilascia_pagina_fisica(indice_pf(toaddr(d)));
 }
 
-inline
-void rilascia(tabella* d)
-{
-	rilascia_pagina_fisica(strutturaPF(pfis(d)));
-}
-
-inline
-void rilascia(pagina* d)
-{
-	rilascia_pagina_fisica(strutturaPF(pfis(d)));
-}
 
 // funzioni che aggiornano sia le strutture dati della paginazione che
 // quelle relative alla gestione delle pagine fisiche:
@@ -961,7 +907,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indi
 
 	// mapping inverso:
 	// ricaviamo il descrittore della pagina fisica che contiene la tabella
-	des_pf* ppf  = strutturaPF(pfis(ptab));
+	des_pf* ppf  = &pagine_fisiche[indice_pf(toaddr(ptab))];
 	ppf->tab.pdir   = pdir;
 	ppf->tab.indice = indice;
 	ppf->tab.quante = 0; // inizialmente, nessuna pagina e' presente
@@ -978,7 +924,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indi
 	ppf->tab.blocco      = pdes_tab->address; // vedi NOTA prec.
 	
 	// mapping diretto
-	pdes_tab->address    = uint(ptab) >> 12;
+	pdes_tab->address    = toaddr(ptab) >> 12;
 	pdes_tab->D          = 0; // bit riservato nel caso di descr. tabella
 	pdes_tab->pgsz       = 0; // pagine di 4KB
 	pdes_tab->P          = 1; // presente
@@ -998,7 +944,7 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
-	des_pf* ppf = strutturaPF(pfis(tabella_puntata(pdes_tab)));
+	des_pf* ppf = &pagine_fisiche[indice_pf(tabella_puntata(pdes_tab))];
 	pdes_tab->address = ppf->tab.blocco;
 
 	return pdes_tab;
@@ -1010,13 +956,13 @@ descrittore_tabella* scollega_tabella(direttorio* pdir, short indice)
 // NOTA: si suppone che la pagina non fosse precedentemente collegata, e quindi 
 // che il corrispondente descrittore di pagina nella tabella contenga
 // il numero del blocco della pagina nello swap
-descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, void* ind_virtuale)
+descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, addr ind_virtuale)
 {
 
 	descrittore_pagina* pdes_pag = &ptab->entrate[indice_tabella(ind_virtuale)];
 
 	// mapping inverso
-	des_pf* ppf = strutturaPF(pfis(pag));
+	des_pf* ppf = &pagine_fisiche[indice_pf(pag)];
 	ppf->pag.ptab	= ptab;
 	ppf->pag.ind_virtuale   = ind_virtuale;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
@@ -1025,12 +971,12 @@ descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, void* in
 	ppf->pag.blocco	= pdes_pag->address; // vedi NOTA prec
 
 	// incremento del contatore nella tabella
-	ppf = strutturaPF(pfis(ptab));
+	ppf = &pagine_fisiche[indice_pf(ptab)];
 	ppf->tab.quante++;
 	ppf->contatore		|= 0x80000000;
 
 	// mapping diretto
-	pdes_pag->address	= uint(pag) >> 12;
+	pdes_pag->address	= toaddr(pag) >> 12;
 	pdes_pag->pgsz		= 0; // bit riservato nel caso di descr. di pagina
 	pdes_pag->P		= 1; // presente
 
@@ -1041,7 +987,7 @@ descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, void* in
 // scollega la pagina di indirizzo virtuale "ind_virtuale" dalla tabella 
 // puntata da "ptab". Aggiorna anche il contatore di pagine nel descrittore di 
 // pagina fisica corrispondente alla tabella
-descrittore_pagina* scollega_pagina_virtuale(tabella* ptab, void* ind_virtuale)
+descrittore_pagina* scollega_pagina_virtuale(tabella* ptab, addr ind_virtuale)
 {
 
 	// poniamo a 0 il bit di presenza nel corrispondente descrittore di 
@@ -1051,11 +997,11 @@ descrittore_pagina* scollega_pagina_virtuale(tabella* ptab, void* ind_virtuale)
 
 	// quindi scriviamo il numero del blocco nello swap al posto 
 	// dell'indirizzo fisico
-	des_pf* ppf = strutturaPF(pfis(pagina_puntata(pdes_pag)));
+	des_pf* ppf = &pagine_fisiche[indice_pf(pagina_puntata(pdes_pag))];
 	pdes_pag->address = ppf->pag.blocco;
 
 	// infine, decrementiamo il numero di pagine puntate dalla tabella
-	ppf = strutturaPF(pfis(ptab));
+	ppf = &pagine_fisiche[indice_pf(ptab)];
 	ppf->tab.quante--;
 
 	return pdes_pag;
@@ -1064,13 +1010,13 @@ descrittore_pagina* scollega_pagina_virtuale(tabella* ptab, void* ind_virtuale)
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
 // memoria virtuale gestita dal direttorio pdir
 // (la funzione viene usata in fase di inizializzazione)
-bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
+bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 {
 	descrittore_tabella* pdes_tab;
 	tabella* ptab;
 	descrittore_pagina *pdes_pag;
 
-	for (void* ind = addr(0); ind < max_mem; ind = add(ind, SIZE_PAGINA)) {
+	for (addr ind = addr(0); ind < max_mem; ind = ind + SIZE_PAGINA) {
 		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		if (pdes_tab->P == 0) {
 			ptab = alloca_tabella(true);
@@ -1078,7 +1024,7 @@ bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
 			}
-			pdes_tab->address   = uint(ptab) >> 12;
+			pdes_tab->address   = toaddr(ptab) >> 12;
 			pdes_tab->D	    = 0;
 			pdes_tab->pgsz      = 0; // pagine di 4K
 			pdes_tab->D	    = 0;
@@ -1089,7 +1035,7 @@ bool mappa_mem_fisica(direttorio* pdir, void* max_mem)
 			ptab = tabella_puntata(pdes_tab);
 		}
 		pdes_pag = &ptab->entrate[indice_tabella(ind)];
-		pdes_pag->address = uint(ind) >> 12;   // indirizzo virtuale == indirizzo fisico
+		pdes_pag->address = ind >> 12;   // indirizzo virtuale == indirizzo fisico
 		pdes_tab->pgsz    = 0;
 		pdes_pag->global  = 1; // puo' restare nel TLB, anche in caso di flush
 		pdes_pag->US      = 0; // livello sistema;
@@ -1151,7 +1097,7 @@ struct partizione {
 // funzioni per la lettura/scrittura da hard disk
 extern "C" void readhd_n(short ind_ata, short drv, void* vetti,
 		unsigned int primo, unsigned char quanti, char &errore);
-extern "C" void writehd_n(short ind_ata, short drv, void* vetti,
+extern "C" void writehd_n(short ind_ata, short drv, void* vetto,
 		unsigned int primo, unsigned char quanti, char &errore);
 // utile per il debug: invia al log un messaggio relativo all'errore che e' 
 // stato riscontrato
@@ -1167,9 +1113,9 @@ struct superblock_t {
 	int		blocks;
 	unsigned int	directory;
 	int		(*user_entry)(int);
-	void*		user_end;
+	addr		user_end;
 	int		(*io_entry)(int);
-	void*		io_end;
+	addr		io_end;
 	unsigned int	checksum;
 };
 
@@ -1401,7 +1347,7 @@ void aggiorna_statistiche()
 		if (check) {
 			// trattiamo tutto come se fosse una tabella, anche se 
 			// si tratta di un direttorio (vedi NOTA 2)
-			ptab = &indirizzoPF(ppf1)->tab;
+			ptab = totab(indirizzo_pf(i));
 			for (int j = 0; j < 1024; j++) {
 				pp = &ptab->entrate[j];
 				if (pp->P == 1) {
@@ -1409,7 +1355,7 @@ void aggiorna_statistiche()
 					// descrittore di pagina fisica 
 					// associato alla pagina fisica puntata 
 					// da "pp"
-					ppf2 = strutturaPF(pfis(pagina_puntata(pp)));
+					ppf2 = &pagine_fisiche[indice_pf(pagina_puntata(pp))];
 
 					// aggiornamento di tipo LRU
 					ppf2->contatore >>= 1;	// shift in ogni caso
@@ -1488,7 +1434,7 @@ bool	 carica_tabella(descrittore_tabella* pdes_tab, tabella* ptab);
 
 // indirizzo_virtale e' l'indirizzo non tradotto. scrittura ci dice se 
 // l'accesso che ha causato il fault era in scrittura
-void* trasferimento(direttorio* pdir, void* indirizzo_virtuale)
+pagina* trasferimento(direttorio* pdir, addr indirizzo_virtuale)
 {
 	descrittore_pagina* pdes_pag;
 	pagina* pag = 0;
@@ -1637,68 +1583,66 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella* ptab)
 // ROUTINE DI RIMPIAZZAMENTO
 //
 // forward
-des_pf* rimpiazzamento();
+int rimpiazzamento();
 
 // funzioni di comodo per il rimpiazzamento, specializzate per le
 // tabelle e per le pagine
 direttorio* rimpiazzamento_direttorio()
 {
-	des_pf *ppf = rimpiazzamento();
-
-	if (ppf == 0) return 0;
+	int i = rimpiazzamento();
+	if (i == -1) return 0;
+	des_pf* ppf = &pagine_fisiche[i];
 
 	ppf->contenuto = DIRETTORIO;
 	ppf->residente = true;
-	return &indirizzoPF(ppf)->dir;
+	return todir(indirizzo_pf(i));
 }
 
 tabella* rimpiazzamento_tabella(bool residente)
 {
-	des_pf *ppf = rimpiazzamento();
-
-	if (ppf == 0) return 0;
+	int i = rimpiazzamento();
+	if (i == -1) return 0;
+	des_pf* ppf = &pagine_fisiche[i];
 
 	ppf->contenuto = TABELLA;
 	ppf->residente = residente;
-	return &indirizzoPF(ppf)->tab;
+	return totab(indirizzo_pf(i));
 }
 
 pagina* rimpiazzamento_pagina_virtuale(tabella* escludi, bool residente) 
 {
 	// Per impedire che venga scelta la tabella "escludi", la rendiamo 
 	// temporaneamente residente
-	des_pf *p = strutturaPF(pfis(escludi));
+	des_pf *p = &pagine_fisiche[indice_pf(escludi)];
 	bool save = p->residente;
 	p->residente = true;
-
-	des_pf *ppf = rimpiazzamento();
-	
+	int i = rimpiazzamento();
 	p->residente = save;
+	if (i == -1) return 0;
 
-	if (ppf == 0) return 0;
-
+	des_pf* ppf = &pagine_fisiche[i];
 	ppf->contenuto = PAGINA_VIRTUALE;
 	ppf->residente = residente;
 
-	return &indirizzoPF(ppf)->pag;
+	return topag(indirizzo_pf(i));
 }
 
 // funzioni usate da rimpiazzamento
-extern "C" void invalida_entrata_TLB(void* ind_virtuale);
+extern "C" void invalida_entrata_TLB(addr ind_virtuale);
 
 // routine di rimpiazzamento vera e propria.
 // libera una pagina fisica rimuovendo e (eventualmente) copiando nello swap 
 // una tabella privata o una pagina virtuale
-des_pf* rimpiazzamento()
+int rimpiazzamento()
 {
 	
 	des_pf *ppf, *vittima = 0;
-	void* ind_virtuale;
+	addr ind_virtuale;
 	unsigned int blocco;
 	
 	// scorriamo tutti i descrittori di pagina fisica alla ricerca della 
 	// prima pagina che contiene una pagina virtuale o una tabella privata
-	int i = 0;
+	int i = 0, j = -1;
 	while (i < num_pagine_fisiche && pagine_fisiche[i].residente)
 		i++;
 
@@ -1710,8 +1654,9 @@ des_pf* rimpiazzamento()
 	// minimo per il contatore delle statistiche (gli interrupt sono 
 	// disabilitati, garantendo la mutua esclusione con la routine del 
 	// timer)
-	vittima = &pagine_fisiche[i];
+	j = i;
 	for (i++; i < num_pagine_fisiche; i++) {
+		vittima = &pagine_fisiche[j];
 		ppf = &pagine_fisiche[i];
 		if (ppf->residente)
 			continue;
@@ -1721,11 +1666,11 @@ des_pf* rimpiazzamento()
 			// tabella, in caso di uguaglianza nei contatori
 			if (ppf->contatore < vittima->contatore ||
 			    ppf->contatore == vittima->contatore && vittima->contenuto == TABELLA) 
-				vittima = ppf;
+				j = i;
 			break;
 		case TABELLA:
 			if (ppf->contatore < vittima->contatore)
-				vittima = ppf;
+				j = i;
 			break;
 		default:
 			// in tutti gli altri casi la pagina non e' 
@@ -1744,7 +1689,7 @@ des_pf* rimpiazzamento()
 
 		// "dovremmo" cancellarla e basta, ma contiene i blocchi delle
 		// pagine allocate dinamicamente
-		if (!scrivi_blocco(pdes_tab->address, indirizzoPF(vittima)))
+		if (!scrivi_blocco(pdes_tab->address, topag(indirizzo_pf(j))))
 			goto error;
 	} else {
 		// usiamo le informazioni nel mapping inverso per ricavare 
@@ -1761,11 +1706,11 @@ des_pf* rimpiazzamento()
 		if (pdes_pag->D == 1) {
 			// pagina modificata, va salvata nello swap (operazione 
 			// bloccante)
-			if (!scrivi_blocco(pdes_pag->address, indirizzoPF(vittima)))
+			if (!scrivi_blocco(pdes_pag->address, topag(indirizzo_pf(j))))
 				goto error;
 		} 
 	}
-	return vittima;
+	return j;
 
 error:
 	flog(LOG_WARN, "Impossibile rimpiazzare pagine");
@@ -1779,10 +1724,10 @@ error:
 // byte nell'intervallo [start, start + quanti) e le marca come residenti (non 
 // rimpiazzabili). Restituisce il numero di byte che e' riuscita a rendere 
 // residenti (potrebbero essere meno di "quanti", in caso di errore)
-extern "C" int c_resident(void* start, int quanti)
+extern "C" int c_resident(addr start, int quanti)
 {
 	int da_fare;
-	void *vero_start, *last, *indirizzo_virtuale;
+	addr vero_start, last, indirizzo_virtuale;
 	direttorio *pdir;
 	des_pf *ppf;
 
@@ -1790,11 +1735,11 @@ extern "C" int c_resident(void* start, int quanti)
 		return 0;
 
 	// calcoliamo l'indirizzo della pagina che contiene "start"
-	vero_start = addr(uint(start) & ~(SIZE_PAGINA - 1));
+	vero_start = start & ~(SIZE_PAGINA - 1);
 	// quindi il numero di pagine da rendere residenti
-	da_fare = ceild(distance(start, vero_start) + quanti, SIZE_PAGINA);
+	da_fare = ceild(start - vero_start + quanti, SIZE_PAGINA);
 	// e l'indirizzo del primo byte che non sara' reso residente
-	last = add(vero_start, da_fare * SIZE_PAGINA);
+	last = vero_start + da_fare * SIZE_PAGINA;
 
 	// accesso in mutua esclusione con la routine di trasferimento
 	// (entrambe manipolano le stesse strutture dati)
@@ -1841,11 +1786,11 @@ extern "C" int c_resident(void* start, int quanti)
 				pag = pagina_puntata(pdes_pag);
 			}
 			// marchiamo la pagina come residente
-			ppf = strutturaPF(pfis(pag));
+			ppf = &pagine_fisiche[indice_pf(pag)];
 			ppf->residente = true;
 
 			// prossimo indirizzo virtuale da considerare
-			indirizzo_virtuale = add(indirizzo_virtuale, SIZE_PAGINA);
+			indirizzo_virtuale = indirizzo_virtuale + SIZE_PAGINA;
 		}
 	}
 
@@ -1854,10 +1799,10 @@ out:
 	// esclusione
 	sem_signal(pf_mutex);
 
-	if (indirizzo_virtuale > add(start, quanti))
-		indirizzo_virtuale = add(start, quanti);
+	if (indirizzo_virtuale > start + quanti)
+		indirizzo_virtuale = start + quanti;
 
-	return distance(indirizzo_virtuale, start);
+	return indirizzo_virtuale - start;
 }
 
 
@@ -1870,11 +1815,11 @@ struct des_proc {			// offset:
 //	short id;
 	unsigned int link;		// 0
 //	int punt_nucleo;
-	void*        esp0;		// 4
+	addr        esp0;		// 4
 	unsigned int ss0;		// 8
-	void*        esp1;		// 12
+	addr        esp1;		// 12
 	unsigned int ss1;		// 16
-	void*        esp2;		// 20
+	addr        esp2;		// 20
 	unsigned int ss2;		// 24
 
 	direttorio* cr3;		// 28
@@ -1939,7 +1884,7 @@ extern proc_elem *pronti;
 // funzioni usate da crea_processo
 pagina* crea_pila_utente(direttorio* pdir);
 pagina* crea_pila_sistema(direttorio* pdir);
-void rilascia_tutto(direttorio* pdir, void* start, int ntab);
+void rilascia_tutto(direttorio* pdir, addr start, int ntab);
 extern "C" int alloca_tss(des_proc* p);
 extern "C" void rilascia_tss(int indice);
 
@@ -1993,10 +1938,10 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	if (liv == LIV_UTENTE) {
 
-		pila_sistema->parole_lunghe[1019] = uint((void*)f);	// EIP (codice utente)
+		pila_sistema->parole_lunghe[1019] = (addr)f;	// EIP (codice utente)
 		pila_sistema->parole_lunghe[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
 		pila_sistema->parole_lunghe[1021] = 0x00000200;	// EFLAG
-		pila_sistema->parole_lunghe[1022] = uint(fine_utente_privato) - 2 * sizeof(int);
+		pila_sistema->parole_lunghe[1022] = fine_utente_privato - 2 * sizeof(int);
 									// ESP (pila utente)
 		pila_sistema->parole_lunghe[1023] = SEL_DATI_UTENTE;	// SS (pila utente)
 		// eseguendo una IRET da questa situazione, il processo
@@ -2022,7 +1967,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// inizialmente, il processo si trova a livello sistema, come
 		// se avesse eseguito una istruzione INT, con la pila sistema
 		// che contiene le 5 parole lunghe preparate precedentemente
-		pdes_proc->esp = uint(fine_sistema_privato) - 5 * sizeof(int);
+		pdes_proc->esp = fine_sistema_privato - 5 * sizeof(int);
 		pdes_proc->ss  = SEL_DATI_SISTEMA;
 
 		pdes_proc->ds  = SEL_DATI_UTENTE;
@@ -2035,7 +1980,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pdes_proc->liv = LIV_UTENTE;
 		// tutti gli altri campi valgono 0
 	} else {
-		pila_sistema->parole_lunghe[1019] = uint((void*)f);	  // EIP (codice sistema)
+		pila_sistema->parole_lunghe[1019] = (addr)f;	  // EIP (codice sistema)
 		pila_sistema->parole_lunghe[1020] = SEL_CODICE_SISTEMA;	  // CS (codice sistema)
 		pila_sistema->parole_lunghe[1021] = 0x00000200;  	  // EFLAG
 		pila_sistema->parole_lunghe[1022] = 0xffffffff;		  // indirizzo ritorno?
@@ -2044,7 +1989,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// sistema. Per questo motivo, prepariamo una sola pila (la
 		// pila sistema)
 
-		pdes_proc->esp = uint(fine_sistema_privato) - 5 * sizeof(int);
+		pdes_proc->esp = fine_sistema_privato - 5 * sizeof(int);
 		pdes_proc->ss  = SEL_DATI_SISTEMA;
 
 		pdes_proc->ds  = SEL_DATI_SISTEMA;
@@ -2106,7 +2051,7 @@ bool crea_main()
 // creazione della pila utente
 pagina* crea_pila_utente(direttorio* pdir)
 {
-	void *ind_virtuale; 
+	addr ind_virtuale; 
 	pagina *ind_fisico;
 	descrittore_tabella* pdes_tab;
 	descrittore_pagina* pdes_pag;
@@ -2128,13 +2073,13 @@ pagina* crea_pila_utente(direttorio* pdir)
 		pdes_tab->global  = 0;
 		pdes_tab->P	  = 0;
 
-		ind_virtuale = add(ind_virtuale, SIZE_SUPERPAGINA);
+		ind_virtuale = ind_virtuale + SIZE_SUPERPAGINA;
 	}
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	ind_virtuale = sub(fine_utente_privato, SIZE_PAGINA);
+	ind_virtuale = fine_utente_privato - SIZE_PAGINA;
 	ind_fisico  = reinterpret_cast<pagina*>(trasferimento(pdir, ind_virtuale));
 	if (ind_fisico != 0) {
 		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
@@ -2156,7 +2101,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 
 	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
 	// dello spazio sistema/privato
-	void *ind = sub(fine_sistema_privato, SIZE_PAGINA);
+	addr ind = fine_sistema_privato - SIZE_PAGINA;
 
 	ptab = alloca_tabella(true);
 	if (ptab == 0) {
@@ -2166,7 +2111,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	}
 
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
-	pdes_tab->address = uint(ptab) >> 12;
+	pdes_tab->address = toaddr(ptab) >> 12;
 	pdes_tab->global  = 0;
 	pdes_tab->US	  = 0; // livello sistema
 	pdes_tab->RW	  = 1; // scrivibile
@@ -2183,7 +2128,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 
 	memset(ptab, 0, SIZE_PAGINA);
 	pdes_pag = &ptab->entrate[indice_tabella(ind)];
-	pdes_pag->address = uint(ind_fisico) >> 12;
+	pdes_pag->address = toaddr(ind_fisico) >> 12;
 	pdes_pag->pgsz	  = 0;
 	pdes_pag->US	  = 0;
 	pdes_pag->RW	  = 1;
@@ -2212,7 +2157,7 @@ void distruggi_processo(proc_elem* p)
 // rilascia ntab tabelle (con tutte le pagine da esse puntate) a partire da 
 // quella che mappa l'indirizzo start, nel direttorio pdir
 // (start deve essere un multiplo di 4 MiB)
-void rilascia_tutto(direttorio* pdir, void* start, int ntab)
+void rilascia_tutto(direttorio* pdir, addr start, int ntab)
 {
 	int j = indice_direttorio(start);
 	for (int i = j; i < j + ntab; i++)
@@ -2400,7 +2345,7 @@ bool init_pe()
 //             o libera (0)
 // - next: puntatore al prossimo descrittore di heap utente
 struct des_heap {
-	void* start;	
+	addr start;	
 	union {
 		unsigned int dimensione;
 		unsigned int occupato : 1;
@@ -2432,7 +2377,7 @@ des_heap heap;  // testa della lista di descrittori di heap
 extern "C" void *c_mem_alloc(int dim)
 {
 	des_heap* nuovo;
-	void* p;
+	addr p;
 
 	// imponiamo il rispetto di (3)
 	dim = allinea(dim, sizeof(int));
@@ -2461,7 +2406,7 @@ extern "C" void *c_mem_alloc(int dim)
 	    (nuovo = new des_heap) != 0)
 	{
 		// inseriamo nuovo nella lista, dopo scorri
-		nuovo->start = add(scorri->start, dim); // rispettiamo (2)
+		nuovo->start = scorri->start + dim; // rispettiamo (2)
 		nuovo->dimensione = scorri->dimensione - dim;
 		scorri->dimensione = dim;
 		nuovo->next = scorri->next; 
@@ -2470,7 +2415,7 @@ extern "C" void *c_mem_alloc(int dim)
 	} 
 	scorri->occupato = 1; // questo va fatto per ultimo, perche'
 	                      // modifica scorri->dimensione 
-	return p;
+	return reinterpret_cast<void*>(p);
 }
 
 // libera la regione dello heap il cui indirizzo di partenza e' pv
@@ -2479,9 +2424,10 @@ extern "C" void *c_mem_alloc(int dim)
 extern "C" void c_mem_free(void *pv)
 {
 	if (pv == 0) return;
+	addr p = toaddr(pv);
 
 	des_heap *prec = 0, *scorri = &heap;
-	while (scorri != 0 && (!scorri->occupato || scorri->start != pv)) {
+	while (scorri != 0 && (!scorri->occupato || scorri->start != p)) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
@@ -2613,17 +2559,18 @@ extern "C" void c_delay(int n)
 
 // verifica i permessi del processo sui parametri passati (problema del
 //  Cavallo di Troia)
-extern "C" bool c_verifica_area(void *area, unsigned int dim, bool write)
+extern "C" bool c_verifica_area(void* a, unsigned int dim, bool write)
 {
 	des_proc *pdes_proc;
 	direttorio* pdirettorio;
 	char liv;
+	addr area = toaddr(a);
 	
 	pdes_proc = des_p(esecuzione->identifier);
 	liv = pdes_proc->liv;
 	pdirettorio = pdes_proc->cr3;
 
-	for (void* i = area; i < add(area, dim); i = add(i, SIZE_PAGINA)) {
+	for (addr i = area; i < area + dim; i += SIZE_PAGINA) {
 		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
 		if (liv == LIV_UTENTE && pdes_tab->US == 0)
 			return false;
@@ -2689,7 +2636,7 @@ extern "C" void c_readlog(log_msg& m)
 // - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
 // avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
 // tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
-extern void* fine_codice_sistema;
+extern addr fine_codice_sistema;
 struct page_fault_error {
 	unsigned int prot  : 1;
 	unsigned int write : 1;
@@ -2705,7 +2652,7 @@ struct page_fault_error {
 // codice di errore descritto prima, mentre "eip" e' l'indirizzo 
 // dell'istruzione che ha causato il fault. Sia "errore" che "eip" vengono 
 // salvati in pila dal microprogramma di gestione dell'eccezione
-extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, void* eip)
+extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, addr eip)
 {
 	if (eip < fine_codice_sistema || errore.res == 1) {
 		// il sistema non e' progettato per gestire page fault causati 
@@ -2741,7 +2688,7 @@ extern "C" void c_page_fault(void* indirizzo_virtuale, page_fault_error errore, 
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
-		void* eip, unsigned cs, short eflag)
+		addr eip, unsigned cs, short eflag)
 {
 	if (eip < fine_codice_sistema) {
 		flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, eip, errore);
@@ -3967,17 +3914,17 @@ extern "C" void init_8259();
 
 // gestione processi
 extern "C" void salta_a_main();
-extern "C" void salta_a_utente(entry_t user_entry, void* stack);
+extern "C" void salta_a_utente(entry_t user_entry, addr stack);
 void main_proc(int n);
 
-bool crea_spazio_condiviso(void*& last_address)
+bool crea_spazio_condiviso(addr& last_address)
 {
 	descrittore_tabella *pdes_tab1, *pdes_tab2, *pdes_tab3;
 	tabella* ptab;
 	direttorio *tmp, *main_dir;
 	const int nspazi = 2;
-	void *inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
-	     *fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
+	addr inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
+	     fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
 
 	main_dir = des_p(esecuzione->identifier)->cr3;
 
@@ -3994,7 +3941,7 @@ bool crea_spazio_condiviso(void*& last_address)
 	
 
 	for (int sp = 0; sp < nspazi; sp++) {
-		for (void* ind = inizio[sp]; ind < fine[sp]; ind = add(ind, SIZE_SUPERPAGINA))
+		for (addr ind = inizio[sp]; ind < fine[sp]; ind = ind + SIZE_SUPERPAGINA)
 		{
 			pdes_tab1 = &tmp->entrate[indice_direttorio(ind)];
 
@@ -4003,7 +3950,7 @@ bool crea_spazio_condiviso(void*& last_address)
 				pdes_tab3 = &main_dir->entrate[indice_direttorio(ind)];
 				*pdes_tab2 = *pdes_tab1;
 
-				last_address = add(ind, SIZE_SUPERPAGINA);
+				last_address = ind + SIZE_SUPERPAGINA;
 
 				ptab = alloca_tabella(true);
 				if (ptab == 0) {
@@ -4014,7 +3961,7 @@ bool crea_spazio_condiviso(void*& last_address)
 					flog(LOG_ERR, "Impossibile caricare tabella condivisa");
 					return false;
 				}
-				pdes_tab2->address	= uint(ptab) >> 12;
+				pdes_tab2->address	= toaddr(ptab) >> 12;
 				for (int i = 0; i < 1024; i++) {
 					descrittore_pagina* pdes_pag = &ptab->entrate[i];
 					if (pdes_pag->P == 1) {
@@ -4027,7 +3974,7 @@ bool crea_spazio_condiviso(void*& last_address)
 							flog(LOG_ERR, "Impossibile caricare pagina residente");
 							return false;
 						}
-						collega_pagina_virtuale(ptab, pag, add(ind, i * SIZE_PAGINA));
+						collega_pagina_virtuale(ptab, pag, ind + i * SIZE_PAGINA);
 					}
 				}
 				*pdes_tab3 = *pdes_tab2;
@@ -4073,7 +4020,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_lower = addr(639 * 1024);
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
-	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, uint(max_mem_upper) >> 20 );
+	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, max_mem_upper >> 20 );
 	
 	// interpretiamo i parametri
 	for (arg = str_token(mbi->cmdline, &cont);
@@ -4136,7 +4083,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	// < 1MiB. Lasciamo inutilizzata la prima pagina, in modo che
 	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
 	// specificare un puntatore non valido
-	free_interna(addr(SIZE_PAGINA), distance(max_mem_lower, addr(SIZE_PAGINA)));
+	free_interna(addr(SIZE_PAGINA), max_mem_lower - addr(SIZE_PAGINA));
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati
@@ -4210,13 +4157,13 @@ void main_proc(int n)
 	
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
-	void* last_address;
+	addr last_address;
 	if (!crea_spazio_condiviso(last_address))
 		goto error;
 
 	// inizializzazione dello heap utente
-	heap.start = allineav(swap.sb.user_end, sizeof(int));
-	heap.dimensione = distance(last_address, heap.start);
+	heap.start = allinea(swap.sb.user_end, sizeof(int));
+	heap.dimensione = last_address - heap.start;
 	flog(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 

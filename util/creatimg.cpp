@@ -296,7 +296,7 @@ int main(int argc, char* argv[])
 	}
 	// - quindi, i rimanenti descrittori di tabella:
 	for (int i = indice_direttorio(last_address) + 1;
-		 i < indice_direttorio(a2i(fine_utente_condiviso));
+		 i < indice_direttorio(fine_utente_condiviso);
 		 i++)
 	{
 		descrittore_tabella* pdes_tab = &main_dir.entrate[i];

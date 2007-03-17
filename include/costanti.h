@@ -86,16 +86,16 @@ const unsigned int dim_io_condiviso	 = ntab_io_condiviso	  * SIZE_SUPERPAGINA;
 const unsigned int dim_utente_condiviso  = ntab_utente_condiviso  * SIZE_SUPERPAGINA;
 const unsigned int dim_utente_privato    = ntab_utente_privato    * SIZE_SUPERPAGINA;
 
-void* const inizio_sistema_condiviso = (void*)0x00000000;
-void* const fine_sistema_condiviso   = (void*)((unsigned int)inizio_sistema_condiviso + dim_sistema_condiviso);
-void* const inizio_sistema_privato   = fine_sistema_condiviso;
-void* const fine_sistema_privato     = (void*)((unsigned int)inizio_sistema_privato + dim_sistema_privato);
-void* const inizio_io_condiviso	     = fine_sistema_privato;
-void* const fine_io_condiviso	     = (void*)((unsigned int)inizio_io_condiviso + dim_io_condiviso);
-void* const inizio_utente_condiviso  = fine_io_condiviso;
-void* const fine_utente_condiviso    = (void*)((unsigned int)inizio_utente_condiviso + dim_utente_condiviso);
-void* const inizio_utente_privato    = fine_utente_condiviso;
-void* const fine_utente_privato      = (void*)((unsigned int)inizio_utente_privato + dim_utente_privato);
+const unsigned int inizio_sistema_condiviso = 0x00000000;
+const unsigned int fine_sistema_condiviso   = inizio_sistema_condiviso + dim_sistema_condiviso;
+const unsigned int inizio_sistema_privato   = fine_sistema_condiviso;
+const unsigned int fine_sistema_privato     = inizio_sistema_privato + dim_sistema_privato;
+const unsigned int inizio_io_condiviso	    = fine_sistema_privato;
+const unsigned int fine_io_condiviso	    = inizio_io_condiviso + dim_io_condiviso;
+const unsigned int inizio_utente_condiviso  = fine_io_condiviso;
+const unsigned int fine_utente_condiviso    = inizio_utente_condiviso + dim_utente_condiviso;
+const unsigned int inizio_utente_privato    = fine_utente_condiviso;
+const unsigned int fine_utente_privato      = inizio_utente_privato + dim_utente_privato;
 
 const unsigned int LOG_MSG_SIZE = 72;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
