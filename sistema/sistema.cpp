@@ -120,6 +120,9 @@ extern addr mem_upper;
 // (assegna quanti byte, a partire da indirizzo, allo heap di sistema)
 void free_interna(addr indirizzo, unsigned int quanti);
 
+//Indirizzo di ritorno a loader
+int return_ebp;
+
 // allocazione sequenziale, da usare durante la fase di inizializzazione.  Si
 // mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
 // puntatore puo' solo avanzare, tramite le funzioni 'occupa' e 'salta_a', e
@@ -2215,12 +2218,12 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	return id;
 }
 
-// non viene eseguito un vero shutdown, ma si blocca semplicemente il 
-// processore
+//Disabilito le interruzioni, ripristino l'ebp della multiboot_entry in sistema.d e ritorno
+//al chiamante (bldr32)
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
-	asm("1: sti; nop; jmp 1b" : : );
+asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
 }
 
 extern "C" void c_terminate_p()
@@ -3990,10 +3993,11 @@ short swap_ch = -1, swap_drv = -1, swap_part = -1;
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
-extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
+extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 {
 	des_proc* pdes_proc;
 	char *arg, *cont;
+    return_ebp=retebp;
 
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
@@ -4185,7 +4189,10 @@ void main_proc(int n)
 	// inizializzazione del meccanismo di lettura del log
 	if (!log_init_usr())
 		goto error;
-	
+		
+	//Stampo l'indirizzo di ritorno a bldr32 Questa riga pu˜ essere cancellata!
+		      flog(LOG_INFO, "Il valore di return_ebp e' %x", return_ebp); /////////////////
+		      
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
 	flog(LOG_INFO, "salto a livello utente...");

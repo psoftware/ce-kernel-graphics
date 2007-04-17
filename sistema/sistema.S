@@ -202,8 +202,12 @@ multiboot_header:
 #endif 
 
 multiboot_entry:
-
-     movl    $(_stack + STACK_SIZE), %esp // inizializziamo lo stack
+//Per mantenere l'indirizzo di ritorno, sostituisco alle istruzioni che azzerano la pila, un prologo.
+     push    %ebp
+     movl    %esp, %ebp
+     
+  //Per ora le ho solo commentate in vista di una futura rimozione
+  //   movl    $(_stack + STACK_SIZE), %esp // inizializziamo lo stack
      call    init_gdt
      lgdt    gdt_pointer		// carichiamo la nuova GDT
 
@@ -217,7 +221,7 @@ qui:
      movw    %cx, %fs
      movw    %cx, %gs
 
-     movl    $0, %ebp			// azzeriamo il base pointer
+ //    movl    $0, %ebp			// azzeriamo il base pointer
 					// (utile per capire dove finisce la 
 					// lista dei frame di attivazione)
 
@@ -228,15 +232,15 @@ qui:
      popf				// N.B.: interrupt disabilitati
 					// (perche', azzerando tutti i flag,
 					// abbiamo azzerato anche IF)
-
+     pushl   %ebp           //passo al cmain il base pointer di questa funzione
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			
      call    _cmain			// il resto dell'inizializzazione
      					// e' scritto in C++
-     addl    $8, %esp
-     // qui non possiamo arrivare, ma non si sa mai
-loop:   hlt
-     jmp     loop
+   //Non si ritorna qui, scrivo comunque il codice necessario in caso di un ritorno.
+     addl    $12, %esp     
+     leave
+     ret
 
 
 //////////////////////////////////////////////////////////////////
