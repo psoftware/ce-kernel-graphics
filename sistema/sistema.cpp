@@ -2223,7 +2223,7 @@ c_activate_p(void f(int), int a, int prio, char liv)
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
-asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
+asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;nop;hlt;leave;ret;": :"r"(return_ebp):);
 }
 
 extern "C" void c_terminate_p()
@@ -4025,7 +4025,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
 	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, max_mem_upper >> 20 );
-	
+
 	// interpretiamo i parametri
 	for (arg = str_token(mbi->cmdline, &cont);
 	     cont != 0 || arg != 0;
@@ -4082,12 +4082,12 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 	attiva_paginazione();
 	flog(LOG_INFO, "Paginazione attivata");
 
-	// quando abbiamo finito di usare la struttura dati passataci dal boot
-	// loader, possiamo assegnare allo heap la memoria fisica di indirizzo
-	// < 1MiB. Lasciamo inutilizzata la prima pagina, in modo che
-	// l'indirizzo 0 non venga mai allocato e possa essere utilizzato per
-	// specificare un puntatore non valido
-	free_interna(addr(SIZE_PAGINA), max_mem_lower - addr(SIZE_PAGINA));
+	//Per lasciare intatto il primo Mib di memoria sposto nucleo di 100 
+	//pagine pi avanti in modo da lasciare lo spazio libero per lo heap.
+	//(vedi makefile)
+	//Passo alla free_interna l'indirizzo corrispondente all'inizio del 
+	//primo MB 0x00100000 e la dimensione di 100 pagine.
+	free_interna(addr(SIZE_PAGINA*256), (SIZE_PAGINA*100));
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati
