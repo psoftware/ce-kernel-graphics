@@ -2196,6 +2196,9 @@ extern "C" void schedulatore(void);
 extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 
 
+// resetta controllore interruzioni
+extern "C" void reset_8259();
+
 extern "C" short
 c_activate_p(void f(int), int a, int prio, char liv)
 {
@@ -2223,7 +2226,8 @@ c_activate_p(void f(int), int a, int prio, char liv)
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
-asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;nop;hlt;leave;ret;": :"r"(return_ebp):);
+		reset_8259();   //Ripristino i registri dei PIC
+asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
 }
 
 extern "C" void c_terminate_p()
@@ -3901,6 +3905,49 @@ error:
 	return;
 }
 
+
+void parse_heap(char* arg, int& heap_mem)
+{
+	heap_mem = 256*SIZE_PAGINA;
+	
+	
+
+	 
+		// il Primo carattere indica l'unitˆ di misura 
+	switch (*arg) {
+	case '\0':
+		flog(LOG_WARN, "Opzione -h: parametro incompleto");
+		goto errore;
+	case 'M':
+	case 'm':
+		// Megabyte
+		arg++;
+	if (*arg == '\0') {
+		flog(LOG_WARN, "Opzione -h: manca la dimensione");
+		goto errore;
+	}
+	heap_mem = strtoi(arg)*256*SIZE_PAGINA;
+	// il Secondo carattere indica la dimensione
+		break;
+	case 'B':
+	case 'b':
+		// Byte
+		heap_mem = strtoi(arg);
+		break;
+	default:
+		flog(LOG_WARN, "Opzione -h: il drive deve essere 'M' o 'B'");
+		goto errore;
+	}
+
+
+
+	
+errore:
+	heap_mem = 256*SIZE_PAGINA;
+
+	return;
+}
+
 // timer
 extern unsigned long ticks;
 extern unsigned long clocks_per_usec;
@@ -3990,6 +4037,7 @@ bool crea_spazio_condiviso(addr& last_address)
 }
 
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
+int heap_mem=256*SIZE_PAGINA;
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
@@ -3997,6 +4045,9 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 {
 	des_proc* pdes_proc;
 	char *arg, *cont;
+	
+	//Inizializzo la variabile globale return_ebp con il valore del registro %ebp 
+	// passatomi da sistem.s al momento della chiamata a cmain
     return_ebp=retebp;
 
 	// anche se il primo processo non e' completamente inizializzato,
@@ -4040,6 +4091,10 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 			// indicazione sulla partizione di swap
 			parse_swap(&arg[2], swap_ch, swap_drv, swap_part);
 			break;
+		case 'h':
+			//indiazioni sullo heap
+			parse_heap(&arg[2], heap_mem);
+		break;
 		default:
 			flog(LOG_WARN, "Opzione sconosciuta: '%s'", arg[1]);
 		}
@@ -4082,12 +4137,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 	attiva_paginazione();
 	flog(LOG_INFO, "Paginazione attivata");
 
-	//Per lasciare intatto il primo Mib di memoria sposto nucleo di 100 
-	//pagine pi avanti in modo da lasciare lo spazio libero per lo heap.
-	//(vedi makefile)
-	//Passo alla free_interna l'indirizzo corrispondente all'inizio del 
-	//primo MB 0x00100000 e la dimensione di 100 pagine.
-	free_interna(addr(SIZE_PAGINA*256), (SIZE_PAGINA*100));
+	//Assegna allo heap il primo MB di spazio disponibile dopo nucleo
+	free_interna(addr(mbi->mem_upper + SIZE_PAGINA*257), (heap_mem));
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati

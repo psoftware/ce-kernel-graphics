@@ -912,6 +912,53 @@ _init_8259:
 	leave
 	ret
 
+// ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
+// Inizializzo la modalità fully nasted e i tipi base sono rispettivamente 0x08 per il master
+// e 0x70 per lo slave.
+		.global _reset_8259
+_reset_8259:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+   	movb	$0x8f, %al		// Disabilita Le interruzioni non Mascherabili per modificare i 
+	outb	$0x70			// registri dei controllori di delle interruzioni.
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+
+	// re-inizializza il controllore delle interruzioni ai normali settaggi per la realmode
+		
+	movb	$0xff, %al		// OCW1
+	outb	$0x21			// maschera tutte le interruzioni
+	outb	$0xa1
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+
+	movb	$0x11, %al		// ICW1
+	outb	$0x20
+	outb	$0xa0
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+
+	movb	$0x08, %al		// ICW2 - base Dos Master
+	outb	$0x21
+	movb	$0x70, %al		// ICW2 - base Dos Slave
+	outb	$0xa1
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+
+	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR è connesso allo slave
+	outb	$0x21
+	movb	$0x02, %al
+	outb	$0xa1
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+
+	movb	$0x01, %al		// ICW4	-	Modo annidato
+	outb	$0x21
+	outb	$0xa1
+    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+ 
+	popl %eax
+	leave
+	ret
+
+
 // timer
 // registri dell'interfaccia di conteggio
 .set CWR,     0x43
