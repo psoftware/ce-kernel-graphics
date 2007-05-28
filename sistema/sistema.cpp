@@ -3908,12 +3908,10 @@ error:
 
 void parse_heap(char* arg, int& heap_mem)
 {
-	heap_mem = 256*SIZE_PAGINA;
-	
-	
+	int dim;
 
 	 
-		// il Primo carattere indica l'unitˆ di misura 
+	// il Primo carattere indica l'unita' di misura 
 	switch (*arg) {
 	case '\0':
 		flog(LOG_WARN, "Opzione -h: parametro incompleto");
@@ -3921,31 +3919,33 @@ void parse_heap(char* arg, int& heap_mem)
 	case 'M':
 	case 'm':
 		// Megabyte
-		arg++;
-	if (*arg == '\0') {
-		flog(LOG_WARN, "Opzione -h: manca la dimensione");
-		goto errore;
-	}
-	heap_mem = strtoi(arg)*256*SIZE_PAGINA;
-	// il Secondo carattere indica la dimensione
+		dim = 1024*1024;
+		break;
+	case 'K':
+	case 'k':
+		// Kilobyte
+		dim = 1024;
 		break;
 	case 'B':
 	case 'b':
 		// Byte
-		heap_mem = strtoi(arg);
+		dim = 1;
 		break;
 	default:
-		flog(LOG_WARN, "Opzione -h: il drive deve essere 'M' o 'B'");
+		flog(LOG_WARN, "Opzione -h: la dimensione deve essere 'M', 'K' o 'B'");
 		goto errore;
 	}
-
-
-
-	
-errore:
-	heap_mem = 256*SIZE_PAGINA;
+	arg++;
+	if (*arg == '\0') {
+		flog(LOG_WARN, "Opzione -h: manca la dimensione");
+		goto errore;
+	}
+	heap_mem = strtoi(arg)*dim;
 
 	return;
+errore:
+	flog(LOG_WARN, "Assumo dimensione di default per lo heap");
+
 }
 
 // timer
@@ -4037,7 +4037,7 @@ bool crea_spazio_condiviso(addr& last_address)
 }
 
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
-int heap_mem=256*SIZE_PAGINA;
+int heap_mem = DEFAULT_HEAP_SIZE;
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
@@ -4106,6 +4106,10 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 		max_mem_upper = fine_sistema_privato;
 		flog(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
 	}
+	
+	//Assegna allo heap heap_mem byte a partire dalla fine del modulo sistema
+	salta_a(mem_upper + heap_mem);
+	flog(LOG_INFO, "Heap di sistema: %d B", heap_mem);
 
 
 	// il resto della memoria e' per le pagine fisiche
@@ -4137,8 +4141,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 	attiva_paginazione();
 	flog(LOG_INFO, "Paginazione attivata");
 
-	//Assegna allo heap il primo MB di spazio disponibile dopo nucleo
-	free_interna(addr(mbi->mem_upper + SIZE_PAGINA*257), (heap_mem));
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
 	// semafori allocati

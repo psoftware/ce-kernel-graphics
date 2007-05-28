@@ -19,6 +19,7 @@
 #define SIZE_DESP		216
 #define SIZE_DESS		8
 #define DELAY			59659		
+#define DEFAULT_HEAP_SIZE	(1024*1024)
 
 #define MAX_PRIORITY		0x7ffffff
 #define MIN_PRIORITY		0x8000000
