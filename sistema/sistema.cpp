@@ -1658,8 +1658,8 @@ int rimpiazzamento()
 	// disabilitati, garantendo la mutua esclusione con la routine del 
 	// timer)
 	j = i;
+	vittima = &pagine_fisiche[j];
 	for (i++; i < num_pagine_fisiche; i++) {
-		vittima = &pagine_fisiche[j];
 		ppf = &pagine_fisiche[i];
 		if (ppf->residente)
 			continue;
@@ -1668,12 +1668,16 @@ int rimpiazzamento()
 			// se e' una pagina virtuale, dobbiamo preferirla a una 
 			// tabella, in caso di uguaglianza nei contatori
 			if (ppf->contatore < vittima->contatore ||
-			    ppf->contatore == vittima->contatore && vittima->contenuto == TABELLA) 
+			    ppf->contatore == vittima->contatore && vittima->contenuto == TABELLA) {
 				j = i;
+				vittima = &pagine_fisiche[j];
+			}
 			break;
 		case TABELLA:
-			if (ppf->contatore < vittima->contatore)
+			if (ppf->contatore < vittima->contatore) {
 				j = i;
+				vittima = &pagine_fisiche[j];
+			}
 			break;
 		default:
 			// in tutti gli altri casi la pagina non e' 
