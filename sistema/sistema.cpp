@@ -1734,7 +1734,7 @@ error:
 extern "C" int c_resident(addr start, int quanti)
 {
 	int da_fare;
-	addr vero_start, last, indirizzo_virtuale;
+	addr vero_start, last, ind_virt;
 	direttorio *pdir;
 	des_pf *ppf;
 
@@ -1754,62 +1754,21 @@ extern "C" int c_resident(addr start, int quanti)
 
 	pdir = leggi_cr3();
 
-	indirizzo_virtuale = vero_start;
-	while(indirizzo_virtuale < last)
-	{
-		descrittore_tabella *pdes_tab = &pdir->entrate[indice_direttorio(indirizzo_virtuale)];
-		tabella *ptab;
-
-		if (pdes_tab->P == 1) {
-			ptab = tabella_puntata(pdes_tab);
-		} else {
-			ptab = alloca_tabella();
-			if (ptab == 0) 
-				ptab = rimpiazzamento_tabella();
-			if (! carica_tabella(pdes_tab, ptab) ) {
-				rilascia(ptab);
-				goto out;
-			}
-			collega_tabella(pdir, ptab, indice_direttorio(indirizzo_virtuale));
-		} 
-			
-		for (int i = indice_tabella(indirizzo_virtuale); i < 1024 && indirizzo_virtuale < last; i++)
-		{
-			descrittore_pagina *pdes_pag =
-				&ptab->entrate[i];
-			pagina *pag;
-
-			if (pdes_pag->P == 0) {
-				pag = alloca_pagina_virtuale();
-				if (pag == 0)  
-					pag = rimpiazzamento_pagina_virtuale(ptab);
-				if (! carica_pagina_virtuale(pdes_pag, pag) ) {
-					rilascia(pag);
-					goto out;
-				}
-				collega_pagina_virtuale(ptab, pag, indirizzo_virtuale);
-				pdes_pag->D = 0;
-			} else {
-				pag = pagina_puntata(pdes_pag);
-			}
-			// marchiamo la pagina come residente
-			ppf = &pagine_fisiche[indice_pf(pag)];
-			ppf->residente = true;
-
-			// prossimo indirizzo virtuale da considerare
-			indirizzo_virtuale = indirizzo_virtuale + SIZE_PAGINA;
-		}
+	for (ind_virt = vero_start; ind_virt < last; ind_virt += SIZE_PAGINA) {
+		pagina *pag = trasferimento(pdir, ind_virt);
+		if (pag == 0)
+			break;
+		// marchiamo la pagina come residente
+		ppf = &pagine_fisiche[indice_pf(pag)];
+		ppf->residente = true;
 	}
 
-out:
-	// qualunque cosa sia accaduta, rilasciamo il semaforo di mutua 
-	// esclusione
 	sem_signal(pf_mutex);
 
-	if (indirizzo_virtuale > start + quanti)
-		indirizzo_virtuale = start + quanti;
+	if (ind_virt > start + quanti)
+		ind_virt = start + quanti;
 
-	return indirizzo_virtuale - start;
+	return ind_virt - start;
 }
 
 
