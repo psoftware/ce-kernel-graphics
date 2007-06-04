@@ -1328,6 +1328,10 @@ void aggiorna_statistiche()
 	des_pf *ppf1, *ppf2;
 	tabella* ptab;
 	descrittore_pagina* pp;
+	static unsigned int istanza = 0;
+
+	if (istanza++ % 16 != 0)
+		return;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
@@ -2186,11 +2190,14 @@ c_activate_p(void f(int), int a, int prio, char liv)
 
 //Disabilito le interruzioni, ripristino l'ebp della multiboot_entry in sistema.d e ritorno
 //al chiamante (bldr32)
+extern "C" void a_shutdown(int return_ebp);
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
-		reset_8259();   //Ripristino i registri dei PIC
-asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
+	//ripristina_timer();
+	reset_8259();   //Ripristino i registri dei PIC
+	a_shutdown(return_ebp);
+//asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
 }
 
 extern "C" void c_terminate_p()
@@ -4004,15 +4011,11 @@ int heap_mem = DEFAULT_HEAP_SIZE;
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
-extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
+extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 {
 	des_proc* pdes_proc;
 	char *arg, *cont;
 	
-	//Inizializzo la variabile globale return_ebp con il valore del registro %ebp 
-	// passatomi da sistem.s al momento della chiamata a cmain
-    return_ebp=retebp;
-
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
 	init.identifier = 0;
@@ -4136,6 +4139,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi,int retebp)
 	// da qui in poi, e' il processo main che esegue
 	schedulatore();
 	salta_a_main();
+	return;
 
 error:
 	c_panic("Errore di inizializzazione", 0, 0, 0, 0);

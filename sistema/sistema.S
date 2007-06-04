@@ -202,13 +202,19 @@ multiboot_header:
 #endif 
 
 multiboot_entry:
-//Per mantenere l'indirizzo di ritorno, sostituisco alle istruzioni che azzerano la pila, un prologo.
-     push    %ebp
-     movl    %esp, %ebp
-     
-  //Per ora le ho solo commentate in vista di una futura rimozione
-  //   movl    $(_stack + STACK_SIZE), %esp // inizializziamo lo stack
+     movl    %esp, save_esp
+     movl    $(_stack + STACK_SIZE), %esp // inizializziamo lo stack
+
+     pushf
+     pushal
+     pushl   %ds
+     pushl   %es
+     pushl   %fs
+     pushl   %gs
+     pushl   %ss
+
      call    init_gdt
+     sgdt    save_gdt
      lgdt    gdt_pointer		// carichiamo la nuova GDT
 
      ljmp    $SEL_CODICE_SISTEMA, $qui	// ricarichiamo CS
@@ -221,25 +227,35 @@ qui:
      movw    %cx, %fs
      movw    %cx, %gs
 
- //    movl    $0, %ebp			// azzeriamo il base pointer
+     movl    $0, %ebp			// azzeriamo il base pointer
 					// (utile per capire dove finisce la 
 					// lista dei frame di attivazione)
 
      call    init_idt			// riempie i gate per le eccezioni
+     sidt    save_idt
      lidt    idt_pointer		// carichiamo la nuova IDT
 	
      pushl   $0				// resettiamo EFLAG
      popf				// N.B.: interrupt disabilitati
 					// (perche', azzerando tutti i flag,
 					// abbiamo azzerato anche IF)
-     pushl   %ebp           //passo al cmain il base pointer di questa funzione
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			
      call    _cmain			// il resto dell'inizializzazione
      					// e' scritto in C++
-   //Non si ritorna qui, scrivo comunque il codice necessario in caso di un ritorno.
-     addl    $12, %esp     
-     leave
+     addl    $8, %esp     
+	
+     lidt   save_idt
+     lgdt   save_gdt
+     popl   %ss
+     popl   %gs
+     popl   %fs
+     popl   %es
+     popl   %ds
+     popal
+     popf
+
+     movl save_esp, %esp
      ret
 
 
@@ -754,6 +770,27 @@ _attiva_paginazione:
 	popl %eax
 	ret
 
+// disattiva la paginazione
+	.global _disattiva_paginazione
+_disattiva_paginazione:
+	pushl %eax
+
+	movl %cr0, %eax
+	andl $0x7FFFFFFF, %eax
+	movl %eax, %cr0
+
+	popl %eax
+	ret
+
+	.global _a_shutdown
+_a_shutdown:
+	cli
+	movl shutdown_esp, %esp
+	movl shutdown_ebp, %ebp
+	call _disattiva_paginazione
+	ret
+	
+
 // dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
 // eliminare la corrispondente traduzione dal TLB
 	.global _invalida_entrata_TLB
@@ -1078,12 +1115,8 @@ _calibra_tsc:
 // le informazioni iniziali dallo swap)
 	.global _salta_a_main
 _salta_a_main:
-	// creiamo in pila la struttura che la salva_stato e la successiva iret 
-	// si aspettano
-	popl %eax			// indirizzo di ritorno in %eax		
-	pushl $0x00000200		// eflag, IF=1
-	pushl $SEL_CODICE_SISTEMA	// cs
-	pushl %eax			// eip
+	movl %esp, shutdown_esp
+	movl %ebp, shutdown_ebp
 	call carica_stato		// carichiamo tr
 	iret				// torniamo al chiamante "trasformati" in processo
 
@@ -2169,3 +2202,15 @@ _stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
+save_gdt:
+	.word 0
+	.long 0
+save_idt:
+	.word 0
+	.long 0
+save_esp:
+	.long 0
+shutdown_esp:
+	.long 0
+shutdown_ebp:
+	.long 0
