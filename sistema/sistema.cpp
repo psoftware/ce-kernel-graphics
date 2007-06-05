@@ -1328,10 +1328,6 @@ void aggiorna_statistiche()
 	des_pf *ppf1, *ppf2;
 	tabella* ptab;
 	descrittore_pagina* pp;
-	static unsigned int istanza = 0;
-
-	if (istanza++ % 16 != 0)
-		return;
 
 	for (int i = 0; i < num_pagine_fisiche; i++) {
 		ppf1 = &pagine_fisiche[i];
