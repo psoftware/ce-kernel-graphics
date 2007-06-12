@@ -1,0 +1,69 @@
+/*
+ * Mailbox
+ */
+
+#include <sys.h>
+#include <lib.h>
+
+const int NMESG = 5;
+
+semaphore mailbox_piena value 0;
+semaphore mailbox_vuota value 1;
+
+process scrittore1 body pms(0), 5, LIV_UTENTE;
+process scrittore2 body pms(NMESG), 5, LIV_UTENTE;
+process lettore   body pml(0), 5, LIV_UTENTE;
+
+int mailbox;
+
+void writeint(int n)
+{
+	char buf[11];
+	int i = 11;
+	bool neg = false;
+
+	if (n == 0) {
+		writeconsole("0");
+		return;
+	}
+
+	if (n < 0) {
+		n = -n;
+		neg = true;
+	}
+	while (n > 0) {
+		buf[i] = n % 10 + '0';
+		n = n / 10;
+		i--;
+	}
+	if (neg) {
+		buf[i] = '-';
+		i--;
+	}
+	writeconsole(&buf[i]);
+}
+		
+process_body pms(int a)
+{
+	int m;
+	for (int i = 0; i < 2 * NMESG; i++) {
+		sem_wait(mailbox_piena);
+		m = mailbox;
+		sem_signal(mailbox_vuota);
+		writeint(m);
+	}
+	writeconsole("fine scrittore\n");
+}
+
+process_body pml(int a)
+{
+	int m = a;
+	for (int i = 0; i < NMESG; i++) {
+		sem_wait(mailbox_vuota);
+		mailbox = a;
+		sem_signal(mailbox_piena);
+		a++;
+		delay(1);
+	}
+	writeconsole("fine lettore\n");
+}
