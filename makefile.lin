@@ -22,6 +22,9 @@ build/io2: io/io2_s.o io/io2_cpp.o
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	ld -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
 
+build/utente2: utente/uten_s.o utente/uten_cpp.o
+	ld -nostdlib -o build/utente2 -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o
+
 
 # compilazione di sistema.s e sistema.cpp
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
@@ -82,9 +85,12 @@ util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
 build/creatimg: util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
 	g++ -g -o build/creatimg util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
-.PHONY: swap
+.PHONY: swap swap2
 swap: build/creatimg build/io build/utente
 	build/creatimg $(SWAP) build/io build/utente
+
+swap2: build/creatimg build/io2 build/utente2
+	build/creatimg $(SWAP) build/io2 build/utente2
 	
 clean:
 	rm -f sistema/*.o io/*.o utente/*.o util/*.o
