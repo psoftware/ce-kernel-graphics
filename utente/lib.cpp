@@ -1374,10 +1374,13 @@ bool vterm_init()
 		vterm_clear(i);
 
 	}
-	flog(LOG_INFO, "vterm: creati %d terminali virtuali", i);
-
-	vterm_switch(0);
-	return true;
+	if (i) {
+		flog(LOG_INFO, "vterm: creati %d terminali virtuali", i);
+		vterm_switch(0);
+		return true;
+	}
+	flog(LOG_WARN, "vterm: terminali virtuali non disponibili");
+	return false;
 }
 
 

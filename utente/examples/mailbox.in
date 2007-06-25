@@ -6,64 +6,88 @@
 #include <lib.h>
 
 const int NMESG = 5;
+const int MSG_SIZE = 100;
 
 semaphore mailbox_piena value 0;
 semaphore mailbox_vuota value 1;
 
-process scrittore1 body pms(0), 5, LIV_UTENTE;
-process scrittore2 body pms(NMESG), 5, LIV_UTENTE;
+process scrittore1 body pms(1), 5, LIV_UTENTE;
+process scrittore2 body pms(2), 5, LIV_UTENTE;
 process lettore   body pml(0), 5, LIV_UTENTE;
 
-int mailbox;
+struct mess {
+	int mittente;
+	char corpo[MSG_SIZE];
+};
 
-void writeint(int n)
+mess mailbox;
+
+char* copy(char* src, char* dst) {
+	while (*src)
+		*dst++ = *src++;
+	*dst = '\0';
+	return dst;
+}
+
+char* convint(int n, char* out)
 {
-	char buf[11];
+	char buf[12];
 	int i = 11;
 	bool neg = false;
 
-	if (n == 0) {
-		writeconsole("0");
-		return;
-	}
+	if (n == 0) 
+		return copy("0", out);
+
+	buf[i--] = '\0';
 
 	if (n < 0) {
 		n = -n;
 		neg = true;
 	}
 	while (n > 0) {
-		buf[i] = n % 10 + '0';
+		buf[i--] = n % 10 + '0';
 		n = n / 10;
-		i--;
 	}
-	if (neg) {
-		buf[i] = '-';
-		i--;
-	}
-	writeconsole(&buf[i]);
+	if (neg)
+		buf[i--] = '-';
+	return copy(buf + i + 1, out);
 }
+
 		
 process_body pms(int a)
 {
-	int m;
-	for (int i = 0; i < 2 * NMESG; i++) {
-		sem_wait(mailbox_piena);
-		m = mailbox;
-		sem_signal(mailbox_vuota);
-		writeint(m);
+	char buf[MSG_SIZE];
+	int m = a;
+	char *ptr;
+	for (int i = 0; i < NMESG; i++) {
+		ptr = copy("Messaggio numero ", buf);
+		convint(i, ptr);
+		sem_wait(mailbox_vuota);
+		mailbox.mittente = a;
+		copy(buf, mailbox.corpo);
+		sem_signal(mailbox_piena);
+		delay(20);
 	}
-	writeconsole("fine scrittore\n");
+	ptr = copy("fine scrittore", buf);
+	convint(a, ptr);
+	writeconsole(buf);
 }
 
 process_body pml(int a)
 {
-	int m = a;
-	for (int i = 0; i < NMESG; i++) {
-		sem_wait(mailbox_vuota);
-		mailbox = a;
-		sem_signal(mailbox_piena);
-		a++;
-		delay(1);
+	char buf[100 + MSG_SIZE], *ptr;
+	char corpo[MSG_SIZE];
+	int mittente;
+	for (int i = 0; i < 2 * NMESG; i++) {
+		sem_wait(mailbox_piena);
+		mittente = mailbox.mittente;
+		copy(mailbox.corpo, corpo);
+		sem_signal(mailbox_vuota);
+		ptr = copy("mittente=", buf);
+		ptr = convint(mittente, ptr);
+		ptr = copy(" corpo=", ptr);
+		copy(corpo, ptr);
+		writeconsole(buf);
 	}
-	writeconsole("fine lettore\n");
+	writeconsole("fine lettore");
 }

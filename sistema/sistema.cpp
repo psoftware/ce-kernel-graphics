@@ -120,9 +120,6 @@ extern addr mem_upper;
 // (assegna quanti byte, a partire da indirizzo, allo heap di sistema)
 void free_interna(addr indirizzo, unsigned int quanti);
 
-//Indirizzo di ritorno a loader
-int return_ebp;
-
 // allocazione sequenziale, da usare durante la fase di inizializzazione.  Si
 // mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
 // puntatore puo' solo avanzare, tramite le funzioni 'occupa' e 'salta_a', e
@@ -2186,14 +2183,13 @@ c_activate_p(void f(int), int a, int prio, char liv)
 
 //Disabilito le interruzioni, ripristino l'ebp della multiboot_entry in sistema.d e ritorno
 //al chiamante (bldr32)
-extern "C" void a_shutdown(int return_ebp);
+extern "C" void a_shutdown();
 void shutdown()
 {
 	flog(LOG_INFO, "Tutti i processi sono terminati!");
 	//ripristina_timer();
 	reset_8259();   //Ripristino i registri dei PIC
-	a_shutdown(return_ebp);
-//asm("cli;movl %0, %%eax;movl %%eax, %%ebp;movl %%ebp, %%esp;leave;ret;": :"r"(return_ebp):);
+	a_shutdown();
 }
 
 extern "C" void c_terminate_p()
@@ -2523,7 +2519,7 @@ extern "C" void c_delay(int n)
 	richiesta *p;
 
 	p = new richiesta;
-	p->d_attesa = n;
+	p->d_attesa = n;	
 	p->pp = esecuzione;
 
 	inserimento_coda_timer(p);
@@ -4206,9 +4202,6 @@ void main_proc(int n)
 	if (!log_init_usr())
 		goto error;
 		
-	//Stampo l'indirizzo di ritorno a bldr32 Questa riga pu˜ essere cancellata!
-		      flog(LOG_INFO, "Il valore di return_ebp e' %x", return_ebp); /////////////////
-		      
 	// ora trasformiamo il processo corrente in un processo utente (in modo 
 	// che possa passare ad eseguire la routine main)
 	flog(LOG_INFO, "salto a livello utente...");

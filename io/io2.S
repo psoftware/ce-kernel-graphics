@@ -41,6 +41,7 @@
 .set io_tipo_wse0,  IO_TIPO_WSE0
 .set io_tipo_rkbd,  IO_TIPO_RKBD		
 .set io_tipo_wvid,  IO_TIPO_WVID		
+.set io_tipo_gmon,  IO_TIPO_GMON		
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -694,6 +695,7 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_wse0	a_writese_0
 	fill_io_gate	io_tipo_rkbd	a_readconsole
 	fill_io_gate	io_tipo_wvid	a_writeconsole
+	fill_io_gate	io_tipo_gmon	a_vmon_getsize
 	leave
 	ret
 
@@ -759,4 +761,9 @@ a_writeconsole:
 	call _c_writeconsole
 	addl $4, %esp
 	carica_registri
+	iret
+
+	.global a_vmon_getsize
+a_vmon_getsize:
+	xorl %eax, %eax
 	iret
