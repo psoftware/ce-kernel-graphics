@@ -94,6 +94,33 @@
 
 .endm
 
+.macro check_cavallo
+	testl $0x80000000, %eax
+	jnz 1f
+	pushl %eax
+	pushl $param_err
+	pushl $2
+	call _flog
+	addl $12, %esp
+	int $tipo_ab
+1:
+
+.endm
+
+.macro cavallo_di_troia offset
+
+	movl (\offset * 4) (%esp), %eax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 offset1 offset2
+
+	movl (\offset1 * 4) (%esp), %eax
+	addl (\offset2 * 4) (%esp), %eax
+	decl %eax
+	check_cavallo
+.endm
+
 
 // Carica un gate della IDT
 // num: indice (a partire da 0) in IDT del gate da caricare
@@ -565,7 +592,6 @@ init_idt:
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
 	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
-	carica_gate	tipo_va		a_verifica_area	LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
@@ -1538,6 +1564,7 @@ driver_hd1:
 a_activate_p:	// routine int $tipo_a
 	salva_reg_rit
         copia_param 4 6		// salva_registri ha inserito 6 long in pila
+	cavallo_di_troia 0
         call _c_activate_p
         addl $16, %esp
         carica_reg_rit
@@ -1597,6 +1624,7 @@ a_mem_alloc:	// routine int $tipo_ma
 a_mem_free:	// routine int $tipo_mf
 	salva_registri
 	copia_param 1 7
+	cavallo_di_troia 0
 	call _c_mem_free
 	addl $4, %esp
 	carica_registri
@@ -1615,6 +1643,7 @@ a_delay:	// routine int $tipo_d
 a_readlog:	// routine int $tipo_rl
 	salva_registri
 	copia_param 1 7
+	cavallo_di_troia 0
 	call _c_readlog
 	addl $4, %esp
 	carica_registri
@@ -1624,6 +1653,8 @@ a_readlog:	// routine int $tipo_rl
 a_resident:	// routine int $tipo_r
 	salva_reg_rit
 	copia_param 2 6
+	cavallo_di_troia 0
+	cavallo_di_troia2 0 1
 	call _c_resident
 	addl $8, %esp
 	carica_reg_rit
@@ -1638,6 +1669,7 @@ a_resident:	// routine int $tipo_r
 a_activate_pe:
 	salva_reg_rit
         copia_param 5 6		// salva_registri ha inserito 7 long in pila
+	cavallo_di_troia 0
         call _c_activate_pe
         addl $20, %esp	
 	carica_reg_rit
@@ -1667,15 +1699,6 @@ m_noack:
 	call carica_stato
 	iret
 
-	.extern _c_verifica_area
-a_verifica_area:
-	salva_reg_rit
-	copia_param 3 6
-	call _c_verifica_area
-	addl $12, %esp
-	carica_reg_rit
-	iret
-
 a_fill_gate:
 	salva_registri
 	copia_param 3 7
@@ -1688,6 +1711,7 @@ a_fill_gate:
 a_panic:	// routine int $tipo_p
 	call salva_stato
 	copia_param 1 0
+	cavallo_di_troia 1
 	call _c_panic
 1:	nop
 	jmp 1b
@@ -1703,6 +1727,8 @@ a_abort_p:
 a_log:
 	call salva_stato
 	copia_param 3 0
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
 	call _c_log
 	addl $12, %esp
 	call carica_stato
@@ -1720,6 +1746,9 @@ a_log:
 a_readhd_n:
 	salva_registri
 	copia_param 6 7
+	cavallo_di_troia 2
+	cavallo_di_troia2 2 4
+	cavallo_di_troia 5
 	call _c_readhd_n
 	addl $24, %esp
 	carica_registri
@@ -1731,6 +1760,9 @@ a_readhd_n:
 a_writehd_n:
 	salva_registri
 	copia_param 6 7
+	cavallo_di_troia 2
+	cavallo_di_troia2 2 4
+	cavallo_di_troia 5
 	call _c_writehd_n
 	addl $24, %esp
 	carica_registri
@@ -2214,3 +2246,5 @@ shutdown_esp:
 	.long 0
 shutdown_ebp:
 	.long 0
+param_err:
+	.asciz "parametro errato %x"

@@ -85,6 +85,33 @@
            movsl			// copia dei parametri
 .endm
 
+.macro check_cavallo
+	testl $0x80000000, %eax
+	jnz 1f
+	pushl %eax
+	pushl $param_err
+	pushl $2
+	call _flog
+	addl $12, %esp
+	int $tipo_ab
+1:
+
+.endm
+
+.macro cavallo_di_troia offset
+
+	movl (\offset * 4) (%esp), %eax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 offset1 offset2
+
+	movl (\offset1 * 4) (%esp), %eax
+	addl (\offset2 * 4) (%esp), %eax
+	decl %eax
+	check_cavallo
+.endm
+
 // Salvataggio dei registri in pila
 .macro salva_registri
 	pushl %eax
@@ -178,6 +205,8 @@ _com:	.long	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].funzione
 	.long	0		// com[1].stato
 
+param_err:
+	.asciz "parametro errato %x"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -228,11 +257,6 @@ _activate_pe:
 	.global _nwfi
 _nwfi:
 	int $tipo_nwfi
-	ret
-
-	.global _verifica_area
-_verifica_area:
-	int $tipo_va
 	ret
 
 	.global _panic
@@ -683,6 +707,9 @@ _fill_io_gates:
 a_readse_n:
 	salva_registri
 	copia_param 4 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 3
 	call _c_readse_n
 	addl $16, %esp
 	carica_registri
@@ -693,6 +720,10 @@ a_readse_n:
 a_readse_ln:
 	salva_registri
 	copia_param 4 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 2
+	cavallo_di_troia 3
 	call _c_readse_ln
 	addl $16, %esp
 	carica_registri
@@ -703,6 +734,8 @@ a_readse_ln:
 a_writese_n:
 	salva_registri
 	copia_param 3 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
 	call _c_writese_n
 	addl $12, %esp
 	carica_registri
@@ -713,6 +746,9 @@ a_writese_n:
 a_writese_0:
 	salva_registri
 	copia_param 3 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 2
 	call _c_writese_0
 	addl $12, %esp
 	carica_registri
@@ -773,6 +809,8 @@ a_vmon_switch:
 a_vmon_write_n:
 	salva_registri
 	copia_param 4 7
+	cavallo_di_troia 2
+	cavallo_di_troia2 2 3
 	call _c_vmon_write_n
 	addl $16, %esp
 	carica_registri
@@ -793,6 +831,8 @@ a_vmon_setcursor:
 a_vmon_getsize:
 	salva_reg_rit
 	copia_param 3 6
+	cavallo_di_troia 1
+	cavallo_di_troia 2
 	call _c_vmon_getsize
 	addl $12, %esp
 	carica_reg_rit

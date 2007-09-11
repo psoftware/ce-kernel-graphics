@@ -65,7 +65,7 @@ bool str_equal(const char* first, const char* second);
 // funzioni utili alla gestione degli errori
 // 
 // invia un messaggio formatto al log
-void flog(log_sev, const char* fmt, ...);
+extern "C" void flog(log_sev, const char* fmt, ...);
 // restituisce l'ultimo messaggio inviato al log
 const char* last_log();
 // restituisce l'ultimo messaggio di errore inviato al log
@@ -2171,11 +2171,6 @@ void rilascia_tutto(direttorio* pdir, addr start, int ntab)
 // schedulatore
 extern "C" void schedulatore(void);
 
-// verifica i diritti del processo in esecuzione sull' area di memoria
-// specificata dai parametri
-extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
-
-
 // resetta controllore interruzioni
 extern "C" void reset_8259();
 
@@ -2546,36 +2541,6 @@ extern "C" void c_delay(int n)
 	schedulatore();
 }
 
-// verifica i permessi del processo sui parametri passati (problema del
-//  Cavallo di Troia)
-extern "C" bool c_verifica_area(void* a, unsigned int dim, bool write)
-{
-	des_proc *pdes_proc;
-	direttorio* pdirettorio;
-	char liv;
-	addr area = toaddr(a);
-	
-	pdes_proc = des_p(esecuzione->identifier);
-	liv = pdes_proc->liv;
-	pdirettorio = pdes_proc->cr3;
-
-	for (addr i = area; i < area + dim; i += SIZE_PAGINA) {
-		descrittore_tabella *pdes_tab = &pdirettorio->entrate[indice_direttorio(i)];
-		if (liv == LIV_UTENTE && pdes_tab->p.US == 0)
-			return false;
-		if (write && pdes_tab->p.RW == 0)
-			return false;
-		if (pdes_tab->p.P == 0)
-			continue;
-		tabella *ptab = tabella_puntata(pdes_tab);
-		descrittore_pagina *pdes_pag = &ptab->entrate[indice_tabella(i)];
-		if (liv == LIV_UTENTE && pdes_pag->p.US == 0)
-			return false;
-		if (write && pdes_pag->p.RW == 0)
-			return false;
-	}
-	return true;
-}
 
 // Il log e' un buffer circolare di messaggi, dove ogni messaggio e' composto 
 // da tre campi:
@@ -3471,10 +3436,6 @@ extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 
 	p_des = &hd[ind_ata];
 
-	//if (!verifica_area(&quanti,sizeof(int),true) ||
-	//!verifica_area(vetti,quanti,true) ||
-	//!verifica_area(&errore,sizeof(char),true)) return;
-
 	// Controllo sulla selezione di un drive presente
 	if (!p_des->disco[drv].presente) {
 		errore = D_ERR_PRESENCE;
@@ -3510,9 +3471,6 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], un
 
 	p_des = &hd[ind_ata];
 
-	//if (!verifica_area(&quanti,sizeof(int),true) ||
-	//!verifica_area(vetti,quanti,true) ||
-	//!verifica_area(&errore,sizeof(char),true)) return;
 
 	// Controllo sulla selezione di un drive presente
 	if (!p_des->disco[drv].presente) {

@@ -1,4 +1,3 @@
-// io.s
 //
 #define ASM 1
 #include "costanti.h"
@@ -135,6 +134,33 @@
 	addl $12, %esp
 .endm
 
+.macro check_cavallo
+	testl $0x80000000, %eax
+	jnz 1f
+	pushl %eax
+	pushl $param_err
+	pushl $2
+	call _flog
+	addl $12, %esp
+	int $tipo_ab
+1:
+
+.endm
+
+.macro cavallo_di_troia offset
+
+	movl (\offset * 4) (%esp), %eax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 offset1 offset2
+
+	movl (\offset1 * 4) (%esp), %eax
+	addl (\offset2 * 4) (%esp), %eax
+	decl %eax
+	check_cavallo
+.endm
+
 .global start, _start
 start:
 _start:	jmp _cmain
@@ -144,6 +170,9 @@ _start:	jmp _cmain
 ////////////////////////////////////////////////////////////////////////////////
 
 	.data
+
+param_err:
+	.asciz "parametro errato %x"
 
 // Descrittori delle interfacce seriali
 	.global _com		// non comi, como
@@ -251,11 +280,6 @@ _activate_pe:
 	.global _nwfi
 _nwfi:
 	int $tipo_nwfi
-	ret
-
-	.global _verifica_area
-_verifica_area:
-	int $tipo_va
 	ret
 
 	.global _panic
@@ -708,6 +732,9 @@ _fill_io_gates:
 a_readse_n:
 	salva_registri
 	copia_param 4 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 3
 	call _c_readse_n
 	addl $16, %esp
 	carica_registri
@@ -718,6 +745,10 @@ a_readse_n:
 a_readse_ln:
 	salva_registri
 	copia_param 4 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 2
+	cavallo_di_troia 3
 	call _c_readse_ln
 	addl $16, %esp
 	carica_registri
@@ -728,6 +759,8 @@ a_readse_ln:
 a_writese_n:
 	salva_registri
 	copia_param 3 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
 	call _c_writese_n
 	addl $12, %esp
 	carica_registri
@@ -738,6 +771,9 @@ a_writese_n:
 a_writese_0:
 	salva_registri
 	copia_param 3 7
+	cavallo_di_troia 1
+	cavallo_di_troia2 1 2
+	cavallo_di_troia 2
 	call _c_writese_0
 	addl $12, %esp
 	carica_registri
@@ -748,6 +784,9 @@ a_writese_0:
 a_readconsole:
 	salva_registri
 	copia_param 2 7
+	cavallo_di_troia 0
+	cavallo_di_troia2 0 1
+	cavallo_di_troia 1
 	call _c_readconsole
 	addl $8, %esp
 	carica_registri
@@ -758,6 +797,7 @@ a_readconsole:
 a_writeconsole:
 	salva_registri
 	copia_param 1 7
+	cavallo_di_troia 0
 	call _c_writeconsole
 	addl $4, %esp
 	carica_registri

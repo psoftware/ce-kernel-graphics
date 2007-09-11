@@ -1114,7 +1114,7 @@ void vterm_rewrite_chars(des_vterm *t, const char vetti[], int quanti, bool visi
 void vterm_setcolor(int term, int fgcol, int bgcol, bool blink)
 {
 	if(term < 0 || term >= N_VTERM) {
-		flog(LOG_WARN, "vterm: terminale inesitente: %d", term);
+		flog(LOG_WARN, "vterm: terminale inesistente: %d", term);
 		return;
 	}
 

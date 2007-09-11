@@ -39,7 +39,6 @@
 
 #define TIPO_AE			0x40
 #define TIPO_NWFI		0x41
-#define TIPO_VA			0x42
 #define TIPO_FG			0x44
 #define TIPO_P			0x45
 #define TIPO_AB			0x48

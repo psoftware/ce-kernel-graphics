@@ -34,7 +34,6 @@ extern "C" short activate_pe(void f(int), int a, int prio, char liv, int irq);
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
 
-extern "C" bool verifica_area(void *area, unsigned int dim, bool write);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void abort_p();
 
@@ -64,7 +63,7 @@ extern "C" void inputbuffw(ind_b reg, unsigned short *a, short n);
 // uscita di una stringa di word su un buffer di IO
 extern "C" void outputbuffw(short *a, ind_b reg,short n);
 
-void flog(log_sev sev, const char* fmt, ...);
+extern "C" void flog(log_sev sev, const char* fmt, ...);
 void *memset(void *dest, int c, unsigned int n);
 void *memcpy(void *dest, const void *src, unsigned int n);
 
@@ -113,8 +112,7 @@ extern "C" void c_readse_n(int serial, unsigned char vetti[], int quanti, char &
 {
 	des_se *p_des;
 
-	if(serial < 0 || serial >= S || !verifica_area(vetti, quanti, true) ||
-			!verifica_area(&errore, sizeof(char), true))
+	if (serial < 0 || serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -129,10 +127,7 @@ extern "C" void c_readse_ln(int serial, unsigned char vetti[], int &quanti, char
 {
 	des_se *p_des;
 
-	if(serial < 0 || serial >= S ||
-			!verifica_area(&quanti, sizeof(int), true) ||
-			!verifica_area(vetti, quanti, true) ||
- 			!verifica_area(&errore, sizeof(char), true))
+	if (serial < 0 || serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -248,8 +243,8 @@ extern "C" void c_writese_n(int serial, unsigned char vetto[], int quanti)
 {
 	des_se *p_des;
 
-	if(serial < 0 || serial >= S || !verifica_area(vetto, quanti, false))
-		return;
+	if (serial < 0 || serial >= S)
+		abort_p();
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -262,10 +257,8 @@ extern "C" void c_writese_0(int serial, unsigned char vetto[], int &quanti)
 {
 	des_se *p_des;
 
-	if(serial < 0 || serial >= S ||
-			!verifica_area(&quanti, sizeof(int), true) ||
-			!verifica_area(vetto, quanti, false))
-		return;
+	if(serial < 0 || serial >= S)
+		abort_p();
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -909,7 +902,7 @@ void *memset(void *dest, int c, unsigned int n)
 }
 
 // log formattato
-void flog(log_sev sev, const char *fmt, ...)
+extern "C" void flog(log_sev sev, const char *fmt, ...)
 {
 	va_list ap;
 	char buf[LOG_MSG_SIZE];
