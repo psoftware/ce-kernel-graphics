@@ -32,24 +32,37 @@ unsigned int a2i(void* v) {
 	return reinterpret_cast<unsigned int>(v);
 }
 
-struct descrittore_pagina {
-	// byte di accesso
-	unsigned int P:		1;	// bit di presenza
-	unsigned int RW:	1;	// Read/Write
-	unsigned int US:	1;	// User/Supervisor
-	unsigned int PWT:	1;	// Page Write Through
-	unsigned int PCD:	1;	// Page Cache Disable
-	unsigned int A:		1;	// Accessed
-	unsigned int D:		1;	// Dirty
-	unsigned int pgsz:	1;	// non visto a lezione
-	unsigned int global:	1;	// non visto a lezione
-	// fine byte di accesso
+union descrittore_pagina {
+	// caso di pagina presente
+	struct {
+		// byte di accesso
+		unsigned int P:		1;	// bit di presenza
+		unsigned int RW:	1;	// Read/Write
+		unsigned int US:	1;	// User/Supervisor
+		unsigned int PWT:	1;	// Page Write Through
+		unsigned int PCD:	1;	// Page Cache Disable
+		unsigned int A:		1;	// Accessed
+		unsigned int D:		1;	// Dirty
+		unsigned int pgsz:	1;	// non visto a lezione
+		// fine byte di accesso
+		
+		unsigned int global:	1;	// non visto a lezione
+		unsigned int avail:	3;	// non usati
 
-	unsigned int avail:	3;	// non usato
+		unsigned int address:	20;	// indirizzo fisico
+	} p;
+	// caso di pagina assente
+	struct {
+		// informazioni sul tipo di pagina
+		unsigned int P:		1;
+		unsigned int RW:	1;
+		unsigned int US:	1;
+		unsigned int PWT:	1;
+		unsigned int PCD:	1;
 
-	unsigned int address:	20;	// indirizzo fisico/blocco
+		unsigned int block:	27;
+	} a;	
 };
-
 
 typedef descrittore_pagina descrittore_tabella;
 
@@ -77,11 +90,11 @@ short indice_tabella(uint indirizzo) {
 }
 
 tabella_pagine* tabella_puntata(descrittore_tabella* pdes_tab) {
-	return reinterpret_cast<tabella_pagine*>(pdes_tab->address << 12);
+	return reinterpret_cast<tabella_pagine*>(pdes_tab->p.address << 12);
 }
 
 pagina* pagina_puntata(descrittore_pagina* pdes_pag) {
-	return reinterpret_cast<pagina*>(pdes_pag->address << 12);
+	return reinterpret_cast<pagina*>(pdes_pag->p.address << 12);
 }
 
 struct bm_t {
@@ -189,7 +202,7 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 		{
 			block_t b;
 			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
-			if (pdes_tab->address == 0) {
+			if (pdes_tab->a.block == 0) {
 				memset(&tab, 0, sizeof(tabella_pagine));
 			
 				if (! bm_alloc(&blocks, b) ) {
@@ -197,32 +210,36 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 					exit(EXIT_FAILURE);
 				}
 
-				pdes_tab->address = b;
-				pdes_tab->RW	  = 1;
-				pdes_tab->US	  = liv;
-				pdes_tab->P	   = 1;
+				pdes_tab->a.block = b;
+				pdes_tab->a.PWT   = 0;
+				pdes_tab->a.PCD   = 0;
+				pdes_tab->a.RW	  = 1;
+				pdes_tab->a.US	  = liv;
+				pdes_tab->a.P	  = 1;
 			} else {
-				CHECKSW(leggi_blocco, pdes_tab->address, &tab);
+				CHECKSW(leggi_blocco, pdes_tab->a.block, &tab);
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
 			if (!s->finito()) {
-				if (pdes_pag->address == 0) {
+				if (pdes_pag->a.block == 0) {
 					if (! bm_alloc(&blocks, b) ) {
 						fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
 						exit(EXIT_FAILURE);
 					}
-					pdes_pag->address = b;
+					pdes_pag->a.block = b;
 				} else {
-					CHECKSW(leggi_blocco, pdes_pag->address, &pag);
+					CHECKSW(leggi_blocco, pdes_pag->a.block, &pag);
 				}
 				s->copia_prossima_pagina(&pag);
-				CHECKSW(scrivi_blocco, pdes_pag->address, &pag);
+				CHECKSW(scrivi_blocco, pdes_pag->a.block, &pag);
 			} 
-			pdes_pag->RW |= s->scrivibile();
-			pdes_pag->US |= liv;
-			pdes_pag->P  |= (1 - liv);
-			CHECKSW(scrivi_blocco, pdes_tab->address, &tab);
+			pdes_pag->a.PWT = 0;
+			pdes_pag->a.PCD = 0;
+			pdes_pag->a.RW |= s->scrivibile();
+			pdes_pag->a.US |= liv;
+			pdes_pag->a.P  |= (1 - liv);
+			CHECKSW(scrivi_blocco, pdes_tab->a.block, &tab);
 		}
 
 	}
@@ -281,18 +298,20 @@ int main(int argc, char* argv[])
 	// - prima, eventuali descrittori di pagina nell'ultima tabella 
 	// utilizzata:
 	descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(last_address)];
-	if (pdes_tab->P) {
+	if (pdes_tab->a.P) {
 		tabella_pagine tab;
-		CHECKSW(leggi_blocco, pdes_tab->address, &tab);
+		CHECKSW(leggi_blocco, pdes_tab->a.block, &tab);
 		int primo_indice = indice_tabella(last_address) + (last_address % SIZE_PAGINA ? 1 : 0);
 		for (int i = primo_indice; i < 1024; i++) {
 			descrittore_pagina *pdes_pag = &tab.entrate[i];
-			pdes_pag->address = 0;
-			pdes_pag->US	  = 1;
-			pdes_pag->RW	  = 1;
-			pdes_pag->P	  = 0;
+			pdes_pag->a.block = 0;
+			pdes_pag->a.PWT   = 0;
+			pdes_pag->a.PCD   = 0;
+			pdes_pag->a.US	  = 1;
+			pdes_pag->a.RW	  = 1;
+			pdes_pag->a.P	  = 0;
 		}
-		CHECKSW(scrivi_blocco, pdes_tab->address, &tab);
+		CHECKSW(scrivi_blocco, pdes_tab->a.block, &tab);
 	}
 	// - quindi, i rimanenti descrittori di tabella:
 	for (int i = indice_direttorio(last_address) + 1;
@@ -300,10 +319,12 @@ int main(int argc, char* argv[])
 		 i++)
 	{
 		descrittore_tabella* pdes_tab = &main_dir.entrate[i];
-		pdes_tab->address = 0;
-		pdes_tab->US	  = 1;
-		pdes_tab->RW	  = 1;
-		pdes_tab->P       = 1;
+		pdes_tab->a.block = 0;
+		pdes_tab->a.PWT   = 0;
+		pdes_tab->a.PCD   = 0;
+		pdes_tab->a.US	  = 1;
+		pdes_tab->a.RW	  = 1;
+		pdes_tab->a.P     = 1;
 	}
 		
 	superblock.magic[0] = 'C';
