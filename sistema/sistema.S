@@ -74,9 +74,9 @@
 .macro copia_param n_long n_reg
 
         movl $\n_reg, %ecx
-        movw 4(%esp, %ecx, 4), %ax      // CS in AX
-        andb $0b00000011, %al	        // CPL del chiamante in AL
-	cmpb $LIV_SISTEMA, %al		// se sistema, non c'e' stato cambio pila
+        movw 4(%esp, %ecx, 4), %dx      // CS in DX
+        andb $0b00000011, %dl	        // CPL del chiamante in CL
+	cmpb $LIV_SISTEMA, %dl		// se sistema, non c'e' stato cambio pila
         je 1f                           // copia da pila sistema 
         movl 12(%esp, %ecx, 4), %eax    // vecchio ESP (della pila utente) in EAX
         leal 4(%eax), %esi		// indirizzo del primo parametro in ESI
@@ -94,7 +94,10 @@
 
 .endm
 
+// DL livello
 .macro check_cavallo
+	cmpb $LIV_SISTEMA, %dl
+	je 1f
 	testl $0x80000000, %eax
 	jnz 1f
 	pushl %eax
