@@ -100,7 +100,7 @@ extern "C" void abort_p();
 // partire dall'indirizzo 0x100000, corrispondente a 1 MiB, quindi il primo 
 // mega byte, esclusa la zona dedicata alla memoria video, risulta 
 // inutilizzato) Queste regioni, man mano che vengono scoperte, vengono 
-// aggiunte allo heap di sistema. Nella seconda fase, il sistema usa lo heap 
+// aggiunte allo heap di sistema. nNella seconda fase, il sistema usa lo heap 
 // cosi' ottenuto per allocare la memoria richiesta dall'operatore new (per 
 // es., per "new richiesta").
 
@@ -938,10 +938,12 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indi
 	ppf->tab.blocco      = pdes_tab->a.block; // vedi NOTA prec.
 	
 	// mapping diretto
-	pdes_tab->p.address    = toaddr(ptab) >> 12;
+	pdes_tab->p.P          = 1; // presente
+	pdes_tab->p.A	       = 0;
 	pdes_tab->p.D          = 0; // bit riservato nel caso di descr. tabella
 	pdes_tab->p.pgsz       = 0; // pagine di 4KB
-	pdes_tab->p.P          = 1; // presente
+	pdes_tab->p.global     = 0;
+	pdes_tab->p.address    = toaddr(ptab) >> 12;
 
 	return pdes_tab;
 }
@@ -991,8 +993,11 @@ descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, addr ind
 
 	// mapping diretto
 	pdes_pag->p.P		= 1; // presente
-	pdes_pag->p.address	= toaddr(pag) >> 12;
+	pdes_pag->p.A		= 0;
+	pdes_pag->p.D		= 0;
 	pdes_pag->p.pgsz	= 0; // bit riservato nel caso di descr. di pagina
+	pdes_pag->p.global	= 0;
+	pdes_pag->p.address	= toaddr(pag) >> 12;
 
 	return pdes_pag;
 }
@@ -1038,10 +1043,10 @@ bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
 			}
-			pdes_tab->p.address   = toaddr(ptab) >> 12;
+			pdes_tab->p.address = toaddr(ptab) >> 12;
 			pdes_tab->p.D	    = 0;
+			pdes_tab->p.A	    = 0;
 			pdes_tab->p.pgsz    = 0; // pagine di 4K
-			pdes_tab->p.D	    = 0;
 			pdes_tab->p.US	    = 0; // livello sistema;
 			pdes_tab->p.RW	    = 1; // scrivibile
 			pdes_tab->p.P 	    = 1; // presente
