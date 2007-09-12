@@ -41,13 +41,17 @@ class EseguibileCoff_go32: public Eseguibile {
 		uint curr_offset;
 		uint curr_vaddr;
 		uint da_leggere;
+		uint line;
+		size_t curr;
 	public:
 		SegmentoCoff_go32(EseguibileCoff_go32 *padre_, SCNHDR* ph_);
 		virtual bool scrivibile() const;
 		virtual uint ind_virtuale() const;
 		virtual uint dimensione() const;
 		virtual bool finito() const;
-		virtual bool copia_prossima_pagina(void* dest);
+		virtual bool prossima_pagina();
+		virtual bool pagina_di_zeri() const;
+		virtual bool copia_pagina(void* dest);
 		~SegmentoCoff_go32() {}
 	};
 
@@ -148,7 +152,9 @@ EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* p
 	: padre(padre_), ph(ph_),
 	  curr_offset(ph->s_scnptr),
 	  curr_vaddr(ph->s_vaddr),
-	  da_leggere(ph->s_size)
+	  da_leggere(ph->s_size),
+	  line(curr_vaddr & ~(SIZE_PAGINA -1)),
+	  curr(da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere)
 {
 }
 
@@ -173,7 +179,7 @@ bool EseguibileCoff_go32::SegmentoCoff_go32::finito() const
 }
 
 
-bool EseguibileCoff_go32::SegmentoCoff_go32::copia_prossima_pagina(void* dest)
+bool EseguibileCoff_go32::SegmentoCoff_go32::copia_pagina(void* dest)
 {
 	if (finito())
 		return false;
@@ -183,9 +189,6 @@ bool EseguibileCoff_go32::SegmentoCoff_go32::copia_prossima_pagina(void* dest)
 		exit(EXIT_FAILURE);
 	}
 
-	uint line = curr_vaddr & 0x00000fff;
-
-	size_t curr = (da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere);
 	if (ph->s_flags & STYP_BSS) {
 		memset((char*)dest + line, 0, curr);
 	} else {
@@ -194,10 +197,25 @@ bool EseguibileCoff_go32::SegmentoCoff_go32::copia_prossima_pagina(void* dest)
 			exit(EXIT_FAILURE);
 		}
 	}
+	return true;
+}
+
+bool EseguibileCoff_go32::SegmentoCoff_go32::prossima_pagina()
+{
+	if (finito())
+		return false;
+
 	da_leggere -= curr;
 	curr_offset += curr;
 	curr_vaddr += curr;
+	line = curr_vaddr & (~SIZE_PAGINA -1);
+	curr = (da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere);
 	return true;
+}
+
+bool EseguibileCoff_go32::SegmentoCoff_go32::pagina_di_zeri() const
+{
+	return (ph->s_flags & STYP_BSS && line == 0 && curr == SIZE_PAGINA);
 }
 
 Eseguibile* InterpreteCoff_go32::interpreta(FILE* pexe)

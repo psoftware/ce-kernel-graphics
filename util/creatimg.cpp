@@ -269,7 +269,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			if (!s->finito()) {
+			if (!s->pagina_di_zeri()) {
 				if (pdes_pag->a.block == 0) {
 					if (! bm_alloc(&blocks, b) ) {
 						fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
@@ -279,7 +279,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 				} else {
 					CHECKSW(leggi_blocco, pdes_pag->a.block, &pag);
 				}
-				s->copia_prossima_pagina(&pag);
+				s->copia_pagina(&pag);
 				CHECKSW(scrivi_blocco, pdes_pag->a.block, &pag);
 			} 
 			pdes_pag->a.PWT = 0;
@@ -288,6 +288,7 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 			pdes_pag->a.US |= liv;
 			pdes_pag->a.P  |= (1 - liv);
 			tabc.scrivi();
+			s->prossima_pagina();
 		}
 
 	}

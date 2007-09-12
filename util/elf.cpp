@@ -37,14 +37,18 @@ class EseguibileElf32: public Eseguibile {
 		EseguibileElf32 *padre;
 		Elf32_Phdr* ph;
 		uint curr_offset;
+		uint curr;
 		uint da_leggere;
+		uint ancora;
 	public:
 		SegmentoElf32(EseguibileElf32 *padre_, Elf32_Phdr* ph_);
 		virtual bool scrivibile() const;
 		virtual uint ind_virtuale() const;
 		virtual uint dimensione() const;
 		virtual bool finito() const;
-		virtual bool copia_prossima_pagina(void* dest);
+		virtual bool copia_pagina(void* dest);
+		virtual bool prossima_pagina();
+		virtual bool pagina_di_zeri() const;
 		~SegmentoElf32() {}
 	};
 
@@ -134,8 +138,11 @@ EseguibileElf32::~EseguibileElf32()
 EseguibileElf32::SegmentoElf32::SegmentoElf32(EseguibileElf32* padre_, Elf32_Phdr* ph_)
 	: padre(padre_), ph(ph_),
 	  curr_offset(ph->p_offset & ~(SIZE_PAGINA - 1)),
-	  da_leggere(ph->p_filesz + (ph->p_offset - curr_offset))
-{}
+	  da_leggere(ph->p_filesz + (ph->p_offset - curr_offset)),
+	  ancora(ph->p_memsz)
+{
+	curr = (da_leggere > SIZE_PAGINA ? SIZE_PAGINA : da_leggere);
+}
 
 bool EseguibileElf32::SegmentoElf32::scrivibile() const
 {
@@ -154,28 +161,38 @@ uint EseguibileElf32::SegmentoElf32::dimensione() const
 
 bool EseguibileElf32::SegmentoElf32::finito() const
 {
-	return (da_leggere <= 0);
+	return (ancora <= 0);
 }
 
-
-bool EseguibileElf32::SegmentoElf32::copia_prossima_pagina(void* dest)
+bool EseguibileElf32::SegmentoElf32::prossima_pagina()
 {
 	if (finito())
 		return false;
+	da_leggere -= curr;
+	curr_offset += curr;
+	curr = (da_leggere > SIZE_PAGINA ? SIZE_PAGINA : da_leggere);
+	return true;
+}
+
+bool EseguibileElf32::SegmentoElf32::pagina_di_zeri() const {
+	return (da_leggere <= 0);
+}
+
+bool EseguibileElf32::SegmentoElf32::copia_pagina(void* dest)
+{
+	if (curr == 0)
+		return true;
 
 	if (fseek(padre->pexe, curr_offset, SEEK_SET) != 0) {
 		fprintf(stderr, "errore nel file ELF\n");
 		exit(EXIT_FAILURE);
 	}
 
-	memset(dest, 0, SIZE_PAGINA);
-	int curr = (da_leggere > SIZE_PAGINA ? SIZE_PAGINA : da_leggere);
+	if (curr < SIZE_PAGINA) memset(dest, 0, SIZE_PAGINA);
 	if (fread(dest, 1, curr, padre->pexe) < curr) {
 		fprintf(stderr, "errore nella lettura dal file ELF\n");
 		exit(EXIT_FAILURE);
 	}
-	da_leggere -= curr;
-	curr_offset += curr;
 	return true;
 }
 

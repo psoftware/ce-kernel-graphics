@@ -17,7 +17,9 @@ public:
 	virtual unsigned int ind_virtuale() const = 0;
 	virtual unsigned int dimensione() const = 0;
 	virtual bool finito() const = 0;
-	virtual bool copia_prossima_pagina(void* dest) = 0;
+	virtual bool prossima_pagina() = 0;
+	virtual bool pagina_di_zeri() const = 0;
+	virtual bool copia_pagina(void * dest) = 0;
 	virtual ~Segmento() {}
 };
 
