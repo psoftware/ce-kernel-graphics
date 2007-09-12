@@ -153,12 +153,66 @@ void bm_free(bm_t *bm, unsigned int pos)
 superblock_t superblock;
 direttorio main_dir;
 bm_t blocks;
-tabella_pagine tab;
 pagina pag;
+tabella_pagine tab;
+Swap* swap = NULL;
 
-void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_address)
+class TabCache {
+	bool dirty;
+	bool valid;
+	block_t block;
+public:
+	
+	TabCache() {
+		valid = false;
+	}
+
+	~TabCache() {
+		if (valid && dirty) {
+			CHECKSW(scrivi_blocco, block, &tab);
+		}
+	}
+
+	block_t nuova() {
+		block_t b;
+
+		if (valid && dirty) {
+			CHECKSW(scrivi_blocco, block, &tab);
+		}
+		memset(&tab, 0, sizeof(tabella_pagine));
+	
+		if (! bm_alloc(&blocks, b) ) {
+			fprintf(stderr, "spazio insufficiente nello swap\n");
+			exit(EXIT_FAILURE);
+		}
+		valid = true;
+		dirty = true;
+		block = b;
+		return b;
+	}
+
+	void leggi(block_t blocco) {
+		if (valid) {
+			if (blocco == block)
+				return;
+			if (dirty)
+				CHECKSW(scrivi_blocco, block, &tab);
+		}
+		CHECKSW(leggi_blocco, blocco, &tab);
+		block = blocco;
+		valid = true;
+		dirty = false;
+	}
+	void scrivi() {
+		dirty = true;
+	}
+};
+
+
+void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 {
 	FILE* exe;
+	TabCache tabc;
 
 	if ( !(exe = fopen(fname, "rb")) ) {
 		perror(fname);
@@ -203,13 +257,7 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 			block_t b;
 			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
 			if (pdes_tab->a.block == 0) {
-				memset(&tab, 0, sizeof(tabella_pagine));
-			
-				if (! bm_alloc(&blocks, b) ) {
-					fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
-					exit(EXIT_FAILURE);
-				}
-
+				b = tabc.nuova();
 				pdes_tab->a.block = b;
 				pdes_tab->a.PWT   = 0;
 				pdes_tab->a.PCD   = 0;
@@ -217,7 +265,7 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 				pdes_tab->a.US	  = liv;
 				pdes_tab->a.P	  = 1;
 			} else {
-				CHECKSW(leggi_blocco, pdes_tab->a.block, &tab);
+				tabc.leggi(pdes_tab->a.block);
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
@@ -239,7 +287,7 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 			pdes_pag->a.RW |= s->scrivibile();
 			pdes_pag->a.US |= liv;
 			pdes_pag->a.P  |= (1 - liv);
-			CHECKSW(scrivi_blocco, pdes_tab->a.block, &tab);
+			tabc.scrivi();
 		}
 
 	}
@@ -251,8 +299,6 @@ void do_map(Swap *swap, char* fname, int liv, void*& entry_point, uint& last_add
 
 int main(int argc, char* argv[])
 {
-	Swap *swap = NULL;
-
 	if (argc < 3) {
 		fprintf(stderr, "Utilizzo: %s <swap> <modulo io> <modulo utente>\n", argv[0]);
 		exit(EXIT_FAILURE);
@@ -288,10 +334,10 @@ int main(int argc, char* argv[])
 	memset(&main_dir, 0, sizeof(direttorio));
 
 	uint last_address;
-	do_map(swap, argv[2], 0, superblock.io_entry, last_address);
+	do_map(argv[2], 0, superblock.io_entry, last_address);
 	superblock.io_end = addr(last_address);
 
-	do_map(swap, argv[3], 1, superblock.user_entry, last_address);
+	do_map(argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = addr(last_address);
 
 	// le tabelle condivise per lo heap:
