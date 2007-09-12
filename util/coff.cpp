@@ -153,7 +153,7 @@ EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* p
 	  curr_offset(ph->s_scnptr),
 	  curr_vaddr(ph->s_vaddr),
 	  da_leggere(ph->s_size),
-	  line(curr_vaddr & ~(SIZE_PAGINA -1)),
+	  line(curr_vaddr & (SIZE_PAGINA - 1)),
 	  curr(da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere)
 {
 }
@@ -208,7 +208,7 @@ bool EseguibileCoff_go32::SegmentoCoff_go32::prossima_pagina()
 	da_leggere -= curr;
 	curr_offset += curr;
 	curr_vaddr += curr;
-	line = curr_vaddr & (~SIZE_PAGINA -1);
+	line = curr_vaddr & (SIZE_PAGINA - 1);
 	curr = (da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere);
 	return true;
 }
