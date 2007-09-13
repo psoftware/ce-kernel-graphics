@@ -963,15 +963,16 @@ void vterm_update_vmoncursor(des_vterm *t)
 static
 void vterm_lazy_clear(des_vterm* t, int first, int end)
 {
-	if (t->uncleared < first || t->uncleared >= end)
+	if (t->uncleared >= end)
 		return;
 
-	if (first < t->append_off)
-		first = t->append_off;
+	if (first < t->uncleared)
+		first = t->uncleared;
 
-	for (; t->uncleared < end; t->uncleared++)
-		t->video[(t->base + t->uncleared) % t->video_size] =
+	for (; first < end; first++)
+		t->video[(t->base + first) % t->video_size] =
 			vterm_mks(' ', t->clear_attr);
+	t->uncleared = end;
 }
 
 
@@ -1033,10 +1034,7 @@ bool vterm_make_visible(des_vterm *t, int off)
 static
 void vterm_addline(des_vterm *t)
 {
-	for (int i = 0; i < t->video_max_x; i++) {
-		t->video[t->base] = vterm_mks(' ', t->attr);
-		t->base = (t->base + 1) % t->video_size;
-	}
+	t->base = (t->base + t->video_max_x) % t->video_size;
 	t->video_off  -= t->video_max_x;
 	t->append_off -= t->video_max_x;
 	t->vmon_off   -= t->video_max_x;
@@ -1337,8 +1335,6 @@ void vterm_clear(int term)
 		t->base = 0;
 		t->video_off = t->append_off = t->vmon_off = 0;
 		t->uncleared = 0;
-		//for (int j = 0; j < t->video_size; j++)
-		//	t->video[j] = vterm_mks(' ', t->attr);
 		vterm_redraw_vmon(t);
 	}
 	sem_signal(t->mutex_w);
@@ -1399,6 +1395,7 @@ bool vterm_init()
 		p_des->funzione = none;
 		p_des->tab = 8;
 		p_des->clear_attr = vterm_mkattr(COL_LIGHTGRAY, COL_BLACK, false);
+		vterm_setcolor(i, COL_LIGHTGRAY, COL_BLACK);
 		vterm_clear(i);
 
 	}
