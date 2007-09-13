@@ -542,10 +542,13 @@ struct des_vterm {
 				// tramite le operazioni di movimento cursore
 	int vmon_off;		// offset (rispetto a "base") del primo
 				// carattere visualizzato sul monitor virtuale
+	int uncleared;		// offset (rispetto a "base") del primo
+				// carattere non pulito
 	vterm_edit_status stat;
 	unsigned int vmon_size;	// dimensione del monitor virtuale
 	unsigned int video_size;// dimensione del buffer video
 	unsigned char attr;	// byte di attributi colore
+	unsigned char clear_attr;
 	int tab;		// dimensione delle tabulazioni
 
 	bool scroll_lock;	// blocco dello scorrimento
@@ -957,6 +960,20 @@ void vterm_update_vmoncursor(des_vterm *t)
 	vmon_setcursor(t->vmon, t->video_off - t->vmon_off);
 }
 
+static
+void vterm_lazy_clear(des_vterm* t, int first, int end)
+{
+	if (t->uncleared < first || t->uncleared >= end)
+		return;
+
+	if (first < t->append_off)
+		first = t->append_off;
+
+	for (; t->uncleared < end; t->uncleared++)
+		t->video[(t->base + t->uncleared) % t->video_size] =
+			vterm_mks(' ', t->clear_attr);
+}
+
 
 static
 void vterm_update_vmon(des_vterm *t, int first, int end)
@@ -969,6 +986,8 @@ void vterm_update_vmon(des_vterm *t, int first, int end)
 
 	if (end > t->vmon_off + t->vmon_size)
 		end = t->vmon_off + t->vmon_size;
+
+	vterm_lazy_clear(t, first, end);
 
 	unsigned int abs_first = (t->base + first) % t->video_size;
 	unsigned int abs_end   = (t->base + end)   % t->video_size;
@@ -1091,8 +1110,11 @@ void vterm_write_chars(des_vterm * t, const char vetti[], int quanti)
 	}
 	if (last > first) 
 		vterm_update_vmon(t, first, last);
-	if (t->video_off > t->append_off)
+	if (t->video_off > t->append_off) {
 		t->append_off = t->video_off;
+		if (t->append_off > t->uncleared)
+			t->uncleared = t->append_off;
+	}
 }
 
 static
@@ -1110,6 +1132,11 @@ void vterm_rewrite_chars(des_vterm *t, const char vetti[], int quanti, bool visi
 		vterm_redraw_vmon(t);
 }
 
+unsigned char vterm_mkattr(int fgcol, int bgcol, bool blink)
+{
+	return (fgcol & 0xf) | (bgcol & 0x7) << 4 | (blink ? 0x80 : 0x00);
+}
+
 
 void vterm_setcolor(int term, int fgcol, int bgcol, bool blink)
 {
@@ -1120,7 +1147,7 @@ void vterm_setcolor(int term, int fgcol, int bgcol, bool blink)
 
 	des_vterm *t = &vterm[term];
 
-	t->attr = (fgcol & 0xf) | (bgcol & 0x7) << 4 | (blink ? 0x80 : 0x00);
+	t->attr = vterm_mkattr(fgcol, bgcol, blink);
 }
 
 static
@@ -1307,11 +1334,11 @@ void vterm_clear(int term)
 
 	sem_wait(t->mutex_w);
 	if (t->funzione == none) {
-		vterm_setcolor(term, COL_LIGHTGRAY, COL_BLACK);
 		t->base = 0;
 		t->video_off = t->append_off = t->vmon_off = 0;
-		for (int j = 0; j < t->video_size; j++)
-			t->video[j] = vterm_mks(' ', t->attr);
+		t->uncleared = 0;
+		//for (int j = 0; j < t->video_size; j++)
+		//	t->video[j] = vterm_mks(' ', t->attr);
 		vterm_redraw_vmon(t);
 	}
 	sem_signal(t->mutex_w);
@@ -1371,6 +1398,7 @@ bool vterm_init()
 		p_des->vmon = i;
 		p_des->funzione = none;
 		p_des->tab = 8;
+		p_des->clear_attr = vterm_mkattr(COL_LIGHTGRAY, COL_BLACK, false);
 		vterm_clear(i);
 
 	}
