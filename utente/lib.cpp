@@ -961,18 +961,17 @@ void vterm_update_vmoncursor(des_vterm *t)
 }
 
 static
-void vterm_lazy_clear(des_vterm* t, int first, int end)
+int vterm_lazy_clear(des_vterm* t, int end)
 {
-	if (t->uncleared >= end)
-		return;
+	int last = t->vmon_off + t->vmon_size;
 
-	if (first < t->uncleared)
-		first = t->uncleared;
+	if (t->uncleared >= last)
+		return end;
 
-	for (; first < end; first++)
-		t->video[(t->base + first) % t->video_size] =
+	for (; t->uncleared < last; t->uncleared++)
+		t->video[(t->base + t->uncleared) % t->video_size] =
 			vterm_mks(' ', t->clear_attr);
-	t->uncleared = end;
+	return last;
 }
 
 
@@ -988,7 +987,7 @@ void vterm_update_vmon(des_vterm *t, int first, int end)
 	if (end > t->vmon_off + t->vmon_size)
 		end = t->vmon_off + t->vmon_size;
 
-	vterm_lazy_clear(t, first, end);
+	end = vterm_lazy_clear(t, end);
 
 	unsigned int abs_first = (t->base + first) % t->video_size;
 	unsigned int abs_end   = (t->base + end)   % t->video_size;
@@ -1040,6 +1039,7 @@ void vterm_addline(des_vterm *t)
 	t->vmon_off   -= t->video_max_x;
 	t->orig_off   -= t->video_max_x;
 	t->pref_off   -= t->video_max_x;
+	t->uncleared  -= t->video_max_x;
 }
 
 static
