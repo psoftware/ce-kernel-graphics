@@ -14,8 +14,8 @@
 #define LIV_UTENTE		3
 #define LIV_SISTEMA		0
 
-#define SIZE_PAGINA		4096
-#define SIZE_SUPERPAGINA	(SIZE_PAGINA * 1024)
+#define DIM_PAGINA		4096
+#define SIZE_SUPERPAGINA	(DIM_PAGINA * 1024)
 #define SIZE_DESP		216
 #define SIZE_DESS		8
 #define DELAY			59659		
@@ -90,7 +90,7 @@ const unsigned int inizio_sistema_condiviso = 0x00000000;
 const unsigned int fine_sistema_condiviso   = inizio_sistema_condiviso + dim_sistema_condiviso;
 const unsigned int inizio_sistema_privato   = fine_sistema_condiviso;
 const unsigned int fine_sistema_privato     = inizio_sistema_privato + dim_sistema_privato;
-const unsigned int inizio_io_condiviso	    = fine_sistema_privato;
+const unsigned int inizio_io_condiviso      = fine_sistema_privato;
 const unsigned int fine_io_condiviso	    = inizio_io_condiviso + dim_io_condiviso;
 const unsigned int inizio_utente_condiviso  = fine_io_condiviso;
 const unsigned int fine_utente_condiviso    = inizio_utente_condiviso + dim_utente_condiviso;

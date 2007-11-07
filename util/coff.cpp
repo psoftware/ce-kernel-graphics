@@ -153,8 +153,8 @@ EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* p
 	  curr_offset(ph->s_scnptr),
 	  curr_vaddr(ph->s_vaddr),
 	  da_leggere(ph->s_size),
-	  line(curr_vaddr & (SIZE_PAGINA - 1)),
-	  curr(da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere)
+	  line(curr_vaddr & (DIM_PAGINA - 1)),
+	  curr(da_leggere > DIM_PAGINA - line ? DIM_PAGINA - line: da_leggere)
 {
 }
 
@@ -208,14 +208,14 @@ bool EseguibileCoff_go32::SegmentoCoff_go32::prossima_pagina()
 	da_leggere -= curr;
 	curr_offset += curr;
 	curr_vaddr += curr;
-	line = curr_vaddr & (SIZE_PAGINA - 1);
-	curr = (da_leggere > SIZE_PAGINA - line ? SIZE_PAGINA - line: da_leggere);
+	line = curr_vaddr & (DIM_PAGINA - 1);
+	curr = (da_leggere > DIM_PAGINA - line ? DIM_PAGINA - line: da_leggere);
 	return true;
 }
 
 bool EseguibileCoff_go32::SegmentoCoff_go32::pagina_di_zeri() const
 {
-	return (ph->s_flags & STYP_BSS && line == 0 && curr == SIZE_PAGINA);
+	return (ph->s_flags & STYP_BSS && line == 0 && curr == DIM_PAGINA);
 }
 
 Eseguibile* InterpreteCoff_go32::interpreta(FILE* pexe)

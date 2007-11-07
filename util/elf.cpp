@@ -137,11 +137,11 @@ EseguibileElf32::~EseguibileElf32()
 
 EseguibileElf32::SegmentoElf32::SegmentoElf32(EseguibileElf32* padre_, Elf32_Phdr* ph_)
 	: padre(padre_), ph(ph_),
-	  curr_offset(ph->p_offset & ~(SIZE_PAGINA - 1)),
+	  curr_offset(ph->p_offset & ~(DIM_PAGINA - 1)),
 	  da_leggere(ph->p_filesz + (ph->p_offset - curr_offset)),
 	  ancora(ph->p_memsz)
 {
-	curr = (da_leggere > SIZE_PAGINA ? SIZE_PAGINA : da_leggere);
+	curr = (da_leggere > DIM_PAGINA ? DIM_PAGINA : da_leggere);
 }
 
 bool EseguibileElf32::SegmentoElf32::scrivibile() const
@@ -170,7 +170,7 @@ bool EseguibileElf32::SegmentoElf32::prossima_pagina()
 		return false;
 	da_leggere -= curr;
 	curr_offset += curr;
-	curr = (da_leggere > SIZE_PAGINA ? SIZE_PAGINA : da_leggere);
+	curr = (da_leggere > DIM_PAGINA ? DIM_PAGINA : da_leggere);
 	return true;
 }
 
@@ -188,7 +188,7 @@ bool EseguibileElf32::SegmentoElf32::copia_pagina(void* dest)
 		exit(EXIT_FAILURE);
 	}
 
-	if (curr < SIZE_PAGINA) memset(dest, 0, SIZE_PAGINA);
+	if (curr < DIM_PAGINA) memset(dest, 0, DIM_PAGINA);
 	if (fread(dest, 1, curr, padre->pexe) < curr) {
 		fprintf(stderr, "errore nella lettura dal file ELF\n");
 		exit(EXIT_FAILURE);

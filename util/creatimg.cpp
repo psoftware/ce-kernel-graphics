@@ -16,7 +16,7 @@
 
 typedef unsigned int uint;
 
-const uint UPB = SIZE_PAGINA / sizeof(uint);
+const uint UPB = DIM_PAGINA / sizeof(uint);
 const uint BPU = sizeof(uint) * 8;
 
 
@@ -76,8 +76,8 @@ struct tabella_pagine {
 
 struct pagina {
 	union {
-		unsigned char byte[SIZE_PAGINA];
-		unsigned int  parole_lunghe[SIZE_PAGINA / sizeof(unsigned int)];
+		unsigned char byte[DIM_PAGINA];
+		unsigned int  parole_lunghe[DIM_PAGINA / sizeof(unsigned int)];
 	};
 };
 
@@ -316,7 +316,7 @@ int main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	long dim = swap->dimensione() / SIZE_PAGINA;
+	long dim = swap->dimensione() / DIM_PAGINA;
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	
@@ -348,7 +348,7 @@ int main(int argc, char* argv[])
 	if (pdes_tab->a.P) {
 		tabella_pagine tab;
 		CHECKSW(leggi_blocco, pdes_tab->a.block, &tab);
-		int primo_indice = indice_tabella(last_address) + (last_address % SIZE_PAGINA ? 1 : 0);
+		int primo_indice = indice_tabella(last_address) + (last_address % DIM_PAGINA ? 1 : 0);
 		for (int i = primo_indice; i < 1024; i++) {
 			descrittore_pagina *pdes_pag = &tab.entrate[i];
 			pdes_pag->a.block = 0;

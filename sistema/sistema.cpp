@@ -2,15 +2,18 @@
 //
 #include "mboot.h"
 #include "costanti.h"
+#include "tipo.h"
 
-// definiamo il tipo "addr" (indirizzo) come un unsigned long
-typedef unsigned long addr;
-
-// funzione che permette di convertire un qualunque puntatore
-// in un indirizzo
-addr toaddr(void* v)
+// funzione che permette di convertire un indirizzo in un naturale
+natl a2n(addr v)
 {
-	return reinterpret_cast<addr>(v);
+	return reinterpret_cast<natl>(v);
+}
+
+// e viceversa
+addr n2a(natl l)
+{
+	return reinterpret_cast<addr>(l);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -24,41 +27,44 @@ addr toaddr(void* v)
 // delle risorse da allocare.  Se il bit vale 0, la corrispondente risorsa e' 
 // occupata, altrimenti e' libera.
 struct bm_t {
-	unsigned int *vect;	// vettore che contiene i bit della mappa
-	unsigned int size;	// numero di bit nella mappa
-	unsigned int vecsize;	// corrispondente dimensione del vettore
+	natl *vect;	// vettore che contiene i bit della mappa
+	natl size;	// numero di bit nella mappa
+	natl vecsize;	// corrispondente dimensione del vettore
 };
 // inizializza una mappa di bit 
-void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size);
+void bm_create(bm_t *bm, natl *buffer, natl size);
 // alloca una risorsa dalla mappa bm, restituendone il numero in pos. La 
 // funzione ritorna false se tutte le risorse sono gia' occupate (in quel caso, 
 // pos non e' significativa)
-bool bm_alloc(bm_t *bm, unsigned int& pos);
+bool bm_alloc(bm_t *bm, natl& pos);
 // libera la risorsa numero pos nella mappa bm
-void bm_free(bm_t *bm, unsigned int pos);
+void bm_free(bm_t *bm, natl pos);
 /////
 
 
 // funzioni che eseguono alcuni calcoli richiesti abbastanza frequentemente
 //
 // restituisce il minimo naturale maggiore o uguale a v/q
-unsigned int ceild(unsigned int v, unsigned int q)
+natl ceild(natl v, natl q)
 {
 	return v / q + (v % q != 0 ? 1 : 0);
 }
 
 // restituisce il valore di "v" allineato a un multiplo di "a"
-inline unsigned int allinea(unsigned int v, unsigned int a)
+inline natl allinea(natl v, natl a)
 {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
+}
+inline addr allineav(addr v, natl a)
+{
+	return allineav(v, a);
 }
 
 // funzioni per la manipolazione di stringhe
 //
-// copia n byte da src a dst
 extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
-extern "C" void *memset(void *dest, int c, unsigned int n);
+extern "C" void *memset(void *dest, int c, natl n);
 // restituisce true se le due stringe first e second sono uguali
 bool str_equal(const char* first, const char* second);
 
@@ -118,7 +124,7 @@ extern addr mem_upper;
 
 // forward declaration
 // (assegna quanti byte, a partire da indirizzo, allo heap di sistema)
-void free_interna(addr indirizzo, unsigned int quanti);
+void free_interna(addr indirizzo, natl quanti);
 
 // allocazione sequenziale, da usare durante la fase di inizializzazione.  Si
 // mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
@@ -127,10 +133,10 @@ void free_interna(addr indirizzo, unsigned int quanti);
 // (max_mem_upper). Se il puntatore viene fatto avanzare tramite la funzione
 // 'salta_a', i byte "saltati" vengono dati all'allocatore a lista
 // tramite la funzione "free_interna"
-addr occupa(unsigned int quanti)
+addr occupa(natl quanti)
 {
 	addr p = 0;
-	addr appoggio = mem_upper + quanti;
+	addr appoggio = n2a(a2n(mem_upper) + quanti);
 	if (appoggio <= max_mem_upper) {
 		p = mem_upper;
 		mem_upper = appoggio;
@@ -143,7 +149,7 @@ int salta_a(addr indirizzo)
 {
 	int saltati = -1;
 	if (indirizzo >= mem_upper && indirizzo < max_mem_upper) {
-		saltati = indirizzo - mem_upper;
+		saltati = a2n(indirizzo) - a2n(mem_upper);
 		free_interna(mem_upper, saltati);
 		mem_upper = indirizzo;
 	}
@@ -170,7 +176,7 @@ int salta_a(addr indirizzo)
 // descrittore di zona di memoria: descrive una zona di memoria nello heap di
 // sistema
 struct des_mem {
-	unsigned int dimensione;
+	natl dimensione;
 	des_mem* next;
 };
 
@@ -183,39 +189,40 @@ des_mem* memlibera = 0;
 // Se la zona trovata e' sufficientemente piu' grande di "quanti" byte, divide la zona
 // in due: una, grande "quanti" byte, viene occupata, mentre i rimanenti byte vanno
 // a formare una nuova zona (con un nuovo descrittore) libera.
-void* malloc(unsigned int quanti)
+void* alloca(natl dim)
 {
 	// per motivi di efficienza, conviene allocare sempre multipli di 4 
 	// byte (in modo che le strutture dati restino allineate alla linea)
-	unsigned int dim = allinea(quanti, sizeof(int));
+	natl quanti = allinea(quanti, sizeof(int));
 
-	// allochiamo "dim" byte, invece dei "quanti" richiesti
+	// allochiamo "quanti" byte, invece dei "quanti" richiesti
 	des_mem *prec = 0, *scorri = memlibera;
-	while (scorri != 0 && scorri->dimensione < dim) {
+	while (scorri != 0 && scorri->dimensione < quanti) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
-	// assert(scorri == 0 || scorri->dimensione >= dim);
+	// assert(scorri == 0 || scorri->dimensione >= quanti);
 
-	void* p = 0;
+	addr p = 0;
 	if (scorri != 0) {
 		p = scorri + 1; // puntatore al primo byte dopo il descrittore
 				// (coincide con l'indirizzo iniziale delle zona
 				// di memoria)
 
 		// per poter dividere in due la zona trovata, la parte
-		// rimanente, dopo aver occupato "dim" byte, deve poter contenere
+		// rimanente, dopo aver occupato "quanti" byte, deve poter contenere
 		// almeno il descrittore piu' 4 byte (minima dimensione
 		// allocabile)
-		if (scorri->dimensione - dim >= sizeof(des_mem) + sizeof(int)) {
+		if (scorri->dimensione - quanti >= sizeof(des_mem) + sizeof(int)) {
 
 			// il nuovo descrittore verra' scritto nei primi byte 
-			// della zona da creare (quindi, "dim" byte dopo "p")
-			des_mem* nuovo = reinterpret_cast<des_mem*>(addr(p) + dim);
+			// della zona da creare (quindi, "quanti" byte dopo "p")
+			addr pnuovo = n2a(a2n(p) + quanti);
+			des_mem* nuovo = static_cast<des_mem*>(pnuovo);
 
 			// aggiustiamo le dimensioni della vecchia e della nuova zona
-			nuovo->dimensione = scorri->dimensione - dim - sizeof(des_mem);
-			scorri->dimensione = dim;
+			nuovo->dimensione = scorri->dimensione - quanti - sizeof(des_mem);
+			scorri->dimensione = quanti;
 
 			// infine, inseriamo "nuovo" nella lista delle zone libere,
 			// al posto precedentemente occupato da "scorri"
@@ -259,7 +266,7 @@ void* malloc(unsigned int quanti)
 
 // free deve essere usata solo con puntatori restituiti da malloc, e rende
 // nuovamente libera la zona di memoria di indirizzo iniziale "p".
-void free(void* p)
+void dealloca(void* p)
 {
 
 	// e' normalmente ammesso invocare "free" su un puntatore nullo.
@@ -279,7 +286,7 @@ void free(void* p)
 	// la zona viene liberata tramite la funzione "free_interna", che ha
 	// bisogno dell'indirizzo di partenza e della dimensione della zona
 	// comprensiva del suo descrittore
-	free_interna(toaddr(des), des->dimensione + sizeof(des_mem));
+	free_interna(des, des->dimensione + sizeof(des_mem));
 }
 
 
@@ -292,7 +299,7 @@ void free(void* p)
 // esse.
 // free_interna puo' essere usata anche in fase di inizializzazione, per
 // definire le zone di memoria fisica che verranno utilizzate dall'allocatore
-void free_interna(addr indirizzo, unsigned int quanti)
+void free_interna(addr indirizzo, natl quanti)
 {
 
 	// non e' un errore invocare free_interna con "quanti" uguale a 0
@@ -306,7 +313,7 @@ void free_interna(addr indirizzo, unsigned int quanti)
 	// indirizzo di partenza (tale ordinamento serve a semplificare la
 	// successiva operazione di riunificazione)
 	des_mem *prec = 0, *scorri = memlibera;
-	while (scorri != 0 && toaddr(scorri) < indirizzo) {
+	while (scorri != 0 && scorri < indirizzo) {
 		prec = scorri;
 		scorri = scorri->next;
 	}
@@ -315,7 +322,7 @@ void free_interna(addr indirizzo, unsigned int quanti)
 	// in alcuni casi, siamo in grado di riconoscere l'errore di doppia
 	// free: "indirizzo" non deve essere l'indirizzo di partenza di una
 	// zona gia' libera
-	if (toaddr(scorri) == indirizzo) {
+	if (scorri == indirizzo) {
 		flog(LOG_ERR, "indirizzo = 0x%x", indirizzo);
 		panic("double free\n");
 	}
@@ -324,11 +331,11 @@ void free_interna(addr indirizzo, unsigned int quanti)
 	// verifichiamo che la zona possa essere unificata alla zona che la
 	// precede.  Cio' e' possibile se tale zona esiste e il suo ultimo byte
 	// e' contiguo al primo byte della nuova zona
-	if (prec != 0 && toaddr(prec + 1) + prec->dimensione == indirizzo) {
+	if (prec != 0 && n2a(a2n(prec + 1) + prec->dimensione) == indirizzo) {
 
 		// controlliamo se la zona e' unificabile anche alla eventuale
 		// zona che la segue
-		if (scorri != 0 && indirizzo + quanti == toaddr(scorri)) {
+		if (scorri != 0 && n2a(a2n(indirizzo) + quanti) == scorri) {
 			
 			// in questo caso le tre zone diventano una sola, di
 			// dimensione pari alla somma delle tre, piu' il
@@ -345,7 +352,7 @@ void free_interna(addr indirizzo, unsigned int quanti)
 			prec->dimensione += quanti;
 		}
 
-	} else if (scorri != 0 && indirizzo + quanti == toaddr(scorri)) {
+	} else if (scorri != 0 && n2a(a2n(indirizzo) + quanti) == scorri) {
 
 		// la zona non e' unificabile con quella che la precede, ma e'
 		// unificabile con quella che la segue. L'unificazione deve
@@ -392,28 +399,6 @@ void free_interna(addr indirizzo, unsigned int quanti)
 		else
 			memlibera = nuovo;
 	}
-}
-
-// ridefinizione degli operatori new e delete, in modo che utilizzino le 
-// funzioni malloc e free definite precedentemente
-void* operator new(size_t size)
-{
-	return malloc(size);
-}
-
-void* operator new[](size_t size)
-{
-	return malloc(size);
-}
-
-void operator delete(void* p)
-{
-	free(p);
-}
-
-void operator delete[](void* p)
-{
-	free(p);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -561,31 +546,31 @@ union descrittore_pagina {
 	// caso di pagina presente
 	struct {
 		// byte di accesso
-		unsigned int P:		1;	// bit di presenza
-		unsigned int RW:	1;	// Read/Write
-		unsigned int US:	1;	// User/Supervisor
-		unsigned int PWT:	1;	// Page Write Through
-		unsigned int PCD:	1;	// Page Cache Disable
-		unsigned int A:		1;	// Accessed
-		unsigned int D:		1;	// Dirty
-		unsigned int pgsz:	1;	// non visto a lezione
+		natl P:		1;	// bit di presenza
+		natl RW:	1;	// Read/Write
+		natl US:	1;	// User/Supervisor
+		natl PWT:	1;	// Page Write Through
+		natl PCD:	1;	// Page Cache Disable
+		natl A:		1;	// Accessed
+		natl D:		1;	// Dirty
+		natl pgsz:	1;	// non visto a lezione
 		// fine byte di accesso
 		
-		unsigned int global:	1;	// non visto a lezione
-		unsigned int avail:	3;	// non usati
+		natl global:	1;	// non visto a lezione
+		natl avail:	3;	// non usati
 
-		unsigned int address:	20;	// indirizzo fisico
+		natl address:	20;	// indirizzo fisico
 	} p;
 	// caso di pagina assente
 	struct {
 		// informazioni sul tipo di pagina
-		unsigned int P:		1;
-		unsigned int RW:	1;
-		unsigned int US:	1;
-		unsigned int PWT:	1;
-		unsigned int PCD:	1;
+		natl P:		1;
+		natl RW:	1;
+		natl US:	1;
+		natl PWT:	1;
+		natl PCD:	1;
 
-		unsigned int block:	27;
+		natl block:	27;
 	} a;	
 };
 
@@ -607,8 +592,8 @@ struct tabella {
 // lunghe (utile nell'inizializzazione delle pile)
 struct pagina {
 	union {
-		unsigned char byte[SIZE_PAGINA];
-		unsigned int  parole_lunghe[SIZE_PAGINA / sizeof(unsigned int)];
+		natb  byte[DIM_PAGINA];
+		natl  parole_lunghe[DIM_PAGINA / sizeof(natl)];
 	};
 };
 
@@ -617,31 +602,31 @@ struct pagina {
 // puntatore ad uno dei tipi definiti precedentemente
 inline direttorio* todir(addr a)
 {
-	return reinterpret_cast<direttorio*>(a);
+	return static_cast<direttorio*>(a);
 }
 
 inline tabella* totab(addr a)
 {
-	return reinterpret_cast<tabella*>(a);
+	return static_cast<tabella*>(a);
 }
 
 inline pagina* topag(addr a)
 {
-	return reinterpret_cast<pagina*>(a);
+	return static_cast<pagina*>(a);
 }
 
 // dato un indirizzo virtuale, ne restituisce l'indice nel direttorio
 // (i dieci bit piu' significativi dell'indirizzo)
-short indice_direttorio(addr indirizzo)
+natw indice_direttorio(addr indirizzo)
 {
-	return (indirizzo & 0xffc00000) >> 22;
+	return (a2n(indirizzo) & 0xffc00000) >> 22;
 }
 
 // dato un indirizzo virtuale, ne restituisce l'indice nella tabella delle
 // pagine (i bit 12:21 dell'indirizzo)
-short indice_tabella(addr indirizzo)
+natw indice_tabella(addr indirizzo)
 {
-	return (indirizzo & 0x003ff000) >> 12;
+	return (a2n(indirizzo) & 0x003ff000) >> 12;
 }
 
 // dato un puntatore ad un descrittore di tabella, restituisce
@@ -717,15 +702,15 @@ enum cont_pf {
 struct des_pf {
 	cont_pf		contenuto;	// uno dei valori precedenti
 	bool		residente;
-	unsigned int	contatore;	// contatore per le statistiche LRU/LFU
+	natl	contatore;	// contatore per le statistiche LRU/LFU
 	union {
 		struct { // informazioni relative a una pagina
-			unsigned int	blocco;		// blocco in memoria di massa
+			natl	blocco;		// blocco in memoria di massa
 			tabella*	ptab;		// tabella che punta alla pagina
 			addr		ind_virtuale;   // indirizzo virtuale della pagina
 		} pag;
 		struct { // informazioni relative a una tabella
-			unsigned int	blocco;		// blocco in memoria di massa
+			natl	blocco;		// blocco in memoria di massa
 			direttorio*     pdir;		// direttorio che punta alla tabella
 			short		indice;		// indice della tab nel direttorio
 			short		quante;		// numero di pagine puntate
@@ -751,28 +736,20 @@ int pagine_libere = -1;
 // indirizzo fisico della prima pagina fisica
 // (necessario per calcolare l'indirizzo del descrittore associato ad una data
 // pagina fisica e viceversa)
-addr prima_pf;
+addr prima_pf_utile;
 
 // restituisce l'indirizzo fisico della pagina fisica associata al descrittore
 // il cui indice e' passato come argomento
 addr indirizzo_pf(int indice)
 {
-	return prima_pf + indice * SIZE_PAGINA;
+	return n2a(a2n(prima_pf_utile) + indice * DIM_PAGINA);
 }
 
 // dato l'indirizzo di una pagina fisica, restituisce l'indice
 // del descrittore associato
 int indice_pf(addr pagina)
 {
-	return (pagina - prima_pf) / SIZE_PAGINA;
-}
-
-// overloading della funzione indice_pf, da usare
-// quando l'indirizzo della pagina e' disponibile
-// sotto forma di puntatore
-int indice_pf(void* pagina)
-{
-	return indice_pf(toaddr(pagina));
+	return (a2n(pagina) - a2n(prima_pf_utile)) / DIM_PAGINA;
 }
 
 // init_pagine_fisiche viene chiamata in fase di inizalizzazione.  Tutta la
@@ -783,10 +760,10 @@ bool init_pagine_fisiche()
 {
 
 	// allineamo mem_upper alla linea, per motivi di efficienza
-	salta_a(allinea(mem_upper, sizeof(int)));
+	salta_a(allineav(mem_upper, sizeof(int)));
 
 	// calcoliamo quanta memoria principale rimane
-	int dimensione = max_mem_upper - mem_upper;
+	int dimensione = a2n(max_mem_upper) - a2n(mem_upper);
 
 	if (dimensione <= 0) {
 		flog(LOG_ERR, "Non ci sono pagine libere");
@@ -795,21 +772,21 @@ bool init_pagine_fisiche()
 
 	// calcoliamo quante pagine fisiche possiamo definire (tenendo conto
 	// del fatto che ogni pagina fisica avra' bisogno di un descrittore)
-	unsigned int quante = dimensione / (SIZE_PAGINA + sizeof(des_pf));
+	natl quante = dimensione / (DIM_PAGINA + sizeof(des_pf));
 
 	// allochiamo i corrispondenti descrittori di pagina fisica
 	pagine_fisiche = reinterpret_cast<des_pf*>(occupa(sizeof(des_pf) * quante));
 
 	// riallineamo mem_upper a un multiplo di pagina
-	salta_a(allinea(mem_upper, SIZE_PAGINA));
+	salta_a(allineav(mem_upper, DIM_PAGINA));
 
 	// ricalcoliamo quante col nuovo mem_upper, per sicurezza
 	// (sara' minore o uguale al precedente)
-	quante = (max_mem_upper - mem_upper) / SIZE_PAGINA;
+	quante = (a2n(max_mem_upper) - a2n(mem_upper)) / DIM_PAGINA;
 
 	// occupiamo il resto della memoria principale con le pagine fisiche;
 	// ricordiamo l'indirizzo della prima pagina fisica e il loro numero
-	prima_pf = occupa(quante * SIZE_PAGINA);
+	prima_pf_utile = occupa(quante * DIM_PAGINA);
 	num_pagine_fisiche = quante;
 
 	// se resta qualcosa (improbabile), lo diamo all'allocatore a lista
@@ -900,9 +877,9 @@ void rilascia_pagina_fisica(int i)
 // descrittore di pagina fisica associato (funzione "struttura") e, infine, 
 // invocano la funzione "rilascia_pagina" generica.
 inline
-void rilascia(void* d)
+void rilascia(addr d)
 {
-	rilascia_pagina_fisica(indice_pf(toaddr(d)));
+	rilascia_pagina_fisica(indice_pf(d));
 }
 
 
@@ -921,7 +898,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indi
 
 	// mapping inverso:
 	// ricaviamo il descrittore della pagina fisica che contiene la tabella
-	des_pf* ppf  = &pagine_fisiche[indice_pf(toaddr(ptab))];
+	des_pf* ppf  = &pagine_fisiche[indice_pf(ptab)];
 	ppf->tab.pdir   = pdir;
 	ppf->tab.indice = indice;
 	ppf->tab.quante = 0; // inizialmente, nessuna pagina e' presente
@@ -943,7 +920,7 @@ descrittore_tabella* collega_tabella(direttorio* pdir, tabella* ptab, short indi
 	pdes_tab->p.D          = 0; // bit riservato nel caso di descr. tabella
 	pdes_tab->p.pgsz       = 0; // pagine di 4KB
 	pdes_tab->p.global     = 0;
-	pdes_tab->p.address    = toaddr(ptab) >> 12;
+	pdes_tab->p.address    = a2n(ptab) >> 12;
 
 	return pdes_tab;
 }
@@ -997,7 +974,7 @@ descrittore_pagina* collega_pagina_virtuale(tabella* ptab, pagina* pag, addr ind
 	pdes_pag->p.D		= 0;
 	pdes_pag->p.pgsz	= 0; // bit riservato nel caso di descr. di pagina
 	pdes_pag->p.global	= 0;
-	pdes_pag->p.address	= toaddr(pag) >> 12;
+	pdes_pag->p.address	= a2n(pag) >> 12;
 
 	return pdes_pag;
 }
@@ -1035,7 +1012,7 @@ bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 	tabella* ptab;
 	descrittore_pagina *pdes_pag;
 
-	for (addr ind = addr(0); ind < max_mem; ind = ind + SIZE_PAGINA) {
+	for (addr ind = n2a(0); ind < max_mem; ind = n2a(a2n(ind) + DIM_PAGINA)) {
 		pdes_tab = &pdir->entrate[indice_direttorio(ind)];
 		if (pdes_tab->p.P == 0) {
 			ptab = alloca_tabella(true);
@@ -1043,7 +1020,7 @@ bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
 			}
-			pdes_tab->p.address = toaddr(ptab) >> 12;
+			pdes_tab->p.address = a2n(ptab) >> 12;
 			pdes_tab->p.D	    = 0;
 			pdes_tab->p.A	    = 0;
 			pdes_tab->p.pgsz    = 0; // pagine di 4K
@@ -1054,7 +1031,7 @@ bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 			ptab = tabella_puntata(pdes_tab);
 		}
 		pdes_pag = &ptab->entrate[indice_tabella(ind)];
-		pdes_pag->p.address = ind >> 12;   // indirizzo virtuale == indirizzo fisico
+		pdes_pag->p.address = a2n(ind) >> 12;   // indirizzo virtuale == indirizzo fisico
 		pdes_tab->p.pgsz    = 0;
 		pdes_pag->p.global  = 1; // puo' restare nel TLB, anche in caso di flush
 		pdes_pag->p.US      = 0; // livello sistema;
@@ -1108,16 +1085,16 @@ bool mappa_mem_fisica(direttorio* pdir, addr max_mem)
 // descrittore di una partizione dell'hard disk
 struct partizione {
 	int	     type;	// tipo della partizione
-	unsigned int first;	// primo settore della partizione
-	unsigned int dim;	// dimensione in settori
+	natl first;	// primo settore della partizione
+	natl dim;	// dimensione in settori
 	partizione*  next;
 };
 
 // funzioni per la lettura/scrittura da hard disk
 extern "C" void readhd_n(short ind_ata, short drv, void* vetti,
-		unsigned int primo, unsigned char quanti, char &errore);
+		natl primo, unsigned char quanti, char &errore);
 extern "C" void writehd_n(short ind_ata, short drv, void* vetto,
-		unsigned int primo, unsigned char quanti, char &errore);
+		natl primo, unsigned char quanti, char &errore);
 // utile per il debug: invia al log un messaggio relativo all'errore che e' 
 // stato riscontrato
 void hd_print_error(int i, int d, int sect, short errore);
@@ -1128,14 +1105,14 @@ partizione* hd_find_partition(short ind_ata, short drv, int p);
 // super blocco (vedi sopra)
 struct superblock_t {
 	char		magic[4];
-	unsigned int	bm_start;
+	natl	bm_start;
 	int		blocks;
-	unsigned int	directory;
+	natl	directory;
 	int		(*user_entry)(int);
 	addr		user_end;
 	int		(*io_entry)(int);
 	addr		io_end;
-	unsigned int	checksum;
+	natl	checksum;
 };
 
 // descrittore di swap (vedi sopra)
@@ -1150,13 +1127,13 @@ struct des_swap {
 
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-bool leggi_blocco(unsigned int blocco, void* dest)
+bool leggi_blocco(natl blocco, void* dest)
 {
 	char errore;
 
 	// ogni blocco (4096 byte) e' grande 8 settori (512 byte)
 	// calcoliamo l'indice del primo settore da leggere
-	unsigned int sector = blocco * 8 + swap.part->first;
+	natl sector = blocco * 8 + swap.part->first;
 
 	// il seguente controllo e' di fondamentale importanza: l'hardware non 
 	// sa niente dell'esistenza delle partizioni, quindi niente ci 
@@ -1180,10 +1157,10 @@ bool leggi_blocco(unsigned int blocco, void* dest)
 
 // scrive nello swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-bool scrivi_blocco(unsigned int blocco, void* dest)
+bool scrivi_blocco(natl blocco, void* dest)
 {
 	char errore;
-	unsigned int sector = blocco * 8 + swap.part->first;
+	natl sector = blocco * 8 + swap.part->first;
 
 	if (blocco < 0 || sector + 8 > (swap.part->first + swap.part->dim)) {
 		flog(LOG_ERR, "Accesso al di fuori della partizione");
@@ -1203,10 +1180,10 @@ bool scrivi_blocco(unsigned int blocco, void* dest)
 }
 
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
-bool leggi_swap(void* buf, unsigned int first, unsigned int bytes, const char* msg)
+bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 {
 	char errore;
-	unsigned int sector = first + swap.part->first;
+	natl sector = first + swap.part->first;
 
 	if (first < 0 || first + bytes > swap.part->dim) {
 		flog(LOG_ERR, "Accesso al di fuori della partizione: %d+%d", first, bytes);
@@ -1272,10 +1249,10 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	flog(LOG_DEBUG, "lettura della bitmap dei blocchi...");
 
 	// calcoliamo la dimensione della mappa di bit in pagine/blocchi
-	unsigned int pages = ceild(swap.sb.blocks, SIZE_PAGINA * 8);
+	natl pages = ceild(swap.sb.blocks, DIM_PAGINA * 8);
 
 	// quindi allochiamo in memoria un buffer che possa contenerla
-	unsigned int* buf = new unsigned int[(pages * SIZE_PAGINA) / sizeof(unsigned int)];
+	natl* buf = static_cast<natl*>(alloca((pages * DIM_PAGINA) / sizeof(natl)));
 	if (buf == 0) {
 		flog(LOG_ERR, "Impossibile allocare la bitmap dei blocchi");
 		return false;
@@ -1285,7 +1262,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	bm_create(&swap.free, buf, swap.sb.blocks);
 
 	// infine, leggiamo la mappa di bit dalla partizione di swap
-	return leggi_swap(buf, swap.sb.bm_start * 8, pages * SIZE_PAGINA, "la bitmap dei blocchi");
+	return leggi_swap(buf, swap.sb.bm_start * 8, pages * DIM_PAGINA, "la bitmap dei blocchi");
 }
 
 // ROUTINE DEL TIMER
@@ -1554,13 +1531,13 @@ bool carica_pagina_virtuale(descrittore_pagina* pdes_pag, pagina* pag)
 	// superblocco), da questo momento in poi e' come se la pagina fosse 
 	// sempre stata presente nello swap
 	if (pdes_pag->a.block == 0) {
-		unsigned int blocco;
+		natl blocco;
 		if (! bm_alloc(&swap.free, blocco) ) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return false;
 		}
 		pdes_pag->a.block = blocco;
-		memset(pag, 0, SIZE_PAGINA);
+		memset(pag, 0, DIM_PAGINA);
 		return true;
 	} else 
 		return leggi_blocco(pdes_pag->a.block, pag);
@@ -1576,7 +1553,7 @@ bool carica_tabella(descrittore_tabella* pdes_tab, tabella* ptab)
 	// della tabella stessa (in particolare, i bit RW e US) e punti a 
 	// pagine da creare (ovvero, con address = 0).
 	if (pdes_tab->a.block == 0) {
-		unsigned int blocco;
+		natl blocco;
 		if (! bm_alloc(&swap.free, blocco)) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return false;
@@ -1656,7 +1633,7 @@ int rimpiazzamento()
 	
 	des_pf *ppf, *vittima = 0;
 	addr ind_virtuale;
-	unsigned int blocco;
+	natl blocco;
 	
 	// scorriamo tutti i descrittori di pagina fisica alla ricerca della 
 	// prima pagina che contiene una pagina virtuale o una tabella privata
@@ -1759,11 +1736,11 @@ extern "C" int c_resident(addr start, int quanti)
 		return 0;
 
 	// calcoliamo l'indirizzo della pagina che contiene "start"
-	vero_start = start & ~(SIZE_PAGINA - 1);
+	vero_start = n2a(a2n(start) & ~(DIM_PAGINA - 1));
 	// quindi il numero di pagine da rendere residenti
-	da_fare = ceild(start - vero_start + quanti, SIZE_PAGINA);
+	da_fare = ceild(a2n(start) - a2n(vero_start) + quanti, DIM_PAGINA);
 	// e l'indirizzo del primo byte che non sara' reso residente
-	last = vero_start + da_fare * SIZE_PAGINA;
+	last = n2a(a2n(vero_start) + da_fare * DIM_PAGINA);
 
 	// accesso in mutua esclusione con la routine di trasferimento
 	// (entrambe manipolano le stesse strutture dati)
@@ -1771,7 +1748,7 @@ extern "C" int c_resident(addr start, int quanti)
 
 	pdir = leggi_cr3();
 
-	for (ind_virt = vero_start; ind_virt < last; ind_virt += SIZE_PAGINA) {
+	for (ind_virt = vero_start; ind_virt < last; ind_virt = n2a(a2n(ind_virt) + DIM_PAGINA)) {
 		pagina *pag = trasferimento(pdir, ind_virt);
 		if (pag == 0)
 			break;
@@ -1782,10 +1759,10 @@ extern "C" int c_resident(addr start, int quanti)
 
 	sem_signal(pf_mutex);
 
-	if (ind_virt > start + quanti)
-		ind_virt = start + quanti;
+	if (ind_virt > n2a(a2n(start) + quanti))
+		ind_virt = n2a(a2n(start) + quanti);
 
-	return ind_virt - start;
+	return a2n(ind_virt) - a2n(start);
 }
 
 
@@ -1796,48 +1773,48 @@ extern "C" int c_resident(addr start, int quanti)
 // descrittore di processo
 struct des_proc {			// offset:
 //	short id;
-	unsigned int link;		// 0
+	natl link;		// 0
 //	int punt_nucleo;
 	addr        esp0;		// 4
-	unsigned int ss0;		// 8
+	natl ss0;		// 8
 	addr        esp1;		// 12
-	unsigned int ss1;		// 16
+	natl ss1;		// 16
 	addr        esp2;		// 20
-	unsigned int ss2;		// 24
+	natl ss2;		// 24
 
 	direttorio* cr3;		// 28
 
-	unsigned int eip;		// 32, non utilizzato
-	unsigned int eflags;		// 36, non utilizzato
+	natl eip;		// 32, non utilizzato
+	natl eflags;		// 36, non utilizzato
 
 //	int contesto[N_REG];
-	unsigned int eax;		// 40
-	unsigned int ecx;		// 44
-	unsigned int edx;		// 48
-	unsigned int ebx;		// 52
-	unsigned int esp;		// 56
-	unsigned int ebp;		// 60
-	unsigned int esi;		// 64
-	unsigned int edi;		// 68
+	natl eax;		// 40
+	natl ecx;		// 44
+	natl edx;		// 48
+	natl ebx;		// 52
+	natl esp;		// 56
+	natl ebp;		// 60
+	natl esi;		// 64
+	natl edi;		// 68
 
-	unsigned int es;		// 72
-	unsigned int cs; 		// 76, char cpl;
-	unsigned int ss;		// 80
-	unsigned int ds;		// 84
-	unsigned int fs;		// 86
-	unsigned int gs;		// 90
-	unsigned int ldt;		// 94, non utilizzato
+	natl es;		// 72
+	natl cs; 		// 76, char cpl;
+	natl ss;		// 80
+	natl ds;		// 84
+	natl fs;		// 86
+	natl gs;		// 90
+	natl ldt;		// 94, non utilizzato
 
-	unsigned int io_map;		// 100, non utilizzato
+	natl io_map;		// 100, non utilizzato
 
 	struct {
-		unsigned int cr;	// 104
-		unsigned int sr;	// 108
-		unsigned int tr;	// 112
-		unsigned int ip;	// 116
-		unsigned int is;	// 120
-		unsigned int op;	// 124
-		unsigned int os;	// 128
+		natl cr;	// 104
+		natl sr;	// 108
+		natl tr;	// 112
+		natl ip;	// 116
+		natl is;	// 120
+		natl op;	// 124
+		natl os;	// 128
 		char regs[80];		// 132
 	} fpu;
 
@@ -1849,20 +1826,17 @@ int processi = 0;
 
 // elemento di una coda di processi
 struct proc_elem {
-	short identifier;
-	int priority;
+	int nome;
+	natl precedenza;
 	proc_elem *puntatore;
 };
+extern proc_elem *esecuzione;
+extern proc_elem *pronti;
 
 // manipolazione delle code di processi
 void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
 void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
 
-// processo in esecuzione
-extern proc_elem *esecuzione;
-
-// coda dei processi pronti
-extern proc_elem *pronti;
 
 // funzioni usate da crea_processo
 pagina* crea_pila_utente(direttorio* pdir);
@@ -1889,18 +1863,18 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	pagina		*pila_sistema,		// punt. di lavoro
 			*pila_utente;		// punt. di lavoro
 	
-	p = new proc_elem;
+	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
         if (p == 0) goto errore1;
 
-	pdes_proc = new des_proc;
+	pdes_proc = static_cast<des_proc*>(alloca(sizeof(des_proc)));
 	if (pdes_proc == 0) goto errore2;
 	memset(pdes_proc, 0, sizeof(des_proc));
 
 	identifier = alloca_tss(pdes_proc);
 	if (identifier == 0) goto errore3;
 
-        p->identifier = identifier;
-        p->priority = prio;
+        p->nome = identifier;
+        p->precedenza = prio;
 
 	// pagina fisica per il direttorio del processo
 	pdirettorio = alloca_direttorio();
@@ -1921,7 +1895,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	if (liv == LIV_UTENTE) {
 
-		pila_sistema->parole_lunghe[1019] = (addr)f;	// EIP (codice utente)
+		pila_sistema->parole_lunghe[1019] = (natl)f;	// EIP (codice utente)
 		pila_sistema->parole_lunghe[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
 		pila_sistema->parole_lunghe[1021] = 0x00000200;	// EFLAG
 		pila_sistema->parole_lunghe[1022] = fine_utente_privato - 2 * sizeof(int);
@@ -1944,7 +1918,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		// indirizzo del bottom della pila sistema, che verra' usato
 		// dal meccanismo delle interruzioni
-		pdes_proc->esp0 = fine_sistema_privato;
+		pdes_proc->esp0 = n2a(fine_sistema_privato);
 		pdes_proc->ss0  = SEL_DATI_SISTEMA;
 
 		// inizialmente, il processo si trova a livello sistema, come
@@ -1963,7 +1937,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pdes_proc->liv = LIV_UTENTE;
 		// tutti gli altri campi valgono 0
 	} else {
-		pila_sistema->parole_lunghe[1019] = (addr)f;	  // EIP (codice sistema)
+		pila_sistema->parole_lunghe[1019] = (natl)f;	  // EIP (codice sistema)
 		pila_sistema->parole_lunghe[1020] = SEL_CODICE_SISTEMA;	  // CS (codice sistema)
 		pila_sistema->parole_lunghe[1021] = 0x00000200;  	  // EFLAG
 		pila_sistema->parole_lunghe[1022] = 0xffffffff;		  // indirizzo ritorno?
@@ -1987,11 +1961,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	return p;
 
-errore6:	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
+errore6:	rilascia_tutto(pdirettorio, n2a(inizio_sistema_privato), ntab_sistema_privato);
 errore5:	rilascia(pdirettorio);
 errore4:	rilascia_tss(identifier);
-errore3:	delete pdes_proc;
-errore2:	delete p;
+errore3:	dealloca(pdes_proc);
+errore2:	dealloca(p);
 errore1:	return 0;
 }
 
@@ -2039,7 +2013,7 @@ pagina* crea_pila_utente(direttorio* pdir)
 	descrittore_tabella* pdes_tab;
 	descrittore_pagina* pdes_pag;
 
-	ind_virtuale = inizio_utente_privato;
+	ind_virtuale = n2a(inizio_utente_privato);
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
@@ -2056,13 +2030,13 @@ pagina* crea_pila_utente(direttorio* pdir)
 		pdes_tab->p.global  = 0;
 		pdes_tab->p.P	    = 0;
 
-		ind_virtuale = ind_virtuale + SIZE_SUPERPAGINA;
+		ind_virtuale = n2a(a2n(ind_virtuale) + SIZE_SUPERPAGINA);
 	}
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	ind_virtuale = fine_utente_privato - SIZE_PAGINA;
+	ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
 	ind_fisico  = reinterpret_cast<pagina*>(trasferimento(pdir, ind_virtuale));
 	if (ind_fisico != 0) {
 		pdes_tab = &pdir->entrate[indice_direttorio(ind_virtuale)];
@@ -2084,7 +2058,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 
 	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
 	// dello spazio sistema/privato
-	addr ind = fine_sistema_privato - SIZE_PAGINA;
+	addr ind = n2a(fine_sistema_privato - DIM_PAGINA);
 
 	ptab = alloca_tabella(true);
 	if (ptab == 0) {
@@ -2094,7 +2068,7 @@ pagina* crea_pila_sistema(direttorio* pdir)
 	}
 
 	pdes_tab = &pdir->entrate[indice_direttorio(ind)];
-	pdes_tab->p.address = toaddr(ptab) >> 12;
+	pdes_tab->p.address = a2n(ptab) >> 12;
 	pdes_tab->p.global  = 0;
 	pdes_tab->p.US	    = 0; // livello sistema
 	pdes_tab->p.RW	    = 1; // scrivibile
@@ -2109,9 +2083,9 @@ pagina* crea_pila_sistema(direttorio* pdir)
 			goto errore2;
 	}
 
-	memset(ptab, 0, SIZE_PAGINA);
+	memset(ptab, 0, DIM_PAGINA);
 	pdes_pag = &ptab->entrate[indice_tabella(ind)];
-	pdes_pag->p.address = toaddr(ind_fisico) >> 12;
+	pdes_pag->p.address = a2n(ind_fisico) >> 12;
 	pdes_pag->p.pgsz    = 0;
 	pdes_pag->p.US	    = 0;
 	pdes_pag->p.RW	    = 1;
@@ -2127,14 +2101,14 @@ errore1:	return 0;
 // "p" (tranne il proc_elem puntato da "p" stesso)
 void distruggi_processo(proc_elem* p)
 {
-	des_proc* pdes_proc = des_p(p->identifier);
+	des_proc* pdes_proc = des_p(p->nome);
 
 	direttorio* pdirettorio = pdes_proc->cr3;
-	rilascia_tutto(pdirettorio, inizio_sistema_privato, ntab_sistema_privato);
-	rilascia_tutto(pdirettorio, inizio_utente_privato,  ntab_utente_privato);
+	rilascia_tutto(pdirettorio, n2a(inizio_sistema_privato), ntab_sistema_privato);
+	rilascia_tutto(pdirettorio, n2a(inizio_utente_privato),  ntab_utente_privato);
 	rilascia(pdirettorio);
-	rilascia_tss(p->identifier);
-	delete pdes_proc;
+	rilascia_tss(p->nome);
+	dealloca(pdes_proc);
 }
 
 // rilascia ntab tabelle (con tutte le pagine da esse puntate) a partire da 
@@ -2174,8 +2148,8 @@ extern "C" void schedulatore(void);
 // resetta controllore interruzioni
 extern "C" void reset_8259();
 
-extern "C" short
-c_activate_p(void f(int), int a, int prio, char liv)
+extern "C" int
+c_activate_p(void f(int), int a, natl prio, natb liv)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short id = 0;
@@ -2187,7 +2161,7 @@ c_activate_p(void f(int), int a, int prio, char liv)
 	if (p != 0) {
 		inserimento_coda(pronti, p);
 		processi++;
-		id = p->identifier;
+		id = p->nome;
 		flog(LOG_INFO, "proc=%d entry=%x(%d) prio=%d liv=%d", id, f, a, prio, liv);
 	}
 
@@ -2212,8 +2186,8 @@ extern "C" void c_terminate_p()
 	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
-	flog(LOG_INFO, "Processo %d terminato", p->identifier);
-	delete p;
+	flog(LOG_INFO, "Processo %d terminato", p->nome);
+	dealloca(p);
 	schedulatore();
 }
 
@@ -2225,8 +2199,8 @@ extern "C" void c_abort_p()
 	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
-	flog(LOG_WARN, "Processo %d abortito", p->identifier);
-	delete p;
+	flog(LOG_WARN, "Processo %d abortito", p->nome);
+	dealloca(p);
 	schedulatore();
 }
 
@@ -2267,7 +2241,7 @@ bool aggiungi_pe(proc_elem *p, int irq)
 
 	a_p[irq] = p;
 	distruggi_processo(a_p_save[irq]);
-	delete a_p_save[irq];
+	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
 	return true;
 
@@ -2287,11 +2261,11 @@ extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 	if (!aggiungi_pe(p, irq) ) 
 		goto error2;
 
-	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d irq=%d", p->identifier, f, a, prio, liv, irq);
+	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d irq=%d", p->nome, f, a, prio, liv, irq);
 
 	sem_signal(pf_mutex);
 
-	return p->identifier;
+	return p->nome;
 
 error2:	distruggi_processo(p);
 error1:	sem_signal(pf_mutex);
@@ -2331,8 +2305,8 @@ bool init_pe()
 struct des_heap {
 	addr start;	
 	union {
-		unsigned int dimensione;
-		unsigned int occupato : 1;
+		natl dimensione;
+		natl occupato : 1;
 	};
 	des_heap* next;
 };
@@ -2387,10 +2361,10 @@ extern "C" void *c_mem_alloc(int dim)
 	// tutta la regione, ma la dividiamo in due parti: una di dimensione
 	// pari a dim, occupata, e il resto libero
 	if (scorri->dimensione - dim >= sizeof(des_heap) &&
-	    (nuovo = new des_heap) != 0)
+	    (nuovo = static_cast<des_heap*>(alloca(sizeof(des_heap)))) != 0)
 	{
 		// inseriamo nuovo nella lista, dopo scorri
-		nuovo->start = scorri->start + dim; // rispettiamo (2)
+		nuovo->start = n2a(a2n(scorri->start) + dim); // rispettiamo (2)
 		nuovo->dimensione = scorri->dimensione - dim;
 		scorri->dimensione = dim;
 		nuovo->next = scorri->next; 
@@ -2405,10 +2379,10 @@ extern "C" void *c_mem_alloc(int dim)
 // libera la regione dello heap il cui indirizzo di partenza e' pv
 // nota: se pv e' 0, o pv non e' l'indirizzo di partenza di nessuna regione,
 // oppure se tale regione e' gia' libera, non si esegue alcuna azione
-extern "C" void c_mem_free(void *pv)
+extern "C" void c_mem_free(addr pv)
 {
 	if (pv == 0) return;
-	addr p = toaddr(pv);
+	addr p = pv;
 
 	des_heap *prec = 0, *scorri = &heap;
 	while (scorri != 0 && (!scorri->occupato || scorri->start != p)) {
@@ -2425,7 +2399,7 @@ extern "C" void c_mem_free(void *pv)
 		// dobbiamo riunire la regione con la precedente, per rispettare (2)
 		prec->dimensione += scorri->dimensione;
 		prec->next = scorri->next;
-		delete scorri;
+		dealloca(scorri);
 		scorri = prec;
 	}
 	des_heap *next = scorri->next;
@@ -2435,12 +2409,12 @@ extern "C" void c_mem_free(void *pv)
 		// dobbiamo riunire anche la regione successiva
 		scorri->dimensione += next->dimensione;
 		scorri->next = next->next;
-		delete next;
+		dealloca(next);
 	}
 }
 
 
-extern "C" int c_give_num()
+extern "C" natl c_give_num()
 {
         return processi;
 }
@@ -2457,7 +2431,7 @@ struct des_sem {
 extern des_sem array_dess[MAX_SEMAFORI];
 
 // bitmap per l'allocazione dei semafori
-unsigned int sem_buf[MAX_SEMAFORI / (sizeof(int) * 8) + 1];
+natl sem_buf[MAX_SEMAFORI / (sizeof(int) * 8) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
 // alloca un nuovo semaforo e ne restiutisce l'indice (da usare con sem_wait e 
@@ -2467,7 +2441,7 @@ bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 // prossima edizione).
 extern "C" int c_sem_ini(int val)
 {
-	unsigned int pos;
+	natl pos;
 	int index_des_s = 0;
 
 	if (bm_alloc(&sem_bm, pos)) {
@@ -2511,7 +2485,7 @@ extern "C" void c_sem_signal(int sem)
 
 	if(s->counter <= 0) {
 		rimozione_coda(s->pointer, lavoro);
-		if(lavoro->priority <= esecuzione->priority)
+		if(lavoro->precedenza <= esecuzione->precedenza)
 			inserimento_coda(pronti, lavoro);
 		else { // preemption
 			inserimento_coda(pronti, esecuzione);
@@ -2522,18 +2496,18 @@ extern "C" void c_sem_signal(int sem)
 
 // richiesta al timer
 struct richiesta {
-	int d_attesa;
+	natl d_attesa;
 	richiesta *p_rich;
 	proc_elem *pp;
 };
 
 void inserimento_coda_timer(richiesta *p);
 
-extern "C" void c_delay(int n)
+extern "C" void c_delay(natl n)
 {
 	richiesta *p;
 
-	p = new richiesta;
+	p = static_cast<richiesta*>(alloca(sizeof(richiesta)));
 	p->d_attesa = n;	
 	p->pp = esecuzione;
 
@@ -2551,7 +2525,7 @@ extern "C" void c_delay(int n)
 // - msg: il messaggio vero e proprio
 
 // numero di messaggi nella coda circolare
-const unsigned int LOG_MSG_NUM = 100;
+const natl LOG_MSG_NUM = 100;
 
 // descrittore del log
 struct des_log {
@@ -2592,11 +2566,11 @@ extern "C" void c_readlog(log_msg& m)
 // tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
 extern addr fine_codice_sistema;
 struct page_fault_error {
-	unsigned int prot  : 1;
-	unsigned int write : 1;
-	unsigned int user  : 1;
-	unsigned int res   : 1;
-	unsigned int pad   : 28; // bit non significativi
+	natl prot  : 1;
+	natl write : 1;
+	natl user  : 1;
+	natl res   : 1;
+	natl pad   : 28; // bit non significativi
 };
 
 
@@ -2663,7 +2637,7 @@ void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem)
 
 	pp = p_coda;
 	prevp = 0;
-	while(pp && pp->priority >= p_elem->priority) {
+	while(pp && pp->precedenza >= p_elem->precedenza) {
 		prevp = pp;
 		pp = pp->puntatore;
 	}
@@ -2743,7 +2717,7 @@ extern "C" void c_driver_t(void)
 		inserimento_coda(pronti, descrittore_timer->pp);
 		p = descrittore_timer;
 		descrittore_timer = descrittore_timer->p_rich;
-		delete p;
+		dealloca(p);
 	}
 
 	// aggiorna le statitische per la memoria virtuale
@@ -2763,7 +2737,7 @@ extern "C" void c_driver_t(void)
 // saranno disponibili quando il nostro nucleo andra' in esecuzione.
 // Per ragioni di convenienza, ridefiniamo delle funzioni analoghe a quelle
 // fornite dalla libreria del C.
-
+//
 // copia n byte da src a dest
 void *memcpy(void *dest, const void *src, unsigned int n)
 {
@@ -2777,7 +2751,7 @@ void *memcpy(void *dest, const void *src, unsigned int n)
 }
 
 // scrive n byte pari a c, a partire da dest
-void *memset(void *dest, int c, unsigned int n)
+void *memset(void *dest, int c, natl n)
 {
 	char *dest_ptr = static_cast<char*>(dest);
 
@@ -2810,7 +2784,7 @@ int strlen(const char *s)
 }
 
 // copia al piu' l caratteri dalla stringa src alla stringa dest
-char *strncpy(char *dest, const char *src, unsigned int l)
+char *strncpy(char *dest, const char *src, natl l)
 {
 
 	for (int i = 0; i < l && src[i]; ++i)
@@ -2874,7 +2848,7 @@ static void htostr(char *buf, unsigned long l)
 }
 
 // converte l in stringa (notazione decimale)
-static void itostr(char *buf, unsigned int len, long l)
+static void itostr(char *buf, natl len, long l)
 {
 	int i, div = 1000000000, v, w = 0;
 
@@ -2920,7 +2894,7 @@ int strtoi(char* buf)
 #define DEC_BUFSIZE 12
 
 // stampa formattata su stringa
-int vsnprintf(char *str, unsigned int size, const char *fmt, va_list ap)
+int vsnprintf(char *str, natl size, const char *fmt, va_list ap)
 {
 	int in = 0, out = 0, tmp;
 	char *aux, buf[DEC_BUFSIZE];
@@ -2964,7 +2938,7 @@ end:
 }
 
 // stampa formattata su stringa (variadica)
-extern "C" int snprintf(char *buf, unsigned int n, const char *fmt, ...)
+extern "C" int snprintf(char *buf, natl n, const char *fmt, ...)
 {
 	va_list ap;
 	int l;
@@ -2980,28 +2954,28 @@ extern "C" int snprintf(char *buf, unsigned int n, const char *fmt, ...)
 ////////////////////////////////////////////////////////////////////////////////
 
 
-inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
+inline natl bm_isset(bm_t *bm, natl pos)
 {
 	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
 }
 
-inline void bm_set(bm_t *bm, unsigned int pos)
+inline void bm_set(bm_t *bm, natl pos)
 {
 	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
 }
 
-inline void bm_clear(bm_t *bm, unsigned int pos)
+inline void bm_clear(bm_t *bm, natl pos)
 {
 	bm->vect[pos / 32] |= (1UL << (pos % 32));
 }
 
 // crea la mappa BM, usando BUFFER come vettore; SIZE e' il numero di bit
 //  nella mappa
-void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
+void bm_create(bm_t *bm, natl *buffer, natl size)
 {
 	bm->vect = buffer;
 	bm->size = size;
-	bm->vecsize = ceild(size, sizeof(unsigned int) * 8);
+	bm->vecsize = ceild(size, sizeof(natl) * 8);
 
 	for (int i = 0; i < bm->vecsize; ++i)
 		bm->vect[i] = 0xffffffff;
@@ -3010,9 +2984,9 @@ void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
 
 // usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
 // efficiente il primo bit a 1 in v
-extern "C" int trova_bit(unsigned int v);
+extern "C" int trova_bit(natl v);
 
-bool bm_alloc(bm_t *bm, unsigned int& pos)
+bool bm_alloc(bm_t *bm, natl& pos)
 {
 
 	int i = 0;
@@ -3022,13 +2996,13 @@ bool bm_alloc(bm_t *bm, unsigned int& pos)
 	if (i < bm->vecsize) {
 		pos = trova_bit(bm->vect[i]);
 		bm->vect[i] &= ~(1UL << pos);
-		pos += sizeof(unsigned int) * 8 * i;
+		pos += sizeof(natl) * 8 * i;
 	} else 
 		risu = false;
 	return risu;
 }
 
-void bm_free(bm_t *bm, unsigned int pos)
+void bm_free(bm_t *bm, natl pos)
 {
 	bm_clear(bm, pos);
 }
@@ -3068,10 +3042,10 @@ extern "C" void backtrace(int off);
 // sistema. I parametri "eip1", "cs", "eflags" e "eip2" sono in pila per 
 // effetto della chiamata di sistema
 extern "C" void c_panic(const char *msg,
-		        unsigned int	 eip1,
+		        natl	 eip1,
 			unsigned short	 cs,
-			unsigned int	 eflags,
-			unsigned int 	 eip2)
+			natl	 eflags,
+			natl 	 eip2)
 {
 	unsigned char* ptr;
 	static char buf[80];
@@ -3092,7 +3066,7 @@ extern "C" void c_panic(const char *msg,
 
 	nl++;
 
-	des_proc* p = des_p(esecuzione->identifier);
+	des_proc* p = des_p(esecuzione->nome);
 	// scriviamo lo stato dei registri
 	l = snprintf(buf, 80, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
 		 p->eax, p->ebx, p->ecx, p->edx);
@@ -3144,7 +3118,7 @@ void do_log(log_sev sev, const char* buf, int quanti)
 		quanti = LOG_MSG_SIZE;
 
 	log_buf.buf[log_buf.last].sev = sev;
-	log_buf.buf[log_buf.last].identifier = esecuzione->identifier;
+	log_buf.buf[log_buf.last].identifier = esecuzione->nome;
 	strncpy(log_buf.buf[log_buf.last].msg, buf, quanti);
 	log_buf.buf[log_buf.last].msg[quanti] = 0;
 
@@ -3265,7 +3239,7 @@ struct interfata_reg {
 struct drive {				// Drive su un canale ATA
 	bool presente;
 	bool dma;
-	unsigned int tot_sett;
+	natl tot_sett;
 	partizione* part;
 };
 
@@ -3292,7 +3266,7 @@ extern "C" void mask_hd(ind_b h);
 extern "C" bool hd_software_reset(ind_b dvctrl);
 extern "C" void hd_read_device(ind_b i_drv_hd, int& ms);
 extern "C" void hd_select_device(short ms,ind_b i_drv_hd);
-extern "C" void hd_write_address(des_ata *p, unsigned int primo);	
+extern "C" void hd_write_address(des_ata *p, natl primo);	
 extern "C" void hd_write_command(hd_cmd cmd, ind_b i_drv_cmd);
 
 
@@ -3361,7 +3335,7 @@ void hd_print_error(int i, int d, int sect, short error)
 }
 
 // Avvio delle operazioni di lettura da hard disk
-bool gohd_input(des_ata* p_des, int drv, unsigned int primo, unsigned char quanti)
+bool gohd_input(des_ata* p_des, int drv, natl primo, unsigned char quanti)
 {
 	if (!hd_sel_drv(p_des, drv))		// selezione del drive
 		return false;
@@ -3374,7 +3348,7 @@ bool gohd_input(des_ata* p_des, int drv, unsigned int primo, unsigned char quant
 
 
 // inizializza il descrittore d'operazione e avvia la lettura
-void starthd_in(des_ata *p_des, short drv, unsigned short vetti[], unsigned int primo, unsigned char quanti)
+void starthd_in(des_ata *p_des, short drv, unsigned short vetti[], natl primo, unsigned char quanti)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
@@ -3389,7 +3363,7 @@ errore:
 }
 
 // Avvio delle operazioni di scrittura su hard disk
-bool gohd_output(des_ata *p_des, int drv, unsigned short vetto[], unsigned int primo, unsigned char quanti)
+bool gohd_output(des_ata *p_des, int drv, unsigned short vetto[], natl primo, unsigned char quanti)
 {
 	if (!hd_sel_drv(p_des, drv))		// selezione del drive
 		return false;
@@ -3404,7 +3378,7 @@ bool gohd_output(des_ata *p_des, int drv, unsigned short vetto[], unsigned int p
 }
 
 // inizializza il descrittore d'operazione e avvia la scrittura
-void starthd_out(des_ata *p_des, short drv, unsigned short vetto[], unsigned int primo, unsigned char quanti)	
+void starthd_out(des_ata *p_des, short drv, unsigned short vetto[], natl primo, unsigned char quanti)	
 {	char stato;				
 	bool ris;
 	p_des->cont = quanti;
@@ -3424,7 +3398,7 @@ errore:
 //  a partire da primo depositandoli in vetti; il controller usato e ind_ata,
 //  il drive e' drv. Riporta un fallimento in errore
 extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
-		unsigned int primo, unsigned char quanti, char &errore)
+		natl primo, unsigned char quanti, char &errore)
 {
 	des_ata *p_des;
 
@@ -3458,7 +3432,7 @@ extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 // Primitiva di scrittura su hard disk: scrive quanti blocchi (max 256, char!)
 //  a partire da primo prelevandoli da vetti; il controller usato e' ind_ata,
 //  il drive e' drv. Riporta un fallimento in errore
-extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], unsigned int primo,
+extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], natl primo,
 		unsigned char quanti, char &errore)
 {
 	des_ata *p_des;
@@ -3531,18 +3505,18 @@ extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
 // descrittore di partizione. Le uniche informazioni che ci interessano sono 
 // "offset" e "sectors"
 struct des_part {
-	unsigned int active	: 8;
-	unsigned int head_start	: 8;
-	unsigned int sec_start	: 6;
-	unsigned int cyl_start_H: 2;
-	unsigned int cyl_start_L: 8;
-	unsigned int type	: 8;
-	unsigned int head_end	: 8;
-	unsigned int sec_end	: 6;
-	unsigned int cyl_end_H	: 2;
-	unsigned int cyl_end_L	: 8;
-	unsigned int offset;
-	unsigned int sectors;
+	natl active	: 8;
+	natl head_start	: 8;
+	natl sec_start	: 6;
+	natl cyl_start_H: 2;
+	natl cyl_start_L: 8;
+	natl type	: 8;
+	natl head_end	: 8;
+	natl sec_end	: 6;
+	natl cyl_end_H	: 2;
+	natl cyl_end_L	: 8;
+	natl offset;
+	natl sectors;
 };
 
 bool leggi_partizioni(short ind_ata, short drv)
@@ -3552,7 +3526,7 @@ bool leggi_partizioni(short ind_ata, short drv)
 	partizione *estesa, **ptail;
 	des_ata* p_des = &hd[ind_ata];
 	static char buf[512];
-	unsigned int settore;
+	natl settore;
 	partizione* pp;
 
 	// lettura del Master Boot Record (LBA = 0)
@@ -3564,14 +3538,14 @@ bool leggi_partizioni(short ind_ata, short drv)
 	p = reinterpret_cast<des_part*>(buf + 446);
 	// interpretiamo i descrittori delle partizioni primarie
 	estesa = 0;
-	pp = new partizione;
+	pp = static_cast<partizione*>(alloca(sizeof(partizione)));
 	// la partizione 0 corrisponde all'intero hard disk
 	pp->first = 0;
 	pp->dim = p_des->disco[drv].tot_sett;
 	p_des->disco[drv].part = pp;
 	ptail = &pp->next;
 	for (int i = 0; i < 4; i++) {
-		pp = *ptail = new partizione;
+		pp = *ptail = static_cast<partizione*>(alloca(sizeof(partizione)));
 
 		pp->type  = p->type;
 		pp->first = p->offset;
@@ -3585,8 +3559,8 @@ bool leggi_partizioni(short ind_ata, short drv)
 	}
 	if (estesa != 0) {
 		// dobbiamo leggere le partizioni logiche
-		unsigned int offset_estesa = estesa->first;
-		unsigned int offset_logica = offset_estesa;
+		natl offset_estesa = estesa->first;
+		natl offset_logica = offset_estesa;
 		while (1) {
 			settore = offset_logica;
 			readhd_n(ind_ata, drv, buf, settore, 1, errore);
@@ -3594,7 +3568,7 @@ bool leggi_partizioni(short ind_ata, short drv)
 				goto errore;
 			p = reinterpret_cast<des_part*>(buf + 446);
 			
-			*ptail = new partizione;
+			*ptail = static_cast<partizione*>(alloca(sizeof(partizione)));
 			
 			(*ptail)->type  = p->type;
 			(*ptail)->first = p->offset + offset_logica;
@@ -3891,7 +3865,7 @@ errore:
 // timer
 extern unsigned long ticks;
 extern unsigned long clocks_per_usec;
-extern "C" void attiva_timer(unsigned int count);
+extern "C" void attiva_timer(natl count);
 extern "C" void disattiva_timer();
 extern "C" unsigned long  calibra_tsc();
 
@@ -3913,15 +3887,15 @@ bool crea_spazio_condiviso(addr& last_address)
 	tabella* ptab;
 	direttorio *tmp, *main_dir;
 	const int nspazi = 2;
-	addr inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
+	natl inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
 	     fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
 
-	main_dir = des_p(esecuzione->identifier)->cr3;
+	main_dir = des_p(esecuzione->nome)->cr3;
 
 	
 	// lettura del direttorio principale dallo swap
 	flog(LOG_INFO, "lettura del direttorio principale...");
-	tmp = new direttorio;
+	tmp = static_cast<direttorio*>(alloca(sizeof(direttorio)));
 	if (tmp == 0) {
 		flog(LOG_ERR, "memoria insufficiente");
 		return false;
@@ -3931,7 +3905,7 @@ bool crea_spazio_condiviso(addr& last_address)
 	
 
 	for (int sp = 0; sp < nspazi; sp++) {
-		for (addr ind = inizio[sp]; ind < fine[sp]; ind = ind + SIZE_SUPERPAGINA)
+		for (addr ind = n2a(inizio[sp]); ind < n2a(fine[sp]); ind = n2a(a2n(ind) + SIZE_SUPERPAGINA))
 		{
 			pdes_tab1 = &tmp->entrate[indice_direttorio(ind)];
 
@@ -3940,7 +3914,7 @@ bool crea_spazio_condiviso(addr& last_address)
 				pdes_tab3 = &main_dir->entrate[indice_direttorio(ind)];
 				*pdes_tab2 = *pdes_tab1;
 
-				last_address = ind + SIZE_SUPERPAGINA;
+				last_address = n2a(a2n(ind) + SIZE_SUPERPAGINA);
 
 				ptab = alloca_tabella(true);
 				if (ptab == 0) {
@@ -3951,7 +3925,7 @@ bool crea_spazio_condiviso(addr& last_address)
 					flog(LOG_ERR, "Impossibile caricare tabella condivisa");
 					return false;
 				}
-				pdes_tab2->p.address	= toaddr(ptab) >> 12;
+				pdes_tab2->p.address	= a2n(ptab) >> 12;
 				for (int i = 0; i < 1024; i++) {
 					descrittore_pagina* pdes_pag = &ptab->entrate[i];
 					if (pdes_pag->p.P == 1) {
@@ -3964,14 +3938,14 @@ bool crea_spazio_condiviso(addr& last_address)
 							flog(LOG_ERR, "Impossibile caricare pagina residente");
 							return false;
 						}
-						collega_pagina_virtuale(ptab, pag, ind + i * SIZE_PAGINA);
+						collega_pagina_virtuale(ptab, pag, n2a(a2n(ind) + i * DIM_PAGINA));
 					}
 				}
 				*pdes_tab3 = *pdes_tab2;
 			}
 		}
 	}
-	delete tmp;
+	dealloca(tmp);
 	carica_cr3(leggi_cr3());
 	return true;
 }
@@ -3988,8 +3962,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
-	init.identifier = 0;
-	init.priority   = MAX_PRIORITY;
+	init.nome = 0;
+	init.precedenza   = MAX_PRIORITY;
 	esecuzione = &init;
 
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v1.0");
@@ -4011,7 +3985,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		max_mem_lower = addr(639 * 1024);
 		max_mem_upper = addr(32 * 1024 * 1024);
 	}
-	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, max_mem_upper >> 20 );
+	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, a2n(max_mem_upper) >> 20 );
 
 	// interpretiamo i parametri
 	for (arg = str_token(mbi->cmdline, &cont);
@@ -4038,13 +4012,13 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	
 	// per come abbiamo organizzato il sistema non possiamo gestire piu' di
 	// 1GiB di memoria fisica
-	if (max_mem_upper > fine_sistema_privato) {
-		max_mem_upper = fine_sistema_privato;
+	if (max_mem_upper > n2a(fine_sistema_privato)) {
+		max_mem_upper = n2a(fine_sistema_privato);
 		flog(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
 	}
 	
 	//Assegna allo heap heap_mem byte a partire dalla fine del modulo sistema
-	salta_a(mem_upper + heap_mem);
+	salta_a(n2a(a2n(mem_upper) + heap_mem));
 	flog(LOG_INFO, "Heap di sistema: %d B", heap_mem);
 
 
@@ -4063,7 +4037,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	}
 		
-	memset(direttorio_principale, 0, SIZE_PAGINA);
+	memset(direttorio_principale, 0, DIM_PAGINA);
 
 	// memoria fisica in memoria virtuale
 	if (!mappa_mem_fisica(direttorio_principale, max_mem_upper))
@@ -4120,7 +4094,7 @@ void main_proc(int n)
 	unsigned long clocks_per_sec;
 	int errore;
 	pagina* pila_utente;
-	des_proc *my_des = des_p(esecuzione->identifier);
+	des_proc *my_des = des_p(esecuzione->nome);
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
@@ -4156,8 +4130,8 @@ void main_proc(int n)
 		goto error;
 
 	// inizializzazione dello heap utente
-	heap.start = allinea(swap.sb.user_end, sizeof(int));
-	heap.dimensione = last_address - heap.start;
+	heap.start = allineav(swap.sb.user_end, sizeof(int));
+	heap.dimensione = a2n(last_address) - a2n(heap.start);
 	flog(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
 
@@ -4188,7 +4162,7 @@ void main_proc(int n)
 		flog(LOG_ERR, "Impossibile allocare la pila utente per main");
 		goto error;
 	}
-	my_des->esp0 = fine_sistema_privato;
+	my_des->esp0 = n2a(fine_sistema_privato);
 	my_des->ss0 = SEL_DATI_SISTEMA;
 	my_des->ds  = SEL_DATI_UTENTE;
 	my_des->es  = SEL_DATI_UTENTE;
@@ -4197,7 +4171,7 @@ void main_proc(int n)
 	my_des->liv = LIV_UTENTE;
 
 	attiva_timer(DELAY);
-	salta_a_utente(swap.sb.user_entry, fine_utente_privato);
+	salta_a_utente(swap.sb.user_entry, n2a(fine_utente_privato));
 error:
 	panic("Errore di inizializzazione");
 }
