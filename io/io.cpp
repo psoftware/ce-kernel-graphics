@@ -34,8 +34,7 @@ extern "C" void nwfi(controllore c);
 extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
 extern "C" void abort_p();
 
-extern "C" void writevid_n(int off, const unsigned char* vett, int quanti);
-extern "C" void attrvid_n(int off, int quanti, unsigned char bg, unsigned char fg, bool blink);
+extern "C" void writevid(char pc);
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -241,7 +240,7 @@ extern "C" void c_writese_0(int serial, natb vetto[], int &quanti)
 {
 	des_se *p_des;
 
-	if(serial < 0 || serial >= S)
+	if (serial < 0 || serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -291,61 +290,141 @@ bool com_init()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE DELLA TASTIERA                            //
+//                         GESTIONE DELLA CONSOLE                            //
 ////////////////////////////////////////////////////////////////////////////////
 
+const int MAX_CODE = 29; 
 
-extern "C" void abilita_tastiera(void);
+struct interfkbd_reg {
+	ioaddr iRBR, iTBR, iCMR, iSTR;
+};
 
 struct des_kbd {
-	bool escape;
-	int pause;
-	ioaddr iRBR;
-	int id;
-} kbd;
+	interfkbd_reg indreg;
+	addr punt;
+	int cont;
+	bool shift;
+	natb tab[MAX_CODE];
+	natb tabmin[MAX_CODE];
+	natb tabmai[MAX_CODE];
+};
 
-unsigned char pausecode[6] = { 0xe1, 0x1d, 0x45, 0xe1, 0x9d, 0xc5 };
+const int COLS = 80;
+const int ROWS = 25;
+const int VIDEO_SIZE = COLS * ROWS;
 
-unsigned short kbd_read()
+struct interfvid_reg {
+	ioaddr iIND, iDAT;
+};
+
+struct des_vid {
+	interfvid_reg indreg;
+	natw* video;
+	int x, y;
+	natb attr;
+};
+
+struct des_console {
+	int mutex;
+	int sincr;
+	des_kbd kbd;
+	des_vid vid;
+};
+
+extern "C" des_console console;
+
+extern "C" void abilita_tastiera(void);
+extern "C" void halt_inputkbd(interfkbd_reg indreg);
+extern "C" void go_inputkbd(interfkbd_reg indreg);
+void writeelem(natb c);
+void writeseq(cstr buff);
+
+void startkbd_in(des_kbd* p_des, addr buff)
 {
-	natb c;
-
-	inputb(kbd.iRBR, c);
-
-	if (c == pausecode[kbd.pause]) {
-		if (++kbd.pause >= 6) {
-			kbd.pause = 0;
-			return 0xe17f;
-		}
-		return 0;
-	} else {
-		kbd.pause = 0;
-	}
-
-	if (c == 0xe0) {
-		kbd.escape = true;
-		return 0;
-	}
-	
-	if (kbd.escape) {
-		kbd.escape = false;
-		return 0xe000 | c;
-	}
-
-	return c;
+	p_des->punt = buff;
+	p_des->cont = 80;
+	go_inputkbd(p_des->indreg);
 }
 
-// smistatore dei caratteri dalla tastiera reale alle tastiere virtuali
-void vkbd_putchar(unsigned short code);
+extern "C" void c_readconsole(str buff, int& quanti)
+{
+	des_console *p_des;
+
+	p_des = &console;
+	sem_wait(p_des->mutex);
+	startkbd_in(&p_des->kbd, buff);
+	sem_wait(p_des->sincr);
+	quanti = p_des->kbd.cont;
+	sem_signal(p_des->mutex);
+}
+
+natb converti(des_kbd* p_des, natb c) {
+	natb cc;
+	int pos = 0;
+	while (pos < MAX_CODE && p_des->tab[pos] != c)
+		pos++;
+	if (pos == MAX_CODE)
+		return 0;
+	if (p_des->shift)
+		cc = p_des->tabmai[pos];
+	else
+		cc = p_des->tabmin[pos];
+	return cc;
+}
+
+
 void estern_kbd(int h)
 {
-	char ch;
-	unsigned short code;
+	des_console *p_des = &console;
+	natb a, c;
+	bool fine;
 
 	for(;;) {
-		code = kbd_read();
-		if (code) 
-			vkbd_putchar(code);				
+		halt_inputkbd(p_des->kbd.indreg);
+
+		inputb(p_des->kbd.indreg.iRBR, c);
+		
+		fine = false;
+		switch (c) {
+		case 0x2a: // left shift make code
+			p_des->kbd.shift = true;
+			break;
+		case 0xaa: // left shift break code
+			p_des->kbd.shift = false;
+			break;
+		default:
+			if (c < 0x80) {
+				a = converti(&p_des->kbd, c);
+				if (a == 0)
+					break;
+				if (a == '\b') {
+					if (p_des->kbd.cont < 80) {
+						p_des->kbd.punt = static_cast<natb*>(p_des->kbd.punt) - 1;
+						p_des->kbd.cont++;
+						writeseq("\b \b");
+					}
+				} else if (a == '\r' || a == '\n') {
+					fine = true;
+					p_des->kbd.cont = 80 - p_des->kbd.cont;
+					*static_cast<natb*>(p_des->kbd.punt) = 0;
+					writeseq("\r\n");
+				} else {
+					*static_cast<natb*>(p_des->kbd.punt) = a;
+					p_des->kbd.punt = static_cast<natb*>(p_des->kbd.punt) + 1;
+					p_des->kbd.cont--;
+					writeelem(a);
+					if (p_des->kbd.cont == 0) {
+						fine = true;
+						p_des->kbd.cont = 80;
+					}
+				}
+			}
+			break;
+		}
+		if (fine == true) 
+			sem_signal(p_des->sincr);
+		else
+			go_inputkbd(p_des->kbd.indreg);
 		nwfi(master);
 	}
 }
@@ -356,14 +435,10 @@ extern "C" void kbd_enable();
 
 bool kbd_init()
 {
-
-	kbd.escape = false;
-	kbd.pause = 0;
-	kbd.iRBR = 0x60;
-
-	if ( (kbd.id = activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ)) == 0) {
+	des_kbd *p_des = &console.kbd;
+	if (activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ) == 0) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
-		return -307;
+		return false;
 	}
 
 	kbd_enable();
@@ -371,355 +446,98 @@ bool kbd_init()
 	return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//    TASTIERE VIRTUALI                                                      //
-///////////////////////////////////////////////////////////////////////////////
+extern "C" des_vid vid;
 
-// sottrazione modulo 'mod' (il '%' del C/C++ calcola il valore sbagliato)
-// p1 e p2 devono essere compresi tra 0 e mod-1
-inline int circular_sub(int p1, int p2, int mod)
+extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y);
+
+bool vid_init()
 {
-	int dist = p1 - p2;
-	if (dist < 0) dist += mod;
-	return dist;
-}
-
-// somma modulo 'mod'
-inline int circular_sum(int p1, int p2, int mod)
-{
-	return (p1 + p2) % mod;
-}
-
-
-
-const unsigned int VKBD_BUF_SIZE = 20;
-const int MAX_VKBD = 12;
-
-struct des_vkbd {
-	int mutex;
-	int intr;
-	bool intr_enabled;
-	bool intr_pending;
-	int intr_waiting;
-	unsigned short buf[VKBD_BUF_SIZE];
-	int first;
-	int last;
-	int nchar;
-	unsigned char leds;
-};
-
-des_vkbd array_desvkbd[MAX_VKBD];
-des_vkbd *vkbd_active;
-
-bool vkbd_init()
-{
-	for (int i = 0; i < MAX_VKBD; i++) {
-		des_vkbd *k = &array_desvkbd[i];
-
-		if ( (k->mutex = sem_ini(1)) == 0) {
-			flog(LOG_ERR, "vkbd: impossibile creare mutex");
-			return false;
-		}
-		if ( (k->intr = sem_ini(0)) == 0) {
-			flog(LOG_ERR, "vkbd: impossibile creare intr");
-			return false;
-		}
-		k->intr_enabled = false;
-		k->intr_pending = false;
-		k->intr_waiting = 0;
-		k->first = k->last = k->nchar = 0;
-	}
-	flog(LOG_INFO, "vkbd: inizializzate %d tastiere virtuali", MAX_VKBD);
+	des_vid *p_des = &console.vid;
+	for (int i = 0; i < VIDEO_SIZE; i++) 
+		p_des->video[i] = 0 | p_des->attr << 8;
+	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
+		p_des->x, p_des->y);
+	flog(LOG_INFO, "vid: video inizializzato");
 	return true;
 }
 
-extern "C" void c_vkbd_wfi(int v)
-{
-	if (v < 0 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
+bool console_init() {
+	des_console *p_des = &console;
 
-	des_vkbd *k = &array_desvkbd[v];
-
-	sem_wait(k->mutex);
-	while (!k->intr_pending) {
-		k->intr_waiting++;
-		sem_signal(k->mutex);
-		sem_wait(k->intr);
-		sem_wait(k->mutex);
-	}
-	sem_signal(k->mutex);
-}
-
-
-void vkbd_nuovo_car(des_vkbd* k, unsigned short code, bool clear = false)
-{
-	sem_wait(k->mutex);
-
-	if (!clear && k->nchar >= VKBD_BUF_SIZE)
-		goto out;
-
-	if (clear) 
-		k->first = k->last = k->nchar = 0;
-
-	k->buf[k->last] = code;
-	k->last = circular_sum(k->last, 1, VKBD_BUF_SIZE);
-	k->nchar++;
-
-	if (k->intr_enabled && !k->intr_pending) {
-		k->intr_pending = true;
-		if (k->intr_waiting > 0) {
-			k->intr_waiting--;
-			sem_signal(k->intr);
-		}
-	}
-out:
-	sem_signal(k->mutex);
-}
-
-void vkbd_putchar(unsigned short code)
-{
-	if (vkbd_active)
-		vkbd_nuovo_car(vkbd_active, code);
-}
-
-extern "C" void c_vkbd_send(int v, unsigned short code, bool clear)
-{
-	if (v < -1 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
-
-	des_vkbd *k;
-
-	if (v == -1) {
-		for (int i = 0; i < MAX_VKBD; i++) {
-			k = &array_desvkbd[i];
-			vkbd_nuovo_car(k, code, clear);
-		}
-	} else {
-		k = &array_desvkbd[v];
-		vkbd_nuovo_car(k, code, clear);
-	}
-}
-
-extern "C" unsigned short c_vkbd_read(int v)
-{
-	unsigned short code = 0;
-
-	if (v < 0 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
-
-	des_vkbd *k = &array_desvkbd[v];
-
-	sem_wait(k->mutex);
-
-	if (k->nchar <= 0)
-		goto out;
-
-	code = k->buf[k->first];
-	k->first = circular_sum(k->first, 1, VKBD_BUF_SIZE);
-	k->nchar--;
-
-	k->intr_pending = false;
-
-	if (k->nchar > 0 && k->intr_enabled) {
-		k->intr_pending = true;
-		if (k->intr_waiting > 0) {
-			k->intr_waiting--;
-			sem_signal(k->intr);
-		}
-	}
-out:
-	sem_signal(k->mutex);
-	return code;
-}
-
-extern "C" void c_vkbd_intr_enable(int v, bool enable)
-{
-	if (v < 0 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
-
-	des_vkbd *k = &array_desvkbd[v];
-
-	sem_wait(k->mutex);
-	if (enable) {
-		if (!k->intr_enabled && k->nchar > 0) {
-			k->intr_pending = true;
-			if (k->intr_waiting > 0) {
-				k->intr_waiting--;
-				sem_signal(k->intr);
-			}
-		}
-		k->intr_enabled = true;
-	} else {
-		k->intr_enabled = false;
-	}
-
-	sem_signal(k->mutex);
-}
-
-const unsigned int VKBD_LED_CAPSLOCK  = 1L;
-const unsigned int VKBD_LED_NUMLOCK   = 2L;
-const unsigned int VKBD_LED_SCROLLOCK = 4L;
-
-extern "C" void kbd_set_leds(unsigned char leds);
-
-extern "C" void c_vkbd_leds(int v, unsigned char led, bool on)
-{
-	if (v < 0 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
-
-	des_vkbd *k = &array_desvkbd[v];
-	if (on) 
-		k->leds |= led;
-	else
-		k->leds &= ~led; 
-
-	if (k == vkbd_active)
-		kbd_set_leds(k->leds);
-}
-
-
-extern "C" void c_vkbd_switch(int v)
-{
-	if (v < 0 || v >= MAX_VKBD) {
-		flog(LOG_WARN, "vkbd inesistente: %d", v);
-		abort_p();
-	}
-
-	des_vkbd *k = &array_desvkbd[v];
-
-	vkbd_active = k;
-	kbd_set_leds(vkbd_active->leds);
-}
-
-
-///////////////////////////////////////////////////////////////////////////////
-//  MONITOR VIRTUALI                                                         //
-///////////////////////////////////////////////////////////////////////////////
-
-unsigned const int MAX_VMON = 12;
-unsigned short *VIDEO_MEM_BASE = reinterpret_cast<unsigned short *>(0x000b8000);
-const int VIDEO_MEM_SIZE = 80 * 25;
-
-// descrittore di monitor virtuale
-struct des_vmon {
-	unsigned short buf[VIDEO_MEM_SIZE]; 
-	unsigned short* video;
-	int cursor;
-	int cursor_size;
-};
-
-des_vmon array_desvmon[MAX_VMON];
-des_vmon *vmon_active;
-
-extern "C" void console_cursor(unsigned int);
-extern "C" void console_set_cursor_size(int size);
-
-extern "C" void c_vmon_switch(int v)
-{
-	if (v < 0 || v >= MAX_VMON) {
-		flog(LOG_WARN, "vmon inesistente: %d", v);
-		abort_p();
-	}
-
-	if (vmon_active) {
-		memcpy(vmon_active->buf, VIDEO_MEM_BASE, VIDEO_MEM_SIZE * 2);
-		vmon_active->video = vmon_active->buf;
-	}
-	vmon_active = &array_desvmon[v];
-	vmon_active->video = VIDEO_MEM_BASE;
-	memcpy(VIDEO_MEM_BASE, vmon_active->buf, VIDEO_MEM_SIZE * 2);
-	console_set_cursor_size(vmon_active->cursor_size);
-	console_cursor(vmon_active->cursor);
-}
-
-bool vmon_init()
-{
-	for (int i = 0; i < MAX_VMON; i++) {
-		des_vmon *t = &array_desvmon[i];
-		
-		t->cursor = 0;
-		t->cursor_size = 14;
-		t->video = t->buf;
-	}
-	flog(LOG_INFO, "vmon: inizializzati %d monitor virtuali", MAX_VKBD);
-	return true;
-}
-
-extern "C" void c_vmon_write_n(int v, int off, unsigned short vetti[], int quanti)
-{
-	if (v < 0 || v >= MAX_VMON) {
-		flog(LOG_WARN, "vmon inesistente: %d", v);
-		abort_p();
-	}
-
-	if (quanti <= 0 || off >= VIDEO_MEM_SIZE || off + quanti <= 0)
-		return;
-
-	des_vmon *t = &array_desvmon[v];
-
-	if (off < 0) {
-		vetti += -off;
-		quanti -= -off;
-		off = 0;
-	}
-	if (off + quanti >= VIDEO_MEM_SIZE) 
-		quanti = VIDEO_MEM_SIZE - off;
-	for (int i = 0; i < quanti; i++)
-		t->video[off + i] = vetti[i];	
-	
-}
-
-
-extern "C" void c_vmon_setcursor(int v, unsigned int off)
-{
-	if (v < 0 || v >= MAX_VMON) {
-		flog(LOG_WARN, "vmon inesistente: %d", v);
-		abort_p();
-	}
-	des_vmon *t = &array_desvmon[v];
-	t->cursor = off;
-	if (t == vmon_active)
-		console_cursor(t->cursor);
-}
-
-extern "C" bool c_vmon_getsize(int v, unsigned int& maxx, unsigned int& maxy)
-{
-	if (v < 0 || v >= MAX_VMON) {
+	if ( (p_des->mutex = sem_ini(1)) == 0) {
+		flog(LOG_ERR, "kbd: impossibile creare mutex");
 		return false;
 	}
-
-	maxx = 80;
-	maxy = 25;
-	return true;
-}
-
-extern "C" void c_vmon_cursor_shape(int v, int shape)
-{
-	if (v < 0 || v >= MAX_VMON) {
-		flog(LOG_WARN, "vmon inesistente: %d", v);
-		abort_p();
+	if ( (p_des->sincr = sem_ini(0)) == 0) {
+		flog(LOG_ERR, "kbd: impossibile creare sincr");
+		return false;
 	}
-
-	int size = 14;
-	if (shape == 1) 
-		size = 2;
-	des_vmon *t = &array_desvmon[v];
-	t->cursor_size = size;
-	console_set_cursor_size(t->cursor_size);
-
+	return kbd_init() && vid_init();
 }
 
-	
+void scroll(des_vid *p_des)
+{
+	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
+		p_des->video[i] = p_des->video[i + COLS];
+	for (int i = 0; i < COLS; i++)
+		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
+	p_des->y--;
+}
+
+void writeelem(natb c) {
+	des_vid* p_des = &console.vid;
+	switch (c) {
+	case '\r':
+		p_des->x = 0;
+		break;
+	case '\n':
+		p_des->y++;
+		if (p_des->y >= ROWS)
+			scroll(p_des);
+		break;
+	case '\b':
+		if (p_des->x > 0 || p_des->y > 0) {
+			p_des->x--;
+			if (p_des->x < 0) {
+				p_des->x = COLS - 1;
+				p_des->y--;
+			}
+		}
+		break;
+	default:
+		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
+		p_des->x++;
+		if (p_des->x >= COLS) {
+			p_des->x = 0;
+			p_des->y++;
+		}
+		if (p_des->y >= ROWS) 
+			scroll(p_des);
+		break;
+	}
+	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
+		p_des->x, p_des->y);
+}
+
+void writeseq(cstr seq)
+{
+	const natb* pn = static_cast<const natb*>(seq);
+	while (*pn != 0) {
+		writeelem(*pn);
+		pn++;
+	}
+}
+
+extern "C" void c_writeconsole(cstr buff)
+{
+	des_console *p_des = &console;
+	sem_wait(p_des->mutex);
+	writeseq(buff);
+	writeseq("\r\n");
+	sem_signal(p_des->mutex);
+}
+
+
 
 //////////////////////////////////////////////////////////////////////////////////
 //                  FUNZIONI DI LIBRERIA                                       
@@ -886,7 +704,7 @@ void *memset(void *dest, int c, unsigned int n)
 }
 
 // log formattato
-extern "C" void flog(log_sev sev, const char *fmt, ...)
+void flog(log_sev sev, const char *fmt, ...)
 {
 	va_list ap;
 	char buf[LOG_MSG_SIZE];
@@ -914,14 +732,10 @@ extern "C" int cmain(void)
 	int error;
 
 	fill_io_gates();
-	if (!kbd_init())
+	if (!console_init())
 		return -1;
-	if (!vkbd_init())
-		return -2;
 	if (!com_init())
 		return -3;
-	if (!vmon_init())
-		return -4;
 
 	return 0;
 }

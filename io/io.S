@@ -1,4 +1,3 @@
-// io.s
 //
 #define ASM 1
 #include "costanti.h"
@@ -40,16 +39,8 @@
 .set io_tipo_wsen,  IO_TIPO_WSEN
 .set io_tipo_wse0,  IO_TIPO_WSE0
 .set io_tipo_rkbd,  IO_TIPO_RKBD		
-.set io_tipo_ikbd,  IO_TIPO_IKBD		
-.set io_tipo_skbd,  IO_TIPO_SKBD		
-.set io_tipo_wfikbd, IO_TIPO_WFIKBD
-.set io_tipo_smon,  IO_TIPO_SMON		
-.set io_tipo_wmon,  IO_TIPO_WMON		
-.set io_tipo_cmon,  IO_TIPO_CMON		
+.set io_tipo_wvid,  IO_TIPO_WVID		
 .set io_tipo_gmon,  IO_TIPO_GMON		
-.set io_tipo_lkbd,  IO_TIPO_LKBD
-.set io_tipo_kmon,  IO_TIPO_KMON		
-.set io_tipo_pkbd,  IO_TIPO_PKBD
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -83,33 +74,6 @@
         cld
         rep
            movsl			// copia dei parametri
-.endm
-
-.macro check_cavallo
-	testl $0x80000000, %eax
-	jnz 1f
-	pushl %eax
-	pushl $param_err
-	pushl $2
-	call _flog
-	addl $12, %esp
-	int $tipo_ab
-1:
-
-.endm
-
-.macro cavallo_di_troia offset
-
-	movl (\offset * 4) (%esp), %eax
-	check_cavallo
-.endm
-
-.macro cavallo_di_troia2 offset1 offset2
-
-	movl (\offset1 * 4) (%esp), %eax
-	addl (\offset2 * 4) (%esp), %eax
-	decl %eax
-	check_cavallo
 .endm
 
 // Salvataggio dei registri in pila
@@ -170,6 +134,33 @@
 	addl $12, %esp
 .endm
 
+.macro check_cavallo
+	testl $0x80000000, %eax
+	jnz 1f
+	pushl %eax
+	pushl $param_err
+	pushl $2
+	call _flog
+	addl $12, %esp
+	int $tipo_ab
+1:
+
+.endm
+
+.macro cavallo_di_troia offset
+
+	movl (\offset * 4) (%esp), %eax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 offset1 offset2
+
+	movl (\offset1 * 4) (%esp), %eax
+	addl (\offset2 * 4) (%esp), %eax
+	decl %eax
+	check_cavallo
+.endm
+
 .global start, _start
 start:
 _start:	jmp _cmain
@@ -179,6 +170,9 @@ _start:	jmp _cmain
 ////////////////////////////////////////////////////////////////////////////////
 
 	.data
+
+param_err:
+	.asciz "parametro errato %x"
 
 // Descrittori delle interfacce seriali
 	.global _com		// non comi, como
@@ -205,8 +199,40 @@ _com:	.long	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].funzione
 	.long	0		// com[1].stato
 
-param_err:
-	.asciz "parametro errato %x"
+// descrittore console
+	.global _console		
+_console:
+	.long	0		// mutex
+	.long	0		// sincr
+	// descrittore tastiera
+	.long	0x60		// kbd.indreg.iRBR
+	.long	0x60		// kbd.indreg.iRBR
+	.long	0x64		// kbd.indreg.iCMR
+	.long	0x64		// kbd.indreg.iCMR
+	.long	0		// kbd.punt
+	.long   0		// kbd.cont
+	.long	0		// kbd.shift
+	// tab
+	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
+	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
+	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x39, 0x1C, 0x0e
+	// tabmin
+        .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
+        .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
+        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '\r', '\b'
+	// tabmai
+        .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
+        .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
+        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\n', '\b'
+	// Descrittore del video
+	.long	0x03D4		// vid.indreg.iIND
+	.long	0x03D5		// vid.indreg.iDAT
+	.long	0xb8000 	// vid.video
+	.byte	0		// vid.x
+	.byte   0		// vid.y
+	.byte   0x4b		// vid.attr
+	.byte	0		// allineamento
+	.word	0		// allineamento
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -283,7 +309,12 @@ _delay:
 _log:
 	int $tipo_l
 	ret
- 
+
+	.global _writevid
+_writevid:
+	int $io_tipo_wvid
+	ret
+
 ////////////////////////////////////////////////////////////////////////////////
 //                         FUNZIONI DI SUPPORTO                               //
 ////////////////////////////////////////////////////////////////////////////////
@@ -577,8 +608,63 @@ _com_setup:
 
 	ret
 
+.set KBD_WCB,	0x60
+.set KBD_RCB,	0x20
+
+.macro wait_kbd_out
+1:	inb $0x64, %al	  // leggi stato
+	testb $0x02, %al  // busy?
+	jnz 1b
+.endm
+
+	.global _go_inputkbd
+_go_inputkbd:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movw 12(%ebp), %dx
+	movb $KBD_WCB, %al
+	outb %al, %dx
+	movw 8(%ebp), %dx
+	movb $0x61, %al
+	outb %al, %dx
+	movw 12(%ebp), %dx
+1:	inb %dx, %al	
+	testb $0x02, %al
+	jnz 1b
+
+	popl %eax
+	leave
+	ret
+	
+	
+	ret
+
+	.global _halt_inputkbd
+_halt_inputkbd:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+
+	movw 12(%ebp), %dx
+	movb $KBD_WCB, %al
+	outb %al, %dx
+	movw 8(%ebp), %dx
+	movb $0x60, %al
+	outb %al, %dx
+	movw 12(%ebp), %dx
+1:	inb %dx, %al	 
+	testb $0x02, %al 
+	jnz 1b
+
+	popl %eax
+	leave
+	ret
+	ret
+
 // Abilitazione del controllore delle interruzioni ad inoltrare le richieste
-//  provenienti dalla tastera
+//  provenienti dalla tastiera
 	.global _kbd_enable
 _kbd_enable:
 	inb $OCW1M, %al
@@ -586,93 +672,43 @@ _kbd_enable:
 	outb %al, $OCW1M
 	ret
 
-.macro wait_kbd
-1:	inb $0x64, %al	  // leggi stato
-	testb $0x02, %al  // busy?
-	jnz 1b
-.endm
-
-	.global _kbd_set_leds
-_kbd_set_leds:
-	pushl %ebp
-	movl  %esp, %ebp
-	pushl %eax
-
-	wait_kbd
-	movb $0xad, %al // disabilita tastiera
-	outb %al, $0x64
-	wait_kbd
-	movb $0xed, %al   // comando "set led"
-	outb %al, $0x60
-	wait_kbd
-	movb 8(%ebp), %al // stato dei led
-	outb %al, $0x60
-	wait_kbd
-	movb $0xae, %al // abilita tastiera
-	outb %al, $0x64
-	
-	popl %eax
-	leave
-	ret
-
 // indirizzi delle porte relative alla gestione del cursore, nel controllore 
 // della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
-.set CUR_START, 0x0a
-.set ADD_P, 0x03d4
-.set DAT_P, 0x03d5
+.set DAT, 0x03d5
 
-	.global _console_set_cursor_size
-_console_set_cursor_size:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %edx
-	pushl %eax
-
-	movw $ADD_P, %dx
-	movb $CUR_START, %al
-	outb %al, %dx
-	movw $DAT_P, %dx
-	movl 8(%ebp), %eax
-	andb $0x1f, %al
-	outb %al, %dx
-
-	popl %eax
-	popl %edx
-	leave
-	ret
-
-	
 
 // visualizza il cursore nella posizione passata come parametro
-	.global _console_cursor
-_console_cursor:
+	.global _cursore
+_cursore:
 	pushl %ebp
 	movl %esp, %ebp
-	pushl %edx
 	pushl %eax
-
-	movw $ADD_P, %dx
-	movb $CUR_HIGH, %al
-	outb %al, %dx
-	movw $DAT_P, %dx
-	movw 8(%ebp), %ax
-	movb %ah, %al
-	outb %al, %dx
-	movw $ADD_P, %dx
-	movb $CUR_LOW, %al
-	outb %al, %dx
-	movw $DAT_P, %dx
-	movw 8(%ebp), %ax
-	outb %al, %dx
-
-	popl %eax
-	popl %edx
+	pushl %ebx
+	pushl %edx
+	movb  $80, %al
+	mulb  20(%ebp)
+	addb  16(%ebp), %al
+	adcb  $0, %ah
+	movw  %ax, %bx 	
+	movw  8(%ebp), %dx
+	movb  $CUR_HIGH, %al
+	outb  %al, %dx
+	movw  12(%ebp), %dx
+	movb  %bh, %al
+	outb  %al, %dx
+	movw  8(%ebp), %dx
+	movb  $CUR_LOW, %al
+	outb  %al, %dx
+	movw  12(%ebp), %dx
+	movb  %bl, %al
+	outb  %al, %dx
+	popl  %edx
+	popl  %ebx
+	popl  %eax
 	leave
 	ret
-
-
 
 // Inizializzazione dei gate per le primitive di IO
 	.global _fill_io_gates
@@ -684,17 +720,9 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rseln	a_readse_ln
 	fill_io_gate	io_tipo_wsen	a_writese_n
 	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_rkbd	a_vkbd_read
-	fill_io_gate	io_tipo_ikbd	a_vkbd_intr_enable
-	fill_io_gate	io_tipo_skbd	a_vkbd_switch
-	fill_io_gate	io_tipo_wfikbd	a_vkbd_wfi
-	fill_io_gate	io_tipo_smon	a_vmon_switch
-	fill_io_gate	io_tipo_wmon	a_vmon_write_n
-	fill_io_gate	io_tipo_cmon	a_vmon_setcursor
+	fill_io_gate	io_tipo_rkbd	a_readconsole
+	fill_io_gate	io_tipo_wvid	a_writeconsole
 	fill_io_gate	io_tipo_gmon	a_vmon_getsize
-	fill_io_gate	io_tipo_lkbd	a_vkbd_leds
-	fill_io_gate	io_tipo_kmon	a_vmon_cursor_shape
-	fill_io_gate	io_tipo_pkbd	a_vkbd_send
 	leave
 	ret
 
@@ -754,116 +782,31 @@ a_writese_0:
 	carica_registri
 	iret
 
-	.global a_vkbd_read
-	.extern _c_vkbd_read	
-a_vkbd_read:
-	salva_reg_rit
-	copia_param 1 6
-	call _c_vkbd_read
-	addl $4, %esp
-	carica_reg_rit
-	iret
-
-	.global a_vkbd_intr_enable
-	.extern _c_vkbd_intr_enable
-a_vkbd_intr_enable:
+	.global a_readconsole
+	.extern _c_readconsole
+a_readconsole:
 	salva_registri
 	copia_param 2 7
-	call _c_vkbd_intr_enable
+	cavallo_di_troia 0
+	cavallo_di_troia2 0 1
+	cavallo_di_troia 1
+	call _c_readconsole
 	addl $8, %esp
 	carica_registri
 	iret
 
-	.global a_vkbd_switch
-	.extern _c_vkbd_switch
-a_vkbd_switch:
+	.global a_writeconsole
+	.extern _c_writeconsole
+a_writeconsole:
 	salva_registri
 	copia_param 1 7
-	call _c_vkbd_switch
+	cavallo_di_troia 0
+	call _c_writeconsole
 	addl $4, %esp
-	carica_registri
-	iret
-
-	.global a_vkbd_wfi
-	.extern _c_vkbd_wfi
-a_vkbd_wfi:
-	salva_registri
-	copia_param 1 7
-	call _c_vkbd_wfi
-	addl $4, %esp
-	carica_registri
-	iret
-
-	.global a_vmon_switch
-	.extern _c_vmon_switch
-a_vmon_switch:
-	salva_registri
-	copia_param 1 7
-	call _c_vmon_switch
-	addl $4, %esp
-	carica_registri
-	iret
-
-	.global a_vmon_write_n
-	.extern _c_vmon_write_n
-a_vmon_write_n:
-	salva_registri
-	copia_param 4 7
-	cavallo_di_troia 2
-	cavallo_di_troia2 2 3
-	call _c_vmon_write_n
-	addl $16, %esp
-	carica_registri
-	iret
-
-	.global a_vmon_setcursor
-	.extern _c_vmon_setcursor
-a_vmon_setcursor:
-	salva_registri
-	copia_param 2 7
-	call _c_vmon_setcursor
-	addl $8, %esp
 	carica_registri
 	iret
 
 	.global a_vmon_getsize
-	.extern _c_vmon_getsize
 a_vmon_getsize:
-	salva_reg_rit
-	copia_param 3 6
-	cavallo_di_troia 1
-	cavallo_di_troia 2
-	call _c_vmon_getsize
-	addl $12, %esp
-	carica_reg_rit
-	iret
-
-	.global a_vkbd_leds
-	.extern _c_vkbd_leds
-a_vkbd_leds:
-	salva_registri
-	copia_param 3 7
-	call _c_vkbd_leds
-	addl $12, %esp
-	carica_registri
-	iret
-
-	.global a_vmon_cursorshape
-	.extern _c_vmon_cursorshape
-a_vmon_cursor_shape:
-	salva_reg_rit
-	copia_param 2 6
-	call _c_vmon_cursor_shape
-	addl $8, %esp
-	carica_reg_rit
-	iret
-
-	.global a_vkbd_send
-	.extern _c_vkbd_send
-a_vkbd_send:
-	salva_registri
-	copia_param 3 7
-	call _c_vkbd_send
-	addl $12, %esp
-	carica_registri
+	xorl %eax, %eax
 	iret
