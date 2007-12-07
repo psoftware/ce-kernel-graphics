@@ -1682,9 +1682,15 @@ a_activate_pe:
 	.extern _c_nwfi
 a_nwfi:		// routine int $tipo_nwfi
 	call salva_stato
-
-	cmpl $1, 16(%esp)
-	jne m_ack
+	copia_param 1 0
+	call inviaEOI
+	addl $4, %esp
+	call _schedulatore
+	call carica_stato
+	iret
+inviaEOI:
+	cmpl $1, 8(%esp)
+	jne m_eoi
 
 	movb $EOI, %al		// ack al controllore slave
 	outb %al, $OCW2S
@@ -1693,14 +1699,12 @@ a_nwfi:		// routine int $tipo_nwfi
 	outb %al, $OCW3S
 	inb $OCW3S, %al
 	testb $0xff, %al
-	jnz m_noack		// ci sono ancora richieste dello slave attive
-m_ack:
+	jnz m_noeoi		// ci sono ancora richieste dello slave attive
+m_eoi:
 	movb $EOI, %al
 	outb %al, $OCW2M
-m_noack:	
-	call _schedulatore
-	call carica_stato
-	iret
+m_noeoi:	
+	ret
 
 a_fill_gate:
 	salva_registri
@@ -1912,8 +1916,8 @@ _hd_software_reset:
 // Abilita il controller ATA specificato a generare richieste di interruzione
 //  utili sia per l'ingresso che per l'uscita
 //
-	.global _go_inouthd
-_go_inouthd:
+	.global _hd_gohd_inout
+_hd_gohd_inout:
 	pushl %eax
 	pushl %edx
 
@@ -1927,8 +1931,8 @@ _go_inouthd:
 
 // Disabilita il controller ATA specificato a generare richeste di interruzione
 //
-	.global _halt_inouthd
-_halt_inouthd:
+	.global _halthd_inout
+_halthd_inout:
 	pushl %eax
 	pushl %edx
 
@@ -2164,15 +2168,18 @@ _esecuzione:	.long 0
 _pronti:	.long 0
 // Descrittore Hard Disk
 	.global _hd
-_hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
-	.long	0x01f0		//hd[0].indreg.iDATA
-	.long	0x01f1		//hd[0].indreg.iFEATURES_iERROR
-	.long 	0x01f2		//hd[0].indreg.iSTCONT
-	.long	0x01f3		//hd[0].indreg.iSECT_N
-	.long	0x01f4		//hd[0].indreg.iCYL_L_N
-	.long	0x01f5		//hd[0].indreg.iCYL_H_N
-	.long	0x01f6		//hd[0].indreg.iHD_N_iDRV_HD
-	.long	0x03f6		//hd[0].indreg.iALT_STS_iDEV_CTRL
+_hd:	
+	.long	0x01f0		//hd[0].indreg.iBR
+	.long	0x01f4		//hd[0].indreg.iCNL
+	.long	0x01f5		//hd[0].indreg.iCNH
+	.long	0x01f3		//hd[0].indreg.iSNR
+	.long	0x01f6		//hd[0].indreg.iHND
+	.long 	0x01f2		//hd[0].indreg.iSCR
+	.long	0x01f1		//hd[0].indreg.iERR
+	.long	0x01f7		//hd[0].indreg.iCMD
+	.long	0x01f7		//hd[0].indreg.iSTS
+	.long	0x03f6		//hd[0].indreg.iDCR
+	.long	0x03f6		//hd[0].indreg.iASR
 	.long	0		//hd[0].disco[0].{presente,dma} (sono byte!)
 	.long	0		//hd[0].disco[0].tot_sett
 	.long	0		//hd[0].disco[0].part
@@ -2185,15 +2192,17 @@ _hd:	.long	0x01f7		//hd[0].indreg.iCMD_iSTS
 	.long	0		//hd[0].punt
 	.long	0		//hd[0].mutex
 	.long	0		//hd[0].sincr
-	.long	0x0177		//hd[1].indreg.iCMD_iSTS
-	.long	0x0170		//hd[1].indreg.iDATA
-	.long	0x0171		//hd[1].indreg.iFEATURES_iERROR
-	.long 	0x0172		//hd[1].indreg.iSTCONT
-	.long	0x0173		//hd[1].indreg.iSECT_N
-	.long	0x0174		//hd[1].indreg.iCYL_L_N
-	.long	0x0175		//hd[1].indreg.iCYL_H_N
-	.long	0x0176		//hd[1].indreg.iHD_N_iDRV_HD
-	.long	0x0376		//hd[1].indreg.iALT_STS_iDEV_CTRL
+	.long	0x0170		//hd[0].indreg.iBR
+	.long	0x0174		//hd[0].indreg.iCNL
+	.long	0x0175		//hd[0].indreg.iCNH
+	.long	0x0173		//hd[0].indreg.iSNR
+	.long	0x0176		//hd[0].indreg.iHND
+	.long 	0x0172		//hd[0].indreg.iSCR
+	.long	0x0171		//hd[0].indreg.iERR
+	.long	0x0177		//hd[0].indreg.iCMD
+	.long	0x0177		//hd[0].indreg.iSTS
+	.long	0x0376		//hd[0].indreg.iDCR
+	.long	0x0376		//hd[0].indreg.iASR
 	.long	0		//hd[1].disco[0].{presente,dma} (sono byte!)
 	.long	0		//hd[1].disco[0].tot_sett
 	.long	0		//hd[1].disco[0].part

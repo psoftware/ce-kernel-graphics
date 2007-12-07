@@ -62,9 +62,9 @@ inline addr allineav(addr v, natl a)
 
 // funzioni per la manipolazione di stringhe
 //
-extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
+extern "C" void *memcpy(void* dest, const void* src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
-extern "C" void *memset(void *dest, int c, natl n);
+extern "C" void *memset(void* dest, int c, natl n);
 // restituisce true se le due stringe first e second sono uguali
 bool str_equal(const char* first, const char* second);
 
@@ -401,119 +401,6 @@ void free_interna(addr indirizzo, natl quanti)
 	}
 }
 
-////////////////////////////////////////////////////////////////////////////
-// INTRODUZIONE GENERALE ALLA MEMORIA VIRTUALE                            //
-////////////////////////////////////////////////////////////////////////////
-//
-// SPAZIO VIRTUALE DI UN PROCESSO:
-// Ogni processo possiede un proprio spazio di indirizzamento, suddiviso in 
-// cinque parti:
-// - sistema/condivisa: contiene l'immagine di tutta la memoria fisica
-// installata nel sistema
-// - sistema/privata: contiene la pila sistema del processo
-// - io/condiviso: contiene l'immagine del modulo io
-// - utente/condivisa: contiene l'immagine dei corpi di tutti i processi, dei 
-// dati globali e dello heap
-// - utente/privata: contiene la pila utente del processo
-// Le parti sistema e io non sono gestite tramite memoria virtuale (i bit P 
-// sono permanentemente a 1 o a 0) e sono accessibili solo da livello di 
-// privilegio sistema. Le parti utente sono gestite tramite memoria virtuale e 
-// sono accessibili da livello utente.
-// Le parti condivise sono comuni a tutti i processi. La condivisione viene 
-// realizzata esclusivamente condividendo le tabelle delle pagine: i direttori 
-// di tutti i processi puntano alle stesse tabelle nelle entrate relative alla 
-// parte sistema/condivisa, io/condivisa e utente/condivisa.  In questo modo, 
-// ogni pagina (sia essa appartenende ad uno spazio privato che ad uno spazio 
-// condiviso) e' puntata sempre da una sola tabella. Cio' semplifica la 
-// gestione della memoria virtuale: per rimuovere o aggiungere una pagina e' 
-// necessario modificare una sola entrata (altrimenti, per rimuovere o 
-// aggiungere una pagina di uno spazio condiviso, sarebbe necessario modificare 
-// le entrate relative alla pagina in tutte le tabelle, di tutti i processi, 
-// che la puntano). Inoltre, le tabelle condivise sono sempre preallocate e non 
-// rimpiazzabili (altrimenti, per aggiungere o rimuovere una tabella condivisa, 
-// sarebbe necessario modificare l'entrata relativa nel direttorio di ogni 
-// processo).
-//
-// MEMORIA FISICA:
-// La memoria fisica e' suddivisa in due parti: la prima parte contiene il 
-// codice e le strutture dati, statiche e dinamiche, del nucleo, mentre la 
-// seconda parte e' suddivisa in pagine fisiche, destinate a contenere i 
-// direttori, le tabelle delle pagine, le pagine del modulo io e le pagine 
-// virtuali dei processi.  Poiche' l'intera memoria fisica (sia la prima che la 
-// seconda parte) e' mappata nello spazio sistema/condiviso di ogni processo, 
-// il nucleo (sia il codice che le strutture dati) e' mappato, agli stessi 
-// indirizzi, nello spazio virtuale di ogni processo.  In questo modo, ogni 
-// volta che un processo passa ad eseguire una routine di nucleo  (per effetto 
-// di una interruzione software, esterna o di una eccezione), la
-// routine puo' continuare ad utilizzare il direttorio del processo e avere 
-// accesso al proprio codice e alle proprie strutture dati.
-// La seconda parte della memoria fisica e' gestita tramite una struttra dati 
-// del nucleo, allocata dinamicamente in fase di inizializzazione del sistema, 
-// contenente un descrittore per ogni pagina fisica. Per le pagine fisiche 
-// occupate (da un direttorio, una tabella o una pagina virtuale) e 
-// rimpiazzabili, tale descrittore contiene il contatore per le statistiche di 
-// accesso (LRU o LFU) e il numero del blocco, in memoria di massa, su cui 
-// ricopiare la pagina, in caso di rimpiazzamento. Per motivi di efficienza, i 
-// descrittori delle pagine occupate e rimpiazzabili contengono anche le 
-// informazioni utili a recuperare velocemente l'entrata del direttorio o della 
-// tabella delle pagine che puntano alla tabella o alla pagina descritta (senza 
-// questa informazione, per rimpiazzare il contenuto di una pagina fisica, 
-// occorrerebbe scorrere le entrate di tutti i direttori o di tutte le tabelle, 
-// alla ricerca delle entrate che puntano a quella pagina fisica).
-//
-// MEMORIA DI MASSA:
-// La memoria di massa (swap), che fa da supporto alla memoria virtuale, e' 
-// organizzata in una serie di blocchi, numerati a partire da 0. I primi 
-// blocchi contengono delle strutture dati necessarie alla gestione dello swap 
-// stesso, mentre i rimanenti blocchi contengono direttori, tabelle e pagine 
-// virtuali.
-// Se una pagina virtuale non e' presente in memoria fisica, il proprio 
-// descrittore di pagina (all'interno della corrispondente tabella delle 
-// pagine) contiene il numero del blocco della pagina nello swap (analogamente 
-// per le tabelle non presenti) e le informazioni necessarie alla corretta 
-// creazione del descrittore di pagina, qualora la pagina dovesse essere 
-// caricata in memoria fisica (in particolare, i valori da assegnare ai bit US, 
-// RW, PCD e PWT). Quando una pagina V, non presente, viene resa presente, 
-// caricandola in una pagina fisica F, l'informazione del blocco associato alla 
-// pagina viene ricopiata nel descrittore della pagina fisica F (altrimenti, 
-// poiche' nel descrittore verra' scritto il byte di accesso e l'indirizzo di 
-// F, tale informazione verrebbe persa). Se la pagina V dovesse essere 
-// successivamente rimossa dalla memoria fisica, l'informazione relativa al 
-// blocco verra' nuovamente copiata dal descrittore della pagina fisica F al 
-// descrittore di pagina di V, all'interno della propria tabella.
-// 
-// CREAZIONE DELLO SPAZIO VIRTUALE DI UN PROCESSO:
-// Inizialmente, lo swap contiene esclusivamente l'immagine della parte 
-// utente/condivisa e io/condivisa, uguale per tutti i processi. Lo swap 
-// contiene, infatti, un solo direttorio, di cui sono significative solo le 
-// entrate relative a tali parti, le corrispondenti tabelle e le pagine puntate 
-// da tali tabelle.
-//
-// All'avvio del sistema, viene creato un direttorio principale, nel seguente 
-// modo:
-// - le entrate corrispondenti allo spazio sistema/condiviso, vengono fatte 
-// puntare a tabelle, opportunamente create, che mappano tutta la memoria 
-// fisica in memoria virtuale
-// - le entrate corrispondenti agli spazi io/condiviso e utente/condiviso, 
-// vengono copiate dalle corrispondenti entrate che si trovano nel direttorio 
-// nello swap. Le tabelle puntate da tali entrate vengono tutte caricate in 
-// memoria fisica, cosi' come le pagine puntate dalle tabelle relative allo 
-// spazio io/condiviso
-// - le rimanenti entrate sono non significative
-//
-// Ogni volta che viene creato un nuovo processo, il suo direttorio viene prima 
-// copiato dal direttorio principale (in questo modo, il nuovo processo 
-// condividera' con tutti gli altri processi le tabelle, e quindi le pagine, 
-// degli spazio sistema, io e utente condivisi). Gli spazi privati (sistema e 
-// utente), che sono inizialmente vuoti (fatta eccezione per alcune parole 
-// lunghe) vengono creati dinamicamente, allocando nuove tabelle e lo spazio 
-// nello swap per le corrispondenti pagine. Se la creazione degli spazio 
-// privati di un processo non fosse effettuata durante la creazione del 
-// processo stesso, lo swap dovrebbe essere preparato conoscendo a priori il 
-// numero di processi che verranno creati al momento dell'esecuzione di main.
-//
-
-
 /////////////////////////////////////////////////////////////////////////
 // PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
@@ -570,6 +457,7 @@ union descrittore_pagina {
 		natl PWT:	1;
 		natl PCD:	1;
 
+		// indirizzo della pagina nello swap
 		natl block:	27;
 	} a;	
 };
@@ -1772,22 +1660,24 @@ extern "C" int c_resident(addr start, int quanti)
 
 // descrittore di processo
 struct des_proc {			// offset:
-//	short id;
+//	int nome;
 	natl link;		// 0
-//	int punt_nucleo;
+//	addr punt_nucleo;
 	addr        esp0;		// 4
+//	addr riservato;
 	natl ss0;		// 8
 	addr        esp1;		// 12
 	natl ss1;		// 16
 	addr        esp2;		// 20
 	natl ss2;		// 24
 
+//	addr cr3;
 	direttorio* cr3;		// 28
 
+//	natl contesto[N_REG];
 	natl eip;		// 32, non utilizzato
 	natl eflags;		// 36, non utilizzato
 
-//	int contesto[N_REG];
 	natl eax;		// 40
 	natl ecx;		// 44
 	natl edx;		// 48
@@ -1798,7 +1688,7 @@ struct des_proc {			// offset:
 	natl edi;		// 68
 
 	natl es;		// 72
-	natl cs; 		// 76, char cpl;
+	natl cs; 		// 76
 	natl ss;		// 80
 	natl ds;		// 84
 	natl fs;		// 86
@@ -1818,7 +1708,7 @@ struct des_proc {			// offset:
 		char regs[80];		// 132
 	} fpu;
 
-	char liv;			// 212
+	natb cpl;			// 212
 }; // dimensione 212 + 1 + 3(allineamento) = 216
 
 // numero di processi attivi
@@ -1834,8 +1724,8 @@ extern proc_elem *esecuzione;
 extern proc_elem *pronti;
 
 // manipolazione delle code di processi
-void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem);
-void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem);
+void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem);
+void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem);
 
 
 // funzioni usate da crea_processo
@@ -1934,7 +1824,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
-		pdes_proc->liv = LIV_UTENTE;
+		pdes_proc->cpl = LIV_UTENTE;
 		// tutti gli altri campi valgono 0
 	} else {
 		pila_sistema->parole_lunghe[1019] = (natl)f;	  // EIP (codice sistema)
@@ -1956,7 +1846,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
-		pdes_proc->liv = LIV_SISTEMA;
+		pdes_proc->cpl = LIV_SISTEMA;
 	}
 
 	return p;
@@ -1989,7 +1879,7 @@ bool crea_dummy()
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return false;
 	}
-	inserimento_coda(pronti, dummy);
+	inserimento_lista(pronti, dummy);
 	return true;
 }
 void main_proc(int n);
@@ -2001,7 +1891,7 @@ bool crea_main()
 		return false;
 	}
 	processi = 1;
-	inserimento_coda(pronti, m);
+	inserimento_lista(pronti, m);
 	return true;
 }
 
@@ -2159,7 +2049,7 @@ c_activate_p(void f(int), int a, natl prio, natb liv)
 	p = crea_processo(f, a, prio, liv);
 
 	if (p != 0) {
-		inserimento_coda(pronti, p);
+		inserimento_lista(pronti, p);
 		processi++;
 		id = p->nome;
 		flog(LOG_INFO, "proc=%d entry=%x(%d) prio=%d liv=%d", id, f, a, prio, liv);
@@ -2379,7 +2269,7 @@ extern "C" void *c_mem_alloc(int dim)
 // libera la regione dello heap il cui indirizzo di partenza e' pv
 // nota: se pv e' 0, o pv non e' l'indirizzo di partenza di nessuna regione,
 // oppure se tale regione e' gia' libera, non si esegue alcuna azione
-extern "C" void c_mem_free(addr pv)
+extern "C" void c_mem_free(void* pv)
 {
 	if (pv == 0) return;
 	addr p = pv;
@@ -2465,7 +2355,7 @@ extern "C" void c_sem_wait(int sem)
 	s->counter--;
 
 	if(s->counter < 0) {
-		inserimento_coda(s->pointer, esecuzione);
+		inserimento_lista(s->pointer, esecuzione);
 		schedulatore();
 	}
 }
@@ -2484,11 +2374,11 @@ extern "C" void c_sem_signal(int sem)
 	s->counter++;
 
 	if(s->counter <= 0) {
-		rimozione_coda(s->pointer, lavoro);
+		rimozione_lista(s->pointer, lavoro);
 		if(lavoro->precedenza <= esecuzione->precedenza)
-			inserimento_coda(pronti, lavoro);
+			inserimento_lista(pronti, lavoro);
 		else { // preemption
-			inserimento_coda(pronti, esecuzione);
+			inserimento_lista(pronti, esecuzione);
 			esecuzione = lavoro;
 		}
 	}
@@ -2501,8 +2391,7 @@ struct richiesta {
 	proc_elem *pp;
 };
 
-void inserimento_coda_timer(richiesta *p);
-
+void inserimento_lista_timer(richiesta *p);
 extern "C" void c_delay(natl n)
 {
 	richiesta *p;
@@ -2511,7 +2400,7 @@ extern "C" void c_delay(natl n)
 	p->d_attesa = n;	
 	p->pp = esecuzione;
 
-	inserimento_coda_timer(p);
+	inserimento_lista_timer(p);
 	schedulatore();
 }
 
@@ -2631,19 +2520,19 @@ extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 //////////////////////////////////////////////////////////////////////////////
 
 // inserisce P_ELEM in P_CODA, mantenendola ordinata per priorita' decrescente
-void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem)
+void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
 {
 	proc_elem *pp, *prevp;
 
-	pp = p_coda;
+	pp = p_lista;
 	prevp = 0;
-	while(pp && pp->precedenza >= p_elem->precedenza) {
+	while (pp && pp->precedenza >= p_elem->precedenza) {
 		prevp = pp;
 		pp = pp->puntatore;
 	}
 
-	if(!prevp)
-		p_coda = p_elem;
+	if (!prevp)
+		p_lista = p_elem;
 	else
 		prevp->puntatore = p_elem;
 
@@ -2651,18 +2540,18 @@ void inserimento_coda(proc_elem *&p_coda, proc_elem *p_elem)
 }
 
 // rimuove il primo elemento da P_CODA e lo mette in P_ELEM
-void rimozione_coda(proc_elem *&p_coda, proc_elem *&p_elem)
+void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 {
-	p_elem = p_coda;
+	p_elem = p_lista;
 
-	if(p_coda)
-		p_coda = p_coda->puntatore;
+	if (p_lista)
+		p_lista = p_lista->puntatore;
 }
 
 // scheduler a priorita'
 extern "C" void schedulatore(void)
 {
-	rimozione_coda(pronti, esecuzione);
+	rimozione_lista(pronti, esecuzione);
 }
 
 
@@ -2670,7 +2559,7 @@ extern "C" void schedulatore(void)
 richiesta *descrittore_timer;
 
 // inserisce P nella coda delle richieste al timer
-void inserimento_coda_timer(richiesta *p)
+void inserimento_lista_timer(richiesta *p)
 {
 	richiesta *r, *precedente;
 	bool ins;
@@ -2679,8 +2568,8 @@ void inserimento_coda_timer(richiesta *p)
 	precedente = 0;
 	ins = false;
 
-	while(r != 0 && !ins)
-		if(p->d_attesa > r->d_attesa) {
+	while (r != 0 && !ins)
+		if (p->d_attesa > r->d_attesa) {
 			p->d_attesa -= r->d_attesa;
 			precedente = r;
 			r = r->p_rich;
@@ -2688,12 +2577,12 @@ void inserimento_coda_timer(richiesta *p)
 			ins = true;
 
 	p->p_rich = r;
-	if(precedente != 0)
+	if (precedente != 0)
 		precedente->p_rich = p;
 	else
 		descrittore_timer = p;
 
-	if(r != 0)
+	if (r != 0)
 		r->d_attesa -= p->d_attesa;
 }
 
@@ -2714,7 +2603,7 @@ extern "C" void c_driver_t(void)
 		descrittore_timer->d_attesa--;
 
 	while(descrittore_timer != 0 && descrittore_timer->d_attesa == 0) {
-		inserimento_coda(pronti, descrittore_timer->pp);
+		inserimento_lista(pronti, descrittore_timer->pp);
 		p = descrittore_timer;
 		descrittore_timer = descrittore_timer->p_rich;
 		dealloca(p);
@@ -3133,14 +3022,14 @@ void do_log(log_sev sev, const char* buf, int quanti)
 		des_sem *s = &array_dess[log_buf.sync];
 		if (s->counter < 0) {
 			s->counter++;
-			rimozione_coda(s->pointer, lavoro);
-			inserimento_coda(pronti, lavoro);
+			rimozione_lista(s->pointer, lavoro);
+			inserimento_lista(pronti, lavoro);
 		}
 	}
 }
 extern "C" void c_log(log_sev sev, const char* buf, int quanti)
 {
-	inserimento_coda(pronti, esecuzione);
+	inserimento_lista(pronti, esecuzione);
 	do_log(sev, buf, quanti);
 	schedulatore();
 }
@@ -3184,15 +3073,14 @@ const char* last_log_err()
 ///////////////////////////////////////////////////////////////////////////////////////
 // DRIVER SWAP                                                                      
 ///////////////////////////////////////////////////////////////////////////////////////
-typedef char *ind_b;	// indirizzo di una porta a 8 bit
 // ingresso di un byte da una porta di IO
-extern "C" void inputb(ind_b reg, char &a);
+extern "C" void inputb(ioaddr reg, natb &a);
 // uscita di un byte su una porta di IO
-extern "C" void outputb(char a, ind_b reg);
+extern "C" void outputb(natb a, ioaddr reg);
 // ingresso di una stringa di word da un buffer di IO
-extern "C" void inputbw(ind_b reg, unsigned short *a,short n);
+extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti);
 // uscita di una stringa di word su un buffer di IO
-extern "C" void outputbw(unsigned short *a, ind_b reg,short n);
+extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg);
 
 #define STRICT_ATA
 
@@ -3213,28 +3101,10 @@ enum hd_cmd {			// Comandi per i controllori degli hard disk
 };
 
 struct interfata_reg {
-	union {				// Command Block Register
-		ind_b iCMD;		// 0
-		ind_b iSTS;		// 0
-	}; //iCMD_iSTS;
-	ind_b iDATA;			// 4
-	union {
-		ind_b iFEATURES;	// 8
-		ind_b iERROR;		// 8
-	}; //iFEATURES_iERROR
-	ind_b iSTCOUNT;			// 12
-	ind_b iSECT_N;			// 16
-	ind_b iCYL_L_N;			// 20
-	ind_b iCYL_H_N;			// 24
-	union {
-		ind_b iHD_N;		// 28
-		ind_b iDRV_HD;		// 32
-	}; //iHD_N_iDRV_HD
-	union {				// Control Block Register
-		ind_b iALT_STS;		// 36
-		ind_b iDEV_CTRL;	// 40
-	}; //iALT_STS_iDEV_CTRL
-}; // size = 44
+	ioaddr iBR;			
+	ioaddr iCNL, iCNH, iSNR, iHND, iSCR, iERR,
+	       iCMD, iSTS, iDCR, iASR;
+};
 
 struct drive {				// Drive su un canale ATA
 	bool presente;
@@ -3247,43 +3117,43 @@ struct des_ata {		// Descrittore operazione per i canali ATA
 	interfata_reg indreg;
 	drive disco[2];		// Ogni canale ATA puo' contenere 2 drive
 	hd_cmd comando;
-	char errore;
-	char cont;
-	unsigned short* punt;	
+	natb errore;
 	int mutex;
 	int sincr;
+	natb cont;
+	addr punt;	
 };
 
 const int A = 2;
 extern "C" des_ata hd[A];	// 2 canali ATA
 
-extern "C" void go_inouthd(ind_b i_dev_ctl);
-extern "C" void halt_inouthd(ind_b i_dev_ctl);
-extern "C" bool test_canale(ind_b st,ind_b stc,ind_b stn);
-extern "C" int leggi_signature(ind_b stc,ind_b stn,ind_b cyl,ind_b cyh);
-extern "C" void umask_hd(ind_b h);
-extern "C" void mask_hd(ind_b h);
-extern "C" bool hd_software_reset(ind_b dvctrl);
-extern "C" void hd_read_device(ind_b i_drv_hd, int& ms);
-extern "C" void hd_select_device(short ms,ind_b i_drv_hd);
+extern "C" void hd_gohd_inout(ioaddr i_dev_ctl);
+extern "C" void halthd_inout(ioaddr i_dev_ctl);
+extern "C" bool test_canale(ioaddr st,ioaddr stc,ioaddr stn);
+extern "C" int leggi_signature(ioaddr stc,ioaddr stn,ioaddr cyl,ioaddr cyh);
+extern "C" void umask_hd(ioaddr h);
+extern "C" void mask_hd(ioaddr h);
+extern "C" bool hd_software_reset(ioaddr dvctrl);
+extern "C" void hd_read_device(ioaddr i_drv_hd, int& ms);
+extern "C" void hd_select_device(short ms,ioaddr i_drv_hd);
 extern "C" void hd_write_address(des_ata *p, natl primo);	
-extern "C" void hd_write_command(hd_cmd cmd, ind_b i_drv_cmd);
+extern "C" void hd_write_command(hd_cmd cmd, ioaddr i_drv_cmd);
 
 
 // seleziona il dispostivo drv e controlla che la selezione abbia avuto 
 // successo
 bool hd_sel_drv(des_ata* p_des, int drv)
 {
-	char stato;
+	natb stato;
 	int curr_drv;
 
-	hd_select_device(drv, p_des->indreg.iDRV_HD);
+	hd_select_device(drv, p_des->indreg.iHND);
 
 	do {
 		inputb(p_des->indreg.iSTS, stato);
 	} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
 
-	hd_read_device(p_des->indreg.iDRV_HD, curr_drv);
+	hd_read_device(p_des->indreg.iHND, curr_drv);
 
 	return  (curr_drv == drv);
 }
@@ -3292,10 +3162,10 @@ bool hd_sel_drv(des_ata* p_des, int drv)
 // (DRQ deve essere 1, BSY 0 e ERR 0)
 bool hd_wait_data(des_ata* p_des)
 {
-	char stato;
+	natb stato;
 
 	do {
-		inputb(p_des->indreg.iALT_STS, stato);
+		inputb(p_des->indreg.iASR, stato);
 	} while (stato & HD_STS_BSY);
 
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
@@ -3334,81 +3204,47 @@ void hd_print_error(int i, int d, int sect, short error)
 	}
 }
 
-// Avvio delle operazioni di lettura da hard disk
-bool gohd_input(des_ata* p_des, int drv, natl primo, unsigned char quanti)
-{
-	if (!hd_sel_drv(p_des, drv))		// selezione del drive
-		return false;
-	hd_write_address(p_des, primo);			// parametri: primo settore
-	outputb(quanti, p_des->indreg.iSTCOUNT);	// parametri: quanti settori
-	go_inouthd(p_des->indreg.iDEV_CTRL);		// abilita interruzioni	
-	hd_write_command(READ_SECT, p_des->indreg.iCMD);// invia comando
-	return true;
-}
-
-
-// inizializza il descrittore d'operazione e avvia la lettura
-void starthd_in(des_ata *p_des, short drv, unsigned short vetti[], natl primo, unsigned char quanti)
+void starthd_in(des_ata *p_des, int drv, natw vetti[], natl primo, natb quanti)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
 	p_des->comando = READ_SECT;
 	p_des->errore = D_ERR_NONE;
-	if (!gohd_input(p_des, drv, primo, quanti))
-		goto errore;
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_gohd_inout(p_des->indreg.iDCR);	
+	hd_write_command(READ_SECT, p_des->indreg.iCMD);
 	return;
-
-errore:
-	panic("Errore nella lettura");
 }
 
-// Avvio delle operazioni di scrittura su hard disk
-bool gohd_output(des_ata *p_des, int drv, unsigned short vetto[], natl primo, unsigned char quanti)
+void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)	
 {
-	if (!hd_sel_drv(p_des, drv))		// selezione del drive
-		return false;
-	hd_write_address(p_des, primo);			// invio parametri (primo settore)
-	outputb(quanti, p_des->indreg.iSTCOUNT);	// invio parametri (quanti settori)
-	go_inouthd(p_des->indreg.iDEV_CTRL);		// abilita interruzioni
-	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);// invia comando
-	if (!hd_wait_data(p_des))
-		return false;
-	outputbw(vetto, p_des->indreg.iDATA, DIM_BLOCK / 2);
-	return true;
-}
-
-// inizializza il descrittore d'operazione e avvia la scrittura
-void starthd_out(des_ata *p_des, short drv, unsigned short vetto[], natl primo, unsigned char quanti)	
-{	char stato;				
-	bool ris;
 	p_des->cont = quanti;
 	p_des->punt = vetto + DIM_BLOCK / 2;
 	p_des->comando = WRITE_SECT;
 	p_des->errore = D_ERR_NONE;
-	if (!gohd_output(p_des, drv, vetto, primo, quanti))
-		goto errore;
+	hd_write_address(p_des, primo);	
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_gohd_inout(p_des->indreg.iDCR);	
+	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
+	hd_wait_data(p_des);
+	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
 	return;
-
-errore:
-	panic("Errore nella scrittura");
 }
 
 
-// Primitiva di lettura da hard disk: legge quanti blocchi (max 256, char!)
-//  a partire da primo depositandoli in vetti; il controller usato e ind_ata,
-//  il drive e' drv. Riporta un fallimento in errore
-extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
-		natl primo, unsigned char quanti, char &errore)
+extern "C" void c_readhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
 	des_ata *p_des;
 
 	// Controllo sulla protezione
-	if (ind_ata < 0 || ind_ata >= A || drv < 0 || drv >= 2) {
+	if (ata < 0 || ata >= A || drv < 0 || drv >= 2) {
 		errore = D_ERR_PRESENCE;
 		return;
 	}
 
-	p_des = &hd[ind_ata];
+	p_des = &hd[ata];
 
 	// Controllo sulla selezione di un drive presente
 	if (!p_des->disco[drv].presente) {
@@ -3429,21 +3265,17 @@ extern "C" void c_readhd_n(short ind_ata, short drv, unsigned short vetti[],
 	sem_signal(p_des->mutex);
 }
 
-// Primitiva di scrittura su hard disk: scrive quanti blocchi (max 256, char!)
-//  a partire da primo prelevandoli da vetti; il controller usato e' ind_ata,
-//  il drive e' drv. Riporta un fallimento in errore
-extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], natl primo,
-		unsigned char quanti, char &errore)
+extern "C" void c_writehd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
 	des_ata *p_des;
 	
 	// Controllo sulla protezione
-	if (ind_ata < 0 || ind_ata >= A || drv < 0 || drv >= 2) {
+	if (ata < 0 || ata >= A || drv < 0 || drv >= 2) {
 		errore = D_ERR_PRESENCE;
 		return;
 	}
 
-	p_des = &hd[ind_ata];
+	p_des = &hd[ata];
 
 
 	// Controllo sulla selezione di un drive presente
@@ -3458,7 +3290,7 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], na
 	}
 
 	sem_wait(p_des->mutex);
-	starthd_out(p_des,drv,vetti,primo,quanti);
+	starthd_out(p_des, drv, vetti, primo, quanti);
 	sem_wait(p_des->sincr);
 	errore = p_des->errore;
 	sem_signal(p_des->mutex);
@@ -3469,34 +3301,34 @@ extern "C" void c_writehd_n(short ind_ata, short drv, unsigned short vetti[], na
 extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
 {	
 	proc_elem* lavoro; des_sem* s; des_ata* p_des;
-	char stato;
+	natb stato;
 	p_des = &hd[ata];
 	p_des->cont--; 
-	p_des->errore = D_ERR_NONE;
 	if (p_des->cont == 0) {	
-		halt_inouthd(p_des->indreg.iDEV_CTRL);	
+		halthd_inout(p_des->indreg.iDCR);	
 		s = &array_dess[p_des->sincr];
 		s->counter++;
 		if (s->counter <= 0) {
-			rimozione_coda(s->pointer, lavoro);
-			inserimento_coda(pronti, lavoro);
+			rimozione_lista(s->pointer, lavoro);
+			inserimento_lista(pronti, lavoro);
 		}
 	}
-	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
+	p_des->errore = D_ERR_NONE;
+	inputb(p_des->indreg.iSTS, stato);
 	if (p_des->comando == READ_SECT) { 
 		if (!hd_wait_data(p_des)) 
-			inputb(p_des->indreg.iERROR, p_des->errore);
+			inputb(p_des->indreg.iERR, p_des->errore);
 		else
-			inputbw(p_des->indreg.iDATA, p_des->punt, DIM_BLOCK / 2);
+			inputbw(p_des->indreg.iBR, static_cast<natw*>(p_des->punt), DIM_BLOCK / 2);
 	} else {
 		if (p_des->cont != 0) {
 			if (!hd_wait_data(p_des)) 
-				inputb(p_des->indreg.iERROR, p_des->errore);
+				inputb(p_des->indreg.iERR, p_des->errore);
 			else
-				outputbw(p_des->punt, p_des->indreg.iDATA, DIM_BLOCK / 2);
+				outputbw(static_cast<natw*>(p_des->punt), DIM_BLOCK / 2, p_des->indreg.iBR);
 		}
 	}
-	p_des->punt += DIM_BLOCK / 2;
+	p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
 	schedulatore();
 }
 
@@ -3615,13 +3447,13 @@ partizione* hd_find_partition(short ch, short drv, int p)
 void hd_reset(des_ata* p_des)
 {
 	// selezione del drive 0 (master)
-	hd_select_device(0, p_des->indreg.iDRV_HD);
+	hd_select_device(0, p_des->indreg.iHND);
 	// invio del comando di reset
-	hd_software_reset(p_des->indreg.iDEV_CTRL);
+	hd_software_reset(p_des->indreg.iDCR);
 	// se il drive 0 (master) era stato trovato, aspettiamo che porti i bit 
 	// BSY e DRQ a 0
 	if (p_des->disco[0].presente) {
-		char stato;
+		natb stato;
 		do {
 			inputb(p_des->indreg.iSTS, stato);
 		} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
@@ -3630,19 +3462,19 @@ void hd_reset(des_ata* p_des)
 	// se il drive 1 (slave) era stato trovato, aspettiamo che permetta 
 	// l'accesso ai registri
 	if (p_des->disco[1].presente) {
-		hd_select_device(1, p_des->indreg.iDRV_HD);
+		hd_select_device(1, p_des->indreg.iHND);
 		do {
-			char b1, b2;
+			natb b1, b2;
 
-			inputb(p_des->indreg.iSTCOUNT, b1);
-			inputb(p_des->indreg.iSECT_N, b2);
+			inputb(p_des->indreg.iSCR, b1);
+			inputb(p_des->indreg.iSNR, b2);
 			if (b1 == 0x01 && b2 == 0x01) break;
 			// ... timeout usando i ticks
 		} while (p_des->disco[1].presente);
 		// ora dobbiamo controllare che lo slave abbia messo 
 		// busy a 0
 		if (p_des->disco[1].presente) {
-			char stato;
+			natb stato;
 
 			inputb(p_des->indreg.iSTS, stato);
 			if ( (stato & HD_STS_BSY) != 0 ) 
@@ -3662,15 +3494,15 @@ bool hd_init()
 	for (int i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
 
-		halt_inouthd(p_des->indreg.iDEV_CTRL);	
+		halthd_inout(p_des->indreg.iDCR);	
 		// cerchiamo di capire quali (tra master e slave) sono presenti
 		// (inizializziamo i campi "presente" della struttura des_ata)
 		for (int d = 0; d < 2; d++) {
-			hd_select_device(d, p_des->indreg.iDRV_HD);	//LBA e drive drv
+			hd_select_device(d, p_des->indreg.iHND);	//LBA e drive drv
 			p_des->disco[d].presente =
 				test_canale(p_des->indreg.iSTS,
-					    p_des->indreg.iSTCOUNT,
-					    p_des->indreg.iSECT_N);
+					    p_des->indreg.iSCR,
+					    p_des->indreg.iSNR);
 		}
 		if (!p_des->disco[0].presente && !p_des->disco[1].presente)
 			continue; // non abbiamo trovato niente, passiamo al prossimo canale
@@ -3682,12 +3514,12 @@ bool hd_init()
 			if (!p_des->disco[d].presente)
 				continue;
 
-			hd_select_device(d, p_des->indreg.iDRV_HD);	//LBA e drive drv
+			hd_select_device(d, p_des->indreg.iHND);	//LBA e drive drv
 			p_des->disco[d].presente = 
-				(leggi_signature(p_des->indreg.iSTCOUNT,
-						p_des->indreg.iSECT_N,
-						p_des->indreg.iCYL_L_N,
-						p_des->indreg.iCYL_H_N) == 0);
+				(leggi_signature(p_des->indreg.iSCR,
+						p_des->indreg.iSNR,
+						p_des->indreg.iCNL,
+						p_des->indreg.iCNH) == 0);
 		}
 		// lo standard dice che, se lo slave e' assente, il master puo' 
 		// rispondere alle letture/scritture nei registri al posto 
@@ -3697,18 +3529,18 @@ bool hd_init()
 		for (int d = 0; d < 2; d++) {
 			unsigned short st_sett[256];
 			char serial[41], *ptr = serial;
-			char stato;
+			natb stato;
 
 			if (!p_des->disco[d].presente) 
 				continue;
-			halt_inouthd(p_des->indreg.iDEV_CTRL);	
+			halthd_inout(p_des->indreg.iDCR);	
 			if (!hd_sel_drv(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
 			if (!hd_wait_data(p_des))
 				goto error;
 			inputb(p_des->indreg.iSTS, stato); // ack
-			inputbw(p_des->indreg.iDATA, st_sett, DIM_BLOCK / 2);
+			inputbw(p_des->indreg.iBR, st_sett, DIM_BLOCK / 2);
 			p_des->disco[d].tot_sett = (st_sett[61] << 16) + st_sett[60];
 			for (int j = 27; j <= 46; j++) {
 				*ptr++ = (char)(st_sett[j] >> 8);
@@ -4168,7 +4000,7 @@ void main_proc(int n)
 	my_des->es  = SEL_DATI_UTENTE;
 	my_des->fpu.cr = 0x037f;
 	my_des->fpu.tr = 0xffff;
-	my_des->liv = LIV_UTENTE;
+	my_des->cpl = LIV_UTENTE;
 
 	attiva_timer(DELAY);
 	salta_a_utente(swap.sb.user_entry, n2a(fine_utente_privato));

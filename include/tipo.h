@@ -5,3 +5,5 @@ typedef unsigned short ioaddr;
 typedef unsigned char natb;
 typedef unsigned short natw;
 typedef unsigned long natl;
+typedef void* str;
+typedef const void* cstr;

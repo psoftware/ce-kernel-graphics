@@ -206,10 +206,12 @@ _console:
 	.long	0		// sincr
 	// descrittore tastiera
 	.long	0x60		// kbd.indreg.iRBR
+	.long	0x60		// kbd.indreg.iRBR
+	.long	0x64		// kbd.indreg.iCMR
 	.long	0x64		// kbd.indreg.iCMR
 	.long	0		// kbd.punt
 	.long   0		// kbd.cont
-	.byte	0		// kbd.shift
+	.long	0		// kbd.shift
 	// tab
 	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
 	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
@@ -226,10 +228,11 @@ _console:
 	.long	0x03D4		// vid.indreg.iIND
 	.long	0x03D5		// vid.indreg.iDAT
 	.long	0xb8000 	// vid.video
-	.byte   0x4b		// vid.attr
 	.byte	0		// vid.x
 	.byte   0		// vid.y
-	.byte	0		// padding
+	.byte   0x4b		// vid.attr
+	.byte	0		// allineamento
+	.word	0		// allineamento
 
 
 ////////////////////////////////////////////////////////////////////////////////
