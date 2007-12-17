@@ -766,8 +766,8 @@ _des_p:
 
 // carica il registro cr3
 // parametri: indirizzo fisico del nuovo direttorio
-	.global _carica_cr3
-_carica_cr3:
+	.global _loadCR3
+_loadCR3:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -780,8 +780,8 @@ _carica_cr3:
 	ret
 
 // restituisce in %eax il contenuto di cr3
-	.global _leggi_cr3
-_leggi_cr3:
+	.global _readCR3
+_readCR3:
 	movl %cr3, %eax
 	ret
 
