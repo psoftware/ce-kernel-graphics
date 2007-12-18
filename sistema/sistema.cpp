@@ -412,8 +412,10 @@ const natl BIT_PCD  = 1U << 4;
 const natl BIT_A    = 1U << 5;
 const natl BIT_D    = 1U << 6;
 
+const natl ACCB_MASK  = 0x000000FF;
 const natl ADDR_MASK  = 0xFFFFF000;
 const natl BLOCK_MASK = 0xFFFFFFE0;
+const natl BLOCK_SHIFT = 5;
 
 
 // dato un indirizzo virtuale, ne restituisce l'indice nel direttorio
@@ -581,10 +583,11 @@ void collega_tabella(addr direttorio, addr tabella, addr ind_virtuale)
 	natl i = indice_direttorio(ind_virtuale);
 	// copia l'indirizzo in memoria die massa della tabella nel campo
 	// ppf->pt.blocco
-	ppf->pt.blocco = (pdt[i] & BLOCK_MASK) >> 5;
+	ppf->pt.blocco = (pdt[i] & BLOCK_MASK) >> BLOCK_SHIFT;
 	// modifica il descrittore di tabella in modo che punti
 	// all'indirizzo fisico "tabella"
-	pdt[i] = (a2n(tabella) & ADDR_MASK) | BIT_P;
+	pdt[i] &= ~BLOCK_MASK;
+	pdt[i] |= (a2n(tabella) & ADDR_MASK) | BIT_P;
 }
 
 void scollega_tabella(addr direttorio, addr ind_virtuale)
@@ -600,13 +603,12 @@ void scollega_tabella(addr direttorio, addr ind_virtuale)
 	des_pf *ppf = &pagine_fisiche[indice];
 	// copia ppf->pt.blocco nel descrittore di tabella
 	pdt[i] &= ~BLOCK_MASK;
-	pdt[i] |= ppf->pt.blocco << 5;
+	pdt[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore
 	pdt[i] &= ~BIT_P;
-	ppf->contenuto = LIBERA;
 	//inserisce in testa alla lista di pagine libere
-	ppf->avl.prossima_libera = pagine_libere;
-	pagine_libere = indice;
+	// *** usiamo rilascia_pagine_fisica
+	rilascia_pagina_fisica(indice);
 }
 
 addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale)
@@ -622,10 +624,11 @@ addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale)
 	natl i = indice_tabella(ind_virtuale);
 	// copia l'indirizzo in memoria die massa della pagina virtuale nel campo
 	// ppf->pt.blocco
-	ppf->pt.blocco = (pdp[i] & BLOCK_MASK) >> 5;
+	ppf->pt.blocco = (pdp[i] & BLOCK_MASK) >> BLOCK_SHIFT;
 	// modifica il descrittore di pagina in modo che punti
 	// all'indirizzo fisico "pagina"
-	pdp[i] = (a2n(pagina) & ADDR_MASK) | BIT_P;
+	pdp[i] &= ~BLOCK_MASK;
+	pdp[i] |= (a2n(pagina) & ADDR_MASK) | BIT_P;
 
 	// *** incremento del contatore nella tabella
 	ppf = &pagine_fisiche[indice_pf(tabella)];
@@ -645,13 +648,12 @@ void scollega_pagina(addr tabella, addr ind_virtuale)
 	des_pf* ppf = &pagine_fisiche[indice];
 	// copia ppf->pt.blocco nel descrittore di pagina
 	pdp[i] &= ~BLOCK_MASK;
-	pdp[i] |= ppf->pt.blocco << 5;
+	pdp[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore di pagina
 	pdp[i] &= ~BIT_P;
-	ppf->contenuto = LIBERA;
 	//inserisce in testa alla lista di pagine libere
-	ppf->avl.prossima_libera = pagine_libere;
-	pagine_libere = indice;
+	// *** usiamo rilascia_pagina_fisica
+	rilascia_pagina_fisica(indice);
 }
 
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
@@ -770,7 +772,7 @@ struct des_swap {
 
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-bool leggi_blocco(natl blocco, void* dest)
+void leggi_blocco(natl blocco, void* dest)
 {
 	char errore;
 
@@ -792,15 +794,14 @@ bool leggi_blocco(natl blocco, void* dest)
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
 		hd_print_error(swap_dev.channel, swap_dev.drive, blocco * 8, errore);
-		return false;
+		panic("Errore sull'hard disk");
 	}
-	return true;
 }
 
 
 // scrive nello swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-bool scrivi_blocco(natl blocco, void* dest)
+void scrivi_blocco(natl blocco, void* dest)
 {
 	char errore;
 	natl sector = blocco * 8 + swap_dev.part->first;
@@ -809,7 +810,6 @@ bool scrivi_blocco(natl blocco, void* dest)
 		flog(LOG_ERR, "Accesso al di fuori della partizione");
 		// come sopra
 		panic("Errore interno");
-		return false;
 	}
 	
 	writehd_n(swap_dev.channel, swap_dev.drive, dest, sector, 8, errore);
@@ -817,9 +817,8 @@ bool scrivi_blocco(natl blocco, void* dest)
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
 		hd_print_error(swap_dev.channel, swap_dev.drive, blocco * 8, errore);
-		return false;
+		panic("Errore sull'hard disk");
 	}
-	return true;
 }
 
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
@@ -998,7 +997,14 @@ bool swap(addr direttorio, addr ind_virtuale)
 		indice_pag = alloca_pagina_fisica();
 		if (indice_pag == -1) {
 			// se non ve ne sono invoca la routine liberazione
+			// *** rendiamo temporaneamente residente la
+			// *** tabella, in modo che non venga scelta
+			// *** per essere rimpiazzata
+			int tmp = indice_pf(ind_fis_tab);
+			bool save = pagine_fisiche[tmp].residente;
+			pagine_fisiche[tmp].residente = true;
 			indice_pag = liberazione();
+			pagine_fisiche[tmp].residente = save;
 			if (indice_pag == -1)
 				// se questa fallisce, termina restituendo false
 				goto error3;
@@ -1007,7 +1013,7 @@ bool swap(addr direttorio, addr ind_virtuale)
 		// (variabile "ind_fis_pag")
 		ind_fis_pag = indirizzo_pf(indice_pag);
 		// 4) trasferisce la pagina da memoria di massa a memoria fisica
-		carica_pagina(direttorio, ind_virtuale, static_cast<natb*>(ind_fis_pag)); 
+		carica_pagina(ind_fis_tab, ind_virtuale, static_cast<natb*>(ind_fis_pag)); 
 		// 5) e 6) aggiusta il descrittore di pagina e il descrittore di pagina fisica
 		collega_pagina(ind_fis_tab, ind_fis_pag, ind_virtuale);
 	} 
@@ -1028,7 +1034,7 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 	natl *pdp = static_cast<natl*>(tabella);
 	natl j = indice_tabella(ind_virtuale);
 	// estrae l'indirizzo in memoria di massa e lo pone nalla variabile "blocco"
-	blocco = (pdp[j] & BLOCK_MASK) >> 5;
+	blocco = (pdp[j] & BLOCK_MASK) >> BLOCK_SHIFT;
 	if (blocco == 0) {
 		// alloca un blocco in memoria di massa
 		if (! bm_alloc(&swap_dev.free, blocco) ) {
@@ -1050,7 +1056,7 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 	natl *pdt = static_cast<natl*>(direttorio);
 	natl j = indice_direttorio(ind_virtuale);
 	// estrae l'indirizzo in memoria di massa e lo pone nalla variabile "blocco"
-	blocco = (pdt[j] & BLOCK_MASK) >> 5;
+	blocco = (pdt[j] & BLOCK_MASK) >> BLOCK_SHIFT;
 	// *** anche per le tabelle vale il caso speciale in cui blocco == 0: la 
 	// tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
 	// in modo che ogni entrata della nuova tabella erediti le proprieta' 
@@ -1065,19 +1071,15 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 		natl* pdp = reinterpret_cast<natl*>(dest);
 		for (int i = 0; i < 1024; i++)
 			pdp[i] = pdt[j];
-		pdt[j] |= (blocco & BLOCK_MASK) << 5;
+		pdt[j] |= (blocco & BLOCK_MASK) << BLOCK_SHIFT;
 	} else 
 		leggi_blocco(blocco, dest);
 }
 
 
-// ROUTINE DI RIMPIAZZAMENTO
+// ROUTINE DI LIBERAZIONE
 //
-// forward
-int liberazione();
-
-
-// funzioni usate da rimpiazzamento
+// funzioni usate da liberazione
 extern "C" void invalida_entrata_TLB(addr ind_virtuale);
 
 int liberazione()
@@ -1121,8 +1123,7 @@ int liberazione()
 		scollega_tabella(pvittima->pt.punt, pvittima->pt.ind_virtuale);
 		// 3') scrive la tabella in memoria di massa nel blocco di indice
 		// dato da "blocco"
-		if (!scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima))))
-			goto error;
+		scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
 	} else {
 		// accede al descrittore di pagina e ne estra il valore del bit D (variabile "bitD")
 		natl *pdp = static_cast<natl*>(pvittima->pt.punt);
@@ -1133,16 +1134,10 @@ int liberazione()
 		// invalida l'entrata del TLB corrispondente a "pvittima->pt.ind_virtuale")
 		invalida_entrata_TLB(pvittima->pt.ind_virtuale);
 
-		if (bitD == 1) {
-			if (!scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima))))
-				goto error;
-		} 
+		if (bitD == 1) 
+			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
 	}
 	return vittima;
-
-error:
-	flog(LOG_WARN, "Impossibile rimpiazzare pagine");
-	return -1;
 }
 
 extern "C" bool c_resident(addr ind_virt, natl quanti)
@@ -1438,16 +1433,13 @@ addr crea_pila_utente(addr direttorio)
 	natl *pd, j;
 	bool risu;
 
-	ind_virtuale = n2a(inizio_utente_privato);
+	j = indice_direttorio(n2a(inizio_utente_privato));
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
 	pd = static_cast<natl*>(direttorio);
-	for (int i = 0; i < ntab_utente_privato; i++) {
-		j = indice_direttorio(ind_virtuale);
-		pd[j] = BIT_US | BIT_RW;
-		ind_virtuale = n2a(a2n(ind_virtuale) + SIZE_SUPERPAGINA);
-	}
+	for (int i = j; i < j + ntab_utente_privato; i++) 
+		pd[i] = BIT_US | BIT_RW;
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
@@ -1547,7 +1539,7 @@ void rilascia_tutto(addr direttorio, addr start, int ntab)
 					addr pagina = n2a(pdp[k] & ADDR_MASK);
 					rilascia_pagina_fisica(indice_pf(pagina));
 				} else {
-					natl blocco = (pdp[k] & BLOCK_MASK) >> 5;
+					natl blocco = (pdp[k] & BLOCK_MASK) >> BLOCK_SHIFT;
 					if (blocco != 0)
 						bm_free(&swap_dev.free, blocco);
 				}
@@ -2007,7 +1999,7 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 	bool risu;
 
 	if (eip < fine_codice_sistema || errore.res == 1) {
-		// il sistema non e' progettato per gestire page fault causati 
+		// *** il sistema non e' progettato per gestire page fault causati 
 		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// si tratta di un bug
 		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, indirizzo_virtuale,
@@ -2017,7 +2009,7 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 			errore.res   ? "bit riservato"	: "");
 		panic("page fault dal modulo sistema");
 	}
-	// l'errore di protezione non puo' essere risolto: il processo ha 
+	// *** l'errore di protezione non puo' essere risolto: il processo ha 
 	// tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
 	// sistema)
 	if (errore.prot == 1) {
@@ -2032,9 +2024,8 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 	risu = swap(readCR3(), indirizzo_virtuale);
 	sem_signal(pf_mutex);
 
-	if (risu == false) {
+	if (risu == false) 
 		abort_p();
-	}
 }
 
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
