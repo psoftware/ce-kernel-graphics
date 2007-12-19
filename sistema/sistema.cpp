@@ -51,13 +51,13 @@ natl ceild(natl v, natl q)
 }
 
 // restituisce il valore di "v" allineato a un multiplo di "a"
-inline natl allinea(natl v, natl a)
+natl allinea(natl v, natl a)
 {
 	return (v % a == 0 ? v : ((v + a - 1) / a) * a);
 }
-inline addr allineav(addr v, natl a)
+addr allineav(addr v, natl a)
 {
-	return allineav(v, a);
+	return n2a(allinea(a2n(v), a));
 }
 
 // funzioni per la manipolazione di stringhe
@@ -193,7 +193,7 @@ void* alloca(natl dim)
 {
 	// per motivi di efficienza, conviene allocare sempre multipli di 4 
 	// byte (in modo che le strutture dati restino allineate alla linea)
-	natl quanti = allinea(quanti, sizeof(int));
+	natl quanti = allinea(dim, sizeof(int));
 
 	// allochiamo "quanti" byte, invece dei "quanti" richiesti
 	des_mem *prec = 0, *scorri = memlibera;
@@ -673,7 +673,9 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 				return false;
 			}
 			des_pf *ppf = &pagine_fisiche[indice];
-			ppf->contenuto = TABELLA;
+			// evitiamo di marcare la pagina come TABELLA
+			// in modo che aggiorna_statistiche non la veda
+			// ppf->contenuto = TABELLA;
 			ppf->residente = true;
 			tabella = indirizzo_pf(indice);
 
@@ -683,7 +685,7 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 		}
 		natl *pdp = static_cast<natl*>(tabella);
 		natl j = indice_tabella(ind);
-		pdp[i] = (a2n(ind) & ADDR_MASK) | BIT_RW | BIT_P; // | BIT_GLOBAL
+		pdp[j] = (a2n(ind) & ADDR_MASK) | BIT_RW | BIT_P; // | BIT_GLOBAL
 	}
 	return true;
 }
@@ -894,7 +896,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	natl pages = ceild(swap_dev.sb.blocks, DIM_PAGINA * 8);
 
 	// quindi allochiamo in memoria un buffer che possa contenerla
-	natl* buf = static_cast<natl*>(alloca((pages * DIM_PAGINA) / sizeof(natl)));
+	natl* buf = static_cast<natl*>(alloca((pages * DIM_PAGINA)));
 	if (buf == 0) {
 		flog(LOG_ERR, "Impossibile allocare la bitmap dei blocchi");
 		return false;
@@ -923,7 +925,7 @@ void aggiorna_statistiche()
 			for (int j = 0; j < 1024; j++) {
 				// accede all'entrata j-esima della tabella/direttorio "tab"
 				natl *pd = static_cast<natl*>(tab);
-				// se la paina/tabella puntata e' presente
+				// se la pagina/tabella puntata e' presente
 				if (pd[j] & BIT_P) {
 					// ne estae l'indirizzo fisico (variabile "pag")
 					pag = n2a(pd[j] & ADDR_MASK);
@@ -1070,7 +1072,7 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 
 		natl* pdp = reinterpret_cast<natl*>(dest);
 		for (int i = 0; i < 1024; i++)
-			pdp[i] = pdt[j];
+			pdp[i] = pdt[j] & ~BIT_P;
 		pdt[j] |= (blocco & BLOCK_MASK) << BLOCK_SHIFT;
 	} else 
 		leggi_blocco(blocco, dest);
@@ -1405,7 +1407,7 @@ void dd(int i)
 // creazione del processo dummy (usata in fase di inizializzazione del sistema)
 bool crea_dummy()
 {
-	proc_elem* dummy = crea_processo(dd, 0, -1, LIV_SISTEMA);
+	proc_elem* dummy = crea_processo(dd, 0, 0, LIV_SISTEMA);
 	if (dummy == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return false;
@@ -1533,7 +1535,7 @@ void rilascia_tutto(addr direttorio, addr start, int ntab)
 	{
 		if (pdt[i] & BIT_P) {
 			tabella = n2a(pdt[i] & ADDR_MASK);
-			pdt = static_cast<natl*>(tabella);
+			pdp = static_cast<natl*>(tabella);
 			for (int k = 0; k < 1024; k++) {
 				if (pdp[k] & BIT_P) {
 					addr pagina = n2a(pdp[k] & ADDR_MASK);
@@ -3301,7 +3303,7 @@ bool crea_spazio_condiviso(addr& last_address)
 						ppf->residente = true;
 						ind_fis_pag = indirizzo_pf(indice);
 						carica_pagina(tabella, ind_virt_pag, static_cast<natb*>(ind_fis_pag));
-						collega_pagina(tabella, ind_virt_pag, ind_fis_pag);
+						collega_pagina(tabella, ind_fis_pag, ind_virt_pag);
 					}
 					ind_virt_pag = n2a(a2n(ind_virt_pag) + DIM_PAGINA);
 				}

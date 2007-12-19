@@ -176,22 +176,24 @@ param_err:
 
 // Descrittori delle interfacce seriali
 	.global _com		// non comi, como
-_com:	.long	0x03f8		// com[0].indreg.iRBR
-	.long	0x03f8		// com[0].indreg.iTHR
-	.long	0x03fd		// com[0].indreg.iLSR
-	.long	0x03f9		// com[0].indreg.iIER
-	.long	0x03fa		// com[0].indreg.iIIR
+_com:	.word	0x03f8		// com[0].indreg.iRBR
+	.word	0x03f8		// com[0].indreg.iTHR
+	.word	0x03fd		// com[0].indreg.iLSR
+	.word	0x03f9		// com[0].indreg.iIER
+	.word	0x03fa		// com[0].indreg.iIIR
+	.word   0		// padding
 	.long	0		// com[0].mutex
 	.long	0		// com[0].sincr
 	.long	0		// com[0].cont
 	.long	0		// com[0].punt
 	.long	0		// com[0].funzione
 	.long	0		// com[0].stato
-	.long	0x02f8		// com[1].indreg.iRBR
-	.long	0x02f8		// com[1].indreg.iTHR
-	.long	0x03fd		// com[1].indreg.iLSR
-	.long	0x02f9		// com[1].indreg.iIER
-	.long	0x02fa		// com[1].indreg.iIIR
+	.word	0x02f8		// com[1].indreg.iRBR
+	.word	0x02f8		// com[1].indreg.iTHR
+	.word	0x03fd		// com[1].indreg.iLSR
+	.word	0x02f9		// com[1].indreg.iIER
+	.word	0x02fa		// com[1].indreg.iIIR
+	.word   0		// padding
 	.long	0		// com[1].mutex
 	.long	0		// com[1].sincr
 	.long	0		// com[1].cont
@@ -205,13 +207,13 @@ _console:
 	.long	0		// mutex
 	.long	0		// sincr
 	// descrittore tastiera
-	.long	0x60		// kbd.indreg.iRBR
-	.long	0x60		// kbd.indreg.iRBR
-	.long	0x64		// kbd.indreg.iCMR
-	.long	0x64		// kbd.indreg.iCMR
+	.word	0x60		// kbd.indreg.iRBR
+	.word	0x60		// kbd.indreg.iTBR
+	.word	0x64		// kbd.indreg.iCMR
+	.word	0x64		// kbd.indreg.iSTR
 	.long	0		// kbd.punt
 	.long   0		// kbd.cont
-	.long	0		// kbd.shift
+	.byte	0		// kbd.shift
 	// tab
 	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
 	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
@@ -225,11 +227,11 @@ _console:
         .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
         .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\n', '\b'
 	// Descrittore del video
-	.long	0x03D4		// vid.indreg.iIND
-	.long	0x03D5		// vid.indreg.iDAT
+	.word	0x03D4		// vid.indreg.iIND
+	.word	0x03D5		// vid.indreg.iDAT
 	.long	0xb8000 	// vid.video
-	.byte	0		// vid.x
-	.byte   0		// vid.y
+	.long	0		// vid.x
+	.long   0		// vid.y
 	.byte   0x4b		// vid.attr
 	.byte	0		// allineamento
 	.word	0		// allineamento

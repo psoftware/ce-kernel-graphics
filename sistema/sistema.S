@@ -2126,21 +2126,21 @@ _hd_write_address:
 	
 	movl 12(%ebp),%eax
 	movl 8(%ebp),%edi	// accede al descrittore per comodita`
-	movl 16(%edi),%edx
-	outb %al,%dx		// caricato iSECT_N
-	movl 20(%edi),%edx
+	movw 6(%edi),%dx
+	outb %al,%dx		// caricato SNR
+	movw 2(%edi),%dx
 	movb %ah,%al
-	outb %al,%dx		// caricato cyl_LSB
+	outb %al,%dx		// caricato CNL
 	shrl $16,%eax
-	movl 24(%edi),%edx
-	outb %al,%dx		// caricato cyl_MSB
-	movl 28(%edi),%edx
-	inb %dx,%al		// iDRV_HD in %al
-	andb $0xf0,%al		// maschera per l'indirizzo in DRV_HD
+	movw 4(%edi),%dx
+	outb %al,%dx		// caricato CNH
+	movw 8(%edi),%dx
+	inb %dx,%al		// HND in %al
+	andb $0xf0,%al		// maschera per l'indirizzo in HND
 	andb $0x0f,%ah		// maschera per i 4 bit +sign di primo
 	orb  $0xe0,%ah		// seleziona LBA
 	orb %ah,%al
-	outb %al,%dx		// caricato iDRV_HD
+	outb %al,%dx		// caricato HND
 	
 	popl %edi
 	popl %edx
@@ -2169,17 +2169,18 @@ _pronti:	.long 0
 // Descrittore Hard Disk
 	.global _hd
 _hd:	
-	.long	0x01f0		//hd[0].indreg.iBR
-	.long	0x01f4		//hd[0].indreg.iCNL
-	.long	0x01f5		//hd[0].indreg.iCNH
-	.long	0x01f3		//hd[0].indreg.iSNR
-	.long	0x01f6		//hd[0].indreg.iHND
-	.long 	0x01f2		//hd[0].indreg.iSCR
-	.long	0x01f1		//hd[0].indreg.iERR
-	.long	0x01f7		//hd[0].indreg.iCMD
-	.long	0x01f7		//hd[0].indreg.iSTS
-	.long	0x03f6		//hd[0].indreg.iDCR
-	.long	0x03f6		//hd[0].indreg.iASR
+	.word	0x01f0		//hd[0].indreg.iBR
+	.word	0x01f4		//hd[0].indreg.iCNL
+	.word	0x01f5		//hd[0].indreg.iCNH
+	.word	0x01f3		//hd[0].indreg.iSNR
+	.word	0x01f6		//hd[0].indreg.iHND
+	.word 	0x01f2		//hd[0].indreg.iSCR
+	.word	0x01f1		//hd[0].indreg.iERR
+	.word	0x01f7		//hd[0].indreg.iCMD
+	.word	0x01f7		//hd[0].indreg.iSTS
+	.word	0x03f6		//hd[0].indreg.iDCR
+	.word	0x03f6		//hd[0].indreg.iASR
+	.word	0		//padding
 	.long	0		//hd[0].disco[0].{presente,dma} (sono byte!)
 	.long	0		//hd[0].disco[0].tot_sett
 	.long	0		//hd[0].disco[0].part
@@ -2192,17 +2193,18 @@ _hd:
 	.long	0		//hd[0].punt
 	.long	0		//hd[0].mutex
 	.long	0		//hd[0].sincr
-	.long	0x0170		//hd[0].indreg.iBR
-	.long	0x0174		//hd[0].indreg.iCNL
-	.long	0x0175		//hd[0].indreg.iCNH
-	.long	0x0173		//hd[0].indreg.iSNR
-	.long	0x0176		//hd[0].indreg.iHND
-	.long 	0x0172		//hd[0].indreg.iSCR
-	.long	0x0171		//hd[0].indreg.iERR
-	.long	0x0177		//hd[0].indreg.iCMD
-	.long	0x0177		//hd[0].indreg.iSTS
-	.long	0x0376		//hd[0].indreg.iDCR
-	.long	0x0376		//hd[0].indreg.iASR
+	.word	0x0170		//hd[0].indreg.iBR
+	.word	0x0174		//hd[0].indreg.iCNL
+	.word	0x0175		//hd[0].indreg.iCNH
+	.word	0x0173		//hd[0].indreg.iSNR
+	.word	0x0176		//hd[0].indreg.iHND
+	.word 	0x0172		//hd[0].indreg.iSCR
+	.word	0x0171		//hd[0].indreg.iERR
+	.word	0x0177		//hd[0].indreg.iCMD
+	.word	0x0177		//hd[0].indreg.iSTS
+	.word	0x0376		//hd[0].indreg.iDCR
+	.word	0x0376		//hd[0].indreg.iASR
+	.word	0		//padding
 	.long	0		//hd[1].disco[0].{presente,dma} (sono byte!)
 	.long	0		//hd[1].disco[0].tot_sett
 	.long	0		//hd[1].disco[0].part

@@ -1,22 +1,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct descrittore_pagina {
-	// byte di accesso
-	unsigned int P:		1;	// bit di presenza
-	unsigned int RW:	1;	// Read/Write
-	unsigned int US:	1;	// User/Supervisor
-	unsigned int PWT:	1;	// Page Write Through
-	unsigned int PCD:	1;	// Page Cache Disable
-	unsigned int A:		1;	// Accessed
-	unsigned int D:		1;	// Dirty
-	unsigned int pgsz:	1;	// non visto a lezione
-	// fine byte di accesso
+union descrittore_pagina {
+	// caso di pagina presente
+	struct {
+		// byte di accesso
+		unsigned int P:		1;	// bit di presenza
+		unsigned int RW:	1;	// Read/Write
+		unsigned int US:	1;	// User/Supervisor
+		unsigned int PWT:	1;	// Page Write Through
+		unsigned int PCD:	1;	// Page Cache Disable
+		unsigned int A:		1;	// Accessed
+		unsigned int D:		1;	// Dirty
+		unsigned int pgsz:	1;	// non visto a lezione
+		// fine byte di accesso
+		
+		unsigned int global:	1;	// non visto a lezione
+		unsigned int avail:	3;	// non usati
 
-	unsigned int global:	1;	// non visto a lezione
-	unsigned int avail:	3;	// non usato
+		unsigned int address:	20;	// indirizzo fisico
+	} p;
+	// caso di pagina assente
+	struct {
+		// informazioni sul tipo di pagina
+		unsigned int P:		1;
+		unsigned int RW:	1;
+		unsigned int US:	1;
+		unsigned int PWT:	1;
+		unsigned int PCD:	1;
 
-	unsigned int address:	20;	// indirizzo fisico/blocco
+		unsigned int block:	27;
+	} a;	
 };
 
 struct superblock_t {
@@ -47,7 +61,7 @@ int get_bit() {
 
 int main(int argc, char* argv[])
 {
-	struct descrittore_pagina p;
+	union descrittore_pagina p;
 	struct superblock_t sb;
 	char buf[512];
 	int record = 0;
@@ -61,8 +75,8 @@ int main(int argc, char* argv[])
 	switch (argv[1][0]) {
 	case 'p':
 		while (fread(&p, sizeof(p), 1, stdin)) {
-			printf("%4d: P=%d RW=%d US=%d address=%d\n",
-				record++, p.P, p.RW, p.US, p.address);
+			printf("%4d: P=%d RW=%d US=%d block=%d\n",
+				record++, p.a.P, p.a.RW, p.a.US, p.a.block);
 		}
 		break;
 	case 's':
