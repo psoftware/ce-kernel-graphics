@@ -879,7 +879,7 @@ _inputbw:
 	pushl %edi
 	pushl %ecx
 	
-	movl 20(%esp), %edx
+	movw 20(%esp), %dx
 	movl 24(%esp), %edi
 	movl 28(%esp), %ecx
 	cld
@@ -900,9 +900,9 @@ _outputbw:
 	pushl %esi
 	pushl %ecx
 	
-	movl 24(%esp), %edx
+	movw 28(%esp), %dx
 	movl 20(%esp), %esi
-	movl 28(%esp),%ecx
+	movl 24(%esp),%ecx
 	cld
 	rep
 	outsw

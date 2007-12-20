@@ -567,6 +567,7 @@ void collega_tabella(addr direttorio, addr tabella, addr ind_virtuale)
 {
 	des_pf* ppf  = &pagine_fisiche[indice_pf(tabella)];
 	ppf->contenuto  = TABELLA;
+	ppf->residente  = false;
 	// *** il contatore deve essere inizializzato come se fosse appena stato 
 	// effettuato un accesso (cosa che, comunque, avverra' al termine della 
 	// gestione del page fault). Diversamente, la pagina o tabella appena 
@@ -606,14 +607,13 @@ void scollega_tabella(addr direttorio, addr ind_virtuale)
 	pdt[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore
 	pdt[i] &= ~BIT_P;
-	//inserisce in testa alla lista di pagine libere
-	// *** usiamo rilascia_pagine_fisica
-	rilascia_pagina_fisica(indice);
 }
 
 addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale)
 {
 	des_pf* ppf = &pagine_fisiche[indice_pf(pagina)];
+	ppf->contenuto = PAGINA_VIRTUALE;
+	ppf->residente = false;
 	// per il campo contatore, vale lo stesso discorso fatto per le tabelle 
 	// delle pagine
 	ppf->pt.contatore  = 0x80000000;
@@ -651,9 +651,6 @@ void scollega_pagina(addr tabella, addr ind_virtuale)
 	pdp[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore di pagina
 	pdp[i] &= ~BIT_P;
-	//inserisce in testa alla lista di pagine libere
-	// *** usiamo rilascia_pagina_fisica
-	rilascia_pagina_fisica(indice);
 }
 
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
@@ -738,13 +735,13 @@ struct partizione {
 };
 
 // funzioni per la lettura/scrittura da hard disk
-extern "C" void readhd_n(short ind_ata, short drv, void* vetti,
-		natl primo, unsigned char quanti, char &errore);
-extern "C" void writehd_n(short ind_ata, short drv, void* vetto,
-		natl primo, unsigned char quanti, char &errore);
+extern "C" void readhd_n(int ata, int drv, natw vetti[],
+		natl primo, natb quanti, natb &errore);
+extern "C" void writehd_n(int ata, int drv, natw vetto[],
+		natl primo, natb quanti, natb &errore);
 // utile per il debug: invia al log un messaggio relativo all'errore che e' 
 // stato riscontrato
-void hd_print_error(int i, int d, int sect, short errore);
+void hd_print_error(int i, int d, int sect, natb errore);
 // cerca la partizione specificata
 partizione* hd_find_partition(short ind_ata, short drv, int p);
 
@@ -776,7 +773,7 @@ struct des_swap {
 // copiandone il contenuto a partire dall'indirizzo "dest"
 void leggi_blocco(natl blocco, void* dest)
 {
-	char errore;
+	natb errore;
 
 	// ogni blocco (4096 byte) e' grande 8 settori (512 byte)
 	// calcoliamo l'indice del primo settore da leggere
@@ -791,7 +788,7 @@ void leggi_blocco(natl blocco, void* dest)
 		panic("Errore interno");
 	}
 
-	readhd_n(swap_dev.channel, swap_dev.drive, dest, sector, 8, errore);
+	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
@@ -805,7 +802,7 @@ void leggi_blocco(natl blocco, void* dest)
 // copiandone il contenuto a partire dall'indirizzo "dest"
 void scrivi_blocco(natl blocco, void* dest)
 {
-	char errore;
+	natb errore;
 	natl sector = blocco * 8 + swap_dev.part->first;
 
 	if (blocco < 0 || sector + 8 > (swap_dev.part->first + swap_dev.part->dim)) {
@@ -814,7 +811,7 @@ void scrivi_blocco(natl blocco, void* dest)
 		panic("Errore interno");
 	}
 	
-	writehd_n(swap_dev.channel, swap_dev.drive, dest, sector, 8, errore);
+	writehd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
@@ -826,7 +823,7 @@ void scrivi_blocco(natl blocco, void* dest)
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
 bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 {
-	char errore;
+	natb errore;
 	natl sector = first + swap_dev.part->first;
 
 	if (first < 0 || first + bytes > swap_dev.part->dim) {
@@ -834,7 +831,7 @@ bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 		return false;
 	}
 	
-	readhd_n(swap_dev.channel, swap_dev.drive, buf, sector, ceild(bytes, 512), errore);
+	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, ceild(bytes, 512), errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
@@ -908,6 +905,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	// infine, leggiamo la mappa di bit dalla partizione di swap
 	return leggi_swap(buf, swap_dev.sb.bm_start * 8, pages * DIM_PAGINA, "la bitmap dei blocchi");
 }
+
 
 // ROUTINE DEL TIMER
 void aggiorna_statistiche()
@@ -1044,7 +1042,7 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 			return;
 		}
 		// e ne scrive l'indice nel descrittore di pagina
-		pdp[j] |= (blocco & BLOCK_MASK) << 5;
+		pdp[j] |= (blocco << BLOCK_SHIFT) & BLOCK_MASK;
 		for (int i = 0; i < DIM_PAGINA; i++)
 			dest[i] = 0;
 	} else 
@@ -1129,12 +1127,13 @@ int liberazione()
 	} else {
 		// accede al descrittore di pagina e ne estra il valore del bit D (variabile "bitD")
 		natl *pdp = static_cast<natl*>(pvittima->pt.punt);
-		natl i = indice_tabella(pvittima->pt.ind_virtuale);
+		addr ind_virt = pvittima->pt.ind_virtuale;
+		natl i = indice_tabella(ind_virt);
 		bitD = (pdp[i] & BIT_D) ? 1 : 0;
 		// 2) aggiusta il descrittore di pagina corrispondente
-		scollega_pagina(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+		scollega_pagina(pvittima->pt.punt, ind_virt);
 		// invalida l'entrata del TLB corrispondente a "pvittima->pt.ind_virtuale")
-		invalida_entrata_TLB(pvittima->pt.ind_virtuale);
+		invalida_entrata_TLB(ind_virt);
 
 		if (bitD == 1) 
 			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
@@ -2657,15 +2656,15 @@ extern "C" des_ata hd[A];	// 2 canali ATA
 
 extern "C" void hd_gohd_inout(ioaddr i_dev_ctl);
 extern "C" void halthd_inout(ioaddr i_dev_ctl);
-extern "C" bool test_canale(ioaddr st,ioaddr stc,ioaddr stn);
-extern "C" int leggi_signature(ioaddr stc,ioaddr stn,ioaddr cyl,ioaddr cyh);
+extern "C" bool test_canale(ioaddr st, ioaddr stc, ioaddr stn);
+extern "C" int leggi_signature(ioaddr stc, ioaddr stn, ioaddr cyl, ioaddr cyh);
 extern "C" void umask_hd(ioaddr h);
 extern "C" void mask_hd(ioaddr h);
 extern "C" bool hd_software_reset(ioaddr dvctrl);
 extern "C" void hd_read_device(ioaddr i_drv_hd, int& ms);
-extern "C" void hd_select_device(short ms,ioaddr i_drv_hd);
+extern "C" void hd_select_device(short ms, ioaddr iHND);
 extern "C" void hd_write_address(des_ata *p, natl primo);	
-extern "C" void hd_write_command(hd_cmd cmd, ioaddr i_drv_cmd);
+extern "C" void hd_write_command(hd_cmd cmd, ioaddr iCMD);
 
 
 // seleziona il dispostivo drv e controlla che la selezione abbia avuto 
@@ -2701,7 +2700,7 @@ bool hd_wait_data(des_ata* p_des)
 
 // invia al log di sistema un messaggio che spiega l'errore passato come 
 // argomento
-void hd_print_error(int i, int d, int sect, short error)
+void hd_print_error(int i, int d, int sect, natb error)
 {
 	des_ata* p = &hd[i];
 	if (error == D_ERR_NONE)
@@ -2752,6 +2751,7 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	p_des->punt = vetto + DIM_BLOCK / 2;
 	p_des->comando = WRITE_SECT;
 	p_des->errore = D_ERR_NONE;
+	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);	
 	outputb(quanti, p_des->indreg.iSCR);
 	hd_gohd_inout(p_des->indreg.iDCR);	
@@ -2879,19 +2879,19 @@ struct des_part {
 	natl sectors;
 };
 
-bool leggi_partizioni(short ind_ata, short drv)
+bool leggi_partizioni(int ata, int drv)
 {
-	char errore;
+	natb errore;
 	des_part* p;
 	partizione *estesa, **ptail;
-	des_ata* p_des = &hd[ind_ata];
-	static char buf[512];
+	des_ata* p_des = &hd[ata];
+	static natb buf[512];
 	natl settore;
 	partizione* pp;
 
 	// lettura del Master Boot Record (LBA = 0)
 	settore = 0;
-	readhd_n(ind_ata, drv, buf, settore, 1, errore);
+	readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
 	if (errore != 0)
 		goto errore;
 		
@@ -2923,7 +2923,7 @@ bool leggi_partizioni(short ind_ata, short drv)
 		natl offset_logica = offset_estesa;
 		while (1) {
 			settore = offset_logica;
-			readhd_n(ind_ata, drv, buf, settore, 1, errore);
+			readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
 			if (errore != 0)
 				goto errore;
 			p = reinterpret_cast<des_part*>(buf + 446);
@@ -2947,7 +2947,7 @@ bool leggi_partizioni(short ind_ata, short drv)
 	return true;
 
 errore:
-	hd_print_error(ind_ata, drv, settore, errore);
+	hd_print_error(ata, drv, settore, errore);
 	return false;
 }
 
