@@ -600,7 +600,7 @@ init_idt:
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
-	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
+	carica_gate	io_tipo_rhdn	a_ireadhd_n	LIV_SISTEMA
 	carica_gate	io_tipo_whdn	a_writehd_n	LIV_SISTEMA
 
 	leave
@@ -1746,6 +1746,11 @@ a_log:
 // Funzioni di utilita' per la gestione degli hard disk
 ////////////////////////////////////////////////////////////////////
 
+	.global _hd_begin_p
+_hd_begin_p:
+	carica_gate io_tipo_rhdn a_readhd_n LIV_SISTEMA
+	ret
+
 
 // lettura di n settori
 	.global a_readhd_n
@@ -1757,6 +1762,18 @@ a_readhd_n:
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
 	call _c_readhd_n
+	addl $24, %esp
+	carica_registri
+	iret
+
+// lettura di n settori
+// da utilizzare in fase di inizializzazione
+	.global a_ireadhd_n
+	.extern _c_ireadhd_n
+a_ireadhd_n:
+	salva_registri
+	copia_param 6 7
+	call _c_ireadhd_n
 	addl $24, %esp
 	carica_registri
 	iret

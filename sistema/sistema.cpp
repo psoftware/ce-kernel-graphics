@@ -195,7 +195,7 @@ void* alloca(natl dim)
 	// byte (in modo che le strutture dati restino allineate alla linea)
 	natl quanti = allinea(dim, sizeof(int));
 
-	// allochiamo "quanti" byte, invece dei "quanti" richiesti
+	// allochiamo "quanti" byte, invece dei "dim" richiesti
 	des_mem *prec = 0, *scorri = memlibera;
 	while (scorri != 0 && scorri->dimensione < quanti) {
 		prec = scorri;
@@ -2761,6 +2761,42 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	return;
 }
 
+extern "C" void c_ireadhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
+{
+	des_ata *p_des;
+	natb cont = quanti;
+	natw *punt = vetti;
+
+	p_des = &hd[ata];
+
+	// Controllo sulla selezione di un drive presente
+	if (!p_des->disco[drv].presente) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+
+	// Controllo sull'indirizzamento
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
+		errore = D_ERR_BOUNDS;
+		return;
+	}
+
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_write_command(READ_SECT, p_des->indreg.iCMD);
+	while (cont > 0) {
+		if (!hd_wait_data(p_des)) {
+			inputb(p_des->indreg.iERR, p_des->errore);
+			return;
+		}
+		inputbw(p_des->indreg.iBR, punt, DIM_BLOCK / 2);
+		cont --;
+		punt += DIM_BLOCK / 2;
+	}
+	errore = D_ERR_NONE;
+}
+
 
 extern "C" void c_readhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
@@ -3459,6 +3495,7 @@ error:
 	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
 }
 
+extern "C" void hd_begin_p();
 void main_proc(int n)
 {
 	unsigned long clocks_per_sec;
@@ -3540,6 +3577,7 @@ void main_proc(int n)
 	my_des->fpu.tr = 0xffff;
 	my_des->cpl = LIV_UTENTE;
 
+	hd_begin_p();
 	attiva_timer(DELAY);
 	salta_a_utente(swap_dev.sb.user_entry, n2a(fine_utente_privato));
 error:
