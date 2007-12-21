@@ -2114,17 +2114,10 @@ void inserimento_lista_timer(richiesta *p)
 }
 
 
-// la variabile globale ticks conta il numero di interruzioni ricevute dal 
-// timer, dall'avvio del sistema
-extern unsigned long ticks;
-
 // driver del timer
 extern "C" void c_driver_t(void)
 {
 	richiesta *p;
-
-	// conta il numero di interruzioni di timer ricevute
-	ticks++;
 
 	if(descrittore_timer != 0)
 		descrittore_timer->d_attesa--;
@@ -3362,6 +3355,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	des_proc* pdes_proc;
 	char *arg, *cont;
 	int indice;
+	unsigned long clocks_per_sec;
 	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
@@ -3479,30 +3473,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	flog(LOG_INFO, "Creati i processi esterni generici");
 
-	// il primo processo utilizza il direttorio principale e,
-	// inizialmente, si trova a livello sistema (deve eseguire la parte 
-	// rimanente di questa routine, che si trova a livello sistema)
-	if (!crea_main())
-		goto error;
-	flog(LOG_INFO, "Creato il processo main");
-
-	// da qui in poi, e' il processo main che esegue
-	schedulatore();
-	salta_a_main();
-	return;
-
-error:
-	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
-}
-
-extern "C" void hd_begin_p();
-void main_proc(int n)
-{
-	unsigned long clocks_per_sec;
-	int errore;
-	addr pila_utente;
-	des_proc *my_des = des_p(esecuzione->nome);
-
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
 	aggiungi_pe(ESTERN_BUSY, 0);
@@ -3528,6 +3498,30 @@ void main_proc(int n)
 			swap_dev.sb.user_end,
 			swap_dev.sb.io_entry,
 			swap_dev.sb.io_end);
+
+	// il primo processo utilizza il direttorio principale e,
+	// inizialmente, si trova a livello sistema (deve eseguire la parte 
+	// rimanente di questa routine, che si trova a livello sistema)
+	if (!crea_main())
+		goto error;
+	flog(LOG_INFO, "Creato il processo main");
+
+	// da qui in poi, e' il processo main che esegue
+	schedulatore();
+	salta_a_main();
+	return;
+
+error:
+	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
+}
+
+extern "C" void hd_begin_p();
+void main_proc(int n)
+{
+	int errore;
+	addr pila_utente;
+	des_proc *my_des = des_p(esecuzione->nome);
+
 
 	
 	// tabelle condivise per lo spazio utente condiviso

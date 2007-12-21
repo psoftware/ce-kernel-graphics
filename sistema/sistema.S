@@ -640,6 +640,7 @@ _init_gate:
 	leave
 	ret
 
+
 // carica un descrittore di segmento in GDT
 // parametri: (vedere la macro carica_descr)
 .global _init_descrittore
@@ -979,7 +980,7 @@ _init_8259:
 	ret
 
 // ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
-// Inizializzo la modalità fully nasted e i tipi base sono rispettivamente 0x08 per il master
+// Inizializzo la modalit¬à fully nasted e i tipi base sono rispettivamente 0x08 per il master
 // e 0x70 per lo slave.
 		.global _reset_8259
 _reset_8259:
@@ -1009,7 +1010,7 @@ _reset_8259:
 	outb	$0xa1
     outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
 
-	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR è connesso allo slave
+	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR ¬è connesso allo slave
 	outb	$0x21
 	movb	$0x02, %al
 	outb	$0xa1
@@ -1086,13 +1087,32 @@ _disattiva_timer:
 // che viene incrementata dalla rotine del timer ogni volta che questa va in 
 // esecuzione. 
 // 
+
+bump_ticks:
+	pushl %eax
+	incl _ticks
+	movb $EOI, %al         // ack al controllore
+	outb %al, $OCW2M
+	popl %eax
+	iret
+
 	.global _calibra_tsc
 _calibra_tsc:
 	pushl %ebp
 	movl %esp, %ebp
-	subl $8, %esp
+	subl $16, %esp
 	pushl %ecx
 	pushl %edx
+	pushl %ebx
+
+	movl $idt, %ebx
+	movl $0x20, %ecx
+	movl (%ebx, %ecx, 8), %eax
+	movl %eax, -16(%ebp)
+	movl 4(%ebx, %ecx, 8), %eax
+	movl %eax, -12(%ebp)
+
+	carica_gate 0x20 bump_ticks LIV_SISTEMA
 
 	cpuid			// l'istruzione cpuid serve da punto di sincronizzazione.
 				// Infatti, i processori moderni possono 
@@ -1129,8 +1149,17 @@ _calibra_tsc:
 				// precedentemente, e' il numero di cicli di 
 				// clock al secondo
 
+perbochs:
+	movl $idt, %ebx
+	movl $0x20, %ecx
+	movl -16(%ebp), %eax
+	movl %eax, (%ebx, %ecx, 8)
+	movl -12(%ebp), %eax
+	movl %eax, 4(%ebx, %ecx, 8)
+
 	movl -4(%ebp), %eax
 	
+	popl %ebx
 	popl %edx
 	popl %ecx
 	leave
