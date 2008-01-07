@@ -2680,12 +2680,12 @@ bool hd_sel_drv(des_ata* p_des, int drv)
 
 // aspetta finche' non e' possibile leggere dal registro dei dati
 // (DRQ deve essere 1, BSY 0 e ERR 0)
-bool hd_wait_data(des_ata* p_des)
+bool hd_wait_data(ioaddr iSTS)
 {
 	natb stato;
 
 	do {
-		inputb(p_des->indreg.iASR, stato);
+		inputb(iSTS, stato);
 	} while (stato & HD_STS_BSY);
 
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
@@ -2749,7 +2749,7 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	outputb(quanti, p_des->indreg.iSCR);
 	hd_gohd_inout(p_des->indreg.iDCR);	
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
-	hd_wait_data(p_des);
+	hd_wait_data(p_des->indreg.iSTS);
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
 	return;
 }
@@ -2779,7 +2779,7 @@ extern "C" void c_ireadhd_n(int ata, int drv, natw vetti[], natl primo, natb qua
 	outputb(quanti, p_des->indreg.iSCR);
 	hd_write_command(READ_SECT, p_des->indreg.iCMD);
 	while (cont > 0) {
-		if (!hd_wait_data(p_des)) {
+		if (!hd_wait_data(p_des->indreg.iSTS)) {
 			inputb(p_des->indreg.iERR, p_des->errore);
 			return;
 		}
@@ -2873,13 +2873,13 @@ extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
 	p_des->errore = D_ERR_NONE;
 	inputb(p_des->indreg.iSTS, stato);
 	if (p_des->comando == READ_SECT) { 
-		if (!hd_wait_data(p_des)) 
+		if (!hd_wait_data(p_des->indreg.iSTS)) 
 			inputb(p_des->indreg.iERR, p_des->errore);
 		else
 			inputbw(p_des->indreg.iBR, static_cast<natw*>(p_des->punt), DIM_BLOCK / 2);
 	} else {
 		if (p_des->cont != 0) {
-			if (!hd_wait_data(p_des)) 
+			if (!hd_wait_data(p_des->indreg.iSTS)) 
 				inputb(p_des->indreg.iERR, p_des->errore);
 			else
 				outputbw(static_cast<natw*>(p_des->punt), DIM_BLOCK / 2, p_des->indreg.iBR);
@@ -3094,7 +3094,7 @@ bool hd_init()
 			if (!hd_sel_drv(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
-			if (!hd_wait_data(p_des))
+			if (!hd_wait_data(p_des->indreg.iSTS))
 				goto error;
 			inputb(p_des->indreg.iSTS, stato); // ack
 			inputbw(p_des->indreg.iBR, st_sett, DIM_BLOCK / 2);
