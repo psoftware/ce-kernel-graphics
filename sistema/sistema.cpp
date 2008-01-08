@@ -195,7 +195,7 @@ void* alloca(natl dim)
 	// byte (in modo che le strutture dati restino allineate alla linea)
 	natl quanti = allinea(dim, sizeof(int));
 
-	// allochiamo "quanti" byte, invece dei "dim" richiesti
+	// allochiamo "quanti" byte, invece dei "quanti" richiesti
 	des_mem *prec = 0, *scorri = memlibera;
 	while (scorri != 0 && scorri->dimensione < quanti) {
 		prec = scorri;
@@ -431,6 +431,14 @@ natw indice_tabella(addr indirizzo)
 {
 	return (a2n(indirizzo) & 0x003FF000) >> 12;
 }
+
+// il direttorio principale contiene i puntatori a tutte le tabelle condivise 
+// (degli spazi sistema, io e utente). Viene usato  nella fase inziale, quando 
+// ancora non e' stato creato alcun processo e dal processo main.  Inoltre, 
+// ogni volta che viene creato un nuovo processo, il direttorio del processo 
+// viene inzialmente copiato dal direttorio principale (in modo che il nuovo 
+// processo condivida tutte le tabelle condivise)
+addr direttorio_principale;
 
 // carica un nuovo valore in cr3 [vedi sistema.S]
 extern "C" void loadCR3(addr dir);
@@ -1271,7 +1279,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 			pila_utente;		// punt. di lavoro
 	natl		*pl;
 	int		indice;
-	des_proc	*ppadre;
 	
 	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
         if (p == 0) goto errore1;
@@ -1301,8 +1308,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	// (in questo modo, il nuovo processo acquisisce automaticamente gli
 	// spazi virtuali condivisi, sia a livello utente che a livello
 	// sistema, tramite condivisione delle relative tabelle delle pagine)
-	ppadre = des_p(esecuzione->nome);
-	memcpy(pdirettorio, ppadre->cr3, DIM_PAGINA);
+	memcpy(pdirettorio, direttorio_principale, DIM_PAGINA);
 	
 	pila_sistema = crea_pila_sistema(pdirettorio);
 	if (pila_sistema == 0) goto errore5;
@@ -1409,60 +1415,16 @@ bool crea_dummy()
 	return true;
 }
 void main_proc(int n);
-bool crea_main(addr main_dir)
+bool crea_main()
 {
-	proc_elem	*p;			// proc_elem per il nuovo processo
-	int		identifier;		// indice del tss nella gdt 
-	des_proc	*pdes_proc;		// descrittore di processo
-
-	addr		pila_sistema,		// punt. di lavoro
-			pila_utente;		// punt. di lavoro
-	natl		*pl;
-	int		indice;
-	des_proc	*ppadre;
-	
-	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
-        if (p == 0) return false;
-
-	pdes_proc = static_cast<des_proc*>(alloca(sizeof(des_proc)));
-	if (pdes_proc == 0) return false;
-	memset(pdes_proc, 0, sizeof(des_proc));
-
-	identifier = alloca_tss(pdes_proc);
-	if (identifier == 0) return false;
-
-        p->nome = identifier;
-        p->precedenza = MAX_PRIORITY;
-
-	pila_sistema = crea_pila_sistema(main_dir);
-	if (pila_sistema == 0) return false;
-
-	pl = static_cast<natl*>(pila_sistema);
-	pl[1019] = (natl)main_proc;	// EIP (codice sistema)
-	pl[1020] = SEL_CODICE_SISTEMA;  // CS (codice sistema)
-	pl[1021] = 0x00000200;  	// EFLAG
-	pl[1022] = 0xffffffff;		// indirizzo ritorno?
-	pl[1023] = 0;			// parametro
-	// i processi esterni lavorano esclusivamente a livello
-	// sistema. Per questo motivo, prepariamo una sola pila (la
-	// pila sistema)
-
-	pdes_proc->esp = fine_sistema_privato - 5 * sizeof(int);
-	pdes_proc->ss  = SEL_DATI_SISTEMA;
-
-	pdes_proc->ds  = SEL_DATI_SISTEMA;
-	pdes_proc->es  = SEL_DATI_SISTEMA;
-
-	pdes_proc->cr3 = main_dir;
-
-	pdes_proc->fpu.cr = 0x037f;
-	pdes_proc->fpu.tr = 0xffff;
-	pdes_proc->cpl = LIV_SISTEMA;
-
+	proc_elem* m = crea_processo(main_proc, 0, MAX_PRIORITY, LIV_SISTEMA);
+	if (m == 0) {
+		flog(LOG_ERR, "Impossibile creare il processo main");
+		return false;
+	}
 	processi = 1;
-	inserimento_lista(pronti, p);
+	inserimento_lista(pronti, m);
 	return true;
-
 }
 
 // creazione della pila utente
@@ -1694,8 +1656,8 @@ bool aggiungi_pe(proc_elem *p, int irq)
 		return false;
 
 	a_p[irq] = p;
-	//distruggi_processo(a_p_save[irq]);
-	//dealloca(a_p_save[irq]);
+	distruggi_processo(a_p_save[irq]);
+	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
 	return true;
 
@@ -1731,14 +1693,12 @@ error1:	sem_signal(pf_mutex);
 bool init_pe()
 {
 	for (int i = 0; i < MAX_IRQ; i++) {
-		//proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA);
-		//if (p == 0) {
-		//	flog(LOG_ERR, "Impossibile creare i processi esterni generici");
-		//	return false;
-		//}
-		//a_p_save[i] = a_p[i] = p;
-		a_p[i] = 0;
-		a_p_save[i] = (proc_elem*)1;
+		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA);
+		if (p == 0) {
+			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
+			return false;
+		}
+		a_p_save[i] = a_p[i] = p;
 	}
 	return true;
 }
@@ -2154,10 +2114,17 @@ void inserimento_lista_timer(richiesta *p)
 }
 
 
+// la variabile globale ticks conta il numero di interruzioni ricevute dal 
+// timer, dall'avvio del sistema
+extern unsigned long ticks;
+
 // driver del timer
 extern "C" void c_driver_t(void)
 {
 	richiesta *p;
+
+	// conta il numero di interruzioni di timer ricevute
+	ticks++;
 
 	if(descrittore_timer != 0)
 		descrittore_timer->d_attesa--;
@@ -2720,12 +2687,12 @@ bool hd_sel_drv(des_ata* p_des, int drv)
 
 // aspetta finche' non e' possibile leggere dal registro dei dati
 // (DRQ deve essere 1, BSY 0 e ERR 0)
-bool hd_wait_data(ioaddr iSTS)
+bool hd_wait_data(des_ata* p_des)
 {
 	natb stato;
 
 	do {
-		inputb(iSTS, stato);
+		inputb(p_des->indreg.iASR, stato);
 	} while (stato & HD_STS_BSY);
 
 	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
@@ -2789,45 +2756,9 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	outputb(quanti, p_des->indreg.iSCR);
 	hd_gohd_inout(p_des->indreg.iDCR);	
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
-	hd_wait_data(p_des->indreg.iSTS);
+	hd_wait_data(p_des);
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
 	return;
-}
-
-extern "C" void c_ireadhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
-{
-	des_ata *p_des;
-	natb cont = quanti;
-	natw *punt = vetti;
-
-	p_des = &hd[ata];
-
-	// Controllo sulla selezione di un drive presente
-	if (!p_des->disco[drv].presente) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-
-	// Controllo sull'indirizzamento
-	if (primo + quanti > p_des->disco[drv].tot_sett) {
-		errore = D_ERR_BOUNDS;
-		return;
-	}
-
-	hd_sel_drv(p_des, drv);
-	hd_write_address(p_des, primo);
-	outputb(quanti, p_des->indreg.iSCR);
-	hd_write_command(READ_SECT, p_des->indreg.iCMD);
-	while (cont > 0) {
-		if (!hd_wait_data(p_des->indreg.iSTS)) {
-			inputb(p_des->indreg.iERR, p_des->errore);
-			return;
-		}
-		inputbw(p_des->indreg.iBR, punt, DIM_BLOCK / 2);
-		cont --;
-		punt += DIM_BLOCK / 2;
-	}
-	errore = D_ERR_NONE;
 }
 
 
@@ -2913,13 +2844,13 @@ extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
 	p_des->errore = D_ERR_NONE;
 	inputb(p_des->indreg.iSTS, stato);
 	if (p_des->comando == READ_SECT) { 
-		if (!hd_wait_data(p_des->indreg.iSTS)) 
+		if (!hd_wait_data(p_des)) 
 			inputb(p_des->indreg.iERR, p_des->errore);
 		else
 			inputbw(p_des->indreg.iBR, static_cast<natw*>(p_des->punt), DIM_BLOCK / 2);
 	} else {
 		if (p_des->cont != 0) {
-			if (!hd_wait_data(p_des->indreg.iSTS)) 
+			if (!hd_wait_data(p_des)) 
 				inputb(p_des->indreg.iERR, p_des->errore);
 			else
 				outputbw(static_cast<natw*>(p_des->punt), DIM_BLOCK / 2, p_des->indreg.iBR);
@@ -3134,7 +3065,7 @@ bool hd_init()
 			if (!hd_sel_drv(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
-			if (!hd_wait_data(p_des->indreg.iSTS))
+			if (!hd_wait_data(p_des))
 				goto error;
 			inputb(p_des->indreg.iSTS, stato); // ack
 			inputbw(p_des->indreg.iBR, st_sett, DIM_BLOCK / 2);
@@ -3310,28 +3241,39 @@ extern "C" void salta_a_main();
 extern "C" void salta_a_utente(entry_t user_entry, addr stack);
 void main_proc(int n);
 
-bool crea_spazio_condiviso(addr main_dir, addr& last_address)
+bool crea_spazio_condiviso(addr& last_address)
 {
-	addr tabella, ind_fis_pag, ind_virt_pag;
-	natl* tmp, j, *pdt, *pdp;
+	addr main_dir, tabella, ind_fis_pag, ind_virt_pag;
+	natl* tmp, j, *pd1, *pd2, *pdp;
 	des_pf* ppf;
 	int indice;
 	const int nspazi = 2;
 	natl inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
 	     fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
 
+	main_dir = des_p(esecuzione->nome)->cr3;
+
+	
 	// lettura del direttorio principale dallo swap
 	flog(LOG_INFO, "lettura del direttorio principale...");
-	if (!leggi_swap(main_dir, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
+	tmp = static_cast<natl*>(alloca(DIM_PAGINA));
+	if (tmp == 0) {
+		flog(LOG_ERR, "memoria insufficiente");
+		return false;
+	}
+	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
 		return false;
 	
-	pdt = static_cast<natl*>(main_dir);
+	pd1 = static_cast<natl*>(direttorio_principale);
+	pd2 = static_cast<natl*>(main_dir);
 	for (int sp = 0; sp < nspazi; sp++) {
 		for (addr ind = n2a(inizio[sp]); ind < n2a(fine[sp]); ind = n2a(a2n(ind) + SIZE_SUPERPAGINA))
 		{
 			j = indice_direttorio(ind);
 
-			if (pdt[j] & BIT_P) {	  
+			if (tmp[j] & BIT_P) {	  
+				pd1[j] = tmp[j];
+
 				last_address = n2a(a2n(ind) + SIZE_SUPERPAGINA);
 
 				indice = alloca_pagina_fisica();
@@ -3340,10 +3282,13 @@ bool crea_spazio_condiviso(addr main_dir, addr& last_address)
 					return false;
 				}
 				ppf = &pagine_fisiche[indice];
-				tabella = indirizzo_pf(indice);
-				carica_tabella(main_dir, ind, static_cast<natb*>(tabella));
-				collega_tabella(main_dir, tabella, ind);
+				ppf->contenuto = TABELLA;
 				ppf->residente = true;
+				tabella = indirizzo_pf(indice);
+
+				carica_tabella(direttorio_principale, ind, static_cast<natb*>(tabella));
+				pd1[j] &= ~BLOCK_MASK;
+				pd1[j] |= a2n(tabella) & ADDR_MASK;
 				pdp = static_cast<natl*>(tabella);
 				ind_virt_pag = ind;
 				for (int i = 0; i < 1024; i++) {
@@ -3354,16 +3299,20 @@ bool crea_spazio_condiviso(addr main_dir, addr& last_address)
 							return false;
 						}
 						ppf = &pagine_fisiche[indice];
+						ppf->contenuto = PAGINA_VIRTUALE;
+						ppf->residente = true;
 						ind_fis_pag = indirizzo_pf(indice);
 						carica_pagina(tabella, ind_virt_pag, static_cast<natb*>(ind_fis_pag));
 						collega_pagina(tabella, ind_fis_pag, ind_virt_pag);
-						ppf->residente = true;
 					}
 					ind_virt_pag = n2a(a2n(ind_virt_pag) + DIM_PAGINA);
 				}
+				pd2[j] = pd1[j];
 			}
 		}
 	}
+	dealloca(tmp);
+	loadCR3(readCR3());
 	return true;
 }
 
@@ -3377,8 +3326,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	des_proc* pdes_proc;
 	char *arg, *cont;
 	int indice;
-	unsigned long clocks_per_sec;
-	addr main_dir;
 	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
@@ -3448,6 +3395,31 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Pagine fisiche: %d", num_pagine_fisiche);
 
 
+	// il direttorio principale viene utilizzato fino a quando non creiamo
+	// il primo processo.  Poi, servira' come "modello" da cui creare i
+	// direttori dei nuovi processi.
+	indice = alloca_pagina_fisica();
+	if (indice == -1) {
+		flog(LOG_ERR, "Impossibile allocare il direttorio principale");
+		goto error;
+	}
+	direttorio_principale = indirizzo_pf(indice);
+	pagine_fisiche[indice].contenuto = DIRETTORIO;
+	pagine_fisiche[indice].residente = true;
+		
+	memset(direttorio_principale, 0, DIM_PAGINA);
+
+	// memoria fisica in memoria virtuale
+	if (!mappa_mem_fisica(direttorio_principale, max_mem_upper))
+		goto error;
+	flog(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
+
+	loadCR3(direttorio_principale);
+	// avendo predisposto il direttorio in modo che tutta la memoria fisica
+	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
+	// la paginazione, sicuri che avremo continuita' di indirizzamento
+	attiva_paginazione();
+	flog(LOG_INFO, "Paginazione attivata");
 
 
 	// inizializziamo la mappa di bit che serve a tenere traccia dei
@@ -3461,11 +3433,38 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	init_8259();
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	
+	// processo dummy
+	if (!crea_dummy())
+		goto error;
+	flog(LOG_INFO, "Creato il processo dummy");
 
 	// processi esterni generici
-	 if (!init_pe())
-	 	goto error;
-	 flog(LOG_INFO, "Creati i processi esterni generici");
+	if (!init_pe())
+		goto error;
+	flog(LOG_INFO, "Creati i processi esterni generici");
+
+	// il primo processo utilizza il direttorio principale e,
+	// inizialmente, si trova a livello sistema (deve eseguire la parte 
+	// rimanente di questa routine, che si trova a livello sistema)
+	if (!crea_main())
+		goto error;
+	flog(LOG_INFO, "Creato il processo main");
+
+	// da qui in poi, e' il processo main che esegue
+	schedulatore();
+	salta_a_main();
+	return;
+
+error:
+	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
+}
+
+void main_proc(int n)
+{
+	unsigned long clocks_per_sec;
+	int errore;
+	addr pila_utente;
+	des_proc *my_des = des_p(esecuzione->nome);
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
@@ -3493,19 +3492,11 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 			swap_dev.sb.io_entry,
 			swap_dev.sb.io_end);
 
-	indice = alloca_pagina_fisica();
-	if (indice == -1) {
-		flog(LOG_ERR, "spazio insufficiente per direttorio di main");
-		goto error;
-	}
-	main_dir = indirizzo_pf(indice);
-	pagine_fisiche[indice].contenuto = DIRETTORIO;
-	pagine_fisiche[indice].residente = true;
-
+	
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	addr last_address;
-	if (!crea_spazio_condiviso(main_dir, last_address))
+	if (!crea_spazio_condiviso(last_address))
 		goto error;
 
 	// inizializzazione dello heap utente
@@ -3513,46 +3504,6 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	heap.dimensione = a2n(last_address) - a2n(heap.start);
 	flog(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
 			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
-	
-	// memoria fisica in memoria virtuale
-	if (!mappa_mem_fisica(main_dir, max_mem_upper))
-		goto error;
-	flog(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
-
-	loadCR3(main_dir);
-	// avendo predisposto il direttorio in modo che tutta la memoria fisica
-	// si trovi gli stessi indirizzi in memoria virtuale, possiamo attivare
-	// la paginazione, sicuri che avremo continuita' di indirizzamento
-	attiva_paginazione();
-	flog(LOG_INFO, "Paginazione attivata");
-
-	// il primo processo utilizza il direttorio principale e,
-	// inizialmente, si trova a livello sistema (deve eseguire la parte 
-	// rimanente di questa routine, che si trova a livello sistema)
-	if (!crea_main(main_dir))
-		goto error;
-	flog(LOG_INFO, "Creato il processo main");
-
-	// da qui in poi, e' il processo main che esegue
-	schedulatore();
-	salta_a_main();
-	return;
-
-error:
-	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
-}
-
-extern "C" void hd_begin_p();
-void main_proc(int n)
-{
-	int errore;
-	addr pila_utente;
-	des_proc *my_des = des_p(esecuzione->nome);
-
-	// processo dummy
-	if (!crea_dummy())
-		goto error;
-	flog(LOG_INFO, "Creato il processo dummy");
 
 	// semaforo per la mutua esclusione nella gestione dei page fault
 	pf_mutex = c_sem_ini(1);
@@ -3589,7 +3540,6 @@ void main_proc(int n)
 	my_des->fpu.tr = 0xffff;
 	my_des->cpl = LIV_UTENTE;
 
-	hd_begin_p();
 	attiva_timer(DELAY);
 	salta_a_utente(swap_dev.sb.user_entry, n2a(fine_utente_privato));
 error:

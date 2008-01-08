@@ -600,7 +600,7 @@ init_idt:
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
-	carica_gate	io_tipo_rhdn	a_ireadhd_n	LIV_SISTEMA
+	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
 	carica_gate	io_tipo_whdn	a_writehd_n	LIV_SISTEMA
 
 	leave
@@ -639,7 +639,6 @@ _init_gate:
 	popl %ebx
 	leave
 	ret
-
 
 // carica un descrittore di segmento in GDT
 // parametri: (vedere la macro carica_descr)
@@ -980,7 +979,7 @@ _init_8259:
 	ret
 
 // ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
-// Inizializzo la modalit¬à fully nasted e i tipi base sono rispettivamente 0x08 per il master
+// Inizializzo la modalità fully nasted e i tipi base sono rispettivamente 0x08 per il master
 // e 0x70 per lo slave.
 		.global _reset_8259
 _reset_8259:
@@ -1010,7 +1009,7 @@ _reset_8259:
 	outb	$0xa1
     outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
 
-	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR ¬è connesso allo slave
+	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR è connesso allo slave
 	outb	$0x21
 	movb	$0x02, %al
 	outb	$0xa1
@@ -1087,32 +1086,13 @@ _disattiva_timer:
 // che viene incrementata dalla rotine del timer ogni volta che questa va in 
 // esecuzione. 
 // 
-
-bump_ticks:
-	pushl %eax
-	incl _ticks
-	movb $EOI, %al         // ack al controllore
-	outb %al, $OCW2M
-	popl %eax
-	iret
-
 	.global _calibra_tsc
 _calibra_tsc:
 	pushl %ebp
 	movl %esp, %ebp
-	subl $16, %esp
+	subl $8, %esp
 	pushl %ecx
 	pushl %edx
-	pushl %ebx
-
-	movl $idt, %ebx
-	movl $0x20, %ecx
-	movl (%ebx, %ecx, 8), %eax
-	movl %eax, -16(%ebp)
-	movl 4(%ebx, %ecx, 8), %eax
-	movl %eax, -12(%ebp)
-
-	carica_gate 0x20 bump_ticks LIV_SISTEMA
 
 	cpuid			// l'istruzione cpuid serve da punto di sincronizzazione.
 				// Infatti, i processori moderni possono 
@@ -1149,17 +1129,8 @@ _calibra_tsc:
 				// precedentemente, e' il numero di cicli di 
 				// clock al secondo
 
-perbochs:
-	movl $idt, %ebx
-	movl $0x20, %ecx
-	movl -16(%ebp), %eax
-	movl %eax, (%ebx, %ecx, 8)
-	movl -12(%ebp), %eax
-	movl %eax, 4(%ebx, %ecx, 8)
-
 	movl -4(%ebp), %eax
 	
-	popl %ebx
 	popl %edx
 	popl %ecx
 	leave
@@ -1775,11 +1746,6 @@ a_log:
 // Funzioni di utilita' per la gestione degli hard disk
 ////////////////////////////////////////////////////////////////////
 
-	.global _hd_begin_p
-_hd_begin_p:
-	carica_gate io_tipo_rhdn a_readhd_n LIV_SISTEMA
-	ret
-
 
 // lettura di n settori
 	.global a_readhd_n
@@ -1791,18 +1757,6 @@ a_readhd_n:
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
 	call _c_readhd_n
-	addl $24, %esp
-	carica_registri
-	iret
-
-// lettura di n settori
-// da utilizzare in fase di inizializzazione
-	.global a_ireadhd_n
-	.extern _c_ireadhd_n
-a_ireadhd_n:
-	salva_registri
-	copia_param 6 7
-	call _c_ireadhd_n
 	addl $24, %esp
 	carica_registri
 	iret
