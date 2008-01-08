@@ -1,3 +1,5 @@
+#include <cstdio>
+using namespace std;
 #include "costanti.h"
 #include "swap.h"
 
