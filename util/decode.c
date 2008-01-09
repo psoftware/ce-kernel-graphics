@@ -1,8 +1,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "costanti.h"
-#include "nucleo.h"
+union descrittore_pagina {
+	// caso di pagina presente
+	struct {
+		// byte di accesso
+		unsigned int P:		1;	// bit di presenza
+		unsigned int RW:	1;	// Read/Write
+		unsigned int US:	1;	// User/Supervisor
+		unsigned int PWT:	1;	// Page Write Through
+		unsigned int PCD:	1;	// Page Cache Disable
+		unsigned int A:		1;	// Accessed
+		unsigned int D:		1;	// Dirty
+		unsigned int pgsz:	1;	// non visto a lezione
+		// fine byte di accesso
+		
+		unsigned int global:	1;	// non visto a lezione
+		unsigned int avail:	3;	// non usati
+
+		unsigned int address:	20;	// indirizzo fisico
+	} p;
+	// caso di pagina assente
+	struct {
+		// informazioni sul tipo di pagina
+		unsigned int P:		1;
+		unsigned int RW:	1;
+		unsigned int US:	1;
+		unsigned int PWT:	1;
+		unsigned int PCD:	1;
+
+		unsigned int block:	27;
+	} a;	
+};
+
+struct superblock_t {
+	char		magic[4];
+	unsigned int	bm_start;
+	int		blocks;
+	unsigned int	directory;
+	int		(*user_entry)(int);
+	void*		user_end;
+	int		(*io_entry)(int);
+	void*		io_end;
+	unsigned int	checksum;
+};
 
 int get_bit() {
 	static int nbit = 0;
@@ -17,46 +58,6 @@ int get_bit() {
 	nbit--;
 	return bit;
 }
-
-const char* seg_des(unsigned int seg)
-{
-	switch (seg) {
-		case SEL_CODICE_SISTEMA:
-			return "CODICE_SISTEMA";
-		case SEL_DATI_SISTEMA:
-			return "DATI_SISTEMA";
-		case SEL_CODICE_UTENTE:
-			return "CODICE_UTENTE";
-		case SEL_DATI_UTENTE:
-			return "DATI_UTENTE";
-		default:
-			return "UNKNOWN";
-	}
-}
-
-const char* priv(natl pl)
-{
-	switch (pl) {
-		case LIV_SISTEMA:
-			return "LIV_SISTEMA";
-		case LIV_UTENTE:
-			return "LIV_UTENTE";
-		default:
-			return "UNKNOWN";
-	}
-}
-
-void print_desp(des_proc* desp)
-{
-	printf("\tesp0 ss0: %08x %s\n", desp->esp0, seg_des(desp->ss0));
-	printf("\tcr3: %d\n", desp->cr3);
-	printf("\teax: %08x ebx: %08x ecx: %08x edx: %08x\n", desp->eax, desp->ebx, desp->ecx, desp->edx);
-	printf("\tesp: %08x ebp: %08x esi: %08x edi: %08x\n", desp->esp, desp->ebp, desp->esi, desp->edi);
-	printf("\tss: %s\n", seg_des(desp->ss));
-	printf("\tds: %s\n", seg_des(desp->ds));
-	printf("\tcpl: %s\n", priv(desp->cpl));
-}
-
 
 int main(int argc, char* argv[])
 {
@@ -84,12 +85,11 @@ int main(int argc, char* argv[])
 		printf("magic: %c%c%c%c\n", sb.magic[0], sb.magic[1], sb.magic[2], sb.magic[3]);
 		printf("bm_start: %d\n", sb.bm_start);
 		printf("blocks: %d\n", sb.blocks);
-		printf("io:\n");
-		print_desp(&sb.io);
+		printf("directory: %d\n", sb.directory);
+		printf("user_entry: %x\n", sb.user_entry);
+		printf("user_end: %x\n", sb.user_end);
+		printf("io_entry: %x\n", sb.io_entry);
 		printf("io_end: %x\n", sb.io_end);
-		printf("utente:\n");
-		print_desp(&sb.utente);
-		printf("utente_end: %x\n", sb.utente_end);
 		printf("checksum: %u\n", sb.checksum);
 		break;
 	case 'b':

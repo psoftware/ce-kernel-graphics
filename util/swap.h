@@ -8,7 +8,19 @@
 	#include <stdlib.h>
 #endif
 
-#include "nucleo.h"
+typedef unsigned int block_t;
+
+struct superblock_t {
+	char	magic[4];
+	block_t	bm_start;
+	int	blocks;
+	block_t	directory;
+	void*   user_entry;
+	void*   user_end;
+	void*	io_entry;
+	void*   io_end;
+	unsigned int	checksum;
+};
 
 // interfaccia generica agli swap
 class Swap {
