@@ -3238,75 +3238,82 @@ extern "C" void salta_a_main();
 extern "C" void salta_a_utente(entry_t user_entry, addr stack);
 void main_proc(int n);
 
+bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
+{
+	natl *tmp = static_cast<natl*>(dir);
+	for (natl ind = start; ind < stop; ind += SIZE_SUPERPAGINA)
+	{
+		natl j = indice_direttorio(n2a(ind));
+
+		if (tmp[j] & BIT_P) {	  
+
+			last_addr = n2a(ind + SIZE_SUPERPAGINA);
+
+			int indice = alloca_pagina_fisica();
+			if (indice == -1) {
+				flog(LOG_ERR, "Impossibile allocare tabella condivisa");
+				return false;
+			}
+			des_pf *ppf = &pagine_fisiche[indice];
+			addr tabella = indirizzo_pf(indice);
+			carica_tabella(dir, n2a(ind), static_cast<natb*>(tabella));
+			collega_tabella(dir, tabella, n2a(ind));
+			ppf->residente = true;
+
+			natl *pdp = static_cast<natl*>(tabella);
+			natl ind_virt_pag = ind;
+			for (int i = 0; i < 1024; i++) {
+				if (pdp[i] & BIT_P) {
+					indice = alloca_pagina_fisica();
+					if (indice == -1) {
+						flog(LOG_ERR, "Impossibile allocare pagina residente");
+						return false;
+					}
+					des_pf *ppf = &pagine_fisiche[indice];
+					addr ind_fis_pag = indirizzo_pf(indice);
+					carica_pagina(tabella, n2a(ind_virt_pag), static_cast<natb*>(ind_fis_pag));
+					collega_pagina(tabella, ind_fis_pag, n2a(ind_virt_pag));
+					ppf->residente = true;
+				}
+				ind_virt_pag += DIM_PAGINA;
+			}
+		}
+	}
+	return true;
+}
+
+void copia_dir(addr src, addr dst, natl start, natl stop)
+{
+	natl *srcp = static_cast<natl*>(src);
+	natl *dstp = static_cast<natl*>(dst);
+
+	for (int i = indice_direttorio(n2a(start)); i < indice_direttorio(n2a(stop)); i++)
+		dstp[i] = srcp[i];
+}
+
 bool crea_spazio_condiviso(addr& last_address)
 {
-	addr main_dir, tabella, ind_fis_pag, ind_virt_pag;
-	natl* tmp, j, *pd1, *pd2, *pdp;
-	des_pf* ppf;
-	int indice;
-	const int nspazi = 2;
-	natl inizio[2] = { inizio_io_condiviso, inizio_utente_condiviso },
-	     fine[2]   = { fine_io_condiviso,   fine_utente_condiviso   };
-
-	main_dir = des_p(esecuzione->nome)->cr3;
-
 	
 	// lettura del direttorio principale dallo swap
 	flog(LOG_INFO, "lettura del direttorio principale...");
-	tmp = static_cast<natl*>(alloca(DIM_PAGINA));
+	addr tmp = alloca(DIM_PAGINA);
 	if (tmp == 0) {
 		flog(LOG_ERR, "memoria insufficiente");
 		return false;
 	}
 	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
 		return false;
-	
-	pd1 = static_cast<natl*>(main_dir);
-	for (int sp = 0; sp < nspazi; sp++) {
-		for (addr ind = n2a(inizio[sp]); ind < n2a(fine[sp]); ind = n2a(a2n(ind) + SIZE_SUPERPAGINA))
-		{
-			j = indice_direttorio(ind);
 
-			if (tmp[j] & BIT_P) {	  
-				pd1[j] = tmp[j];
-
-				last_address = n2a(a2n(ind) + SIZE_SUPERPAGINA);
-
-				indice = alloca_pagina_fisica();
-				if (indice == -1) {
-					flog(LOG_ERR, "Impossibile allocare tabella condivisa");
-					return false;
-				}
-				ppf = &pagine_fisiche[indice];
-				ppf->contenuto = TABELLA;
-				ppf->residente = true;
-				tabella = indirizzo_pf(indice);
-
-				carica_tabella(main_dir, ind, static_cast<natb*>(tabella));
-				pd1[j] &= ~BLOCK_MASK;
-				pd1[j] |= a2n(tabella) & ADDR_MASK;
-				pdp = static_cast<natl*>(tabella);
-				ind_virt_pag = ind;
-				for (int i = 0; i < 1024; i++) {
-					if (pdp[i] & BIT_P) {
-						indice = alloca_pagina_fisica();
-						if (indice == -1) {
-							flog(LOG_ERR, "Impossibile allocare pagina residente");
-							return false;
-						}
-						ppf = &pagine_fisiche[indice];
-						ppf->contenuto = PAGINA_VIRTUALE;
-						ppf->residente = true;
-						ind_fis_pag = indirizzo_pf(indice);
-						carica_pagina(tabella, ind_virt_pag, static_cast<natb*>(ind_fis_pag));
-						collega_pagina(tabella, ind_fis_pag, ind_virt_pag);
-					}
-					ind_virt_pag = n2a(a2n(ind_virt_pag) + DIM_PAGINA);
-				}
-			}
-		}
-	}
+	addr main_dir = readCR3();
+	copia_dir(tmp, main_dir, inizio_io_condiviso, fine_io_condiviso);
+	copia_dir(tmp, main_dir, inizio_utente_condiviso, fine_utente_condiviso);
 	dealloca(tmp);
+	
+	if (!carica_tutto(main_dir, inizio_io_condiviso, fine_io_condiviso, last_address))
+		return false;
+	if (!carica_tutto(main_dir, inizio_utente_condiviso, fine_utente_condiviso, last_address))
+		return false;
+
 	loadCR3(readCR3());
 	return true;
 }
