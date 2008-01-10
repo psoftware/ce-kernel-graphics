@@ -21,21 +21,6 @@ extern "C" void readse_ln(int serial, char vetti[], int &quanti, char &errore);
 extern "C" void writese_0(int serial, char vetto[], int &quanti);
 extern "C" void writese_n(int serial, char vetto[], int quanti);
 
-const unsigned int VKBD_LED_SCROLLOCK = 1L;
-const unsigned int VKBD_LED_NUMLOCK   = 2L;
-const unsigned int VKBD_LED_CAPSLOCK  = 4L;
-
-extern "C" void vkbd_wfi(int v);
-extern "C" unsigned short vkbd_read(int v);
-extern "C" void vkbd_intr_enable(int v, bool enable);
-extern "C" void vkbd_switch(int v);
-extern "C" void vkbd_send(int v, unsigned short code, bool clear = false);
-extern "C" void vkbd_leds(int v, unsigned char led, bool on);
-extern "C" void vmon_switch(int v);
-extern "C" void vmon_write_n(int v, unsigned int off, unsigned short vetti[], int quanti);
-extern "C" void vmon_setcursor(int v, unsigned int off);
-extern "C" bool vmon_getsize(int v, unsigned int& maxx, unsigned int& maxy);
-extern "C" bool vmon_cursor_shape(int v, int shape);
 
 const unsigned int LOG_MSG_SIZE = 72;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
