@@ -1137,11 +1137,6 @@ _calibra_tsc:
 	ret
 
 
-// trasforma_in_processo viene chiamata nella fase di inizializzazione, in modo 
-// che il codice di inizializzazione venga eseguito nel contesto di un processo 
-// (il processo main) che, quindi, puo' invocare le primitive di sistema, anche 
-// bloccanti (in particolare, e' necessario invocare le primitive per leggere 
-// le informazioni iniziali dallo swap)
 	.global _salta_a_main
 _salta_a_main:
 	movl %esp, shutdown_esp
@@ -1149,43 +1144,6 @@ _salta_a_main:
 	call carica_stato		// carichiamo tr
 	iret				// torniamo al chiamante "trasformati" in processo
 
-
-// salta_a_main viene chiamata come ultima operazione della fase di 
-// inizializzazione, per passare ad eseguire il codice, a livello utente, della 
-// funzione main. Per passare da livello sistema a livello utente, l'unico modo
-// e' usare una iret, preparando opportunamente le informazioni in pila.
-// La funzione richiede due parametri: l'entry point di main e l'indirizzo 
-// della pila utente
-	.global _salta_a_utente
-_salta_a_utente:
-        movl _esecuzione, %edx
-	movl $0, %ebx
-        movw (%edx), %bx		// esecuzione->identifier in ebx
-	
-	movl %ebx, %ecx			
-	shll $3, %ecx			// trasformo indice->selettore
-
-        leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
-	estrai_base			// ind. del TSS in %ebx
-        andl $0xfffffdff, 4(%eax)       // bit busy del TSS a zero
-
-       	ltr %cx				// nuovo valore in TR
-	movw $SEL_DATI_UTENTE, %ax	// sostituiamo i selettori dati sistema
-					// con selettori dati utente
-	movw %ax, %ds
-	movw %ax, %es
-	popl %eax			// indirizzo di ritorno, che scartiamo
-	popl %eax			// primo parametro: indirizzo di main -> %eax
-	popl %ebx			// secondo parametro: indirizzo pila utente ->%ebx
-	// prepariamo le informazioni che la iret si aspetta nel caso di 
-	// ritorno da livello sistema a livello utente
-	pushl $SEL_DATI_UTENTE		// selettore della nuova pila
-	subl $8, %ebx
-	pushl %ebx			// puntatore alla testa della nuova pila
-	pushl $0x00000200		// eflag (interrupt abilitati)
-	pushl $SEL_CODICE_UTENTE	// selettore del segmento codice 
-	pushl %eax			// nuovo eip
-	iret
 
 
 ////////////////////////////////////////////////////////////////
@@ -1322,6 +1280,11 @@ comm_exc:
 // a loro volta invocare altre routine del nucleo stesso. In particolare, sono 
 // necessarie le seguenti:
 //
+	.global _sem_ini
+_sem_ini:
+	int $tipo_si
+	ret
+
 	.global _sem_wait
 _sem_wait:
 	int $tipo_w
@@ -1330,6 +1293,11 @@ _sem_wait:
 	.global _sem_signal
 _sem_signal:
 	int $tipo_s
+	ret
+
+	.global _activate_p
+_activate_p:
+	int $tipo_a
 	ret
 
 	.global _terminate_p

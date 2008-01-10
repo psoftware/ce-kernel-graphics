@@ -727,15 +727,14 @@ extern "C" void fill_io_gates(void);
 
 // eseguita in fase di inizializzazione
 //
-extern "C" int cmain(void)
+extern "C" void cmain(int)
 {
 	int error;
 
 	fill_io_gates();
 	if (!console_init())
-		return -1;
+		abort_p();
 	if (!com_init())
-		return -3;
-
-	return 0;
+		abort_p();
+	terminate_p();
 }
