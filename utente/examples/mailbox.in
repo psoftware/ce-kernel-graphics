@@ -22,38 +22,6 @@ struct mess {
 
 mess mailbox;
 
-char* copy(char* src, char* dst) {
-	while (*src)
-		*dst++ = *src++;
-	*dst = '\0';
-	return dst;
-}
-
-char* convint(int n, char* out)
-{
-	char buf[12];
-	int i = 11;
-	bool neg = false;
-
-	if (n == 0) 
-		return copy("0", out);
-
-	buf[i--] = '\0';
-
-	if (n < 0) {
-		n = -n;
-		neg = true;
-	}
-	while (n > 0) {
-		buf[i--] = n % 10 + '0';
-		n = n / 10;
-	}
-	if (neg)
-		buf[i--] = '-';
-	return copy(buf + i + 1, out);
-}
-
-		
 process_body pms(int a)
 {
 	char buf[MSG_SIZE];
