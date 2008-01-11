@@ -417,20 +417,54 @@ const natl ADDR_MASK  = 0xFFFFF000;
 const natl BLOCK_MASK = 0xFFFFFFE0;
 const natl BLOCK_SHIFT = 5;
 
-
-// dato un indirizzo virtuale, ne restituisce l'indice nel direttorio
-// (i dieci bit piu' significativi dell'indirizzo)
-natw indice_direttorio(addr indirizzo)
+int i_dir(addr ind_virt)
 {
-	return (a2n(indirizzo) & 0xFFC00000) >> 22;
+	return (a2n(ind_virt) & 0xFFC00000) >> 22;
+}
+int i_tab(addr ind_virt)
+{
+	return (a2n(ind_virt) & 0x003FF000) >> 12;
+}
+natl get_des(addr dirtab, int index)
+{
+	natl *pd = static_cast<natl*>(dirtab);
+	return pd[index];
+}
+void set_des(addr dirtab, int index, natl des)
+{
+	natl *pd = static_cast<natl*>(dirtab);
+	pd[index] = des;
+}
+natl get_destab(addr dir, addr ind_virt)
+{
+	return get_des(dir, i_dir(ind_virt));
+}
+void set_destab(addr dir, addr ind_virt, natl destab)
+{
+	set_des(dir, i_dir(ind_virt), destab);
+}
+natl get_despag(addr tab, addr ind_virt)
+{
+	return get_des(tab, i_tab(ind_virt));
+}
+void set_despag(addr tab, addr ind_virt, natl despag)
+{
+	set_des(tab, i_tab(ind_virt), despag);
+}
+void set_all_des(addr dirtab, natl des)
+{
+	natl *pd = static_cast<natl*>(dirtab);
+	for (int i = 0; i < 1024; i++)
+		pd[i] = des;
+}
+void copy_dir(addr src, addr dst, addr start, addr stop)
+{
+	natl *pdsrc = static_cast<natl*>(src),
+	     *pddst = static_cast<natl*>(dst);
+	for (int i = i_dir(start); i < i_dir(stop); i++)
+		pddst[i] = pdsrc[i];
 }
 
-// dato un indirizzo virtuale, ne restituisce l'indice nella tabella delle
-// pagine (i bit 12:21 dell'indirizzo)
-natw indice_tabella(addr indirizzo)
-{
-	return (a2n(indirizzo) & 0x003FF000) >> 12;
-}
 
 // carica un nuovo valore in cr3 [vedi sistema.S]
 extern "C" void loadCR3(addr dir);
@@ -572,15 +606,15 @@ void collega_tabella(addr direttorio, addr tabella, addr ind_virtuale)
 	ppf->pt.punt = direttorio;
 	ppf->pt.ind_virtuale = ind_virtuale;
 	// usa "ind_virtuale" e "direttorio" per accedere al descrittore di tabella,
-	natl *pdt = static_cast<natl*>(direttorio);
-	natl i = indice_direttorio(ind_virtuale);
+	natl dt = get_destab(direttorio, ind_virtuale);
 	// copia l'indirizzo in memoria die massa della tabella nel campo
 	// ppf->pt.blocco
-	ppf->pt.blocco = (pdt[i] & BLOCK_MASK) >> BLOCK_SHIFT;
+	ppf->pt.blocco = (dt & BLOCK_MASK) >> BLOCK_SHIFT;
 	// modifica il descrittore di tabella in modo che punti
 	// all'indirizzo fisico "tabella"
-	pdt[i] &= ~BLOCK_MASK;
-	pdt[i] |= (a2n(tabella) & ADDR_MASK) | BIT_P;
+	dt &= ~BLOCK_MASK;
+	dt |= (a2n(tabella) & ADDR_MASK) | BIT_P;
+	set_destab(direttorio, ind_virtuale, dt);
 }
 
 void scollega_tabella(addr direttorio, addr ind_virtuale)
@@ -588,17 +622,17 @@ void scollega_tabella(addr direttorio, addr ind_virtuale)
 	addr tabella;
 	// usa "ind_virtuale" e "direttorio" per accedere al descrittore di tabella
 	// estrae l'indirizzo fisico della tabella e lo pone nella variabile "tabella"
-	natl *pdt = static_cast<natl*>(direttorio);
-	natl i = indice_direttorio(ind_virtuale);
-	tabella = n2a(pdt[i] & ADDR_MASK);
+	natl dt = get_destab(direttorio, ind_virtuale);
+	tabella = n2a(dt & ADDR_MASK);
 
 	int indice = indice_pf(tabella);
 	des_pf *ppf = &pagine_fisiche[indice];
 	// copia ppf->pt.blocco nel descrittore di tabella
-	pdt[i] &= ~BLOCK_MASK;
-	pdt[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
+	dt &= ~BLOCK_MASK;
+	dt |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore
-	pdt[i] &= ~BIT_P;
+	dt &= ~BIT_P;
+	set_destab(direttorio, ind_virtuale, dt);
 }
 
 addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale)
@@ -612,15 +646,15 @@ addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale)
 	ppf->pt.punt = tabella;
 	ppf->pt.ind_virtuale = ind_virtuale;
 	// usa "ind_virtuale" e "tabella" per accedere al descrittore di pagina
-	natl *pdp = static_cast<natl*>(tabella);
-	natl i = indice_tabella(ind_virtuale);
+	natl dp = get_despag(tabella, ind_virtuale);
 	// copia l'indirizzo in memoria die massa della pagina virtuale nel campo
 	// ppf->pt.blocco
-	ppf->pt.blocco = (pdp[i] & BLOCK_MASK) >> BLOCK_SHIFT;
+	ppf->pt.blocco = (dp & BLOCK_MASK) >> BLOCK_SHIFT;
 	// modifica il descrittore di pagina in modo che punti
 	// all'indirizzo fisico "pagina"
-	pdp[i] &= ~BLOCK_MASK;
-	pdp[i] |= (a2n(pagina) & ADDR_MASK) | BIT_P;
+	dp &= ~BLOCK_MASK;
+	dp |= (a2n(pagina) & ADDR_MASK) | BIT_P;
+	set_despag(tabella, ind_virtuale, dp);
 
 	// *** incremento del contatore nella tabella
 	ppf = &pagine_fisiche[indice_pf(tabella)];
@@ -632,17 +666,17 @@ void scollega_pagina(addr tabella, addr ind_virtuale)
 	addr pagina;
 	// usa "ind_virtuale" e "tabella" per accedere al descrittore di pagina
 	// estrae l'indirizzo fisico della pagina virtuale e lo pone nella variabile "pagina"
-	natl *pdp = static_cast<natl*>(tabella);
-	natl i = indice_tabella(ind_virtuale);
-	pagina = n2a(pdp[i] & ADDR_MASK);
+	natl dp = get_despag(tabella, ind_virtuale);
+	pagina = n2a(dp & ADDR_MASK);
 
 	int indice = indice_pf(pagina);
 	des_pf* ppf = &pagine_fisiche[indice];
 	// copia ppf->pt.blocco nel descrittore di pagina
-	pdp[i] &= ~BLOCK_MASK;
-	pdp[i] |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
+	dp &= ~BLOCK_MASK;
+	dp |= (ppf->pt.blocco << BLOCK_SHIFT) & BLOCK_MASK;
 	// pone il bit P a zero nel descrittore di pagina
-	pdp[i] &= ~BIT_P;
+	dp &= ~BIT_P;
+	set_despag(tabella, ind_virtuale, dp);
 }
 
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
@@ -650,12 +684,10 @@ void scollega_pagina(addr tabella, addr ind_virtuale)
 // (la funzione viene usata in fase di inizializzazione)
 bool mappa_mem_fisica(addr direttorio, addr max_mem)
 {
-	addr tabella;
-	natl *pdt = static_cast<natl*>(direttorio);
-
 	for (addr ind = n2a(0); ind < max_mem; ind = n2a(a2n(ind) + DIM_PAGINA)) {
-		natl i = indice_direttorio(ind);
-		if (! (pdt[i] & BIT_P)) {
+		natl dt = get_destab(direttorio, ind);
+		addr tabella;
+		if (! (dt & BIT_P)) {
 			int indice = alloca_pagina_fisica();
 			if (indice == -1) {
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
@@ -668,13 +700,14 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 			ppf->residente = true;
 			tabella = indirizzo_pf(indice);
 
-			pdt[i] = (a2n(tabella) & ADDR_MASK) | BIT_RW | BIT_P;
+			dt = (a2n(tabella) & ADDR_MASK) | BIT_RW | BIT_P;
+			set_destab(direttorio, ind, dt);
 		} else {
-			tabella = n2a(pdt[i] & ADDR_MASK);
+			tabella = n2a(dt & ADDR_MASK);
 		}
-		natl *pdp = static_cast<natl*>(tabella);
-		natl j = indice_tabella(ind);
-		pdp[j] = (a2n(ind) & ADDR_MASK) | BIT_RW | BIT_P; // | BIT_GLOBAL
+		natl dp = get_despag(tabella, ind);
+		dp = (a2n(ind) & ADDR_MASK) | BIT_RW | BIT_P; // | BIT_GLOBAL
+		set_despag(tabella, ind, dp);
 	}
 	return true;
 }
@@ -914,15 +947,15 @@ void aggiorna_statistiche()
 			tab = indirizzo_pf(i);
 			for (int j = 0; j < 1024; j++) {
 				// accede all'entrata j-esima della tabella/direttorio "tab"
-				natl *pd = static_cast<natl*>(tab);
+				natl des = get_des(tab, j);
 				// se la pagina/tabella puntata e' presente
-				if (pd[j] & BIT_P) {
+				if (des & BIT_P) {
 					// ne estae l'indirizzo fisico (variabile "pag")
-					pag = n2a(pd[j] & ADDR_MASK);
+					pag = n2a(des & ADDR_MASK);
 					// e il valore del bit A (variabile "bitA")
-					bitA = (pd[j] & BIT_A) ? 1 : 0;
+					bitA = (des & BIT_A) ? 1 : 0;
 					// quindi azzera il bit A
-					pd[j] &= ~BIT_A;
+					set_des(tab, j, des & ~BIT_A);
 					ppf2 = &pagine_fisiche[indice_pf(pag)];
 					ppf2->pt.contatore >>= 1;
 					ppf2->pt.contatore |= bitA << 31U;
@@ -953,14 +986,13 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest);
 bool swap(addr direttorio, addr ind_virtuale)
 {
 	natb bitP;
+	natl dt, dp;
 	addr ind_fis_tab, ind_fis_pag;
-	natl *pdt, *pdp, i, j;
 	int indice_tab = -1, indice_pag = -1;
 	// usa "direttorio" e "ind_virtuale" per accedere al descrittore di tabella
 	// e ne estrae il bit P (variabile "bitP")
-	pdt = static_cast<natl*>(direttorio);
-	i = indice_direttorio(ind_virtuale);
-	bitP = (pdt[i] & BIT_P) ? 1 : 0;
+	dt = get_destab(direttorio, ind_virtuale);
+	bitP = (dt & BIT_P) ? 1 : 0;
 	if (bitP == 0) {
 		// cerca di allocare una pagina fisica per la tabella
 		indice_tab = alloca_pagina_fisica();
@@ -980,13 +1012,12 @@ bool swap(addr direttorio, addr ind_virtuale)
 	} else {
 		// accede al descrittore di tabella e ne estrae l'indirizzo fisico
 		// (variabile "ind_fis_tab")
-		ind_fis_tab = n2a(pdt[i] & ADDR_MASK);
+		ind_fis_tab = n2a(dt & ADDR_MASK);
 	}
 	// usa "ind_fis_tab" e "ind_virtuale" per accedere al descrittore dipagina
 	// e ne estrae il bit P (variabile "bitP")
-	pdp = static_cast<natl*>(ind_fis_tab);
-	j = indice_tabella(ind_virtuale);
-	bitP = (pdp[j] & BIT_P) ? 1 : 0;
+	dp = get_despag(ind_fis_tab, ind_virtuale);
+	bitP = (dp & BIT_P) ? 1 : 0;
 	if (bitP == 0) {
 		// cerca di allocare una pagina fisica per la pagina
 		indice_pag = alloca_pagina_fisica();
@@ -1026,10 +1057,9 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 {
 	natl blocco;
 	// usa "tabella" e "ind_virtuale" per accedere al descrittore di pagina
-	natl *pdp = static_cast<natl*>(tabella);
-	natl j = indice_tabella(ind_virtuale);
+	natl dp = get_despag(tabella, ind_virtuale);
 	// estrae l'indirizzo in memoria di massa e lo pone nalla variabile "blocco"
-	blocco = (pdp[j] & BLOCK_MASK) >> BLOCK_SHIFT;
+	blocco = (dp & BLOCK_MASK) >> BLOCK_SHIFT;
 	if (blocco == 0) {
 		// alloca un blocco in memoria di massa
 		if (! bm_alloc(&swap_dev.free, blocco) ) {
@@ -1037,7 +1067,8 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 			return;
 		}
 		// e ne scrive l'indice nel descrittore di pagina
-		pdp[j] |= (blocco << BLOCK_SHIFT) & BLOCK_MASK;
+		dp |= (blocco << BLOCK_SHIFT) & BLOCK_MASK;
+		set_despag(tabella, ind_virtuale, dp);
 		for (int i = 0; i < DIM_PAGINA; i++)
 			dest[i] = 0;
 	} else 
@@ -1048,10 +1079,9 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 {
 	natl blocco;
 	// usa "direttorio" e "ind_virtuale" per accedere al descrittore di tabella
-	natl *pdt = static_cast<natl*>(direttorio);
-	natl j = indice_direttorio(ind_virtuale);
+	natl dt = get_destab(direttorio, ind_virtuale);
 	// estrae l'indirizzo in memoria di massa e lo pone nalla variabile "blocco"
-	blocco = (pdt[j] & BLOCK_MASK) >> BLOCK_SHIFT;
+	blocco = (dt & BLOCK_MASK) >> BLOCK_SHIFT;
 	// *** anche per le tabelle vale il caso speciale in cui blocco == 0: la 
 	// tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
 	// in modo che ogni entrata della nuova tabella erediti le proprieta' 
@@ -1063,10 +1093,9 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 			return;
 		}
 
-		natl* pdp = reinterpret_cast<natl*>(dest);
-		for (int i = 0; i < 1024; i++)
-			pdp[i] = pdt[j] & ~BIT_P;
-		pdt[j] |= (blocco & BLOCK_MASK) << BLOCK_SHIFT;
+		set_all_des(dest, dt & ~BIT_P);
+		dt |= (blocco & BLOCK_MASK) << BLOCK_SHIFT;
+		set_destab(direttorio, ind_virtuale, dt);
 	} else 
 		leggi_blocco(blocco, dest);
 }
@@ -1121,14 +1150,12 @@ int liberazione()
 		scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
 	} else {
 		// accede al descrittore di pagina e ne estra il valore del bit D (variabile "bitD")
-		natl *pdp = static_cast<natl*>(pvittima->pt.punt);
-		addr ind_virt = pvittima->pt.ind_virtuale;
-		natl i = indice_tabella(ind_virt);
-		bitD = (pdp[i] & BIT_D) ? 1 : 0;
+		natl dp = get_despag(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+		bitD = (dp & BIT_D) ? 1 : 0;
 		// 2) aggiusta il descrittore di pagina corrispondente
-		scollega_pagina(pvittima->pt.punt, ind_virt);
+		scollega_pagina(pvittima->pt.punt, pvittima->pt.ind_virtuale);
 		// invalida l'entrata del TLB corrispondente a "pvittima->pt.ind_virtuale")
-		invalida_entrata_TLB(ind_virt);
+		invalida_entrata_TLB(pvittima->pt.ind_virtuale);
 
 		if (bitD == 1) 
 			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
@@ -1155,12 +1182,10 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 		// accede al descrittore di pagina associato a "ind_virt_pag"
 		// estraendone l'indirizzo fisico associato (variabile "iff")
 		if (risu == true) {
-			natl *pd = static_cast<natl*>(dir);
-			natl ii = indice_direttorio(ind_virt_pag);
-			addr tab = n2a(pd[ii] & ADDR_MASK);
-			pd = static_cast<natl*>(tab);
-			ii = indice_tabella(ind_virt_pag);
-			iff = n2a(pd[ii] & ADDR_MASK);
+			natl dt = get_destab(dir, ind_virt_pag);
+			addr tab = n2a(dt & ADDR_MASK);
+			natl dp = get_despag(tab, ind_virt_pag);
+			iff = n2a(dp & ADDR_MASK);
 
 			indice = indice_pf(iff);
 			ppf = &pagine_fisiche[indice];
@@ -1417,7 +1442,6 @@ bool crea_main()
 	proc_elem* m = crea_processo(main_proc, 0, MAX_PRIORITY, LIV_SISTEMA);
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main");
-		return false;
 	}
 	processi = 1;
 	inserimento_lista(pronti, m);
@@ -1427,30 +1451,24 @@ bool crea_main()
 // creazione della pila utente
 addr crea_pila_utente(addr direttorio)
 {
-	addr ind_virtuale, ind_fisico, tabella;
-	natl *pd, j;
-	bool risu;
-
-	j = indice_direttorio(n2a(inizio_utente_privato));
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
-	pd = static_cast<natl*>(direttorio);
-	for (int i = j; i < j + ntab_utente_privato; i++) 
-		pd[i] = BIT_US | BIT_RW;
+	for (natl ind = inizio_utente_privato; ind < fine_utente_privato; ind += SIZE_SUPERPAGINA)
+		set_destab(direttorio, n2a(ind), BIT_US | BIT_RW);
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
-	risu = swap(direttorio, ind_virtuale);
+	addr ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
+	bool risu = swap(direttorio, ind_virtuale);
 	if (risu == true) {
-		j = indice_direttorio(ind_virtuale);
-		tabella = n2a(pd[j] & ADDR_MASK);
-		pd = static_cast<natl*>(tabella);
-		j = indice_tabella(ind_virtuale);
-		ind_fisico = n2a(pd[j] & ADDR_MASK);
-		pd[j] |= BIT_D;
+		natl dt = get_destab(direttorio, ind_virtuale);
+		addr tabella = n2a(dt & ADDR_MASK);
+		natl dp = get_despag(tabella, ind_virtuale);
+		addr ind_fisico = n2a(dp & ADDR_MASK);
+		dp |= BIT_D;
+		set_despag(tabella, ind_virtuale, dp);
 		return ind_fisico;
 	}
 	return 0;
@@ -1462,12 +1480,9 @@ addr crea_pila_sistema(addr direttorio)
 {
 	addr ind_virtuale, ind_fisico, tabella;
 	int indice;
-	natl *pd, j;
-	des_pf*	     ppf;
 
 	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
 	// dello spazio sistema/privato
-	ind_virtuale = n2a(fine_sistema_privato - DIM_PAGINA);
 
 	indice = alloca_pagina_fisica();
 	if (indice == -1) {
@@ -1476,13 +1491,11 @@ addr crea_pila_sistema(addr direttorio)
 			goto errore1;
 	}
 	tabella = indirizzo_pf(indice);
-	memset(tabella, 0, DIM_PAGINA);
-	ppf = &pagine_fisiche[indice];
-	ppf->contenuto = TABELLA;
-	ppf->residente = true;
-	pd = static_cast<natl*>(direttorio);
-	j = indice_direttorio(ind_virtuale);
-	pd[j] = (a2n(tabella) & ADDR_MASK) | BIT_RW | BIT_P;
+	set_all_des(tabella, 0);
+	ind_virtuale = n2a(fine_sistema_privato - DIM_PAGINA);
+	set_destab(direttorio, ind_virtuale, BIT_RW);
+	collega_tabella(direttorio, tabella, ind_virtuale);
+	pagine_fisiche[indice].residente = true;
 
 	indice = alloca_pagina_fisica();
 	if (indice == -1) {
@@ -1492,12 +1505,9 @@ addr crea_pila_sistema(addr direttorio)
 	}
 	ind_fisico = indirizzo_pf(indice);
 	memset(ind_fisico, 0, DIM_PAGINA);
-	ppf = &pagine_fisiche[indice];
-	ppf->contenuto = PAGINA_VIRTUALE;
-	ppf->residente = true;
-	pd = static_cast<natl*>(tabella);
-	j = indice_tabella(ind_virtuale);
-	pd[j] = (a2n(ind_fisico) & ADDR_MASK) | BIT_RW | BIT_P;
+	set_despag(tabella, ind_virtuale, BIT_RW);
+	collega_pagina(tabella, ind_fisico, ind_virtuale);
+	pagine_fisiche[indice].residente = true;
 
 	return ind_fisico;
 
@@ -1524,23 +1534,23 @@ void distruggi_processo(proc_elem* p)
 // (start deve essere un multiplo di 4 MiB)
 void rilascia_tutto(addr direttorio, addr start, int ntab)
 {
-	addr tabella;
-	int j = indice_direttorio(start);
-	natl *pdt = static_cast<natl*>(direttorio), *pdp;
-	for (int i = j; i < j + ntab; i++)
+	addr ind = start;
+	for (int i = 0; i < ntab; i++)
 	{
-		if (pdt[i] & BIT_P) {
-			tabella = n2a(pdt[i] & ADDR_MASK);
-			pdp = static_cast<natl*>(tabella);
-			for (int k = 0; k < 1024; k++) {
-				if (pdp[k] & BIT_P) {
-					addr pagina = n2a(pdp[k] & ADDR_MASK);
+		natl dt = get_destab(direttorio, ind);
+		if (dt & BIT_P) {
+			addr tabella = n2a(dt & ADDR_MASK);
+			for (int j = 0; j < 1024; j++) {
+				natl dp = get_despag(tabella, ind);
+				if (dp & BIT_P) {
+					addr pagina = n2a(dp & ADDR_MASK);
 					rilascia_pagina_fisica(indice_pf(pagina));
 				} else {
-					natl blocco = (pdp[k] & BLOCK_MASK) >> BLOCK_SHIFT;
+					natl blocco = (dp & BLOCK_MASK) >> BLOCK_SHIFT;
 					if (blocco != 0)
 						bm_free(&swap_dev.free, blocco);
 				}
+				ind = n2a(a2n(ind) + DIM_PAGINA);
 			}
 			rilascia_pagina_fisica(indice_pf(tabella));
 		}
@@ -3240,12 +3250,11 @@ void main_proc(int n);
 
 bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 {
-	natl *tmp = static_cast<natl*>(dir);
 	for (natl ind = start; ind < stop; ind += SIZE_SUPERPAGINA)
 	{
-		natl j = indice_direttorio(n2a(ind));
+		natl dt = get_destab(dir, n2a(ind));
 
-		if (tmp[j] & BIT_P) {	  
+		if (dt & BIT_P) {	  
 
 			last_addr = n2a(ind + SIZE_SUPERPAGINA);
 
@@ -3260,10 +3269,10 @@ bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 			collega_tabella(dir, tabella, n2a(ind));
 			ppf->residente = true;
 
-			natl *pdp = static_cast<natl*>(tabella);
 			natl ind_virt_pag = ind;
 			for (int i = 0; i < 1024; i++) {
-				if (pdp[i] & BIT_P) {
+				natl dp = get_despag(tabella, n2a(ind_virt_pag));
+				if (dp & BIT_P) {
 					indice = alloca_pagina_fisica();
 					if (indice == -1) {
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
@@ -3282,15 +3291,6 @@ bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 	return true;
 }
 
-void copia_dir(addr src, addr dst, natl start, natl stop)
-{
-	natl *srcp = static_cast<natl*>(src);
-	natl *dstp = static_cast<natl*>(dst);
-
-	for (int i = indice_direttorio(n2a(start)); i < indice_direttorio(n2a(stop)); i++)
-		dstp[i] = srcp[i];
-}
-
 bool crea_spazio_condiviso(addr& last_address)
 {
 	
@@ -3305,8 +3305,8 @@ bool crea_spazio_condiviso(addr& last_address)
 		return false;
 
 	addr main_dir = readCR3();
-	copia_dir(tmp, main_dir, inizio_io_condiviso, fine_io_condiviso);
-	copia_dir(tmp, main_dir, inizio_utente_condiviso, fine_utente_condiviso);
+	copy_dir(tmp, main_dir, n2a(inizio_io_condiviso),     n2a(fine_io_condiviso));
+	copy_dir(tmp, main_dir, n2a(inizio_utente_condiviso), n2a(fine_utente_condiviso));
 	dealloca(tmp);
 	
 	if (!carica_tutto(main_dir, inizio_io_condiviso, fine_io_condiviso, last_address))
