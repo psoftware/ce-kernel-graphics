@@ -3245,7 +3245,6 @@ extern "C" void init_8259();
 
 // gestione processi
 extern "C" void salta_a_main();
-extern "C" void salta_a_utente(entry_t user_entry, addr stack);
 void main_proc(int n);
 
 bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
