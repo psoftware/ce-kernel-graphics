@@ -2121,17 +2121,10 @@ void inserimento_lista_timer(richiesta *p)
 }
 
 
-// la variabile globale ticks conta il numero di interruzioni ricevute dal 
-// timer, dall'avvio del sistema
-extern unsigned long ticks;
-
 // driver del timer
 extern "C" void c_driver_t(void)
 {
 	richiesta *p;
-
-	// conta il numero di interruzioni di timer ricevute
-	ticks++;
 
 	if(descrittore_timer != 0)
 		descrittore_timer->d_attesa--;
@@ -3494,7 +3487,6 @@ void main_proc(int n)
 			swap_dev.sb.io_entry,
 			swap_dev.sb.io_end);
 
-	
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	addr last_address;
