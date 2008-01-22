@@ -16,6 +16,7 @@
 .set tipo_rl, 0x3a
 .set tipo_r, 0x3b
 .set tipo_l, 0x49
+.set tipo_ep, 0x3c
 
 .set io_tipo_rsen, 0x60
 .set io_tipo_rseln, 0x61
@@ -51,6 +52,11 @@ _terminate_p:
 	.global _give_num
 _give_num:
 	int $tipo_g
+	ret
+
+	.global _end_program
+_end_program:
+	int $tipo_ep
 	ret
 
 	.global _sem_ini

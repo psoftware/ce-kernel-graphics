@@ -518,6 +518,7 @@ init_gdt:
 .set tipo_d, TIPO_D
 .set tipo_rl, TIPO_RL
 .set tipo_r, TIPO_R
+.set tipo_ep, TIPO_EP
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 .set tipo_ae, TIPO_AE
@@ -591,6 +592,7 @@ init_idt:
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
 	carica_gate	tipo_r		a_resident	LIV_UTENTE
 	carica_gate	tipo_l		a_log		LIV_UTENTE
+	carica_gate	tipo_ep		a_end_program	LIV_UTENTE
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
@@ -812,9 +814,10 @@ _disattiva_paginazione:
 	popl %eax
 	ret
 
-	.global _a_shutdown
-_a_shutdown:
+	.global a_end_program
+a_end_program:
 	cli
+	call _reset_8259
 	movl shutdown_esp, %esp
 	movl shutdown_ebp, %ebp
 	call _disattiva_paginazione

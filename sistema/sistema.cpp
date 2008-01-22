@@ -1417,23 +1417,20 @@ errore1:	return 0;
 extern "C" void shutdown();
 
 // corpo del processo dummy
-void dd(int i)
+void dummy_init(int i)
 {
-	while (processi > 0)
-		;
-	shutdown();
-
+	for (;;);
 }
 
 // creazione del processo dummy (usata in fase di inizializzazione del sistema)
-bool crea_dummy()
+bool crea_dummy_init()
 {
-	proc_elem* dummy = crea_processo(dd, 0, 0, LIV_SISTEMA);
-	if (dummy == 0) {
+	proc_elem* di = crea_processo(dummy_init, 0, 0, LIV_SISTEMA);
+	if (di == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return false;
 	}
-	inserimento_lista(pronti, dummy);
+	inserimento_lista(pronti, di);
 	return true;
 }
 void main_proc(int n);
@@ -1591,17 +1588,6 @@ c_activate_p(void f(int), int a, natl prio, natb liv)
 	sem_signal(pf_mutex);
 
 	return id;
-}
-
-//Disabilito le interruzioni, ripristino l'ebp della multiboot_entry in sistema.d e ritorno
-//al chiamante (bldr32)
-extern "C" void a_shutdown();
-void shutdown()
-{
-	flog(LOG_INFO, "Tutti i processi sono terminati!");
-	//ripristina_timer();
-	reset_8259();   //Ripristino i registri dei PIC
-	a_shutdown();
 }
 
 extern "C" void c_terminate_p()
@@ -3429,7 +3415,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	
 	// processo dummy
-	if (!crea_dummy())
+	if (!crea_dummy_init())
 		goto error;
 	flog(LOG_INFO, "Creato il processo dummy");
 
