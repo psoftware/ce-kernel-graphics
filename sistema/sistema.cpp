@@ -5,12 +5,14 @@
 #include "tipo.h"
 
 // funzione che permette di convertire un indirizzo in un naturale
+static inline 
 natl a2n(addr v)
 {
 	return reinterpret_cast<natl>(v);
 }
 
 // e viceversa
+static inline 
 addr n2a(natl l)
 {
 	return reinterpret_cast<addr>(l);
@@ -417,36 +419,44 @@ const natl ADDR_MASK  = 0xFFFFF000;
 const natl BLOCK_MASK = 0xFFFFFFE0;
 const natl BLOCK_SHIFT = 5;
 
+static inline 
 int i_dir(addr ind_virt)
 {
 	return (a2n(ind_virt) & 0xFFC00000) >> 22;
 }
+static inline 
 int i_tab(addr ind_virt)
 {
 	return (a2n(ind_virt) & 0x003FF000) >> 12;
 }
+static inline 
 natl get_des(addr dirtab, int index)
 {
 	natl *pd = static_cast<natl*>(dirtab);
 	return pd[index];
 }
+static inline 
 void set_des(addr dirtab, int index, natl des)
 {
 	natl *pd = static_cast<natl*>(dirtab);
 	pd[index] = des;
 }
+static inline 
 natl get_destab(addr dir, addr ind_virt)
 {
 	return get_des(dir, i_dir(ind_virt));
 }
+static inline 
 void set_destab(addr dir, addr ind_virt, natl destab)
 {
 	set_des(dir, i_dir(ind_virt), destab);
 }
+static inline 
 natl get_despag(addr tab, addr ind_virt)
 {
 	return get_des(tab, i_tab(ind_virt));
 }
+static inline 
 void set_despag(addr tab, addr ind_virt, natl despag)
 {
 	set_des(tab, i_tab(ind_virt), despag);
@@ -507,11 +517,13 @@ int pagine_libere = -1;
 
 addr prima_pf_utile;
 
+static inline 
 int indice_pf(addr pagina)
 {
 	return (a2n(pagina) - a2n(prima_pf_utile)) / DIM_PAGINA;
 }
 
+static inline 
 addr indirizzo_pf(int indice)
 {
 	return n2a(a2n(prima_pf_utile) + indice * DIM_PAGINA);
