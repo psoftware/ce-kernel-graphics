@@ -3458,6 +3458,7 @@ void main_proc(int n)
 	int errore;
 	addr pila_utente;
 	des_proc *my_des = des_p(esecuzione->nome);
+	int sem_io;
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
@@ -3510,10 +3511,12 @@ void main_proc(int n)
 		goto error;
 	// inizializzazione del modulo di io
 	flog(LOG_INFO, "creazione del processo main I/O...");
-	activate_p(swap_dev.sb.io_entry, 0, MAX_PRIORITY, LIV_SISTEMA);	
+	sem_io = sem_ini(0);
+	activate_p(swap_dev.sb.io_entry, sem_io, MAX_PRIORITY, LIV_SISTEMA);	
+	sem_wait(sem_io);
 
 	flog(LOG_INFO, "creazione del processo main utente...");
-	activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY - 1, LIV_UTENTE);	
+	activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE);	
 		
 	attiva_timer(DELAY);
 	terminate_p();

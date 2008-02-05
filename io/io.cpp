@@ -727,7 +727,7 @@ extern "C" void fill_io_gates(void);
 
 // eseguita in fase di inizializzazione
 //
-extern "C" void cmain(int)
+extern "C" void cmain(int sem_io)
 {
 	int error;
 
@@ -736,5 +736,6 @@ extern "C" void cmain(int)
 		abort_p();
 	if (!com_init())
 		abort_p();
+	sem_signal(sem_io);
 	terminate_p();
 }
