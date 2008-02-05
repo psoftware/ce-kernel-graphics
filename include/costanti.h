@@ -75,6 +75,8 @@
 #define D_ERR_GENERIC  0xFD
 
 #ifndef ASM
+const unsigned int T_STAT = 2;
+
 const unsigned int ntab_sistema_condiviso = 255;
 const unsigned int ntab_sistema_privato   = 1;
 const unsigned int ntab_io_condiviso	  = 256;
