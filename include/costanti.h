@@ -15,9 +15,9 @@
 #define LIV_SISTEMA		0
 
 #define DIM_PAGINA		4096
-#define SIZE_SUPERPAGINA	(DIM_PAGINA * 1024)
-#define SIZE_DESP		216
-#define SIZE_DESS		8
+#define DIM_SUPERPAGINA		(DIM_PAGINA * 1024)
+#define DIM_DESP		216
+#define DIM_DESS		8
 #define DELAY			59659		
 #define DEFAULT_HEAP_SIZE	(1024*1024)
 
@@ -83,11 +83,11 @@ const unsigned int ntab_io_condiviso	  = 256;
 const unsigned int ntab_utente_condiviso  = 256;
 const unsigned int ntab_utente_privato    = 255;
 
-const unsigned int dim_sistema_condiviso = ntab_sistema_condiviso * SIZE_SUPERPAGINA;
-const unsigned int dim_sistema_privato   = ntab_sistema_privato   * SIZE_SUPERPAGINA;
-const unsigned int dim_io_condiviso	 = ntab_io_condiviso	  * SIZE_SUPERPAGINA;
-const unsigned int dim_utente_condiviso  = ntab_utente_condiviso  * SIZE_SUPERPAGINA;
-const unsigned int dim_utente_privato    = ntab_utente_privato    * SIZE_SUPERPAGINA;
+const unsigned int dim_sistema_condiviso = ntab_sistema_condiviso * DIM_SUPERPAGINA;
+const unsigned int dim_sistema_privato   = ntab_sistema_privato   * DIM_SUPERPAGINA;
+const unsigned int dim_io_condiviso	 = ntab_io_condiviso	  * DIM_SUPERPAGINA;
+const unsigned int dim_utente_condiviso  = ntab_utente_condiviso  * DIM_SUPERPAGINA;
+const unsigned int dim_utente_privato    = ntab_utente_privato    * DIM_SUPERPAGINA;
 
 const unsigned int inizio_sistema_condiviso = 0x00000000;
 const unsigned int fine_sistema_condiviso   = inizio_sistema_condiviso + dim_sistema_condiviso;

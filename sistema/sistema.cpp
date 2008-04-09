@@ -106,9 +106,8 @@ extern "C" void abort_p();
 // partire dall'indirizzo 0x100000, corrispondente a 1 MiB, quindi il primo 
 // mega byte, esclusa la zona dedicata alla memoria video, risulta 
 // inutilizzato) Queste regioni, man mano che vengono scoperte, vengono 
-// aggiunte allo heap di sistema. nNella seconda fase, il sistema usa lo heap 
-// cosi' ottenuto per allocare la memoria richiesta dall'operatore new (per 
-// es., per "new richiesta").
+// aggiunte allo heap di sistema. Nella seconda fase, il sistema usa lo heap 
+// cosi' ottenuto per allocare la memoria richiesta dalla funzione "alloca".
 
 // indirizzo fisico del primo byte non riferibile in memoria inferiore e
 // superiore (rappresentano la memoria fisica installata sul sistema)
@@ -162,7 +161,7 @@ int salta_a(addr indirizzo)
 // HEAP DI SISTEMA
 //
 // Il nucleo ha bisogno di una zona di memoria gestita ad heap, per realizzare
-// l'operatore "new".
+// la funzione "alloca".
 // Lo heap e' composto da zone di memoria libere e occupate. Ogni zona di memoria
 // e' identificata dal suo indirizzo di partenza e dalla sua dimensione.
 // Ogni zona di memoria contiene, nei primi byte, un descrittore di zona di
@@ -194,8 +193,9 @@ void* alloca(natl dim)
 	// per motivi di efficienza, conviene allocare sempre multipli di 4 
 	// byte (in modo che le strutture dati restino allineate alla linea)
 	natl quanti = allinea(dim, sizeof(int));
-
-	// allochiamo "quanti" byte, invece dei "quanti" richiesti
+	// allochiamo "quanti" byte, invece dei "dim" richiesti
+	
+	// per prima cosa, cerchiamo una zona di dimensione sufficiente
 	des_mem *prec = 0, *scorri = memlibera;
 	while (scorri != 0 && scorri->dimensione < quanti) {
 		prec = scorri;
@@ -264,12 +264,12 @@ void* alloca(natl dim)
 	return p;
 }
 
-// free deve essere usata solo con puntatori restituiti da malloc, e rende
+// "dealloca" deve essere usata solo con puntatori restituiti da "alloca", e rende
 // nuovamente libera la zona di memoria di indirizzo iniziale "p".
 void dealloca(void* p)
 {
 
-	// e' normalmente ammesso invocare "free" su un puntatore nullo.
+	// e' normalmente ammesso invocare "dealloca" su un puntatore nullo.
 	// In questo caso, la funzione non deve fare niente.
 	if (p == 0) return;
 	
@@ -297,7 +297,7 @@ void dealloca(void* p)
 // frammentazione", in cui si vengono a creare tante zone libere, contigue, ma
 // non utilizzabili per allocazioni piu' grandi della dimensione di ciascuna di
 // esse.
-// free_interna puo' essere usata anche in fase di inizializzazione, per
+// "free_interna" puo' essere usata anche in fase di inizializzazione, per
 // definire le zone di memoria fisica che verranno utilizzate dall'allocatore
 void free_interna(addr indirizzo, natl quanti)
 {
@@ -404,59 +404,117 @@ void free_interna(addr indirizzo, natl quanti)
 /////////////////////////////////////////////////////////////////////////
 // PAGINAZIONE                                                         //
 /////////////////////////////////////////////////////////////////////////
-const natl BIT_P    = 1U << 0;
-const natl BIT_RW   = 1U << 1;
-const natl BIT_US   = 1U << 2;
-const natl BIT_PWT  = 1U << 3;
-const natl BIT_PCD  = 1U << 4;
-const natl BIT_A    = 1U << 5;
-const natl BIT_D    = 1U << 6;
+// definiamo alcune costanti utili per la manipolazione dei descrittori
+// di pagina e di tabella. Assegneremo a tali descrittori il tipo "natl"
+// e li manipoleremo tramite maschere e operazioni sui bit.
+const natl BIT_P    = 1U << 0; // il bit di presenza
+const natl BIT_RW   = 1U << 1; // il bit di lettura/scrittura
+const natl BIT_US   = 1U << 2; // il bit utente/sistema(*)
+const natl BIT_PWT  = 1U << 3; // il bit Page Wright Through
+const natl BIT_PCD  = 1U << 4; // il bit Page Cache Disable
+const natl BIT_A    = 1U << 5; // il bit di accesso
+const natl BIT_D    = 1U << 6; // il bit "dirty"
 
-const natl ACCB_MASK  = 0x000000FF;
-const natl ADDR_MASK  = 0xFFFFF000;
-const natl BLOCK_MASK = 0xFFFFFFE0;
-const natl BLOCK_SHIFT = 5;
+// (*) attenzione, la convenzione Intel e' diversa da quella
+// illustrata nel libro: 0 = sistema, 1 = utente.
 
+const natl ACCB_MASK  = 0x000000FF; // maschera per il byte di accesso
+const natl ADDR_MASK  = 0xFFFFF000; // maschera per l'indirizzo
+
+// i descrittori di pagina/tabella con P=0 contengono l'indirizzo
+// in memoria di massa della corrispondente pagina/tabella.
+// Tale indirizzo consiste nell'indice di un blocco nel dispositivo
+// di swap. L'indice viene memorizzato nei bit 31-5. I 5 bit
+// meno significativi vengono usati per il bit P e per memorizzare
+// alcune informazioni che e' necessario conoscere anche per le pagine non presenti.
+// Queste informazioni corrispondono ai valori per i bit RW, US, PWT e PCD.
+
+const natl BLOCK_MASK = 0xFFFFFFE0; // maschera per l'indirizzo in mem. di massa
+const natl BLOCK_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di massa
+
+// funzione che restituisce i 10 bit piu' significativi di "ind_virt"
+// (indice nel direttorio)
 int i_dir(addr ind_virt)
 {
 	return (a2n(ind_virt) & 0xFFC00000) >> 22;
 }
+
+// funzione che restituisce i bit 22-12 di "ind_virt"
+// (indice nella tabella delle pagine)
 int i_tab(addr ind_virt)
 {
 	return (a2n(ind_virt) & 0x003FF000) >> 12;
 }
+
+// funzione che restiuisce il descrittore di indice
+// "index" nel direttorio o tabella di indirizzo "dirtab"
 natl get_des(addr dirtab, int index)
 {
+	// convertiamo "dirtab" in un array di descrittori
 	natl *pd = static_cast<natl*>(dirtab);
 	return pd[index];
 }
+
+// funzione che sovrascrive il descrittore di indice
+// "index" nel direttorio o tabella di indirizzo "dirtab"
+// con il nuovo valore dato da "des"
 void set_des(addr dirtab, int index, natl des)
 {
 	natl *pd = static_cast<natl*>(dirtab);
 	pd[index] = des;
 }
+
+// funzione di comodo che restituisce il descrittore
+// di tabella associato all'indirizzo "ind_virt"
+// nel direttorio di indirizzo "dir"
 natl get_destab(addr dir, addr ind_virt)
 {
 	return get_des(dir, i_dir(ind_virt));
 }
+
+// funzione di comodo che sovrascrive il descrittore
+// di tabella associato all'indirizzo "ind_virt"
+// nel direttorio di indirizzo "dir" con il nuovo
+// valore dato da "destab"
 void set_destab(addr dir, addr ind_virt, natl destab)
 {
 	set_des(dir, i_dir(ind_virt), destab);
 }
+
+// funzione di comodo che restituisce il descrittore
+// di pagina associato all'indirizzo "ind_virt"
+// nella tabella delle pagine di indirizzo "tab"
 natl get_despag(addr tab, addr ind_virt)
 {
 	return get_des(tab, i_tab(ind_virt));
 }
+
+// funzione di comodo che sovrascrive il descrittore
+// di pagina associato all'indirizzo "ind_virt"
+// nella tabella delle pagine di indirizzo "dir" con il nuovo
+// valore dato da "despag"
 void set_despag(addr tab, addr ind_virt, natl despag)
 {
 	set_des(tab, i_tab(ind_virt), despag);
 }
+
+// funzione che sovrascrive tutti i descrittori
+// di pagina/tabella nel direttorio o tabella
+// di indirizzo "dirtab" con il nuovo valore dato
+// da "des". (Utile in fase di inizializzazione)
 void set_all_des(addr dirtab, natl des)
 {
 	natl *pd = static_cast<natl*>(dirtab);
 	for (int i = 0; i < 1024; i++)
 		pd[i] = des;
 }
+
+// funzione che copia (parte di) un direttorio
+// ("src") in un altro ("dst"). Vengono copiati
+// tutti i descrittori a partire da quello
+// associato all'indirizzo "start" (incluso)
+// fino a quello associato all'indirizzo "stop" (escluso).
+// (Utile in fase di inizializzazione)
 void copy_dir(addr src, addr dst, addr start, addr stop)
 {
 	natl *pdsrc = static_cast<natl*>(src),
@@ -570,8 +628,8 @@ bool init_pagine_fisiche()
 }
 
 // funzione di allocazione generica di una pagina
-// Nota: restituisce un puntatore al *descrittore* della pagina, non alla 
-// pagina
+// Nota: restituisce l'indice del *descrittore di pagina fisica* della pagina
+// (uno dei "des_pf" di cui sopra), non un puntatore alla pagina
 int alloca_pagina_fisica()
 {
 	int p = pagine_libere;
@@ -580,7 +638,8 @@ int alloca_pagina_fisica()
 	return p;
 }
 
-
+// rende di nuovo libera la pagina fisica il cui descrittore di pagina fisica
+// ha per indice "i"
 void rilascia_pagina_fisica(int i)
 {
 	des_pf* p = &pagine_fisiche[i];
@@ -695,7 +754,7 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 			}
 			des_pf *ppf = &pagine_fisiche[indice];
 			// evitiamo di marcare la pagina come TABELLA
-			// in modo che aggiorna_statistiche non la veda
+			// in modo che "aggiorna_statistiche" non la veda
 			// ppf->contenuto = TABELLA;
 			ppf->residente = true;
 			tabella = indirizzo_pf(indice);
@@ -753,7 +812,7 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 
 // descrittore di una partizione dell'hard disk
 struct partizione {
-	int	     type;	// tipo della partizione
+	int  type;	// tipo della partizione
 	natl first;	// primo settore della partizione
 	natl dim;	// dimensione in settori
 	partizione*  next;
@@ -932,7 +991,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 }
 
 
-// ROUTINE DEL TIMER
+// ROUTINE DEL TIMER per la paginazione
 void aggiorna_statistiche()
 {
 	des_pf *ppf1, *ppf2;
@@ -977,12 +1036,13 @@ extern "C" void sem_signal(int);
 extern "C" int activate_p(void f(int), int a, natl prio, natb liv);
 extern "C" void terminate_p();
 
-// funzioni usate dalla routine di trasferimento
-// tabella* rimpiazzamento_tabella(bool residente = false);
-// pagina*  rimpiazzamento_pagina_virtuale(tabella* escludi, bool residente = false);
+// funzioni usate dalla routine di trasferimento ("swap")
 int liberazione();
 void carica_pagina(addr tabella, addr ind_virtuale, natb* dest);
 void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest);
+// NOTA: diversamente dal libro, usiamo "scrivi_blocco" e "leggi_blocco"
+// al posto di "readhd_n" e "writehd_n", in modo da tenere conto
+// dell'esistenza delle partizioni.
 bool swap(addr direttorio, addr ind_virtuale)
 {
 	natb bitP;
@@ -1083,10 +1143,10 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 	// estrae l'indirizzo in memoria di massa e lo pone nalla variabile "blocco"
 	blocco = (dt & BLOCK_MASK) >> BLOCK_SHIFT;
 	// *** anche per le tabelle vale il caso speciale in cui blocco == 0: la 
-	// tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
-	// in modo che ogni entrata della nuova tabella erediti le proprieta' 
-	// della tabella stessa (in particolare, i bit RW e US) e punti a 
-	// pagine da creare (ovvero, con address = 0).
+	// *** tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
+	// *** in modo che ogni entrata della nuova tabella erediti le proprieta' 
+	// *** della tabella stessa (in particolare, i bit RW e US) e punti a 
+	// *** pagine da creare (ovvero, con address = 0).
 	if (blocco == 0) {
 		if (! bm_alloc(&swap_dev.free, blocco)) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
@@ -1204,16 +1264,20 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 //////////////////////////////////////////////////////////////////////////////////
 
 // descrittore di processo
-struct des_proc {			// offset:
+// (scriviamo come commento il campo che si trova nel libro, e 
+// di seguito il/i vero/i campo/i che tiene/tengono
+// conto della struttura completa
+// del descrittore di processo)
+struct des_proc {		// offset:
 //	int nome;
 	natl link;		// 0
 //	addr punt_nucleo;
-	addr        esp0;		// 4
+	addr esp0;		// 4
 //	addr riservato;
 	natl ss0;		// 8
-	addr        esp1;		// 12
+	addr esp1;		// 12
 	natl ss1;		// 16
-	addr        esp2;		// 20
+	addr esp2;		// 20
 	natl ss2;		// 24
 
 //	addr cr3;
@@ -1416,18 +1480,18 @@ errore1:	return 0;
 // esegue lo shutdown del sistema
 extern "C" void shutdown();
 
-// corpo del processo dummy
+// corpo del processo dummy iniziale
 void dummy_init(int i)
 {
 	for (;;);
 }
 
-// creazione del processo dummy (usata in fase di inizializzazione del sistema)
+// creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 bool crea_dummy_init()
 {
 	proc_elem* di = crea_processo(dummy_init, 0, 0, LIV_SISTEMA);
 	if (di == 0) {
-		flog(LOG_ERR, "Impossibile creare il processo dummy");
+		flog(LOG_ERR, "Impossibile creare il processo dummy_init");
 		return false;
 	}
 	inserimento_lista(pronti, di);
@@ -1451,7 +1515,7 @@ addr crea_pila_utente(addr direttorio)
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
-	for (natl ind = inizio_utente_privato; ind < fine_utente_privato; ind += SIZE_SUPERPAGINA)
+	for (natl ind = inizio_utente_privato; ind < fine_utente_privato; ind += DIM_SUPERPAGINA)
 		set_destab(direttorio, n2a(ind), BIT_US | BIT_RW);
 
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
@@ -1994,8 +2058,8 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 
 	if (eip < fine_codice_sistema || errore.res == 1) {
 		// *** il sistema non e' progettato per gestire page fault causati 
-		// dalle primitie di nucleo, quindi, se cio' si e' verificato, 
-		// si tratta di un bug
+		// *** dalle primitie di nucleo, quindi, se cio' si e' verificato, 
+		// *** si tratta di un bug
 		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, indirizzo_virtuale,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
@@ -2004,8 +2068,8 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 		panic("page fault dal modulo sistema");
 	}
 	// *** l'errore di protezione non puo' essere risolto: il processo ha 
-	// tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
-	// sistema)
+	// *** tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
+	// *** sistema)
 	if (errore.prot == 1) {
 		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, indirizzo_virtuale,
 			errore.write ? "scrittura"	: "lettura",
@@ -2018,6 +2082,8 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 	risu = swap(readCR3(), indirizzo_virtuale);
 	sem_signal(pf_mutex);
 
+	// se non e' stato possibile caricare la pagina, il processo
+	// non puo' proseguire
 	if (risu == false) 
 		abort_p();
 }
@@ -3232,13 +3298,13 @@ void main_proc(int n);
 
 bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 {
-	for (natl ind = start; ind < stop; ind += SIZE_SUPERPAGINA)
+	for (natl ind = start; ind < stop; ind += DIM_SUPERPAGINA)
 	{
 		natl dt = get_destab(dir, n2a(ind));
 
 		if (dt & BIT_P) {	  
 
-			last_addr = n2a(ind + SIZE_SUPERPAGINA);
+			last_addr = n2a(ind + DIM_SUPERPAGINA);
 
 			int indice = alloca_pagina_fisica();
 			if (indice == -1) {

@@ -708,7 +708,7 @@ _alloca_tss:
 	pushl $SEG_TSS		// tipo
 	pushl $LIV_SISTEMA	// dpl
 	pushl $PRES		// bit presenza
-	pushl $(SIZE_DESP - 1)	// limite
+	pushl $(DIM_DESP - 1)	// limite
 	pushl 8(%ebp)		// base
 	pushl %ecx		// indice descr.
 	call  _init_descrittore
@@ -2228,7 +2228,7 @@ idt_pointer:
 
 .bss
 .global		_array_dess
-_array_dess:	.space SIZE_DESS * MAX_SEMAFORI 
+_array_dess:	.space DIM_DESS * MAX_SEMAFORI 
 .balign 16
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 
