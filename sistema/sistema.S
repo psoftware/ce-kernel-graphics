@@ -382,6 +382,7 @@ salva_stato:
 	movl _esecuzione, %eax
 	movl $0, %ebx
         movw (%eax), %bx		// esecuzione->identifier in ebx
+	shrl $3, %ebx			// trasformo selettore->indice
         leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
 	estrai_base			// ind. TSS -> %ebx
 
@@ -424,7 +425,7 @@ carica_stato:
         movw (%edx), %bx		// esecuzione->identifier in ebx
 	
 	movl %ebx, %ecx			
-	shll $3, %ecx			// trasformo indice->selettore
+	shrl $3, %ebx			// trasformo selettore->indice
 
         leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
 	estrai_base			// ind. del TSS in %ebx
@@ -759,6 +760,7 @@ _des_p:
 
 	movl $0, %ebx
         movw 8(%ebp), %bx		// esecuzione->identifier in ebx
+	shrl $3, %ebx			// indice in %ebx
         leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
 	estrai_base			// ind. TSS -> %ebx
 	movl %ebx, %eax

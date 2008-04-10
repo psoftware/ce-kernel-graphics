@@ -1269,8 +1269,8 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 // conto della struttura completa
 // del descrittore di processo)
 struct des_proc {		// offset:
-//	int nome;
-	natl link;		// 0
+//	natw nome;
+	natw link;		// 0
 //	addr punt_nucleo;
 	addr esp0;		// 4
 //	addr riservato;
@@ -1325,7 +1325,7 @@ int processi = 0;
 
 // elemento di una coda di processi
 struct proc_elem {
-	int nome;
+	natw nome;
 	natl precedenza;
 	proc_elem *puntatore;
 };
@@ -1375,7 +1375,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	identifier = alloca_tss(pdes_proc);
 	if (identifier == 0) goto errore3;
 
-        p->nome = identifier;
+        p->nome = identifier << 3U;
         p->precedenza = prio;
 
 	// pagina fisica per il direttorio del processo
@@ -1586,7 +1586,7 @@ void distruggi_processo(proc_elem* p)
 	rilascia_tutto(direttorio, n2a(inizio_sistema_privato), ntab_sistema_privato);
 	rilascia_tutto(direttorio, n2a(inizio_utente_privato),  ntab_utente_privato);
 	rilascia_pagina_fisica(indice_pf(direttorio));
-	rilascia_tss(p->nome);
+	rilascia_tss(p->nome >> 3);
 	dealloca(pdes_proc);
 }
 
@@ -1632,7 +1632,7 @@ extern "C" void schedulatore(void);
 // resetta controllore interruzioni
 extern "C" void reset_8259();
 
-extern "C" int
+extern "C" natw
 c_activate_p(void f(int), int a, natl prio, natb liv)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
@@ -1721,7 +1721,7 @@ bool aggiungi_pe(proc_elem *p, int irq)
 }
 
 
-extern "C" short c_activate_pe(void f(int), int a, int prio, char liv, int irq)
+extern "C" natw c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
@@ -3570,12 +3570,17 @@ void main_proc(int n)
 	// inizializzazione del modulo di io
 	flog(LOG_INFO, "creazione del processo main I/O...");
 	sem_io = sem_ini(0);
-	activate_p(swap_dev.sb.io_entry, sem_io, MAX_PRIORITY, LIV_SISTEMA);	
+	if (activate_p(swap_dev.sb.io_entry, sem_io, MAX_PRIORITY, LIV_SISTEMA) == 0) {
+		flog(LOG_ERR, "impossibile creare il processo main I/O");
+		goto error;
+	}
 	sem_wait(sem_io);
 
 	flog(LOG_INFO, "creazione del processo main utente...");
-	activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE);	
-		
+	if (activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE) == 0) {
+		flog(LOG_ERR, "impossibile creare il processo main utente");
+		goto error;
+	}
 	attiva_timer(DELAY);
 	terminate_p();
 error:

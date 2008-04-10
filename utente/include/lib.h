@@ -17,7 +17,7 @@ typedef char *va_list;
 
 typedef unsigned int size_t;
 
-char* copy(char* src, char* dst);
+char* copy(const char* src, char* dst);
 char* convint(int n, char* out);
 int strlen(const char *s);
 char *strncpy(char *dest, const char *src, size_t l);

@@ -7,7 +7,7 @@
 
 #include "tipo.h"
 
-extern "C" int activate_p(void f(int), int a, natl prio, natb liv);
+extern "C" natw activate_p(void f(int), int a, natl prio, natb liv);
 extern "C" void terminate_p();
 extern "C" natl give_num();
 extern "C" void end_program();
@@ -37,7 +37,7 @@ extern "C" void log(log_sev sev, const char* msg, int quanti);
 extern "C" int resident(void* start, int quanti);
 
 extern "C" void readconsole(char* buff, int& quanti);
-extern "C" void writeconsole(char* buff);
+extern "C" void writeconsole(const char* buff);
 
 // Costanti
 //

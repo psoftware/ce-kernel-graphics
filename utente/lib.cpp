@@ -1,7 +1,7 @@
 #include <lib.h>
 #include <sys.h>
 
-char* copy(char* src, char* dst) {
+char* copy(const char* src, char* dst) {
 	while (*src)
 		*dst++ = *src++;
 	*dst = '\0';
