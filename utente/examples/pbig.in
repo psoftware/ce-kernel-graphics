@@ -15,31 +15,36 @@ process big7 body big_c(7), 10, LIV_UTENTE;
 process big8 body big_c(8), 10, LIV_UTENTE;
 process big9 body big_c(9), 10, LIV_UTENTE;
 
-#define N  9000000
+const int N = 9000000;
+const int MSG_SIZE = 100;
 unsigned int values[N];
 
 process_body big_c(int a)
 {
-	printf(1, "&values = %x\n", values);
-	printf(1, "scrivo i valori\n");
+	char buf[MSG_SIZE];
+	char *ptr;
+	ptr = convint(a, buf);
+	copy(": scrivo i valori", ptr);
+	writeconsole(buf);
 	for (int i = 0; i < N; i++) {
 		values[i] = i;
-		if (i % 65536 == 0) printf(1, "%d", a);
 	}
-	printf(1, "\nora li sommo\n");
+	ptr = convint(a, buf);
+	copy(": ora li sommo", ptr);
+	writeconsole(buf);
 	unsigned int sum = 0;
 	for (int i = 0; i < N; i++) {
 		if (values[i] != i) {
-			printf(1, "(ERRORE:%d != %d)", i, values[i]);
-			for (int j = 0; j < 1023; j++)
-				if (values[j] + 1 != values[j + 1]) {
-					printf(1, "(v[%d] = %d)", j + 1, values[j + 1]);
-				}
+			ptr = convint(a, buf);
+			copy(": ERRORE!", ptr);
+			writeconsole(buf);
 			terminate_p();
 		}
 		sum += values[i];
-		if (i % 65536 == 0) printf(1, "%d", a);
 	}
-	printf(1, "\nsomma: %d\n", sum);
+	ptr = convint(a, buf);
+	ptr = copy(": somma = ", ptr);
+	convint(sum, ptr);
+	writeconsole(buf);
 }
 
