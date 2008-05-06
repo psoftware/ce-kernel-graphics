@@ -853,6 +853,20 @@ struct des_swap {
 } swap_dev; 	// c'e' un unico oggetto swap
 
 
+natl alloca_blocco()
+{
+	natl blocco;
+ 	if (!bm_alloc(&swap_dev.free, blocco))
+		return 0;
+	return blocco;
+}
+void dealloca_blocco(natl blocco)
+{
+	if (blocco != 0)
+		bm_free(&swap_dev.free, blocco);
+}
+
+
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
 void leggi_blocco(natl blocco, void* dest)
@@ -1118,7 +1132,8 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 	blocco = (dp & BLOCK_MASK) >> BLOCK_SHIFT;
 	if (blocco == 0) {
 		// alloca un blocco in memoria di massa
-		if (! bm_alloc(&swap_dev.free, blocco) ) {
+		blocco = alloca_blocco();
+		if (blocco == 0) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return;
 		}
@@ -1144,7 +1159,8 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 	// *** della tabella stessa (in particolare, i bit RW e US) e punti a 
 	// *** pagine da creare (ovvero, con address = 0).
 	if (blocco == 0) {
-		if (! bm_alloc(&swap_dev.free, blocco)) {
+		blocco = alloca_blocco();
+		if (blocco == 0) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
 			return;
 		}
@@ -1590,8 +1606,7 @@ void rilascia_tutto(addr direttorio, addr start, int ntab)
 					rilascia_pagina_fisica(indice_pf(pagina));
 				} else {
 					natl blocco = (dp & BLOCK_MASK) >> BLOCK_SHIFT;
-					if (blocco != 0)
-						bm_free(&swap_dev.free, blocco);
+					dealloca_blocco(blocco);
 				}
 				ind = n2a(a2n(ind) + DIM_PAGINA);
 			}
