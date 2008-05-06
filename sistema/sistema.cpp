@@ -1082,7 +1082,7 @@ addr swap_pagina(addr tabella, addr ind_virtuale) {
 	collega_pagina(tabella, ind_fis_pag, ind_virtuale);
 	return ind_fis_pag;
 }
-bool swap(addr direttorio, addr ind_virtuale)
+addr swap(addr direttorio, addr ind_virtuale)
 {
 	natb bitP;
 	natl dt, dp;
@@ -1091,21 +1091,20 @@ bool swap(addr direttorio, addr ind_virtuale)
 	// e ne estrae il bit P (variabile "bitP")
 	dt = get_destab(direttorio, ind_virtuale);
 	bitP = (dt & BIT_P) ? 1 : 0;
-	if (bitP == 0) {
-		ind_fis_tab = swap_tabella(direttorio, ind_virtuale);
-	} else {
+	ind_fis_tab = (bitP == 0) ?
+		swap_tabella(direttorio, ind_virtuale) :
 		// accede al descrittore di tabella e ne estrae l'indirizzo fisico
-		// (variabile "ind_fis_tab")
-		ind_fis_tab = n2a(dt & ADDR_MASK);
-	}
+		n2a(dt & ADDR_MASK);
+	if (ind_fis_tab == 0)
+		return 0;
 	// usa "ind_fis_tab" e "ind_virtuale" per accedere al descrittore dipagina
 	// e ne estrae il bit P (variabile "bitP")
 	dp = get_despag(ind_fis_tab, ind_virtuale);
 	bitP = (dp & BIT_P) ? 1 : 0;
-	if (bitP == 0) {
-		swap_pagina(ind_fis_tab, ind_virtuale);
-	} 
-	return true;
+	return (bitP == 0) ?
+		swap_pagina(ind_fis_tab, ind_virtuale) :
+		n2a(dp & ADDR_MASK);
+
 }
 
 // carica la pagina descritta da pdes_pag in memoria fisica,
@@ -1509,6 +1508,8 @@ bool crea_main()
 // creazione della pila utente
 addr crea_pila_utente(addr direttorio)
 {
+	addr ind_virtuale, ind_fisico, tabella;
+
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
 	// (le tabelle verranno create solo se effettivamente utilizzate)
@@ -1518,18 +1519,19 @@ addr crea_pila_utente(addr direttorio)
 	// l'ultima pagina della pila va preallocata e precaricata, in quanto 
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
-	addr ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
-	bool risu = swap(direttorio, ind_virtuale);
-	if (risu == true) {
-		natl dt = get_destab(direttorio, ind_virtuale);
-		addr tabella = n2a(dt & ADDR_MASK);
-		natl dp = get_despag(tabella, ind_virtuale);
-		addr ind_fisico = n2a(dp & ADDR_MASK);
-		dp |= BIT_D;
-		set_despag(tabella, ind_virtuale, dp);
-		return ind_fisico;
+	ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
+	tabella = swap_tabella(direttorio, ind_virtuale);
+	if (tabella == 0)
+		return 0;
+	ind_fisico = swap_pagina(tabella, ind_virtuale);
+	if (ind_fisico == 0) {
+		rilascia_pagina_fisica(indice_pf(tabella));
+		return 0;
 	}
-	return 0;
+	natl dp = get_despag(tabella, ind_virtuale);
+	set_despag(tabella, ind_virtuale, dp | BIT_D);
+
+	return ind_fisico;
 }
 
 // crea la pila sistema di un processo
@@ -1537,40 +1539,23 @@ addr crea_pila_utente(addr direttorio)
 addr crea_pila_sistema(addr direttorio)
 {
 	addr ind_virtuale, ind_fisico, tabella;
-	int indice;
 
 	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
 	// dello spazio sistema/privato
-
-	indice = alloca_pagina_fisica();
-	if (indice == -1) {
-		indice = liberazione();
-		if (indice == -1)
-			goto errore1;
-	}
-	tabella = indirizzo_pf(indice);
-	set_all_des(tabella, 0);
 	ind_virtuale = n2a(fine_sistema_privato - DIM_PAGINA);
 	set_destab(direttorio, ind_virtuale, BIT_RW);
-	collega_tabella(direttorio, tabella, ind_virtuale);
-	pagine_fisiche[indice].residente = true;
-
-	indice = alloca_pagina_fisica();
-	if (indice == -1) {
-		indice = liberazione();
-		if (indice == -1)
-			goto errore2;
+	tabella = swap_tabella(direttorio, ind_virtuale);
+	if (tabella == 0)
+		return 0;
+	pagine_fisiche[indice_pf(tabella)].residente = true;
+	ind_fisico = swap_pagina(tabella, ind_virtuale);
+	if (ind_fisico == 0) {
+		rilascia_pagina_fisica(indice_pf(tabella));
+		return 0;
 	}
-	ind_fisico = indirizzo_pf(indice);
-	memset(ind_fisico, 0, DIM_PAGINA);
-	set_despag(tabella, ind_virtuale, BIT_RW);
-	collega_pagina(tabella, ind_fisico, ind_virtuale);
-	pagine_fisiche[indice].residente = true;
+	pagine_fisiche[indice_pf(ind_fisico)].residente = true;
 
 	return ind_fisico;
-
-errore2: 	rilascia_pagina_fisica(indice_pf(tabella)); 
-errore1:	return 0;
 }
 	
 // rilascia tutte le strutture dati private associate al processo puntato da 
@@ -3567,6 +3552,10 @@ void main_proc(int n)
 	// inizializzazione del modulo di io
 	flog(LOG_INFO, "creazione del processo main I/O...");
 	sem_io = sem_ini(0);
+	if (sem_io == 0) {
+		flog(LOG_ERR, "Impossibile allocare il semaforo di sincr per l'IO");
+		goto error;
+	}
 	if (activate_p(swap_dev.sb.io_entry, sem_io, MAX_PRIORITY, LIV_SISTEMA) == 0) {
 		flog(LOG_ERR, "impossibile creare il processo main I/O");
 		goto error;
