@@ -1053,8 +1053,8 @@ extern "C" void terminate_p();
 
 // funzioni usate dalla routine di trasferimento ("swap")
 int liberazione();
-void carica_pagina(addr tabella, addr ind_virtuale, natb* dest);
-void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest);
+bool carica_pagina(addr tabella, addr ind_virtuale, natb* dest);
+bool carica_tabella(addr direttorio, addr ind_virtuale, natb* dest);
 // NOTA: diversamente dal libro, usiamo "scrivi_blocco" e "leggi_blocco"
 // al posto di "readhd_n" e "writehd_n", in modo da tenere conto
 // dell'esistenza delle partizioni.
@@ -1072,7 +1072,8 @@ addr swap_tabella(addr direttorio, addr ind_virtuale) {
 	// diversamente, ottiene un indirizzo fisico per la tabella (variabile "ind_fis_tab")
 	ind_fis_tab = indirizzo_pf(indice_tab);
 	// 4') trasferisce la tabella da memoria di massa a memoria fisica
-	carica_tabella(direttorio, ind_virtuale, static_cast<natb*>(ind_fis_tab));
+	if (!carica_tabella(direttorio, ind_virtuale, static_cast<natb*>(ind_fis_tab)))
+		return 0;
 	// 5') e 6') aggiusta il descrittore di tabella e il descrittore di pagina fisica	
 	collega_tabella(direttorio, ind_fis_tab, ind_virtuale);
 	return ind_fis_tab;
@@ -1091,7 +1092,8 @@ addr swap_pagina(addr tabella, addr ind_virtuale) {
 	// (variabile "ind_fis_pag")
 	ind_fis_pag = indirizzo_pf(indice_pag);
 	// 4) trasferisce la pagina da memoria di massa a memoria fisica
-	carica_pagina(tabella, ind_virtuale, static_cast<natb*>(ind_fis_pag)); 
+	if (!carica_pagina(tabella, ind_virtuale, static_cast<natb*>(ind_fis_pag)))
+		return 0;
 	// 5) e 6) aggiusta il descrittore di pagina e il descrittore di pagina fisica
 	collega_pagina(tabella, ind_fis_pag, ind_virtuale);
 	return ind_fis_pag;
@@ -1123,7 +1125,7 @@ addr swap(addr direttorio, addr ind_virtuale)
 
 // carica la pagina descritta da pdes_pag in memoria fisica,
 // all'indirizzo pag
-void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
+bool carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 {
 	natl blocco;
 	// usa "tabella" e "ind_virtuale" per accedere al descrittore di pagina
@@ -1135,7 +1137,7 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 		blocco = alloca_blocco();
 		if (blocco == 0) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
-			return;
+			return false;
 		}
 		// e ne scrive l'indice nel descrittore di pagina
 		dp |= (blocco << BLOCK_SHIFT) & BLOCK_MASK;
@@ -1144,9 +1146,10 @@ void carica_pagina(addr tabella, addr ind_virtuale, natb* dest)
 			dest[i] = 0;
 	} else 
 		leggi_blocco(blocco, dest);
+	return true;
 }
 
-void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
+bool carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 {
 	natl blocco;
 	// usa "direttorio" e "ind_virtuale" per accedere al descrittore di tabella
@@ -1162,7 +1165,7 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 		blocco = alloca_blocco();
 		if (blocco == 0) {
 			flog(LOG_WARN, "spazio nello swap insufficiente");
-			return;
+			return false;
 		}
 
 		set_all_des(dest, dt & ~BIT_P);
@@ -1170,6 +1173,7 @@ void carica_tabella(addr direttorio, addr ind_virtuale, natb* dest)
 		set_destab(direttorio, ind_virtuale, dt);
 	} else 
 		leggi_blocco(blocco, dest);
+	return true;
 }
 
 
