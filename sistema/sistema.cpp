@@ -723,63 +723,46 @@ void rilascia_pagina_fisica(natl i)
 	pagine_libere = i;
 }
 
-void collega_tabella(natl proc, addr tabella, addr ind_virtuale, bool residente)
+natl& get_entdes(natl indice)
 {
-	des_pf* ppf  = &pagine_fisiche[indice_pf(tabella)];
-	ppf->contenuto  = TABELLA;
-	ppf->residente  = residente;
-	ppf->pt.contatore = 0x10000000;
-	ppf->pt.processo = proc;
-	ppf->pt.ind_virtuale = ind_virtuale;
-	natl& dt = get_destab(proc, ind_virtuale);
-	ppf->pt.blocco = ext_block(dt);
-	set_P(dt);
-	set_indfis(dt, tabella);
+	des_pf *ppf =&pagine_fisiche[indice];
+	if (ppf->contenuto == TABELLA) 
+		return get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
+	return get_despag(ppf->pt.processo, ppf->pt.ind_virtuale);
 }
 
-void scollega_tabella(natl proc, addr ind_virtuale)
-{
-	addr tabella;
-	natl& dt = get_destab(proc, ind_virtuale);
-	tabella = ext_indfis(dt);
-	natl indice = indice_pf(tabella);
-	des_pf *ppf = &pagine_fisiche[indice];
-	set_block(dt, ppf->pt.blocco);
-	reset_P(dt);
-}
 
-addr collega_pagina(natl proc, addr pagina, addr ind_virtuale, bool residente)
+addr collega(natl indice)
 {
-	des_pf* ppf = &pagine_fisiche[indice_pf(pagina)];
-	ppf->contenuto = PAGINA_VIRTUALE;
-	ppf->residente = residente;
-	ppf->pt.contatore  = 0x10000000;
-	ppf->pt.processo = proc;
-	ppf->pt.ind_virtuale = ind_virtuale;
-	natl& dt = get_destab(proc, ind_virtuale);
-	addr tabella = ext_indfis(dt);
-	natl& dp = get_despag(tabella, ind_virtuale);
-	ppf->pt.blocco = ext_block(dp);
-	set_P(dp);
-	set_indfis(dp, pagina);
-	ppf = &pagine_fisiche[indice_pf(tabella)];
-	ppf->pt.contatore |= 0x10000000;
-}
-
-void wait_gdb() {}
-
-void scollega_pagina(natl proc, addr ind_virtuale)
-{
-	addr pagina;
-	natl& dp = get_despag(proc, ind_virtuale);
-	pagina = ext_indfis(dp);
-	natl indice = indice_pf(pagina);
-	if (indice > 100000)
-		wait_gdb();
 	des_pf* ppf = &pagine_fisiche[indice];
-	set_block(dp, ppf->pt.blocco);
-	reset_P(dp);
+	natl& des = get_entdes(indice);
+
+	ppf->pt.blocco = ext_block(des);
+	set_indfis(des, indirizzo_pf(indice));
+	set_P(des);
+	ppf->pt.contatore  = 0x10000000;
+	if (ppf->contenuto == PAGINA_VIRTUALE) {
+		addr ind_fis_tab = ext_indfis(des);
+		ppf = &pagine_fisiche[indice_pf(ind_fis_tab)];
+		ppf->pt.contatore |= 0x10000000;
+	}
 }
+
+extern "C" void invalida_entrata_TLB(addr ind_virtuale);
+
+bool scollega(natl indice)
+{
+	bool bitD;
+
+	des_pf *ppf =&pagine_fisiche[indice];
+	natl &des = get_entdes(indice);
+	bitD = ext_D(des);
+	set_block(des, ppf->pt.blocco);
+	reset_P(des);
+	invalida_entrata_TLB(ppf->pt.ind_virtuale);
+	return bitD || ppf->contenuto == TABELLA;
+}
+
 
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
 // memoria virtuale gestita dal direttorio pdir
@@ -909,6 +892,7 @@ void dealloca_blocco(natl blocco)
 		bm_free(&swap_dev.free, blocco);
 }
 
+void wait_gdb() {}
 
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
@@ -924,6 +908,7 @@ void leggi_blocco(natl blocco, void* dest)
 	// sa niente dell'esistenza delle partizioni, quindi niente ci 
 	// impedisce di leggere o scrivere, per sbaglio, in un'altra partizione
 	if (blocco < 0 || sector + 8 > (swap_dev.part->first + swap_dev.part->dim)) {
+		wait_gdb();
 		flog(LOG_ERR, "Accesso al di fuori della partizione");
 		// fermiamo tutto
 		panic("Errore interno");
@@ -1088,72 +1073,97 @@ extern "C" int activate_p(void f(int), int a, natl prio, natb liv);
 extern "C" void terminate_p();
 
 int scegli_vittima(int indice_vietato);
-bool carica_pagina(natl proc, addr ind_virtuale, addr dest, bool residente);
-bool carica_tabella(natl proc, addr ind_virtuale, addr dest, bool residente);
-extern "C" void invalida_entrata_TLB(addr ind_virtuale);
-addr swap_tabella(natl proc, addr ind_virtuale, bool residente) {
-	addr ind_fis_tab;
-	des_pf *pvittima;
-	natl blocco;
-	natl vittima;
-	natl indice_tab = alloca_pagina_fisica();
-	if (indice_tab == 0xFFFFFFFF) {
-		vittima = scegli_vittima(0xFFFFFFFF);
+bool carica(natl indice);
+void scarica(natl indice);
+//addr swap_tabella(natl proc, addr ind_virtuale, bool residente) {
+//	addr ind_fis_tab;
+//	des_pf *pvittima, *ppf;
+//	natl blocco;
+//	natl vittima;
+//	natl indice_tab = alloca_pagina_fisica();
+//	if (indice_tab == 0xFFFFFFFF) {
+//		vittima = scegli_vittima(0xFFFFFFFF);
+//		if (vittima == 0xFFFFFFFF)
+//			return 0;
+//		pvittima = &pagine_fisiche[vittima];
+//		natl des = get_entdes(vittima);
+//		bool bitD = ext_D(des);
+//		scollega(vittima);
+//		if (pvittima->contenuto == TABELLA || bitD)
+//			scarica(vittima);
+//		indice_tab = vittima;
+//	}
+//	ppf = &pagine_fisiche[indice_tab];
+//	ppf->contenuto = TABELLA;
+//	ppf->residente = residente;
+//	ppf->pt.processo = proc;
+//	ppf->pt.ind_virtuale = ind_virtuale;
+//	collega(indice_tab);
+//	if (!carica(indice_tab))
+//		return 0;
+//	return indirizzo_pf(indice_tab);
+//}
+//addr swap_pagina(natl proc, addr ind_virtuale, bool residente) {
+//	des_pf *pvittima, *ppf;
+//	natl vittima;
+//	natl blocco;
+//	addr tabella = ext_indfis(get_destab(proc, ind_virtuale));
+//	natl indice_pag = alloca_pagina_fisica();
+//	if (indice_pag == 0xFFFFFFFF) {
+//		vittima = scegli_vittima(indice_pf(tabella));
+//		if (vittima == 0xFFFFFFFF)
+//			return 0;
+//		pvittima = &pagine_fisiche[vittima];
+//		natl des = get_entdes(vittima);
+//		bool bitD = ext_D(des);
+//		scollega(vittima);
+//		if (pvittima->contenuto == TABELLA || bitD)
+//			scarica(vittima);
+//		indice_pag = vittima;
+//	}
+//	ppf = &pagine_fisiche[indice_pag];
+//	ppf->contenuto = PAGINA_VIRTUALE;
+//	ppf->residente = residente;
+//	ppf->pt.processo = proc;
+//	ppf->pt.ind_virtuale = ind_virtuale;
+//	collega(indice_pag);
+//	if (!carica(indice_pag))
+//		return 0;
+//	return indirizzo_pf(indice_pag);
+//}
+
+addr get_parent(natl proc, cont_pf tipo, addr ind_virt)
+{
+	if (tipo == TABELLA)
+		return get_dir(proc);
+	return ext_indfis(get_destab(proc, ind_virt));
+}
+
+addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente) {
+	des_pf *ppf;
+
+	natl indice = alloca_pagina_fisica();
+	if (indice == 0xFFFFFFFF) {
+		addr escludi = get_parent(proc, tipo, ind_virt);
+		natl vittima = scegli_vittima(indice_pf(escludi));
 		if (vittima == 0xFFFFFFFF)
 			return 0;
-		pvittima = &pagine_fisiche[vittima];
-		blocco = pvittima->pt.blocco;
-		if (pvittima->contenuto == TABELLA) {
-			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			scrivi_blocco(blocco, indirizzo_pf(vittima));
-		} else {
-			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			bool bitD = ext_D(dp);
-			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
-			if (bitD) 
-				scrivi_blocco(blocco, indirizzo_pf(vittima));
-		}
-		indice_tab = vittima;
+		bool modificata = scollega(vittima);
+		if (modificata)
+			scarica(vittima);
+		indice = vittima;
 	}
-	ind_fis_tab = indirizzo_pf(indice_tab);
-	if (!carica_tabella(proc, ind_virtuale, ind_fis_tab, residente))
+	ppf = &pagine_fisiche[indice];
+	ppf->contenuto = tipo;
+	ppf->residente = residente;
+	ppf->pt.processo = proc;
+	ppf->pt.ind_virtuale = ind_virt;
+	collega(indice);
+	if (!carica(indice))
 		return 0;
-	collega_tabella(proc, ind_fis_tab, ind_virtuale, residente);
-	return ind_fis_tab;
+	return indirizzo_pf(indice);
 }
-addr swap_pagina(natl proc, addr ind_virtuale, bool residente) {
-	addr ind_fis_pag;
-	des_pf *pvittima;
-	natl vittima;
-	natl blocco;
-	addr tabella = ext_indfis(get_destab(proc, ind_virtuale));
-	natl indice_pag = alloca_pagina_fisica();
-	if (indice_pag == 0xFFFFFFFF) {
-		vittima = scegli_vittima(indice_pf(tabella));
-		if (vittima == 0xFFFFFFFF)
-			return 0;
-		pvittima = &pagine_fisiche[vittima];
-		blocco = pvittima->pt.blocco;
-		if (pvittima->contenuto == TABELLA) {
-			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			scrivi_blocco(blocco, indirizzo_pf(vittima));
-		} else {
-			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			bool bitD = ext_D(dp);
-			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
-			if (bitD) 
-				scrivi_blocco(blocco, indirizzo_pf(vittima));
-		}
-		indice_pag = vittima;
-	}
-	ind_fis_pag = indirizzo_pf(indice_pag);
-	if (!carica_pagina(proc, ind_virtuale, ind_fis_pag, residente))
-		return 0;
-	collega_pagina(proc, ind_fis_pag, ind_virtuale, residente);
-	return ind_fis_pag;
-}
+
 addr swap(natl proc, addr ind_virtuale)
 {
 	bool bitP;
@@ -1164,7 +1174,7 @@ addr swap(natl proc, addr ind_virtuale)
 	dt = get_destab(proc, ind_virtuale);
 	bitP = ext_P(dt);
 	if (!bitP)
-		ind_fis_tab = swap_tabella(proc, ind_virtuale, false);
+		ind_fis_tab = swap_ent(proc, TABELLA, ind_virtuale, false);
 	else
 		ind_fis_tab = ext_indfis(dt);
 	if (ind_fis_tab == 0)
@@ -1173,58 +1183,41 @@ addr swap(natl proc, addr ind_virtuale)
 	dp = get_despag(ppf->pt.processo, ind_virtuale);
 	bitP = ext_P(dp);
 	if (!bitP)
-		return swap_pagina(ppf->pt.processo, ind_virtuale, false);
+		return swap_ent(ppf->pt.processo, PAGINA_VIRTUALE,  ind_virtuale, false);
 	return ext_indfis(dp);
 
 }
 
-bool carica_pagina(natl proc, addr ind_virtuale, addr dest, bool residente)
+bool carica(natl indice)
 {
-	natl blocco;
-	natl& dp = get_despag(proc, ind_virtuale);
-	blocco = ext_block(dp);
-	if (blocco == 0) {
-		if (!residente) {
-			blocco = alloca_blocco();
-			if (blocco == 0) {
+	des_pf *ppf =&pagine_fisiche[indice];
+	addr dest = indirizzo_pf(indice);
+	if (ppf->pt.blocco == 0) {
+		if (!ppf->residente) {
+			ppf->pt.blocco = alloca_blocco();
+			if (ppf->pt.blocco == 0) {
 				flog(LOG_WARN, "spazio nello swap insufficiente");
 				return false;
 			}
-			set_block(dp, blocco);
 		}
-		for (int i = 0; i < DIM_PAGINA / 4; i++)
-			reinterpret_cast<natl*>(dest)[i] = 0;
+		if (ppf->contenuto == PAGINA_VIRTUALE) {
+			memset(dest, 0, DIM_PAGINA);
+		} else {
+			natl des = get_entdes(indice);
+			reset_P(des);
+			clear_block(des);
+			set_all_des(dest, des);
+		}
 	} else 
-		leggi_blocco(blocco, dest);
+		leggi_blocco(ppf->pt.blocco, dest);
 	return true;
 }
 
-bool carica_tabella(natl proc, addr ind_virtuale, addr dest, bool residente)
+void scarica(natl indice)
 {
-	natl blocco;
-	natl& dt = get_destab(proc, ind_virtuale);
-	natl dt2 = dt;
-	blocco = ext_block(dt);
-	// *** anche per le tabelle vale il caso speciale in cui blocco == 0: la 
-	// *** tabella non si trova nello swap, ma va creata. Per crearla, facciamo 
-	// *** in modo che ogni entrata della nuova tabella erediti le proprieta' 
-	// *** della tabella stessa (in particolare, i bit RW e US) e punti a 
-	// *** pagine da creare (ovvero, con address = 0).
-	if (blocco == 0) {
-		if (!residente) {
-			blocco = alloca_blocco();
-			if (blocco == 0) {
-				flog(LOG_WARN, "spazio nello swap insufficiente");
-				return false;
-			}
-			set_block(dt, blocco);
-		}
-		set_all_des(dest, dt2 & ~BIT_P);
-	} else 
-		leggi_blocco(blocco, dest);
-	return true;
+	des_pf *ppf =&pagine_fisiche[indice];
+	scrivi_blocco(ppf->pt.blocco, indirizzo_pf(indice));
 }
-
 
 extern "C" void invalida_entrata_TLB(addr ind_virtuale);
 
@@ -1264,11 +1257,9 @@ natl proc_corrente();
 
 extern "C" bool c_resident(addr ind_virt, natl quanti)
 {
-	bool  risu;
-	addr dir = readCR3();
-	addr ind_virt_pag, iff; natl np;
-	natl indice;
+	addr ind_virt_pag, ind_fis_pag;
 	des_pf* ppf;
+	natl np;
 	natl proc = proc_corrente();
 
 	// usa "ind_virt" e "quanti" per calcolare l'indirizzo virtuale
@@ -1278,21 +1269,13 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 	np = ceild(a2n(ind_virt) + quanti - a2n(ind_virt_pag), DIM_PAGINA);
 	for (int i = 0; i < np; i++) {
 		sem_wait(pf_mutex);
-		risu = swap(proc, ind_virt_pag);
-		// accede al descrittore di pagina associato a "ind_virt_pag"
-		// estraendone l'indirizzo fisico associato (variabile "iff")
-		if (risu == true) {
-			natl dt = get_destab(dir, ind_virt_pag);
-			addr tab = ext_indfis(dt);
-			natl dp = get_despag(tab, ind_virt_pag);
-			iff = ext_indfis(dp);
-
-			indice = indice_pf(iff);
-			ppf = &pagine_fisiche[indice];
+		ind_fis_pag = swap(proc, ind_virt_pag);
+		if (ind_fis_pag != 0) {
+			ppf = &pagine_fisiche[indice_pf(ind_fis_pag)];
 			ppf->residente = true;
 		}
 		sem_signal(pf_mutex);
-		if (risu == false)
+		if (ind_fis_pag == 0)
 			return false;
 	}
 	return true;
@@ -1432,23 +1415,13 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 	// pagina fisica per il direttorio del processo
 	indice = alloca_pagina_fisica();
-	if (indice == -1) {
-		int vittima = scegli_vittima(-1);
-		if (vittima == -1)
+	if (indice == 0xFFFFFFFF) {
+		int vittima = scegli_vittima(0xFFFFFFFF);
+		if (vittima == 0xFFFFFFFF)
 			goto errore4;
-		des_pf *pvittima = &pagine_fisiche[vittima];
-		natl  blocco = pvittima->pt.blocco;
-		if (pvittima->contenuto == TABELLA) {
-			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
-		} else {
-			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			natl bitD = (dp & BIT_D) ? 1 : 0;
-			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
-			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
-			if (bitD == 1) 
-				scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
-		}
+		bool modificata = scollega(vittima);
+		if (modificata)
+			scarica(vittima);
 		indice = vittima;
 	}
 	pdirettorio = indirizzo_pf(indice);
@@ -1586,10 +1559,10 @@ addr crea_pila_utente(natl proc)
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
 	ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
-	tabella = swap_tabella(proc, ind_virtuale, false);
+	tabella = swap_ent(proc, TABELLA, ind_virtuale, false);
 	if (tabella == 0)
 		return 0;
-	ind_fisico = swap_pagina(proc, ind_virtuale, false);
+	ind_fisico = swap_ent(proc, PAGINA_VIRTUALE, ind_virtuale, false);
 	if (ind_fisico == 0) {
 		rilascia_pagina_fisica(indice_pf(tabella));
 		return 0;
@@ -1611,10 +1584,10 @@ addr crea_pila_sistema(natl proc)
 	// dello spazio sistema/privato
 	ind_virtuale = n2a(fine_sistema_privato - DIM_PAGINA);
 	set_destab(direttorio, ind_virtuale, BIT_RW);
-	tabella = swap_tabella(proc, ind_virtuale, true);
+	tabella = swap_ent(proc, TABELLA, ind_virtuale, true);
 	if (tabella == 0)
 		return 0;
-	ind_fisico = swap_pagina(proc, ind_virtuale, true);
+	ind_fisico = swap_ent(proc, PAGINA_VIRTUALE, ind_virtuale, true);
 	if (ind_fisico == 0) {
 		rilascia_pagina_fisica(indice_pf(tabella));
 		return 0;
@@ -3360,34 +3333,21 @@ bool carica_tutto(natl proc, natl start, natl stop, addr& last_addr)
 	for (natl ind = start; ind < stop; ind += DIM_SUPERPAGINA)
 	{
 		natl dt = get_destab(dir, n2a(ind));
-
-		if (dt & BIT_P) {	  
-
+		if (ext_P(dt)) {	  
 			last_addr = n2a(ind + DIM_SUPERPAGINA);
-
-			int indice = alloca_pagina_fisica();
-			if (indice == -1) {
-				flog(LOG_ERR, "Impossibile allocare tabella condivisa");
+			addr tabella = swap_ent(proc, TABELLA, n2a(ind), true);
+			if (!tabella) {
+				flog(LOG_ERR, "Impossibile allocare tabella residente");
 				return false;
 			}
-			des_pf *ppf = &pagine_fisiche[indice];
-			addr tabella = indirizzo_pf(indice);
-			carica_tabella(proc, n2a(ind), tabella, true);
-			collega_tabella(proc, tabella, n2a(ind), true);
-
 			natl ind_virt_pag = ind;
 			for (int i = 0; i < 1024; i++) {
 				natl dp = get_despag(tabella, n2a(ind_virt_pag));
-				if (dp & BIT_P) {
-					indice = alloca_pagina_fisica();
-					if (indice == -1) {
+				if (ext_P(dp)) {
+					if (!swap_ent(proc, PAGINA_VIRTUALE, n2a(ind_virt_pag), true)) {	
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
 						return false;
 					}
-					des_pf *ppf = &pagine_fisiche[indice];
-					addr ind_fis_pag = indirizzo_pf(indice);
-					carica_pagina(proc, n2a(ind_virt_pag), ind_fis_pag, true);
-					collega_pagina(proc, ind_fis_pag, n2a(ind_virt_pag), true);
 				}
 				ind_virt_pag += DIM_PAGINA;
 			}
