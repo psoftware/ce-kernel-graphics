@@ -21,8 +21,10 @@
 #define DELAY			59659		
 #define DEFAULT_HEAP_SIZE	(1024*1024)
 
-#define MAX_PRIORITY		0x7ffffff
-#define MIN_PRIORITY		0x8000000
+#define MAX_PRIORITY		0xfffffff
+#define MIN_PRIORITY		0x0000002
+#define DUMMY_PRIORITY		0x0000001
+#define FREEZE_PRIORITY		0x0000000
 
 
 #define TIPO_A			0x30
@@ -37,6 +39,7 @@
 #define TIPO_RL			0x3a
 #define TIPO_R			0x3b
 #define TIPO_EP			0x3c
+#define TIPO_F			0x3d
 
 #define TIPO_AE			0x40
 #define TIPO_NWFI		0x41

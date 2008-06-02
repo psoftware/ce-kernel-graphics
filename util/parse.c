@@ -277,7 +277,8 @@ void rilascia_righe()
 	}
 }
 
-#define MAIN_HEAD "\nint main()\n{\n\tdummy = activate_p(dd, 0, 1, LIV_UTENTE);\n"
+//#define MAIN_HEAD "\nint main()\n{\n\tdummy = activate_p(dd, 0, 1, LIV_UTENTE);\n"
+#define MAIN_HEAD "\nint main()\n{\n"
 
 #if defined WIN || defined WIN_XP
 #define MAIN_TAIL "\n\tterminate_p();\n}\n\nextern\"C\" void __main()\n{\n}\n"

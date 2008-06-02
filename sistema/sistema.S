@@ -520,6 +520,7 @@ init_gdt:
 .set tipo_rl, TIPO_RL
 .set tipo_r, TIPO_R
 .set tipo_ep, TIPO_EP
+.set tipo_f, TIPO_F
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 .set tipo_ae, TIPO_AE
@@ -594,6 +595,8 @@ init_idt:
 	carica_gate	tipo_r		a_resident	LIV_UTENTE
 	carica_gate	tipo_l		a_log		LIV_UTENTE
 	carica_gate	tipo_ep		a_end_program	LIV_UTENTE
+
+	carica_gate	tipo_f		a_freeze	LIV_SISTEMA
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
@@ -1362,6 +1365,16 @@ _abort_p:
 _nwfi:
 	int $tipo_nwfi
 	ret
+
+	.global _end_program
+_end_program:
+	int $tipo_ep
+	ret
+
+	.global _freeze
+_freeze:
+	int $tipo_f
+	ret
 ////////////////////////////////////////////////////////
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
@@ -1663,7 +1676,13 @@ a_resident:	// routine int $tipo_r
 	addl $8, %esp
 	carica_reg_rit
 	iret
-
+	
+	.extern _c_freeze
+a_freeze:
+	call salva_stato
+	call _c_freeze
+	call carica_stato
+	iret
 
 //
 // Interfaccia offerta al modulo di IO, inaccessibile dal livello utente

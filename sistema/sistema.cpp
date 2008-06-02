@@ -543,6 +543,11 @@ bool ext_D(natl des)
 	return (des & BIT_D);
 }
 
+void set_D(natl& des)
+{
+	des |= BIT_D;
+}
+
 bool ext_A(natl des)
 {
 	return (des & BIT_A);
@@ -581,6 +586,19 @@ void set_block(natl& des, natl block)
 	des |= (block << BLOCK_SHIFT);
 }
 
+addr get_dir(natl proc);
+
+natl& get_destab(natl proc, addr ind_virt)
+{
+	return get_destab(get_dir(proc), ind_virt);
+}
+
+natl& get_despag(natl proc, addr ind_virt)
+{
+	natl dt = get_destab(proc, ind_virt);
+	return get_despag(ext_indfis(dt), ind_virt);
+}
+
 // carica un nuovo valore in cr3 [vedi sistema.S]
 extern "C" void loadCR3(addr dir);
 
@@ -604,7 +622,7 @@ struct des_pf {
 	union {
 		struct { // informazioni relative a una pagina virtuale o tabella
 			natl	blocco;		// blocco in memoria di massa
-			addr	punt;		// tabella (direttorio) che punta alla pagina (tabella)
+			natl	processo;	// processo a cui appartiene la pagina (tabella)
 			addr	ind_virtuale;   // indirizzo virtuale della pagina (tabella)
 			natl	contatore;	// contatore per le statistiche LRU
 		} pt;
@@ -705,24 +723,24 @@ void rilascia_pagina_fisica(natl i)
 	pagine_libere = i;
 }
 
-void collega_tabella(addr direttorio, addr tabella, addr ind_virtuale, bool residente)
+void collega_tabella(natl proc, addr tabella, addr ind_virtuale, bool residente)
 {
 	des_pf* ppf  = &pagine_fisiche[indice_pf(tabella)];
 	ppf->contenuto  = TABELLA;
 	ppf->residente  = residente;
 	ppf->pt.contatore = 0x10000000;
-	ppf->pt.punt = direttorio;
+	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virtuale;
-	natl& dt = get_destab(direttorio, ind_virtuale);
+	natl& dt = get_destab(proc, ind_virtuale);
 	ppf->pt.blocco = ext_block(dt);
 	set_P(dt);
 	set_indfis(dt, tabella);
 }
 
-void scollega_tabella(addr direttorio, addr ind_virtuale)
+void scollega_tabella(natl proc, addr ind_virtuale)
 {
 	addr tabella;
-	natl& dt = get_destab(direttorio, ind_virtuale);
+	natl& dt = get_destab(proc, ind_virtuale);
 	tabella = ext_indfis(dt);
 	natl indice = indice_pf(tabella);
 	des_pf *ppf = &pagine_fisiche[indice];
@@ -730,14 +748,16 @@ void scollega_tabella(addr direttorio, addr ind_virtuale)
 	reset_P(dt);
 }
 
-addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale, bool residente)
+addr collega_pagina(natl proc, addr pagina, addr ind_virtuale, bool residente)
 {
 	des_pf* ppf = &pagine_fisiche[indice_pf(pagina)];
 	ppf->contenuto = PAGINA_VIRTUALE;
 	ppf->residente = residente;
 	ppf->pt.contatore  = 0x10000000;
-	ppf->pt.punt = tabella;
+	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virtuale;
+	natl& dt = get_destab(proc, ind_virtuale);
+	addr tabella = ext_indfis(dt);
 	natl& dp = get_despag(tabella, ind_virtuale);
 	ppf->pt.blocco = ext_block(dp);
 	set_P(dp);
@@ -746,12 +766,16 @@ addr collega_pagina(addr tabella, addr pagina, addr ind_virtuale, bool residente
 	ppf->pt.contatore |= 0x10000000;
 }
 
-void scollega_pagina(addr tabella, addr ind_virtuale)
+void wait_gdb() {}
+
+void scollega_pagina(natl proc, addr ind_virtuale)
 {
 	addr pagina;
-	natl& dp = get_despag(tabella, ind_virtuale);
+	natl& dp = get_despag(proc, ind_virtuale);
 	pagina = ext_indfis(dp);
 	natl indice = indice_pf(pagina);
+	if (indice > 100000)
+		wait_gdb();
 	des_pf* ppf = &pagine_fisiche[indice];
 	set_block(dp, ppf->pt.blocco);
 	reset_P(dp);
@@ -1064,10 +1088,10 @@ extern "C" int activate_p(void f(int), int a, natl prio, natb liv);
 extern "C" void terminate_p();
 
 int scegli_vittima(int indice_vietato);
-bool carica_pagina(addr tabella, addr ind_virtuale, addr dest, bool residente);
-bool carica_tabella(addr direttorio, addr ind_virtuale, addr dest, bool residente);
+bool carica_pagina(natl proc, addr ind_virtuale, addr dest, bool residente);
+bool carica_tabella(natl proc, addr ind_virtuale, addr dest, bool residente);
 extern "C" void invalida_entrata_TLB(addr ind_virtuale);
-addr swap_tabella(addr direttorio, addr ind_virtuale, bool residente) {
+addr swap_tabella(natl proc, addr ind_virtuale, bool residente) {
 	addr ind_fis_tab;
 	des_pf *pvittima;
 	natl blocco;
@@ -1080,12 +1104,12 @@ addr swap_tabella(addr direttorio, addr ind_virtuale, bool residente) {
 		pvittima = &pagine_fisiche[vittima];
 		blocco = pvittima->pt.blocco;
 		if (pvittima->contenuto == TABELLA) {
-			scollega_tabella(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			scrivi_blocco(blocco, indirizzo_pf(vittima));
 		} else {
-			natl dp = get_despag(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			bool bitD = ext_D(dp);
-			scollega_pagina(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
 			if (bitD) 
 				scrivi_blocco(blocco, indirizzo_pf(vittima));
@@ -1093,16 +1117,17 @@ addr swap_tabella(addr direttorio, addr ind_virtuale, bool residente) {
 		indice_tab = vittima;
 	}
 	ind_fis_tab = indirizzo_pf(indice_tab);
-	if (!carica_tabella(direttorio, ind_virtuale, ind_fis_tab, residente))
+	if (!carica_tabella(proc, ind_virtuale, ind_fis_tab, residente))
 		return 0;
-	collega_tabella(direttorio, ind_fis_tab, ind_virtuale, residente);
+	collega_tabella(proc, ind_fis_tab, ind_virtuale, residente);
 	return ind_fis_tab;
 }
-addr swap_pagina(addr tabella, addr ind_virtuale, bool residente) {
+addr swap_pagina(natl proc, addr ind_virtuale, bool residente) {
 	addr ind_fis_pag;
 	des_pf *pvittima;
 	natl vittima;
 	natl blocco;
+	addr tabella = ext_indfis(get_destab(proc, ind_virtuale));
 	natl indice_pag = alloca_pagina_fisica();
 	if (indice_pag == 0xFFFFFFFF) {
 		vittima = scegli_vittima(indice_pf(tabella));
@@ -1111,49 +1136,52 @@ addr swap_pagina(addr tabella, addr ind_virtuale, bool residente) {
 		pvittima = &pagine_fisiche[vittima];
 		blocco = pvittima->pt.blocco;
 		if (pvittima->contenuto == TABELLA) {
-			scollega_tabella(pvittima->pt.punt, pvittima->pt.ind_virtuale);
-			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
+			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
+			scrivi_blocco(blocco, indirizzo_pf(vittima));
 		} else {
-			natl dp = get_despag(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			bool bitD = ext_D(dp);
-			scollega_pagina(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
 			if (bitD) 
-				scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
+				scrivi_blocco(blocco, indirizzo_pf(vittima));
 		}
 		indice_pag = vittima;
 	}
 	ind_fis_pag = indirizzo_pf(indice_pag);
-	if (!carica_pagina(tabella, ind_virtuale, ind_fis_pag, residente))
+	if (!carica_pagina(proc, ind_virtuale, ind_fis_pag, residente))
 		return 0;
-	collega_pagina(tabella, ind_fis_pag, ind_virtuale, residente);
+	collega_pagina(proc, ind_fis_pag, ind_virtuale, residente);
 	return ind_fis_pag;
 }
-addr swap(addr direttorio, addr ind_virtuale)
+addr swap(natl proc, addr ind_virtuale)
 {
 	bool bitP;
 	natl dt, dp;
 	addr ind_fis_tab, ind_fis_pag;
-	dt = get_destab(direttorio, ind_virtuale);
+	des_pf *ppf;
+
+	dt = get_destab(proc, ind_virtuale);
 	bitP = ext_P(dt);
 	if (!bitP)
-		ind_fis_tab = swap_tabella(direttorio, ind_virtuale, false);
+		ind_fis_tab = swap_tabella(proc, ind_virtuale, false);
 	else
 		ind_fis_tab = ext_indfis(dt);
 	if (ind_fis_tab == 0)
 		return 0;
-	dp = get_despag(ind_fis_tab, ind_virtuale);
+	ppf =&pagine_fisiche[indice_pf(ind_fis_tab)];
+	dp = get_despag(ppf->pt.processo, ind_virtuale);
 	bitP = ext_P(dp);
 	if (!bitP)
-		return swap_pagina(ind_fis_tab, ind_virtuale, false);
+		return swap_pagina(ppf->pt.processo, ind_virtuale, false);
 	return ext_indfis(dp);
 
 }
 
-bool carica_pagina(addr tabella, addr ind_virtuale, addr dest, bool residente)
+bool carica_pagina(natl proc, addr ind_virtuale, addr dest, bool residente)
 {
 	natl blocco;
-	natl& dp = get_despag(tabella, ind_virtuale);
+	natl& dp = get_despag(proc, ind_virtuale);
 	blocco = ext_block(dp);
 	if (blocco == 0) {
 		if (!residente) {
@@ -1171,10 +1199,10 @@ bool carica_pagina(addr tabella, addr ind_virtuale, addr dest, bool residente)
 	return true;
 }
 
-bool carica_tabella(addr direttorio, addr ind_virtuale, addr dest, bool residente)
+bool carica_tabella(natl proc, addr ind_virtuale, addr dest, bool residente)
 {
 	natl blocco;
-	natl& dt = get_destab(direttorio, ind_virtuale);
+	natl& dt = get_destab(proc, ind_virtuale);
 	natl dt2 = dt;
 	blocco = ext_block(dt);
 	// *** anche per le tabelle vale il caso speciale in cui blocco == 0: la 
@@ -1232,6 +1260,8 @@ int scegli_vittima(int indice_vietato)
 	return vittima;
 }
 
+natl proc_corrente();
+
 extern "C" bool c_resident(addr ind_virt, natl quanti)
 {
 	bool  risu;
@@ -1239,6 +1269,7 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 	addr ind_virt_pag, iff; natl np;
 	natl indice;
 	des_pf* ppf;
+	natl proc = proc_corrente();
 
 	// usa "ind_virt" e "quanti" per calcolare l'indirizzo virtuale
 	// della prima pagina (variabile "ind_virt_pag") e il numero
@@ -1247,7 +1278,7 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 	np = ceild(a2n(ind_virt) + quanti - a2n(ind_virt_pag), DIM_PAGINA);
 	for (int i = 0; i < np; i++) {
 		sem_wait(pf_mutex);
-		risu = swap(dir, ind_virt_pag);
+		risu = swap(proc, ind_virt_pag);
 		// accede al descrittore di pagina associato a "ind_virt_pag"
 		// estraendone l'indirizzo fisico associato (variabile "iff")
 		if (risu == true) {
@@ -1347,14 +1378,26 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem);
 
 
 // funzioni usate da crea_processo
-addr crea_pila_utente(addr direttorio);
-addr crea_pila_sistema(addr direttorio);
+addr crea_pila_utente(natl proc);
+addr crea_pila_sistema(natl proc);
 void rilascia_tutto(addr direttorio, addr start, int ntab);
 extern "C" int alloca_tss(des_proc* p);
 extern "C" void rilascia_tss(int indice);
 
 // ritorna il descrittore del processo id
 extern "C" des_proc *des_p(short id);
+
+// restituisce l'indirizzo fisico del direttorio del processo proc
+addr get_dir(natl proc)
+{
+	des_proc *p = des_p(proc);
+	return p->cr3;
+}
+
+natl proc_corrente()
+{
+	return esecuzione->nome;
+}
 
 // elemento di coda e descrittore del primo processo (quello che esegue il 
 // codice di inizializzazione e la funzione main)
@@ -1392,25 +1435,17 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	if (indice == -1) {
 		int vittima = scegli_vittima(-1);
 		if (vittima == -1)
-			// se questa fallisce, termina restituendo false
 			goto errore4;
 		des_pf *pvittima = &pagine_fisiche[vittima];
 		natl  blocco = pvittima->pt.blocco;
 		if (pvittima->contenuto == TABELLA) {
-			// 2') aggiusta il descrittore di tabella corrispondente
-			scollega_tabella(pvittima->pt.punt, pvittima->pt.ind_virtuale);
-			// 3') scrive la tabella in memoria di massa nel blocco di indice
-			// dato da "blocco"
+			scollega_tabella(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
 		} else {
-			// accede al descrittore di pagina e ne estra il valore del bit D (variabile "bitD")
-			natl dp = get_despag(pvittima->pt.punt, pvittima->pt.ind_virtuale);
+			natl dp = get_despag(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			natl bitD = (dp & BIT_D) ? 1 : 0;
-			// 2) aggiusta il descrittore di pagina corrispondente
-			scollega_pagina(pvittima->pt.punt, pvittima->pt.ind_virtuale);
-			// invalida l'entrata del TLB corrispondente a "pvittima->pt.ind_virtuale")
+			scollega_pagina(pvittima->pt.processo, pvittima->pt.ind_virtuale);
 			invalida_entrata_TLB(pvittima->pt.ind_virtuale);
-
 			if (bitD == 1) 
 				scrivi_blocco(blocco, static_cast<natb*>(indirizzo_pf(vittima)));
 		}
@@ -1419,6 +1454,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	pdirettorio = indirizzo_pf(indice);
 	pagine_fisiche[indice].contenuto = DIRETTORIO;
 	pagine_fisiche[indice].residente = true;
+	pdes_proc->cr3 = pdirettorio;
 
 	// il direttorio viene inizialmente copiato dal direttorio principale
 	// (in questo modo, il nuovo processo acquisisce automaticamente gli
@@ -1427,7 +1463,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	ppdir = readCR3();
 	memcpy(pdirettorio, ppdir, DIM_PAGINA);
 	
-	pila_sistema = crea_pila_sistema(pdirettorio);
+	pila_sistema = crea_pila_sistema(p->nome);
 	if (pila_sistema == 0) goto errore5;
 
 	if (liv == LIV_UTENTE) {
@@ -1442,7 +1478,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// passera' ad eseguire la prima istruzione della funzione f,
 		// usando come pila la pila utente (al suo indirizzo virtuale)
 
-		pila_utente = crea_pila_utente(pdirettorio);
+		pila_utente = crea_pila_utente(p->nome);
 		if (pila_utente == 0) goto errore6;
 
 		// dobbiamo ora fare in modo che la pila utente si trovi nella
@@ -1468,8 +1504,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pdes_proc->ds  = SEL_DATI_UTENTE;
 		pdes_proc->es  = SEL_DATI_UTENTE;
 
-		pdes_proc->cr3 = pdirettorio;
-
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
 		pdes_proc->cpl = LIV_UTENTE;
@@ -1490,9 +1524,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		pdes_proc->ds  = SEL_DATI_SISTEMA;
 		pdes_proc->es  = SEL_DATI_SISTEMA;
-
-		pdes_proc->cr3 = pdirettorio;
-
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
 		pdes_proc->cpl = LIV_SISTEMA;
@@ -1508,19 +1539,18 @@ errore2:	dealloca(p);
 errore1:	return 0;
 }
 
-// esegue lo shutdown del sistema
-extern "C" void shutdown();
-
 // corpo del processo dummy iniziale
 void dummy_init(int i)
 {
-	for (;;);
+	while (processi > 1)
+		;
+	terminate_p();
 }
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 bool crea_dummy_init()
 {
-	proc_elem* di = crea_processo(dummy_init, 0, 0, LIV_SISTEMA);
+	proc_elem* di = crea_processo(dummy_init, 0, DUMMY_PRIORITY, LIV_SISTEMA);
 	if (di == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy_init");
 		return false;
@@ -1541,9 +1571,10 @@ bool crea_main()
 }
 
 // creazione della pila utente
-addr crea_pila_utente(addr direttorio)
+addr crea_pila_utente(natl proc)
 {
 	addr ind_virtuale, ind_fisico, tabella;
+	addr direttorio = get_dir(proc);
 
 	// prepariamo i descrittori di tabella per tutto lo spazio 
 	// utente/privato. Viene usata l'ottimizzazione address = 0
@@ -1555,34 +1586,35 @@ addr crea_pila_utente(addr direttorio)
 	// la crea processo vi dovra' scrivere le parole lunghe di 
 	// inizializzazione
 	ind_virtuale = n2a(fine_utente_privato - DIM_PAGINA);
-	tabella = swap_tabella(direttorio, ind_virtuale, false);
+	tabella = swap_tabella(proc, ind_virtuale, false);
 	if (tabella == 0)
 		return 0;
-	ind_fisico = swap_pagina(tabella, ind_virtuale, false);
+	ind_fisico = swap_pagina(proc, ind_virtuale, false);
 	if (ind_fisico == 0) {
 		rilascia_pagina_fisica(indice_pf(tabella));
 		return 0;
 	}
-	natl dp = get_despag(tabella, ind_virtuale);
-	set_despag(tabella, ind_virtuale, dp | BIT_D);
+	natl& dp = get_despag(tabella, ind_virtuale);
+	set_D(dp);
 
 	return ind_fisico;
 }
 
 // crea la pila sistema di un processo
 // la pila sistema e' grande una sola pagina ed e' sempre residente
-addr crea_pila_sistema(addr direttorio)
+addr crea_pila_sistema(natl proc)
 {
 	addr ind_virtuale, ind_fisico, tabella;
+	addr direttorio = get_dir(proc);
 
 	// l'indirizzo della cima della pila e' una pagina sopra alla fine 
 	// dello spazio sistema/privato
 	ind_virtuale = n2a(fine_sistema_privato - DIM_PAGINA);
 	set_destab(direttorio, ind_virtuale, BIT_RW);
-	tabella = swap_tabella(direttorio, ind_virtuale, true);
+	tabella = swap_tabella(proc, ind_virtuale, true);
 	if (tabella == 0)
 		return 0;
-	ind_fisico = swap_pagina(tabella, ind_virtuale, true);
+	ind_fisico = swap_pagina(proc, ind_virtuale, true);
 	if (ind_fisico == 0) {
 		rilascia_pagina_fisica(indice_pf(tabella));
 		return 0;
@@ -1653,6 +1685,11 @@ c_activate_p(void f(int), int a, natl prio, natb liv)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	short id = 0;
+
+	if (prio < MIN_PRIORITY) {
+		flog(LOG_WARN, "priorita' non valida: %d", prio);
+		abort_p();
+	}
 
 	sem_wait(pf_mutex);
 
@@ -1740,6 +1777,11 @@ bool aggiungi_pe(proc_elem *p, int irq)
 extern "C" natw c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
+
+	if (prio < MIN_PRIORITY) {
+		flog(LOG_WARN, "priorita' non valida: %d", prio);
+		abort_p();
+	}
 
 	sem_wait(pf_mutex);
 
@@ -2095,7 +2137,7 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 
 	// in tutti gli altri casi, proviamo a trasferire la pagina mancante
 	sem_wait(pf_mutex);
-	risu = swap(readCR3(), indirizzo_virtuale);
+	risu = swap(proc_corrente(), indirizzo_virtuale);
 	sem_signal(pf_mutex);
 
 	// se non e' stato possibile caricare la pagina, il processo
@@ -3312,8 +3354,9 @@ extern "C" void init_8259();
 extern "C" void salta_a_main();
 void main_proc(int n);
 
-bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
+bool carica_tutto(natl proc, natl start, natl stop, addr& last_addr)
 {
+	addr dir = get_dir(proc);
 	for (natl ind = start; ind < stop; ind += DIM_SUPERPAGINA)
 	{
 		natl dt = get_destab(dir, n2a(ind));
@@ -3329,8 +3372,8 @@ bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 			}
 			des_pf *ppf = &pagine_fisiche[indice];
 			addr tabella = indirizzo_pf(indice);
-			carica_tabella(dir, n2a(ind), tabella, true);
-			collega_tabella(dir, tabella, n2a(ind), true);
+			carica_tabella(proc, n2a(ind), tabella, true);
+			collega_tabella(proc, tabella, n2a(ind), true);
 
 			natl ind_virt_pag = ind;
 			for (int i = 0; i < 1024; i++) {
@@ -3343,8 +3386,8 @@ bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 					}
 					des_pf *ppf = &pagine_fisiche[indice];
 					addr ind_fis_pag = indirizzo_pf(indice);
-					carica_pagina(tabella, n2a(ind_virt_pag), ind_fis_pag, true);
-					collega_pagina(tabella, ind_fis_pag, n2a(ind_virt_pag), true);
+					carica_pagina(proc, n2a(ind_virt_pag), ind_fis_pag, true);
+					collega_pagina(proc, ind_fis_pag, n2a(ind_virt_pag), true);
 				}
 				ind_virt_pag += DIM_PAGINA;
 			}
@@ -3353,7 +3396,7 @@ bool carica_tutto(addr dir, natl start, natl stop, addr& last_addr)
 	return true;
 }
 
-bool crea_spazio_condiviso(addr& last_address)
+bool crea_spazio_condiviso(natl main_proc, addr& last_address)
 {
 	
 	// lettura del direttorio principale dallo swap
@@ -3366,14 +3409,14 @@ bool crea_spazio_condiviso(addr& last_address)
 	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
 		return false;
 
-	addr main_dir = readCR3();
+	addr main_dir = get_dir(main_proc);
 	copy_dir(tmp, main_dir, n2a(inizio_io_condiviso),     n2a(fine_io_condiviso));
 	copy_dir(tmp, main_dir, n2a(inizio_utente_condiviso), n2a(fine_utente_condiviso));
 	dealloca(tmp);
 	
-	if (!carica_tutto(main_dir, inizio_io_condiviso, fine_io_condiviso, last_address))
+	if (!carica_tutto(main_proc, inizio_io_condiviso, fine_io_condiviso, last_address))
 		return false;
-	if (!carica_tutto(main_dir, inizio_utente_condiviso, fine_utente_condiviso, last_address))
+	if (!carica_tutto(main_proc, inizio_utente_condiviso, fine_utente_condiviso, last_address))
 		return false;
 
 	loadCR3(readCR3());
@@ -3382,6 +3425,15 @@ bool crea_spazio_condiviso(addr& last_address)
 
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
 int heap_mem = DEFAULT_HEAP_SIZE;
+
+extern "C" void freeze();
+extern "C" void end_program();
+extern "C" void c_freeze()
+{
+	esecuzione->precedenza = FREEZE_PRIORITY;
+	inserimento_lista(pronti, esecuzione);
+	schedulatore();
+}
 
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
@@ -3558,7 +3610,7 @@ void main_proc(int n)
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	addr last_address;
-	if (!crea_spazio_condiviso(last_address))
+	if (!crea_spazio_condiviso(proc_corrente(), last_address))
 		goto error;
 
 	// inizializzazione dello heap utente
@@ -3597,7 +3649,8 @@ void main_proc(int n)
 		goto error;
 	}
 	attiva_timer(DELAY);
-	terminate_p();
+	freeze();
+	end_program();
 error:
 	panic("Errore di inizializzazione");
 }
