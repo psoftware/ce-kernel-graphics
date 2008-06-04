@@ -587,6 +587,7 @@ void set_block(natl& des, natl block)
 }
 
 addr get_dir(natl proc);
+addr get_tab(natl proc, addr ind_virt);
 
 natl& get_destab(natl proc, addr ind_virt)
 {
@@ -742,7 +743,7 @@ addr collega(natl indice)
 	set_P(des);
 	ppf->pt.contatore  = 0x10000000;
 	if (ppf->contenuto == PAGINA_VIRTUALE) {
-		addr ind_fis_tab = ext_indfis(des);
+		addr ind_fis_tab = get_tab(ppf->pt.processo, ppf->pt.ind_virtuale);
 		ppf = &pagine_fisiche[indice_pf(ind_fis_tab)];
 		ppf->pt.contatore |= 0x10000000;
 	}
@@ -1075,63 +1076,6 @@ extern "C" void terminate_p();
 int scegli_vittima(int indice_vietato);
 bool carica(natl indice);
 void scarica(natl indice);
-//addr swap_tabella(natl proc, addr ind_virtuale, bool residente) {
-//	addr ind_fis_tab;
-//	des_pf *pvittima, *ppf;
-//	natl blocco;
-//	natl vittima;
-//	natl indice_tab = alloca_pagina_fisica();
-//	if (indice_tab == 0xFFFFFFFF) {
-//		vittima = scegli_vittima(0xFFFFFFFF);
-//		if (vittima == 0xFFFFFFFF)
-//			return 0;
-//		pvittima = &pagine_fisiche[vittima];
-//		natl des = get_entdes(vittima);
-//		bool bitD = ext_D(des);
-//		scollega(vittima);
-//		if (pvittima->contenuto == TABELLA || bitD)
-//			scarica(vittima);
-//		indice_tab = vittima;
-//	}
-//	ppf = &pagine_fisiche[indice_tab];
-//	ppf->contenuto = TABELLA;
-//	ppf->residente = residente;
-//	ppf->pt.processo = proc;
-//	ppf->pt.ind_virtuale = ind_virtuale;
-//	collega(indice_tab);
-//	if (!carica(indice_tab))
-//		return 0;
-//	return indirizzo_pf(indice_tab);
-//}
-//addr swap_pagina(natl proc, addr ind_virtuale, bool residente) {
-//	des_pf *pvittima, *ppf;
-//	natl vittima;
-//	natl blocco;
-//	addr tabella = ext_indfis(get_destab(proc, ind_virtuale));
-//	natl indice_pag = alloca_pagina_fisica();
-//	if (indice_pag == 0xFFFFFFFF) {
-//		vittima = scegli_vittima(indice_pf(tabella));
-//		if (vittima == 0xFFFFFFFF)
-//			return 0;
-//		pvittima = &pagine_fisiche[vittima];
-//		natl des = get_entdes(vittima);
-//		bool bitD = ext_D(des);
-//		scollega(vittima);
-//		if (pvittima->contenuto == TABELLA || bitD)
-//			scarica(vittima);
-//		indice_pag = vittima;
-//	}
-//	ppf = &pagine_fisiche[indice_pag];
-//	ppf->contenuto = PAGINA_VIRTUALE;
-//	ppf->residente = residente;
-//	ppf->pt.processo = proc;
-//	ppf->pt.ind_virtuale = ind_virtuale;
-//	collega(indice_pag);
-//	if (!carica(indice_pag))
-//		return 0;
-//	return indirizzo_pf(indice_pag);
-//}
-
 addr get_parent(natl proc, cont_pf tipo, addr ind_virt)
 {
 	if (tipo == TABELLA)
@@ -1375,6 +1319,12 @@ addr get_dir(natl proc)
 {
 	des_proc *p = des_p(proc);
 	return p->cr3;
+}
+
+addr get_tab(natl proc, addr ind_virt)
+{
+	natl dt = get_destab(proc, ind_virt);
+	return ext_indfis(dt);
 }
 
 natl proc_corrente()
