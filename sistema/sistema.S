@@ -772,6 +772,14 @@ _des_p:
 	leave
 	ret
 
+	.global _invalida_TLB
+_invalida_TLB:
+	pushl %eax
+	movl %cr3, %eax
+	movl %eax, %cr3
+	popl %eax
+	ret
+
 // carica il registro cr3
 // parametri: indirizzo fisico del nuovo direttorio
 	.global _loadCR3
@@ -833,15 +841,7 @@ a_end_program:
 // eliminare la corrispondente traduzione dal TLB
 	.global _invalida_entrata_TLB
 _invalida_entrata_TLB:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-
-	movl 8(%ebp), %eax
-	invlpg (%eax)
-	
-	popl %eax
-	leave
+	invlpg 4(%esp)
 	ret
 	
 // trova efficientemente il primo bit a 0 nella doppia parola passata come 
@@ -2172,6 +2172,8 @@ _hd_write_address:
 // sezione dati: tabelle e stack				      //
 ////////////////////////////////////////////////////////////////
 .data
+.global		_dpf
+_dpf:		.long 0
 .global		_ticks
 _ticks:		.long 0
 .global		_clocks_per_usec
