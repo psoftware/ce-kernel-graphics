@@ -80,11 +80,11 @@
 #ifndef ASM
 const unsigned int T_STAT = 4;
 
-const unsigned int ntab_sistema_condiviso = 255;
+const unsigned int ntab_sistema_condiviso = 256;
 const unsigned int ntab_sistema_privato   = 1;
-const unsigned int ntab_io_condiviso	  = 256;
+const unsigned int ntab_io_condiviso	  = 255;
 const unsigned int ntab_utente_condiviso  = 256;
-const unsigned int ntab_utente_privato    = 255;
+const unsigned int ntab_utente_privato    = 255; // una tabella non viene usata (per future estensioni)
 
 const unsigned int dim_sistema_condiviso = ntab_sistema_condiviso * DIM_SUPERPAGINA;
 const unsigned int dim_sistema_privato   = ntab_sistema_privato   * DIM_SUPERPAGINA;

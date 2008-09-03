@@ -799,7 +799,7 @@ bool mappa_mem_fisica(addr direttorio, addr max_mem)
 			}
 			des_pf *ppf = &dpf[indice];
 			// evitiamo di marcare la pagina come TABELLA
-			// in modo che "aggiorna_statistiche" non la veda
+			// in modo che "c_driver_stat" non la veda
 			// ppf->contenuto = TABELLA;
 			ppf->pt.residente = true;
 			tabella = indirizzo_pf(indice);
@@ -1054,25 +1054,25 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 
 // ROUTINE DEL TIMER per la paginazione
 extern "C" void invalida_TLB();
-void aggiorna_statistiche()
+void c_driver_stat()
 {
 	des_pf *ppf1, *ppf2;
-	addr tab, pag;
+	addr ff1, ff2;
 	bool bitA;
 
 	for (natl i = 0; i < NUM_DPF; i++) {
 		ppf1 = &dpf[i];
 		switch (ppf1->contenuto) {
-		case TABELLA:
 		case DIRETTORIO:
-			tab = indirizzo_pf(i);
+		case TABELLA:
+			ff1 = indirizzo_pf(i);
 			for (int j = 0; j < 1024; j++) {
-				natl& des = get_des(tab, j);
+				natl& des = get_des(ff1, j);
 				if (extr_P(des)) {
-					pag = extr_IND_F(des);
+					ff2 = extr_IND_F(des);
 					bitA = extr_A(des);
 					set_A(des, false);
-					ppf2 = &dpf[indice_dpf(pag)];
+					ppf2 = &dpf[indice_dpf(ff2)];
 					ppf2->pt.contatore >>= 1;
 					if (bitA)
 						ppf2->pt.contatore |= 0x80000000;
@@ -1128,26 +1128,26 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente) {
 	return indirizzo_pf(nuovo_indice);
 }
 
-addr swap(natl proc, addr ind_virtuale)
+addr swap(natl proc, addr ind_virt)
 {
 	bool bitP;
 	natl dt, dp;
 	addr ind_fis_tab, ind_fis_pag;
 	des_pf *ppf;
 
-	dt = get_destab(proc, ind_virtuale);
+	dt = get_destab(proc, ind_virt);
 	bitP = extr_P(dt);
 	if (!bitP)
-		ind_fis_tab = swap_ent(proc, TABELLA, ind_virtuale, false);
+		ind_fis_tab = swap_ent(proc, TABELLA, ind_virt, false);
 	else
 		ind_fis_tab = extr_IND_F(dt);
 	if (ind_fis_tab == 0)
 		return 0;
 	ppf =&dpf[indice_dpf(ind_fis_tab)];
-	dp = get_despag(ppf->pt.processo, ind_virtuale);
+	dp = get_despag(ppf->pt.processo, ind_virt);
 	bitP = extr_P(dp);
 	if (!bitP)
-		return swap_ent(ppf->pt.processo, PAGINA_VIRTUALE,  ind_virtuale, false);
+		return swap_ent(ppf->pt.processo, PAGINA_VIRTUALE,  ind_virt, false);
 	return extr_IND_F(dp);
 
 }
@@ -1193,7 +1193,7 @@ int scegli_vittima(int indice_vietato)
 	natl i, vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
-	while (i < NUM_DPF && dpf[i].pt.residente)
+	while (i < NUM_DPF && dpf[i].pt.residente || i == indice_vietato)
 		i++;
 	if (i >= NUM_DPF) return 0xFFFFFFFF;
 	vittima = i;
@@ -1224,7 +1224,7 @@ natl proc_corrente();
 
 extern "C" bool c_resident(addr ind_virt, natl quanti)
 {
-	addr ind_virt_pag, ind_fis_pag;
+	addr ind_virt_pag, iff;
 	des_pf* ppf;
 	natl np;
 	natl proc = proc_corrente();
@@ -1236,14 +1236,15 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 	np = ceild(a2n(ind_virt) + quanti - a2n(ind_virt_pag), DIM_PAGINA);
 	for (int i = 0; i < np; i++) {
 		sem_wait(pf_mutex);
-		ind_fis_pag = swap(proc, ind_virt_pag);
-		if (ind_fis_pag != 0) {
-			ppf = &dpf[indice_dpf(ind_fis_pag)];
+		iff = swap(proc, ind_virt_pag);
+		if (iff != 0) {
+			ppf = &dpf[indice_dpf(iff)];
 			ppf->pt.residente = true;
 		}
 		sem_signal(pf_mutex);
-		if (ind_fis_pag == 0)
+		if (iff == 0)
 			return false;
+		ind_virt_pag = static_cast<natb*>(ind_virt_pag) + DIM_PAGINA;
 	}
 	return true;
 }
@@ -1486,7 +1487,7 @@ errore1:	return 0;
 }
 
 // corpo del processo dummy iniziale
-void dummy_init(int i)
+void dummy(int i)
 {
 	while (processi > 1)
 		;
@@ -1494,22 +1495,22 @@ void dummy_init(int i)
 }
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
-bool crea_dummy_init()
+bool crea_dummy()
 {
-	proc_elem* di = crea_processo(dummy_init, 0, DUMMY_PRIORITY, LIV_SISTEMA);
+	proc_elem* di = crea_processo(dummy, 0, DUMMY_PRIORITY, LIV_SISTEMA);
 	if (di == 0) {
-		flog(LOG_ERR, "Impossibile creare il processo dummy_init");
+		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return false;
 	}
 	inserimento_lista(pronti, di);
 	return true;
 }
-void main_proc(int n);
-bool crea_main()
+void main_sistema(int n);
+bool crea_main_sistema()
 {
-	proc_elem* m = crea_processo(main_proc, 0, MAX_PRIORITY, LIV_SISTEMA);
+	proc_elem* m = crea_processo(main_sistema, 0, MAX_PRIORITY, LIV_SISTEMA);
 	if (m == 0) {
-		flog(LOG_ERR, "Impossibile creare il processo main");
+		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
 	processi = 1;
 	inserimento_lista(pronti, m);
@@ -2195,7 +2196,7 @@ extern "C" void c_driver_t(void)
 
 	// aggiorna le statitische per la memoria virtuale
 	if (istanza % T_STAT == 0)
-		aggiorna_statistiche();
+		c_driver_stat();
 	istanza++;
 		
 
@@ -3298,7 +3299,7 @@ extern "C" void init_8259();
 
 // gestione processi
 extern "C" void salta_a_main();
-void main_proc(int n);
+void main_sistema(int n);
 
 bool carica_tutto(natl proc, natl start, natl stop, addr& last_addr)
 {
@@ -3352,7 +3353,7 @@ bool crea_spazio_condiviso(natl main_proc, addr& last_address)
 	if (!carica_tutto(main_proc, inizio_utente_condiviso, fine_utente_condiviso, last_address))
 		return false;
 
-	loadCR3(readCR3());
+	invalida_TLB();
 	return true;
 }
 
@@ -3484,7 +3485,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	
 	// processo dummy
-	if (!crea_dummy_init())
+	if (!crea_dummy())
 		goto error;
 	flog(LOG_INFO, "Creato il processo dummy");
 
@@ -3493,20 +3494,20 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	flog(LOG_INFO, "Creati i processi esterni generici");
 
-	if (!crea_main())
+	if (!crea_main_sistema())
 		goto error;
-	flog(LOG_INFO, "Creato il processo main");
+	flog(LOG_INFO, "Creato il processo main_sistema");
 
 	// da qui in poi, e' il processo main che esegue
 	schedulatore();
-	salta_a_main();
+	salta_a_main(); // esegue CALL carica_stato; IRET
 	return;
 
 error:
 	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
 }
 
-void main_proc(int n)
+void main_sistema(int n)
 {
 	unsigned long clocks_per_sec;
 	int errore;
