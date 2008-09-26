@@ -557,7 +557,7 @@ init_idt:
 	carica_gate	11 		segm_fault 	LIV_SISTEMA
 	carica_gate	12 		stack_fault 	LIV_SISTEMA
 	carica_gate	13 		prot_fault 	LIV_SISTEMA
-	carica_gate	14 		page_fault 	LIV_SISTEMA
+	carica_gate	14 		int_tipo_pf 	LIV_SISTEMA
 	carica_gate	16 		fp_exc 		LIV_SISTEMA
 	carica_gate	17 		ac_exc 		LIV_SISTEMA
 	carica_gate	18 		mc_exc 		LIV_SISTEMA
@@ -827,7 +827,6 @@ _disattiva_paginazione:
 	popl %eax
 	ret
 
-	.global a_end_program
 a_end_program:
 	cli
 	call _reset_8259
@@ -842,6 +841,7 @@ a_end_program:
 	.global _invalida_entrata_TLB
 _invalida_entrata_TLB:
 	invlpg 4(%esp)
+	# non e' necessario predisporre e utilizzare EBP
 	ret
 	
 // trova efficientemente il primo bit a 0 nella doppia parola passata come 
@@ -1270,19 +1270,21 @@ prot_fault:
 // di un bug nel nucleo, nel qual caso vogliamo fermare tutto)
 // - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale 
 // non tradotto che ha generato il fault
-page_fault:
+int_tipo_pf:
 	salva_registri
-	movl 32(%esp), %eax	// cs salvato dall'eccezione
-	movl 28(%esp), %ebx	// eip salvato dall'eccezione
-	pushl %eax		
+	movl 28(%esp), %eax // errore
+	movl 32(%esp), %ebx // eip
 	pushl %ebx
-	movl %cr2, %eax
 	pushl %eax
-	call _c_page_fault
-	addl $12, %esp
+	call _c_routine_pf
+	addl $8, %esp
 	carica_registri
 	addl $4, %esp
 	iret
+.global _readCR2
+_readCR2:
+	movl %cr2, %eax
+	ret
 
 fp_exc:
 	pushl $0
@@ -1380,11 +1382,11 @@ _freeze:
 ////////////////////////////////////////////////////////
 //
 // driver del timer
-	.extern _c_driver_t
+	.extern _c_driver_td
 driver_t:
 	call salva_stato
 	call inspronti
-	call _c_driver_t
+	call _c_driver_td
 	movb $EOI, %al         // ack al controllore
 	outb %al, $OCW2M
 	call carica_stato
@@ -1537,12 +1539,12 @@ handler_13:
 	iret
 
 // driver degli hard disk sul canale primario
-	.extern _c_driver_hd
+	.extern _c_driverhd
 driver_hd0:
 	call salva_stato
 	call inspronti
 	pushl $0
-	call _c_driver_hd
+	call _c_driverhd
 	movb $EOI, %al		// ack al controllore slave
 	outb %al, $OCW2S
 	movb $READ_ISR, %al	// lettura di ISR dello slave
@@ -1560,7 +1562,7 @@ driver_hd1:
 	call salva_stato
 	call inspronti
 	pushl $1
-	call _c_driver_hd
+	call _c_driverhd
 	movb $EOI, %al		// ack al controllore slave
 	outb %al, $OCW2S
 	movb $READ_ISR, %al	// lettura di ISR dello slave
@@ -1699,7 +1701,6 @@ a_activate_pe:
 	iret
 
 
-	.extern _c_nwfi
 a_nwfi:		// routine int $tipo_nwfi
 	call salva_stato
 	copia_param 1 0
@@ -1936,8 +1937,8 @@ _hd_software_reset:
 // Abilita il controller ATA specificato a generare richieste di interruzione
 //  utili sia per l'ingresso che per l'uscita
 //
-	.global _hd_gohd_inout
-_hd_gohd_inout:
+	.global _hd_go_inout
+_hd_go_inout:
 	pushl %eax
 	pushl %edx
 
@@ -1951,8 +1952,8 @@ _hd_gohd_inout:
 
 // Disabilita il controller ATA specificato a generare richeste di interruzione
 //
-	.global _halthd_inout
-_halthd_inout:
+	.global _hd_halt_inout
+_hd_halt_inout:
 	pushl %eax
 	pushl %edx
 

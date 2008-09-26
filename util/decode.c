@@ -75,8 +75,11 @@ int main(int argc, char* argv[])
 	switch (argv[1][0]) {
 	case 'p':
 		while (fread(&p, sizeof(p), 1, stdin)) {
-			printf("%4d: P=%d RW=%d US=%d block=%d\n",
+			printf("%4d: P=%d RW=%d US=%d block=%d",
 				record++, p.a.P, p.a.RW, p.a.US, p.a.block);
+			printf(p.a.PWT? " PWT": "    ");
+			printf(p.a.PCD? " PCD": "    ");
+			printf("\n");
 		}
 		break;
 	case 's':

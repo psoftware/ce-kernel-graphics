@@ -17,16 +17,16 @@ const int PRIO_ESTERN = 0x400;
 ////////////////////////////////////////////////////////////////////////////////
 
 extern "C" void terminate_p(void);
-extern "C" int sem_ini(int val);
+extern "C" natl sem_ini(int val);
 extern "C" void sem_wait(int sem);
 extern "C" void sem_signal(int sem);
-extern "C" short activate_p(void f(int), int a, int prio, char liv);
+extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 
 ////////////////////////////////////////////////////////////////////////////////
 //               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
 ////////////////////////////////////////////////////////////////////////////////
 
-extern "C" short activate_pe(void f(int), int a, int prio, char liv, int irq);
+extern "C" natl activate_pe(void f(int), int a, natl prio, natl liv, natb type);
 
 enum controllore { master=0, slave=1 };
 extern "C" void nwfi(controllore c);
@@ -76,9 +76,9 @@ struct interfse_reg {
 
 struct des_se {
 	interfse_reg indreg;
-	int mutex;
-	int sincr;
-	int cont;
+	natl mutex;
+	natl sincr;
+	natl cont;
 	addr punt;
 	funz funzione;
 	natb stato;
@@ -86,7 +86,7 @@ struct des_se {
 
 extern "C" des_se com[S];
 
-void startse_in(des_se *p_des, natb vetti[], int quanti, funz op)
+void startse_in(des_se *p_des, natb vetti[], natl quanti, funz op)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
@@ -94,11 +94,11 @@ void startse_in(des_se *p_des, natb vetti[], int quanti, funz op)
 	go_inputse(p_des->indreg.iIER);
 }
 
-extern "C" void c_readse_n(int serial, natb vetti[], int quanti, natb& errore)
+extern "C" void c_readse_n(natl serial, natb vetti[], natl quanti, natb& errore)
 {
 	des_se *p_des;
 
-	if (serial < 0 || serial >= S)
+	if (serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -113,7 +113,7 @@ extern "C" void c_readse_ln(int serial, natb vetti[], int& quanti, natb& errore)
 {
 	des_se *p_des;
 
-	if (serial < 0 || serial >= S)
+	if (serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -133,8 +133,8 @@ void output_com(des_se *p_des)
 	if(p_des->funzione == output_n) {
 		p_des->cont--;
 		if(p_des->cont == 0) {
-			halt_outputse(p_des->indreg.iIER);
 			fine = true;
+			halt_outputse(p_des->indreg.iIER);
 		}
 		c = *static_cast<natb*>(p_des->punt); //prelievo
 		outputb(c, p_des->indreg.iTHR);
@@ -145,8 +145,8 @@ void output_com(des_se *p_des)
 			fine = true;
 			halt_outputse(p_des->indreg.iIER);
 		} else {
-			p_des->cont++;
 			outputb(c, p_des->indreg.iTHR);
+			p_des->cont++;
 			p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
 		}
 	}
@@ -213,20 +213,20 @@ void estern_com(int i)
 	}
 }
 
-void startse_out(des_se *p_des, natb vetto[], int quanti, funz op)
+void startse_out(des_se *p_des, natb vetto[], natl quanti, funz op)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetto;
 	p_des->funzione = op;
 	go_outputse(p_des->indreg.iIER);
-	output_com(p_des);
+	output_com(p_des); 
 }
 
-extern "C" void c_writese_n(int serial, natb vetto[], int quanti)
+extern "C" void c_writese_n(natl serial, natb vetto[], natl quanti)
 {
 	des_se *p_des;
 
-	if (serial < 0 || serial >= S)
+	if (serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -236,11 +236,11 @@ extern "C" void c_writese_n(int serial, natb vetto[], int quanti)
 	sem_signal(p_des->mutex);
 }
 
-extern "C" void c_writese_0(int serial, natb vetto[], int &quanti)
+extern "C" void c_writese_0(natl serial, natb vetto[], natl &quanti)
 {
 	des_se *p_des;
 
-	if (serial < 0 || serial >= S)
+	if (serial >= S)
 		abort_p();
 
 	p_des = &com[serial];
@@ -269,17 +269,17 @@ bool com_init()
 	for(i = 0; i < S; ++i) {
 		p_des = &com[i];
 
-		if ( (p_des->mutex = sem_ini(1)) == 0) {
+		if ( (p_des->mutex = sem_ini(1)) == 0xFFFFFFFF) {
 			flog(LOG_ERR, "com: impossibile creare mutex");
 			return false;
 		}
-		if ( (p_des->sincr = sem_ini(0)) == 0) {
+		if ( (p_des->sincr = sem_ini(0)) == 0xFFFFFFFF) {
 			flog(LOG_ERR, "com: impossibile creare sincr");
 			return false;
 		}
 
 		id = activate_pe(estern_com, i, com_base_prio - i, LIV_SISTEMA, com_irq[i]);
-		if (id == 0) {
+		if (id == 0xFFFFFFFF) {
 			flog(LOG_ERR, "com: impossibile creare proc. esterno");
 			return false;
 		}
@@ -302,16 +302,16 @@ struct interfkbd_reg {
 struct des_kbd {
 	interfkbd_reg indreg;
 	addr punt;
-	int cont;
+	natl cont;
 	bool shift;
 	natb tab[MAX_CODE];
 	natb tabmin[MAX_CODE];
 	natb tabmai[MAX_CODE];
 };
 
-const int COLS = 80;
-const int ROWS = 25;
-const int VIDEO_SIZE = COLS * ROWS;
+const natl COLS = 80;
+const natl ROWS = 25;
+const natl VIDEO_SIZE = COLS * ROWS;
 
 struct interfvid_reg {
 	ioaddr iIND, iDAT;
@@ -320,13 +320,13 @@ struct interfvid_reg {
 struct des_vid {
 	interfvid_reg indreg;
 	natw* video;
-	int x, y;
+	natl x, y;
 	natb attr;
 };
 
 struct des_console {
-	int mutex;
-	int sincr;
+	natl mutex;
+	natl sincr;
 	des_kbd kbd;
 	des_vid vid;
 };
@@ -338,15 +338,23 @@ extern "C" void halt_inputkbd(interfkbd_reg indreg);
 extern "C" void go_inputkbd(interfkbd_reg indreg);
 void writeelem(natb c);
 void writeseq(cstr buff);
+bool vid_init();
 
-void startkbd_in(des_kbd* p_des, addr buff)
+extern "C" void c_iniconsole(natb cc)
+{
+	des_vid *p_des = &console.vid;
+	p_des->attr = cc;
+	vid_init();
+}
+
+void startkbd_in(des_kbd* p_des, str buff)
 {
 	p_des->punt = buff;
 	p_des->cont = 80;
 	go_inputkbd(p_des->indreg);
 }
 
-extern "C" void c_readconsole(str buff, int& quanti)
+extern "C" void c_readconsole(str buff, natl& quanti)
 {
 	des_console *p_des;
 
@@ -360,7 +368,7 @@ extern "C" void c_readconsole(str buff, int& quanti)
 
 natb converti(des_kbd* p_des, natb c) {
 	natb cc;
-	int pos = 0;
+	natl pos = 0;
 	while (pos < MAX_CODE && p_des->tab[pos] != c)
 		pos++;
 	if (pos == MAX_CODE)
@@ -436,7 +444,7 @@ extern "C" void kbd_enable();
 bool kbd_init()
 {
 	des_kbd *p_des = &console.kbd;
-	if (activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ) == 0) {
+	if (activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
 	}
@@ -464,11 +472,11 @@ bool vid_init()
 bool console_init() {
 	des_console *p_des = &console;
 
-	if ( (p_des->mutex = sem_ini(1)) == 0) {
+	if ( (p_des->mutex = sem_ini(1)) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare mutex");
 		return false;
 	}
-	if ( (p_des->sincr = sem_ini(0)) == 0) {
+	if ( (p_des->sincr = sem_ini(0)) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare sincr");
 		return false;
 	}

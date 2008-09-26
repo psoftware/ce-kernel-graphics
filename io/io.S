@@ -40,6 +40,7 @@
 .set io_tipo_wse0,  IO_TIPO_WSE0
 .set io_tipo_rkbd,  IO_TIPO_RKBD		
 .set io_tipo_wvid,  IO_TIPO_WVID		
+.set io_tipo_icon,  IO_TIPO_ICON
 .set io_tipo_gmon,  IO_TIPO_GMON		
 
 
@@ -221,18 +222,18 @@ _console:
 	// tabmin
         .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
         .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
-        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '\r', '\b'
+        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '\n', '\b'
 	// tabmai
         .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
         .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
-        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\n', '\b'
+        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\b'
 	// Descrittore del video
 	.word	0x03D4		// vid.indreg.iIND
 	.word	0x03D5		// vid.indreg.iDAT
-	.long	0xb8000 	// vid.video
+	.long	0xB8000 	// vid.video
 	.long	0		// vid.x
 	.long   0		// vid.y
-	.byte   0x4b		// vid.attr
+	.byte   0x4B		// vid.attr
 	.byte	0		// allineamento
 	.word	0		// allineamento
 
@@ -725,6 +726,7 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rkbd	a_readconsole
 	fill_io_gate	io_tipo_wvid	a_writeconsole
 	fill_io_gate	io_tipo_gmon	a_vmon_getsize
+	fill_io_gate	io_tipo_icon	a_iniconsole
 	leave
 	ret
 
@@ -732,7 +734,6 @@ _fill_io_gates:
 //                              PRIMITIVE DI IO                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-	.global a_readse_n
 	.extern _c_readse_n
 a_readse_n:
 	salva_registri
@@ -745,7 +746,6 @@ a_readse_n:
 	carica_registri
 	iret
 
-	.global a_readse_ln
 	.extern _c_readse_ln
 a_readse_ln:
 	salva_registri
@@ -759,7 +759,6 @@ a_readse_ln:
 	carica_registri
 	iret
 
-	.global a_writese_n
 	.extern _c_writese_n
 a_writese_n:
 	salva_registri
@@ -771,7 +770,6 @@ a_writese_n:
 	carica_registri
 	iret
 
-	.global a_writese_0
 	.extern _c_writese_0	// non _c_writese_ln, che va lo stesso
 a_writese_0:
 	salva_registri
@@ -784,7 +782,6 @@ a_writese_0:
 	carica_registri
 	iret
 
-	.global a_readconsole
 	.extern _c_readconsole
 a_readconsole:
 	salva_registri
@@ -797,7 +794,6 @@ a_readconsole:
 	carica_registri
 	iret
 
-	.global a_writeconsole
 	.extern _c_writeconsole
 a_writeconsole:
 	salva_registri
@@ -808,7 +804,15 @@ a_writeconsole:
 	carica_registri
 	iret
 
-	.global a_vmon_getsize
 a_vmon_getsize:
 	xorl %eax, %eax
+	iret
+
+	.extern _c_iniconsole
+a_iniconsole:
+	salva_registri
+	copia_param 1 7
+	call _c_iniconsole
+	addl $4, %esp
+	carica_registri
 	iret

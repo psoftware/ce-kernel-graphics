@@ -37,6 +37,7 @@
 .set io_tipo_lkbd, 0x6c
 .set io_tipo_kmon, 0x6d
 .set io_tipo_pkbd, 0x6e
+.set io_tipo_icon, 0x6f
 
 	.text
 	.global _activate_p
@@ -117,6 +118,11 @@ _readconsole:
 	.global _writeconsole
 _writeconsole:
 	int $io_tipo_wvid
+	ret
+
+	.global _iniconsole
+_iniconsole:
+	int $io_tipo_icon
 	ret
 
 	.global _vkbd_read

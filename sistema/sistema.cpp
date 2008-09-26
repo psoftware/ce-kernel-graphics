@@ -627,7 +627,7 @@ struct des_pf {
 			addr	ind_virtuale;
 			// indirizzo virtuale della pagina (ultimi 12 bit a 0)
 			// o della prima pagina indirizzata da una tabella 
-			// (ultimi 22 bit uguali a 0
+			// (ultimi 22 bit uguali a 0)
 			natl	contatore;	// contatore per le statistiche
 		} pt; 	// rilevante se "contenuto" vale TABELLA o PAGINA_VIRTUALE
 		struct  { // informazioni relative a una pagina libera
@@ -725,7 +725,7 @@ void rilascia_pagina_fisica(natl i)
 	p->avl.prossima_libera = pagine_libere;
 	pagine_libere = i;
 }
-
+natl dummy_des;
 natl& get_desent(natl indice)
 {
 	des_pf *ppf = &dpf[indice];
@@ -734,6 +734,11 @@ natl& get_desent(natl indice)
 		return get_despag(ppf->pt.processo, ppf->pt.ind_virtuale);
 	case TABELLA:
 		return get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
+	// per poter usare swap anche per caricare direttori prevediamo
+	// questo ulteriore caso (restituiamo un descrittore fasullo,
+	// perché il direttorio non e' puntato da un descrittore)
+	case DIRETTORIO:
+		return dummy_des;
 	default:
 		flog(LOG_ERR, "get_desent(%d) su cont=%d", indice, ppf->contenuto);
 		panic("Errore di sistema");
@@ -763,6 +768,8 @@ addr collega(natl indice)
 	set_P(des, true);
 	ppf->pt.contatore  = 0x80000000;
 	if (ppf->contenuto == PAGINA_VIRTUALE) {
+		// aggiornamento del contatore anche nel descrittore di pagina fisica
+		// contenente la tabella delle pagine coinvolta
 		addr ind_fis_tab = get_INDTAB(indice);
 		ppf = &dpf[indice_dpf(ind_fis_tab)];
 		ppf->pt.contatore |= 0x80000000;
@@ -1087,10 +1094,10 @@ void c_driver_stat()
 }
 
 int pf_mutex;
-extern "C" int sem_ini(int);
-extern "C" void sem_wait(int);
-extern "C" void sem_signal(int);
-extern "C" int activate_p(void f(int), int a, natl prio, natb liv);
+extern "C" natl sem_ini(int);
+extern "C" void sem_wait(natl);
+extern "C" void sem_signal(natl);
+extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 extern "C" void terminate_p();
 
 int scegli_vittima(int indice_vietato);
@@ -1098,16 +1105,28 @@ bool carica(natl indice);
 void scarica(natl indice);
 addr get_parent(natl proc, cont_pf tipo, addr ind_virt)
 {
-	if (tipo == TABELLA)
+	switch (tipo) {
+	case DIRETTORIO:
+		return (addr)0xFFFFFFFF;
+	case TABELLA:
 		return get_dir(proc);
-	return extr_IND_F(get_destab(proc, ind_virt));
+	case PAGINA_VIRTUALE:
+		return extr_IND_F(get_destab(proc, ind_virt));
+	default:
+		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
+		abort_p();
+	}
 }
 
-addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente) {
+addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente = false)
+{
+	// "ind_virt" e' l'indirizzo virtuale non tradotto
+	// carica una tabella delle pagine o una pagina
 	des_pf *ppf;
-
 	natl nuovo_indice = alloca_pagina_fisica_libera();
 	if (nuovo_indice == 0xFFFFFFFF) {
+		// non puo' essere scelto come vittima l'indice del descrittore di pagina fisica
+		// il cui indirizzo virtule e' stato restituito da get_parent()
 		addr escludi = get_parent(proc, tipo, ind_virt);
 		natl vittima = scegli_vittima(indice_dpf(escludi));
 		if (vittima == 0xFFFFFFFF)
@@ -1126,10 +1145,13 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente) {
 		return 0;
 	collega(nuovo_indice);
 	return indirizzo_pf(nuovo_indice);
+	// vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
 }
 
 addr swap(natl proc, addr ind_virt)
 {
+	// "ind_virt" e' l'indirizzo virtuale non tradotto
+	// carica la pagina ed eventualmente sia la tabella delle pagine che la pagina
 	bool bitP;
 	natl dt, dp;
 	addr ind_fis_tab, ind_fis_pag;
@@ -1138,7 +1160,7 @@ addr swap(natl proc, addr ind_virt)
 	dt = get_destab(proc, ind_virt);
 	bitP = extr_P(dt);
 	if (!bitP)
-		ind_fis_tab = swap_ent(proc, TABELLA, ind_virt, false);
+		ind_fis_tab = swap_ent(proc, TABELLA, ind_virt);
 	else
 		ind_fis_tab = extr_IND_F(dt);
 	if (ind_fis_tab == 0)
@@ -1147,7 +1169,7 @@ addr swap(natl proc, addr ind_virt)
 	dp = get_despag(ppf->pt.processo, ind_virt);
 	bitP = extr_P(dp);
 	if (!bitP)
-		return swap_ent(ppf->pt.processo, PAGINA_VIRTUALE,  ind_virt, false);
+		return swap_ent(ppf->pt.processo, PAGINA_VIRTUALE,  ind_virt);
 	return extr_IND_F(dp);
 
 }
@@ -1158,25 +1180,48 @@ bool carica(natl indice)
 	natl ind_massa = extr_IND_M(des);
 	addr dest = indirizzo_pf(indice);
 	des_pf *ppf = &dpf[indice];
-	if (ind_massa == 0) {
-		if (!ppf->pt.residente) {
-			ind_massa = alloca_blocco();
-			if (ind_massa == 0) {
-				flog(LOG_WARN, "spazio nello swap insufficiente");
-				return false;
+	switch (ppf->contenuto) {
+	case PAGINA_VIRTUALE:
+		if (ind_massa == 0) {
+			// evitiamo di allocare un blocco per le pagine residenti
+			if (!ppf->pt.residente) {
+				ind_massa = alloca_blocco();
+				if (ind_massa == 0) {
+					flog(LOG_WARN, "spazio nello swap insufficiente");
+					return false;
+				}
+				set_IND_M(des, ind_massa);
 			}
-			set_IND_M(des, ind_massa);
-		}
-		if (ppf->contenuto == PAGINA_VIRTUALE) {
 			memset(dest, 0, DIM_PAGINA);
 		} else {
+			leggi_blocco(ind_massa, dest);
+		}
+		break;
+	case TABELLA:
+		if (ind_massa == 0) {
+			// evitiamo di allocare un blocco per le tabelle residenti
+			if (!ppf->pt.residente) {
+				ind_massa = alloca_blocco();
+				if (ind_massa == 0) {
+					flog(LOG_WARN, "spazio nello swap insufficiente");
+					return false;
+				}
+				set_IND_M(des, ind_massa);
+			}
 			natl ndes = des;
 			set_P(ndes, false);
 			clear_IND_M(ndes);
 			set_all_des(dest, ndes);
+		} else {
+			leggi_blocco(ind_massa, dest);
 		}
-	} else 
-		leggi_blocco(ind_massa, dest);
+		break;
+	case DIRETTORIO:
+		memcpy(dest, readCR3(), DIM_PAGINA);
+		break;
+	default:
+		abort_p();
+	}
 	return true;
 }
 
@@ -1259,44 +1304,46 @@ extern "C" bool c_resident(addr ind_virt, natl quanti)
 // di seguito il/i vero/i campo/i che tiene/tengono
 // conto della struttura completa
 // del descrittore di processo)
+const int N_REG = 18;
+enum { I_EIP = 0, I_EFLAGS, I_EAX, I_ECX, I_EDX, I_EBX,
+       I_ESP, I_EBP, I_ESI, I_EDI, I_ES, I_CS, I_SS,
+       I_DS, I_FS, I_GS, I_LDT,  I_IOMAP };
 struct des_proc {		// offset:
-//	natw nome;
-	natw link;		// 0
-//	addr punt_nucleo;
-	addr esp0;		// 4
-//	addr riservato;
-	natl ss0;		// 8
+	natl id;		// 0
+	addr punt_nucleo;	// 4
+	natl riservato;		// 8
+	// altri campi riservati
 	addr esp1;		// 12
 	natl ss1;		// 16
 	addr esp2;		// 20
 	natl ss2;		// 24
 
-//	addr cr3;
 	addr cr3;		// 28
 
-//	natl contesto[N_REG];
-	natl eip;		// 32, non utilizzato
-	natl eflags;		// 36, non utilizzato
+	natl contesto[N_REG];
+	//natl eip;		// 32, non utilizzato
+	//natl eflags;		// 36, non utilizzato
 
-	natl eax;		// 40
-	natl ecx;		// 44
-	natl edx;		// 48
-	natl ebx;		// 52
-	natl esp;		// 56
-	natl ebp;		// 60
-	natl esi;		// 64
-	natl edi;		// 68
+	//natl eax;		// 40 (2)
+	//natl ecx;		// 44 (3)
+	//natl edx;		// 48 (4)
+	//natl ebx;		// 52 (5)
+	//natl esp;		// 56 (6)
+	//natl ebp;		// 60 (7)
+	//natl esi;		// 64 (8)
+	//natl edi;		// 68 (9)
 
-	natl es;		// 72
-	natl cs; 		// 76
-	natl ss;		// 80
-	natl ds;		// 84
-	natl fs;		// 86
-	natl gs;		// 90
-	natl ldt;		// 94, non utilizzato
+	//natl es;		// 72 (10)
+	//natl cs; 		// 76 (11)
+	//natl ss;		// 80 (12)
+	//natl ds;		// 84 (13)
+	//natl fs;		// 86 (14)
+	//natl gs;		// 90 (15)
+	//natl ldt;		// 94 (16) non utilizzato
 
-	natl io_map;		// 100, non utilizzato
+	//natl io_map;		// 100 (17) non utilizzato
 
+	// contesto per la FPU
 	struct {
 		natl cr;	// 104
 		natl sr;	// 108
@@ -1308,7 +1355,7 @@ struct des_proc {		// offset:
 		char regs[80];		// 132
 	} fpu;
 
-	natb cpl;			// 212
+	natl cpl;			// 212
 }; // dimensione 212 + 1 + 3(allineamento) = 216
 
 // numero di processi attivi
@@ -1316,7 +1363,7 @@ int processi = 0;
 
 // elemento di una coda di processi
 struct proc_elem {
-	natw nome;
+	natl id;
 	natl precedenza;
 	proc_elem *puntatore;
 };
@@ -1353,7 +1400,7 @@ addr get_tab(natl proc, addr ind_virt)
 
 natl proc_corrente()
 {
-	return esecuzione->nome;
+	return esecuzione->id;
 }
 
 // elemento di coda e descrittore del primo processo (quello che esegue il 
@@ -1374,43 +1421,48 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 	natl		*pl;
 	int		indice;
 	
-	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
-        if (p == 0) goto errore1;
 
+	// allocazione (e azzeramento preventivo) di un des_proc 
 	pdes_proc = static_cast<des_proc*>(alloca(sizeof(des_proc)));
 	if (pdes_proc == 0) goto errore2;
 	memset(pdes_proc, 0, sizeof(des_proc));
 
+	// selezione di un identificatore
 	identifier = alloca_tss(pdes_proc);
 	if (identifier == 0) goto errore3;
-
-        p->nome = identifier << 3U;
+	
+	// allocazione e inizializzazione di un proc_elem
+	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
+        if (p == 0) goto errore1;
+        p->id = identifier << 3U;
         p->precedenza = prio;
 
 	// pagina fisica per il direttorio del processo
-	indice = alloca_pagina_fisica_libera();
-	if (indice == 0xFFFFFFFF) {
-		int vittima = scegli_vittima(0xFFFFFFFF);
-		if (vittima == 0xFFFFFFFF)
-			goto errore4;
-		bool modificata = scollega(vittima);
-		if (modificata)
-			scarica(vittima);
-		indice = vittima;
-	}
-	pdirettorio = indirizzo_pf(indice);
-	dpf[indice].contenuto = DIRETTORIO;
-	dpf[indice].pt.residente = true;
+	pdirettorio = swap_ent(p->id, DIRETTORIO, 0, true);
+	if (pdirettorio == 0) goto errore4;
+	//indice = alloca_pagina_fisica_libera();
+	//if (indice == 0xFFFFFFFF) {
+	//	int vittima = scegli_vittima(0xFFFFFFFF);
+	//	if (vittima == 0xFFFFFFFF)
+	//		goto errore4;
+	//	bool modificata = scollega(vittima);
+	//	if (modificata)
+	//		scarica(vittima);
+	//	indice = vittima;
+	//}
+	//pdirettorio = indirizzo_pf(indice);
+	//dpf[indice].contenuto = DIRETTORIO;
+	//dpf[indice].pt.residente = true;
 	pdes_proc->cr3 = pdirettorio;
 
 	// il direttorio viene inizialmente copiato dal direttorio principale
 	// (in questo modo, il nuovo processo acquisisce automaticamente gli
 	// spazi virtuali condivisi, sia a livello utente che a livello
 	// sistema, tramite condivisione delle relative tabelle delle pagine)
-	ppdir = readCR3();
-	memcpy(pdirettorio, ppdir, DIM_PAGINA);
+	//ppdir = readCR3();
+	//memcpy(pdirettorio, ppdir, DIM_PAGINA);
 	
-	pila_sistema = crea_pila_sistema(p->nome);
+	pila_sistema = crea_pila_sistema(p->id);
 	if (pila_sistema == 0) goto errore5;
 
 	if (liv == LIV_UTENTE) {
@@ -1425,7 +1477,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// passera' ad eseguire la prima istruzione della funzione f,
 		// usando come pila la pila utente (al suo indirizzo virtuale)
 
-		pila_utente = crea_pila_utente(p->nome);
+		pila_utente = crea_pila_utente(p->id);
 		if (pila_utente == 0) goto errore6;
 
 		// dobbiamo ora fare in modo che la pila utente si trovi nella
@@ -1439,17 +1491,17 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		// indirizzo del bottom della pila sistema, che verra' usato
 		// dal meccanismo delle interruzioni
-		pdes_proc->esp0 = n2a(fine_sistema_privato);
-		pdes_proc->ss0  = SEL_DATI_SISTEMA;
+		pdes_proc->punt_nucleo = n2a(fine_sistema_privato);
+		pdes_proc->riservato  = SEL_DATI_SISTEMA;
 
 		// inizialmente, il processo si trova a livello sistema, come
 		// se avesse eseguito una istruzione INT, con la pila sistema
 		// che contiene le 5 parole lunghe preparate precedentemente
-		pdes_proc->esp = fine_sistema_privato - 5 * sizeof(int);
-		pdes_proc->ss  = SEL_DATI_SISTEMA;
+		pdes_proc->contesto[I_ESP] = fine_sistema_privato - 5 * sizeof(int);
+		pdes_proc->contesto[I_SS]  = SEL_DATI_SISTEMA;
 
-		pdes_proc->ds  = SEL_DATI_UTENTE;
-		pdes_proc->es  = SEL_DATI_UTENTE;
+		pdes_proc->contesto[I_DS]  = SEL_DATI_UTENTE;
+		pdes_proc->contesto[I_ES]  = SEL_DATI_UTENTE;
 
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
@@ -1466,11 +1518,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		// sistema. Per questo motivo, prepariamo una sola pila (la
 		// pila sistema)
 
-		pdes_proc->esp = fine_sistema_privato - 5 * sizeof(int);
-		pdes_proc->ss  = SEL_DATI_SISTEMA;
+		pdes_proc->contesto[I_ESP] = fine_sistema_privato - 5 * sizeof(int);
+		pdes_proc->contesto[I_SS]  = SEL_DATI_SISTEMA;
 
-		pdes_proc->ds  = SEL_DATI_SISTEMA;
-		pdes_proc->es  = SEL_DATI_SISTEMA;
+		pdes_proc->contesto[I_DS]  = SEL_DATI_SISTEMA;
+		pdes_proc->contesto[I_ES]  = SEL_DATI_SISTEMA;
 		pdes_proc->fpu.cr = 0x037f;
 		pdes_proc->fpu.tr = 0xffff;
 		pdes_proc->cpl = LIV_SISTEMA;
@@ -1486,7 +1538,7 @@ errore2:	dealloca(p);
 errore1:	return 0;
 }
 
-// corpo del processo dummy iniziale
+// corpo del processo dummy
 void dummy(int i)
 {
 	while (processi > 1)
@@ -1574,13 +1626,13 @@ addr crea_pila_sistema(natl proc)
 // "p" (tranne il proc_elem puntato da "p" stesso)
 void distruggi_processo(proc_elem* p)
 {
-	des_proc* pdes_proc = des_p(p->nome);
+	des_proc* pdes_proc = des_p(p->id);
 
 	addr direttorio = pdes_proc->cr3;
 	rilascia_tutto(direttorio, n2a(inizio_sistema_privato), ntab_sistema_privato);
 	rilascia_tutto(direttorio, n2a(inizio_utente_privato),  ntab_utente_privato);
 	rilascia_pagina_fisica(indice_dpf(direttorio));
-	rilascia_tss(p->nome >> 3);
+	rilascia_tss(p->id >> 3);
 	dealloca(pdes_proc);
 }
 
@@ -1627,11 +1679,11 @@ extern "C" void schedulatore(void);
 // resetta controllore interruzioni
 extern "C" void reset_8259();
 
-extern "C" natw
-c_activate_p(void f(int), int a, natl prio, natb liv)
+extern "C" natl
+c_activate_p(void f(int), int a, natl prio, natl liv)
 {
-	proc_elem	*p;			// proc_elem per il nuovo processo
-	short id = 0;
+	proc_elem *p;			// proc_elem per il nuovo processo
+	natl id = 0xFFFFFFFF;
 
 	if (prio < MIN_PRIORITY) {
 		flog(LOG_WARN, "priorita' non valida: %d", prio);
@@ -1645,7 +1697,7 @@ c_activate_p(void f(int), int a, natl prio, natb liv)
 	if (p != 0) {
 		inserimento_lista(pronti, p);
 		processi++;
-		id = p->nome;
+		id = p->id;
 		flog(LOG_INFO, "proc=%d entry=%x(%d) prio=%d liv=%d", id, f, a, prio, liv);
 	}
 
@@ -1659,7 +1711,7 @@ extern "C" void c_terminate_p()
 	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
-	flog(LOG_INFO, "Processo %d terminato", p->nome);
+	flog(LOG_INFO, "Processo %d terminato", p->id);
 	dealloca(p);
 	schedulatore();
 }
@@ -1672,7 +1724,7 @@ extern "C" void c_abort_p()
 	proc_elem *p = esecuzione;
 	distruggi_processo(p);
 	processi--;
-	flog(LOG_WARN, "Processo %d abortito", p->nome);
+	flog(LOG_WARN, "Processo %d abortito", p->id);
 	dealloca(p);
 	schedulatore();
 }
@@ -1721,7 +1773,7 @@ bool aggiungi_pe(proc_elem *p, int irq)
 }
 
 
-extern "C" natw c_activate_pe(void f(int), int a, int prio, char liv, int irq)
+extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 
@@ -1736,18 +1788,18 @@ extern "C" natw c_activate_pe(void f(int), int a, int prio, char liv, int irq)
 	if (p == 0)
 		goto error1;
 		
-	if (!aggiungi_pe(p, irq) ) 
+	if (!aggiungi_pe(p, type) ) 
 		goto error2;
 
-	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d irq=%d", p->nome, f, a, prio, liv, irq);
+	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d type=%d", p->id, f, a, prio, liv, type);
 
 	sem_signal(pf_mutex);
 
-	return p->nome;
+	return p->id;
 
 error2:	distruggi_processo(p);
 error1:	sem_signal(pf_mutex);
-	return 0;
+	return 0xFFFFFFFF;
 }
 
 // init_pe viene chiamata in fase di inizializzazione, ed associa una istanza 
@@ -1913,14 +1965,11 @@ natl sem_buf[MAX_SEMAFORI / (sizeof(int) * 8) + 1];
 bm_t sem_bm = { sem_buf, MAX_SEMAFORI };
 
 // alloca un nuovo semaforo e ne restiutisce l'indice (da usare con sem_wait e 
-// sem_signal). Se non ci sono piu' semafori disponibili, restituisce l'indice 
-// 0 (NOTA: la firma della funzione e' diversa da quella del testo, in quanto 
-// sono stati eliminati i parametri di ritorno. Il testo verra' aggiornato alla 
-// prossima edizione).
-extern "C" int c_sem_ini(int val)
+// sem_signal). Se non ci sono piu' semafori disponibili, restituisce 0xFFFFFFFF
+extern "C" natl c_sem_ini(int val)
 {
 	natl pos;
-	int index_des_s = 0;
+	natl index_des_s = 0xFFFFFFFF;
 
 	if (bm_alloc(&sem_bm, pos)) {
 		index_des_s = pos;
@@ -1930,7 +1979,7 @@ extern "C" int c_sem_ini(int val)
 	return index_des_s;
 }
 
-extern "C" void c_sem_wait(int sem)
+extern "C" void c_sem_wait(natl sem)
 {
 	des_sem *s;
 
@@ -1948,7 +1997,7 @@ extern "C" void c_sem_wait(int sem)
 	}
 }
 
-extern "C" void c_sem_signal(int sem)
+extern "C" void c_sem_signal(natl sem)
 {
 	des_sem *s;
 	proc_elem *lavoro;
@@ -1979,7 +2028,7 @@ struct richiesta {
 	proc_elem *pp;
 };
 
-void inserimento_lista_timer(richiesta *p);
+void inserimento_lista_attesa(richiesta *p);
 extern "C" void c_delay(natl n)
 {
 	richiesta *p;
@@ -1988,7 +2037,7 @@ extern "C" void c_delay(natl n)
 	p->d_attesa = n;	
 	p->pp = esecuzione;
 
-	inserimento_lista_timer(p);
+	inserimento_lista_attesa(p);
 	schedulatore();
 }
 
@@ -2057,26 +2106,28 @@ struct page_fault_error {
 // codice di errore descritto prima, mentre "eip" e' l'indirizzo 
 // dell'istruzione che ha causato il fault. Sia "errore" che "eip" vengono 
 // salvati in pila dal microprogramma di gestione dell'eccezione
-extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, addr eip)
+extern "C" addr readCR2();
+extern "C" void c_routine_pf(page_fault_error errore, addr eip)
 {
-	bool risu;
+	addr risu;
+	addr ind_virt_non_tradotto = readCR2();
 
 	if (eip < fine_codice_sistema || errore.res == 1) {
 		// *** il sistema non e' progettato per gestire page fault causati 
 		// *** dalle primitie di nucleo, quindi, se cio' si e' verificato, 
 		// *** si tratta di un bug
-		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, indirizzo_virtuale,
+		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema");
+		panic(errore.res ? "bit riservato = 1" : "page fault dal modulo sistema");
 	}
 	// *** l'errore di protezione non puo' essere risolto: il processo ha 
 	// *** tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
 	// *** sistema)
 	if (errore.prot == 1) {
-		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, indirizzo_virtuale,
+		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, ind_virt_non_tradotto,
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema");
 		abort_p();
@@ -2084,12 +2135,12 @@ extern "C" void c_page_fault(addr indirizzo_virtuale, page_fault_error errore, a
 
 	// in tutti gli altri casi, proviamo a trasferire la pagina mancante
 	sem_wait(pf_mutex);
-	risu = swap(proc_corrente(), indirizzo_virtuale);
+	risu = swap(esecuzione->id, ind_virt_non_tradotto);
 	sem_signal(pf_mutex);
 
 	// se non e' stato possibile caricare la pagina, il processo
 	// non puo' proseguire
-	if (risu == false) 
+	if (risu == 0) 
 		abort_p();
 }
 
@@ -2150,7 +2201,7 @@ extern "C" void schedulatore(void)
 richiesta *descrittore_timer;
 
 // inserisce P nella coda delle richieste al timer
-void inserimento_lista_timer(richiesta *p)
+void inserimento_lista_attesa(richiesta *p)
 {
 	richiesta *r, *precedente;
 	bool ins;
@@ -2179,7 +2230,7 @@ void inserimento_lista_timer(richiesta *p)
 
 
 // driver del timer
-extern "C" void c_driver_t(void)
+extern "C" void c_driver_td(void)
 {
 	static natl istanza = 0;
 	richiesta *p;
@@ -2543,16 +2594,18 @@ extern "C" void c_panic(const char *msg,
 
 	nl++;
 
-	des_proc* p = des_p(esecuzione->nome);
+	des_proc* p = des_p(esecuzione->id);
 	// scriviamo lo stato dei registri
 	l = snprintf(buf, 80, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
-		 p->eax, p->ebx, p->ecx, p->edx);
+		 p->contesto[I_EAX], p->contesto[I_EBX],
+		 p->contesto[I_ECX], p->contesto[I_EDX]);
 	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
-		 p->esi, p->edi, p->ebp, p->esp);
+		 p->contesto[I_ESI], p->contesto[I_EDI], p->contesto[I_EBP], p->contesto[I_ESP]);
 	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
-			cs, p->ds, p->es, p->fs, p->gs, p->ss);
+		cs, p->contesto[I_DS], p->contesto[I_ES],
+		p->contesto[I_FS], p->contesto[I_GS], p->contesto[I_SS]);
 	writevid_n(nl++ * 80, buf, l);
 	l = snprintf(buf, 80, "EIP=%x  EFLAGS=%x", eip2, eflags);
 	writevid_n(nl++ * 80, buf, l);
@@ -2572,10 +2625,10 @@ extern "C" void c_panic(const char *msg,
 // da livello utente, i messaggi del log
 bool log_init_usr()
 {
-	if ( (log_buf.mutex = c_sem_ini(1)) == 0)
+	if ( (log_buf.mutex = c_sem_ini(1)) == 0xFFFFFFFF)
 		goto error1;
 
-	if ( (log_buf.sync = c_sem_ini(0)) == 0)
+	if ( (log_buf.sync = c_sem_ini(0)) == 0xFFFFFFFF)
 		goto error2;
 
 	return true;
@@ -2595,7 +2648,7 @@ void do_log(log_sev sev, const char* buf, int quanti)
 		quanti = LOG_MSG_SIZE;
 
 	log_buf.buf[log_buf.last].sev = sev;
-	log_buf.buf[log_buf.last].identifier = esecuzione->nome;
+	log_buf.buf[log_buf.last].identifier = esecuzione->id;
 	strncpy(log_buf.buf[log_buf.last].msg, buf, quanti);
 	log_buf.buf[log_buf.last].msg[quanti] = 0;
 
@@ -2682,8 +2735,7 @@ extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg);
 #define HD_DRV_MASTER 0
 #define HD_DRV_SLAVE 1
 enum hd_cmd {			// Comandi per i controllori degli hard disk
-	NONE		= 0x00,
-	IDENTIFY	= 0xEC,
+	IDENTIFY	= 0xEC, // comando per l'identificazione del disp.
 	WRITE_SECT	= 0x30,
 	READ_SECT	= 0x20
 };
@@ -2694,6 +2746,7 @@ struct interfata_reg {
 	       iCMD, iSTS, iDCR, iASR;
 };
 
+// informazioni aggiuntive specifiche per ogni drive 
 struct drive {				// Drive su un canale ATA
 	bool presente;
 	bool dma;
@@ -2703,20 +2756,20 @@ struct drive {				// Drive su un canale ATA
 
 struct des_ata {		// Descrittore operazione per i canali ATA
 	interfata_reg indreg;
-	drive disco[2];		// Ogni canale ATA puo' contenere 2 drive
 	hd_cmd comando;
 	natb errore;
-	int mutex;
-	int sincr;
+	natl mutex;
+	natl sincr;
 	natb cont;
 	addr punt;	
+	drive disco[2];		// Ogni canale ATA puo' contenere 2 drive
 };
 
 const int A = 2;
 extern "C" des_ata hd[A];	// 2 canali ATA
 
-extern "C" void hd_gohd_inout(ioaddr i_dev_ctl);
-extern "C" void halthd_inout(ioaddr i_dev_ctl);
+extern "C" void hd_go_inout(ioaddr i_dev_ctl);
+extern "C" void hd_halt_inout(ioaddr i_dev_ctl);
 extern "C" bool test_canale(ioaddr st, ioaddr stc, ioaddr stn);
 extern "C" int leggi_signature(ioaddr stc, ioaddr stn, ioaddr cyl, ioaddr cyh);
 extern "C" void umask_hd(ioaddr h);
@@ -2792,7 +2845,7 @@ void hd_print_error(int i, int d, int sect, natb error)
 	}
 }
 
-void starthd_in(des_ata *p_des, int drv, natw vetti[], natl primo, natb quanti)
+void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
 {
 	p_des->cont = quanti;
 	p_des->punt = vetti;
@@ -2801,7 +2854,7 @@ void starthd_in(des_ata *p_des, int drv, natw vetti[], natl primo, natb quanti)
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_gohd_inout(p_des->indreg.iDCR);	
+	hd_go_inout(p_des->indreg.iDCR);	
 	hd_write_command(READ_SECT, p_des->indreg.iCMD);
 	return;
 }
@@ -2815,7 +2868,7 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);	
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_gohd_inout(p_des->indreg.iDCR);	
+	hd_go_inout(p_des->indreg.iDCR);	
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
 	hd_wait_data(p_des->indreg.iSTS);
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
@@ -2823,12 +2876,12 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 }
 
 
-extern "C" void c_readhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
+extern "C" void c_readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
 	des_ata *p_des;
 
 	// Controllo sulla protezione
-	if (ata < 0 || ata >= A || drv < 0 || drv >= 2) {
+	if (ata >= A || drv >= 2) {
 		errore = D_ERR_PRESENCE;
 		return;
 	}
@@ -2854,12 +2907,12 @@ extern "C" void c_readhd_n(int ata, int drv, natw vetti[], natl primo, natb quan
 	sem_signal(p_des->mutex);
 }
 
-extern "C" void c_writehd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore)
+extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
 	des_ata *p_des;
 	
 	// Controllo sulla protezione
-	if (ata < 0 || ata >= A || drv < 0 || drv >= 2) {
+	if (ata >= A || drv >= 2) {
 		errore = D_ERR_PRESENCE;
 		return;
 	}
@@ -2887,14 +2940,14 @@ extern "C" void c_writehd_n(int ata, int drv, natw vetti[], natl primo, natb qua
 
 
 
-extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
+extern "C" void c_driverhd(int ata)			// opera su desintb[interf]
 {	
 	proc_elem* lavoro; des_sem* s; des_ata* p_des;
 	natb stato;
 	p_des = &hd[ata];
 	p_des->cont--; 
 	if (p_des->cont == 0) {	
-		halthd_inout(p_des->indreg.iDCR);	
+		hd_halt_inout(p_des->indreg.iDCR);	
 		s = &array_dess[p_des->sincr];
 		s->counter++;
 		if (s->counter <= 0) {
@@ -2903,7 +2956,7 @@ extern "C" void c_driver_hd(int ata)			// opera su desintb[interf]
 		}
 	}
 	p_des->errore = D_ERR_NONE;
-	inputb(p_des->indreg.iSTS, stato);
+	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
 	if (p_des->comando == READ_SECT) { 
 		if (!hd_wait_data(p_des->indreg.iSTS)) 
 			inputb(p_des->indreg.iERR, p_des->errore);
@@ -3083,7 +3136,7 @@ bool hd_init()
 	for (int i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
 
-		halthd_inout(p_des->indreg.iDCR);	
+		hd_halt_inout(p_des->indreg.iDCR);	
 		// cerchiamo di capire quali (tra master e slave) sono presenti
 		// (inizializziamo i campi "presente" della struttura des_ata)
 		for (int d = 0; d < 2; d++) {
@@ -3122,7 +3175,7 @@ bool hd_init()
 
 			if (!p_des->disco[d].presente) 
 				continue;
-			halthd_inout(p_des->indreg.iDCR);	
+			hd_halt_inout(p_des->indreg.iDCR);	
 			if (!hd_sel_drv(p_des, d))
 				goto error;
 			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
@@ -3149,8 +3202,8 @@ bool hd_init()
 		}
 		//mask_hd(p_des->indreg.iSTS);
 		umask_hd(p_des->indreg.iSTS);			// abilita int. nel PIC
-		if ( (p_des->mutex = c_sem_ini(1)) == 0 ||
-		     (p_des->sincr = c_sem_ini(0)) == 0)
+		if ( (p_des->mutex = c_sem_ini(1)) == 0xFFFFFFFF ||
+		     (p_des->sincr = c_sem_ini(0)) == 0xFFFFFFFF)
 		{
 			flog(LOG_ERR, "Impossibile allocare i semafori per l'hard disk");
 			return false;
@@ -3380,7 +3433,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
-	init.nome = 0;
+	init.id = 0;
 	init.precedenza   = MAX_PRIORITY;
 	esecuzione = &init;
 
@@ -3512,8 +3565,8 @@ void main_sistema(int n)
 	unsigned long clocks_per_sec;
 	int errore;
 	addr pila_utente;
-	des_proc *my_des = des_p(esecuzione->nome);
-	int sem_io;
+	des_proc *my_des = des_p(esecuzione->id);
+	natl sync_io;
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
@@ -3555,7 +3608,7 @@ void main_sistema(int n)
 
 	// semaforo per la mutua esclusione nella gestione dei page fault
 	pf_mutex = sem_ini(1);
-	if (pf_mutex == 0) {
+	if (pf_mutex == 0xFFFFFFFF) {
 		flog(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
 		goto error;
 	}
@@ -3566,16 +3619,16 @@ void main_sistema(int n)
 		goto error;
 	// inizializzazione del modulo di io
 	flog(LOG_INFO, "creazione del processo main I/O...");
-	sem_io = sem_ini(0);
-	if (sem_io == 0) {
+	sync_io = sem_ini(0);
+	if (sync_io == 0xFFFFFFFF) {
 		flog(LOG_ERR, "Impossibile allocare il semaforo di sincr per l'IO");
 		goto error;
 	}
-	if (activate_p(swap_dev.sb.io_entry, sem_io, MAX_PRIORITY, LIV_SISTEMA) == 0) {
+	if (activate_p(swap_dev.sb.io_entry, sync_io, MAX_PRIORITY, LIV_SISTEMA) == 0) {
 		flog(LOG_ERR, "impossibile creare il processo main I/O");
 		goto error;
 	}
-	sem_wait(sem_io);
+	sem_wait(sync_io);
 
 	flog(LOG_INFO, "creazione del processo main utente...");
 	if (activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE) == 0) {

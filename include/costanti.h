@@ -67,6 +67,7 @@
 #define IO_TIPO_LKBD		0x6c
 #define IO_TIPO_KMON		0x6d
 #define IO_TIPO_PKBD		0x6e
+#define IO_TIPO_ICON		0x6f
 
 
 #define DIM_BLOCK 512			// Dimensione del blocco (HD e FD)
@@ -103,7 +104,7 @@ const unsigned int fine_utente_condiviso    = inizio_utente_condiviso + dim_uten
 const unsigned int inizio_utente_privato    = fine_utente_condiviso;
 const unsigned int fine_utente_privato      = inizio_utente_privato + dim_utente_privato;
 
-const unsigned int LOG_MSG_SIZE = 72;
+const unsigned int LOG_MSG_SIZE = 80;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };
 
 struct log_msg {
