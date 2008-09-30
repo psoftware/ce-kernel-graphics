@@ -1538,29 +1538,30 @@ errore2:	dealloca(p);
 errore1:	return 0;
 }
 
+extern "C" void end_program();
 // corpo del processo dummy
 void dummy(int i)
 {
-	while (processi > 1)
+	while (processi != 1)
 		;
-	terminate_p();
+	end_program();
 }
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
-bool crea_dummy()
+natl crea_dummy()
 {
 	proc_elem* di = crea_processo(dummy, 0, DUMMY_PRIORITY, LIV_SISTEMA);
 	if (di == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
-		return false;
+		return 0xFFFFFFFF;
 	}
 	inserimento_lista(pronti, di);
-	return true;
+	return di->id;
 }
 void main_sistema(int n);
-bool crea_main_sistema()
+bool crea_main_sistema(natl dummy_proc)
 {
-	proc_elem* m = crea_processo(main_sistema, 0, MAX_PRIORITY, LIV_SISTEMA);
+	proc_elem* m = crea_processo(main_sistema, (int)dummy_proc, MAX_PRIORITY, LIV_SISTEMA);
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
@@ -3383,7 +3384,7 @@ bool carica_tutto(natl proc, natl start, natl stop, addr& last_addr)
 	return true;
 }
 
-bool crea_spazio_condiviso(natl main_proc, addr& last_address)
+bool crea_spazio_condiviso(natl dummy_proc, addr& last_address)
 {
 	
 	// lettura del direttorio principale dallo swap
@@ -3396,15 +3397,19 @@ bool crea_spazio_condiviso(natl main_proc, addr& last_address)
 	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
 		return false;
 
-	addr main_dir = get_dir(main_proc);
-	copy_dir(tmp, main_dir, n2a(inizio_io_condiviso),     n2a(fine_io_condiviso));
-	copy_dir(tmp, main_dir, n2a(inizio_utente_condiviso), n2a(fine_utente_condiviso));
+	addr dummy_dir = get_dir(dummy_proc);
+	copy_dir(tmp, dummy_dir, n2a(inizio_io_condiviso),     n2a(fine_io_condiviso));
+	copy_dir(tmp, dummy_dir, n2a(inizio_utente_condiviso), n2a(fine_utente_condiviso));
 	dealloca(tmp);
 	
-	if (!carica_tutto(main_proc, inizio_io_condiviso, fine_io_condiviso, last_address))
+	if (!carica_tutto(dummy_proc, inizio_io_condiviso, fine_io_condiviso, last_address))
 		return false;
-	if (!carica_tutto(main_proc, inizio_utente_condiviso, fine_utente_condiviso, last_address))
+	if (!carica_tutto(dummy_proc, inizio_utente_condiviso, fine_utente_condiviso, last_address))
 		return false;
+
+	addr my_dir = get_dir(proc_corrente());
+	copy_dir(dummy_dir, my_dir, n2a(inizio_io_condiviso),     n2a(fine_io_condiviso));
+	copy_dir(dummy_dir, my_dir, n2a(inizio_utente_condiviso), n2a(fine_utente_condiviso));
 
 	invalida_TLB();
 	return true;
@@ -3413,15 +3418,7 @@ bool crea_spazio_condiviso(natl main_proc, addr& last_address)
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
 int heap_mem = DEFAULT_HEAP_SIZE;
 
-extern "C" void freeze();
 extern "C" void end_program();
-extern "C" void c_freeze()
-{
-	esecuzione->precedenza = FREEZE_PRIORITY;
-	inserimento_lista(pronti, esecuzione);
-	schedulatore();
-}
-
 // routine di inizializzazione. Viene invocata dal bootstrap loader dopo aver 
 // caricato in memoria l'immagine del modulo sistema
 extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
@@ -3430,6 +3427,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	char *arg, *cont;
 	int indice;
 	addr direttorio;
+	natl dummy_proc;
 	
 	// anche se il primo processo non e' completamente inizializzato,
 	// gli diamo un identificatore, in modo che compaia nei log
@@ -3538,7 +3536,8 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	
 	// processo dummy
-	if (!crea_dummy())
+	dummy_proc = crea_dummy();
+	if (dummy_proc == 0xFFFFFFFF)
 		goto error;
 	flog(LOG_INFO, "Creato il processo dummy");
 
@@ -3547,7 +3546,7 @@ extern "C" void cmain (unsigned long magic, multiboot_info_t* mbi)
 		goto error;
 	flog(LOG_INFO, "Creati i processi esterni generici");
 
-	if (!crea_main_sistema())
+	if (!crea_main_sistema(dummy_proc))
 		goto error;
 	flog(LOG_INFO, "Creato il processo main_sistema");
 
@@ -3567,6 +3566,7 @@ void main_sistema(int n)
 	addr pila_utente;
 	des_proc *my_des = des_p(esecuzione->id);
 	natl sync_io;
+	natl dummy_proc = (natl)n; 
 
 	// attiviamo il timer e calibriamo il contatore per i microdelay
 	// (necessari nella corretta realizzazione del driver dell'hard disk)
@@ -3597,7 +3597,7 @@ void main_sistema(int n)
 	// tabelle condivise per lo spazio utente condiviso
 	flog(LOG_INFO, "creazione o lettura delle tabelle condivise...");
 	addr last_address;
-	if (!crea_spazio_condiviso(proc_corrente(), last_address))
+	if (!crea_spazio_condiviso(dummy_proc, last_address))
 		goto error;
 
 	// inizializzazione dello heap utente
@@ -3636,8 +3636,7 @@ void main_sistema(int n)
 		goto error;
 	}
 	attiva_timer(DELAY);
-	freeze();
-	end_program();
+	terminate_p();
 error:
 	panic("Errore di inizializzazione");
 }
