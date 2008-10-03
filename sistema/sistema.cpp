@@ -884,15 +884,15 @@ partizione* hd_find_partition(short ind_ata, short drv, int p);
 
 // super blocco (vedi sopra)
 struct superblock_t {
-	char		magic[4];
+	char	magic[4];
 	natl	bm_start;
-	int		blocks;
+	natl	blocks;
 	natl	directory;
-	void		(*user_entry)(int);
-	addr		user_end;
-	void		(*io_entry)(int);
-	addr		io_end;
-	natl	checksum;
+	void	(*user_entry)(int);
+	addr	user_end;
+	void	(*io_entry)(int);
+	addr	io_end;
+	int	checksum;
 };
 
 // descrittore di swap (vedi sopra)
@@ -1036,6 +1036,16 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	    swap_dev.sb.magic[3] != 'W')
 	{
 		flog(LOG_ERR, "Firma errata nel superblocco");
+		return false;
+	}
+
+	// controlliamo il checksum
+	int *w = (int*)&swap_dev.sb, sum = 0;
+	for (int i = 0; i < sizeof(swap_dev.sb) / sizeof(int); i++)
+		sum += w[i];
+
+	if (sum != 0) {
+		flog(LOG_ERR, "Checksum errato nel superblocco");
 		return false;
 	}
 

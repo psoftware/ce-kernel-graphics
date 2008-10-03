@@ -378,6 +378,12 @@ int main(int argc, char* argv[])
 	superblock.magic[1] = 'E';
 	superblock.magic[2] = 'S';
 	superblock.magic[3] = 'W';
+
+	int *w = (int*)&superblock, sum = 0;
+	for (int i = 0; i < sizeof(superblock) / sizeof(int) - 1; i++)
+		sum += w[i];
+	superblock.checksum = -sum;
+
 	if ( !swap->scrivi_superblocco(superblock) ||
 	     !swap->scrivi_bitmap(blocks.vect, nbmblocks) ||
 	     !swap->scrivi_blocco(superblock.directory, &main_dir))
