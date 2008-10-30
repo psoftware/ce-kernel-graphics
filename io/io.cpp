@@ -2,9 +2,9 @@
 //
 #include "costanti.h"
 #include "tipo.h"
-#define BOCHS
+//#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
-//COSTANTI                                   //
+//    COSTANTI                                                                //
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -20,21 +20,10 @@ extern "C" void terminate_p(void);
 extern "C" natl sem_ini(int val);
 extern "C" void sem_wait(int sem);
 extern "C" void sem_signal(int sem);
-extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
-
-////////////////////////////////////////////////////////////////////////////////
-//               INTERFACCIA OFFERTA DAL NUCLEO AL MODULO DI IO               //
-////////////////////////////////////////////////////////////////////////////////
-
 extern "C" natl activate_pe(void f(int), int a, natl prio, natl liv, natb type);
-
-enum controllore { master=0, slave=1 };
-extern "C" void nwfi(controllore c);
-
-extern "C" void fill_gate(int gate, void (*f)(void), int tipo, int dpl);
+enum controllore { master=0, slave=1 };	// [9.1]
+extern "C" void nwfi(controllore c);	// [9.1]
 extern "C" void abort_p();
-
-extern "C" void writevid(char pc);
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -58,23 +47,16 @@ void *memset(void *dest, int c, unsigned int n);
 void *memcpy(void *dest, const void *src, unsigned int n);
 
 ////////////////////////////////////////////////////////////////////////////////
-//                    GESTIONE DELLE INTERFACCE SERIALI                       //
+//                    GESTIONE DELLE INTERFACCE SERIALI [9.2]                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-const int S = 2;
+enum funz { input_n, input_ln, output_n, output_0 };  // [9.2]
 
-extern "C" void go_inputse(ioaddr i_ctr);
-extern "C" void halt_inputse(ioaddr i_ctr);
-extern "C" void go_outputse(ioaddr i_ctr);
-extern "C" void halt_outputse(ioaddr i_ctr);
-
-enum funz { input_n, input_ln, output_n, output_0 };
-
-struct interfse_reg {
+struct interfse_reg {	// [9.2]
 	ioaddr iRBR, iTHR, iLSR, iIER, iIIR;
 };
 
-struct des_se {
+struct des_se {		// [9.2]
 	interfse_reg indreg;
 	natl mutex;
 	natl sincr;
@@ -84,22 +66,37 @@ struct des_se {
 	natb stato;
 };
 
-extern "C" des_se com[S];
+const int S = 2;
+extern "C" des_se com[S];	// [9.2]
 
-void startse_in(des_se *p_des, natb vetti[], natl quanti, funz op)
+void input_com(des_se* p_des);	// [9.2]
+void output_com(des_se* p_des);	// [9.2]
+void estern_com(int i) // [9.2]
 {
-	p_des->cont = quanti;
-	p_des->punt = vetti;
-	p_des->funzione = op;
-	go_inputse(p_des->indreg.iIER);
+	natb r;
+	des_se *p_des;
+	p_des = &com[i];
+	for(;;) {
+		inputb(p_des->indreg.iIIR, r);
+		if ((r&0x06) == 0x04) 
+			input_com(p_des);
+		else if ((r&0x06) == 0x02)
+			output_com(p_des);
+		nwfi(master); // sia com1 che com2 sono sul master
+	}
 }
 
-extern "C" void c_readse_n(natl serial, natb vetti[], natl quanti, natb& errore)
+void startse_in(des_se *p_des, natb vetti[], natl quanti, funz op); // [9.2.1]
+extern "C" void c_readse_n(natl serial, natb vetti[], natl quanti, natb& errore) // [9.2.1]
 {
 	des_se *p_des;
 
-	if (serial >= S)
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (serial >= S) {
+		flog(LOG_WARN, "readse_n con serial=%d", serial);
 		abort_p();
+	}
+	// *)
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -113,8 +110,12 @@ extern "C" void c_readse_ln(int serial, natb vetti[], int& quanti, natb& errore)
 {
 	des_se *p_des;
 
-	if (serial >= S)
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (serial >= S) {
+		flog(LOG_WARN, "readse_ln con serial=%d", serial);
 		abort_p();
+	}
+	// *)
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -125,38 +126,17 @@ extern "C" void c_readse_ln(int serial, natb vetti[], int& quanti, natb& errore)
 	sem_signal(p_des->mutex);
 }
 
-void output_com(des_se *p_des)
+extern "C" void go_inputse(ioaddr i_ctr);
+void startse_in(des_se *p_des, natb vetti[], natl quanti, funz op) // [9.2.1]
 {
-	natb c; bool fine;
-        fine = false;
-
-	if(p_des->funzione == output_n) {
-		p_des->cont--;
-		if(p_des->cont == 0) {
-			fine = true;
-			halt_outputse(p_des->indreg.iIER);
-		}
-		c = *static_cast<natb*>(p_des->punt); //prelievo
-		outputb(c, p_des->indreg.iTHR);
-		p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
-	} else if(p_des->funzione == output_0) {
-		c = *static_cast<natb*>(p_des->punt); //prelievo
-		if(c == 0) {
-			fine = true;
-			halt_outputse(p_des->indreg.iIER);
-		} else {
-			outputb(c, p_des->indreg.iTHR);
-			p_des->cont++;
-			p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
-		}
-	}
-
-	if(fine == true)
-		sem_signal(p_des->sincr);
-
+	p_des->cont = quanti;
+	p_des->punt = vetti;
+	p_des->funzione = op;
+	go_inputse(p_des->indreg.iIER);
 }
 
-void input_com(des_se *p_des)
+extern "C" void halt_inputse(ioaddr i_ctr);
+void input_com(des_se *p_des) // [9.2.1]
 {
 	natb c; bool fine;
 	fine = false;
@@ -198,36 +178,17 @@ void input_com(des_se *p_des)
 		go_inputse(p_des->indreg.iIER);
 }
 
-void estern_com(int i)
-{
-	natb r;
-	des_se *p_des;
-	p_des = &com[i];
-	for(;;) {
-		inputb(p_des->indreg.iIIR, r);
-		if ((r&0x06) == 0x04) 
-			input_com(p_des);
-		else if ((r&0x06) == 0x02)
-			output_com(p_des);
-		nwfi(master); // sia com1 che com2 sono sul master
-	}
-}
-
-void startse_out(des_se *p_des, natb vetto[], natl quanti, funz op)
-{
-	p_des->cont = quanti;
-	p_des->punt = vetto;
-	p_des->funzione = op;
-	go_outputse(p_des->indreg.iIER);
-	output_com(p_des); 
-}
-
-extern "C" void c_writese_n(natl serial, natb vetto[], natl quanti)
+void startse_out(des_se *p_des, natb vetto[], natl quanti, funz op);
+extern "C" void c_writese_n(natl serial, natb vetto[], natl quanti)	// [9.2.2]
 {
 	des_se *p_des;
 
-	if (serial >= S)
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (serial >= S) {
+		flog(LOG_WARN, "writese_n con serial=%d", serial);
 		abort_p();
+	}
+	// *)
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -240,8 +201,12 @@ extern "C" void c_writese_0(natl serial, natb vetto[], natl &quanti)
 {
 	des_se *p_des;
 
-	if (serial >= S)
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (serial >= S) {
+		flog(LOG_WARN, "writese_0 con serial=%d", serial);
 		abort_p();
+	}
+	// *)
 
 	p_des = &com[serial];
 	sem_wait(p_des->mutex);
@@ -251,11 +216,51 @@ extern "C" void c_writese_0(natl serial, natb vetto[], natl &quanti)
 	sem_signal(p_des->mutex);
 }
 
+extern "C" void go_outputse(ioaddr i_ctr);
+void startse_out(des_se *p_des, natb vetto[], natl quanti, funz op) // [9.2.2]
+{
+	p_des->cont = quanti;
+	p_des->punt = vetto;
+	p_des->funzione = op;
+	go_outputse(p_des->indreg.iIER);
+	output_com(p_des); 
+}
 
-extern "C" void com_setup(void);
+extern "C" void halt_outputse(ioaddr i_ctr);
+void output_com(des_se *p_des)	// [9.2.2]
+{
+	natb c; bool fine;
+        fine = false;
 
-// Interruzioni hardware delle interfacce seriali
-//
+	if (p_des->funzione == output_n) {
+		p_des->cont--;
+		if(p_des->cont == 0) {
+			fine = true;
+			halt_outputse(p_des->indreg.iIER);
+		}
+		c = *static_cast<natb*>(p_des->punt); //prelievo
+		outputb(c, p_des->indreg.iTHR);
+		p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
+	} else if (p_des->funzione == output_0) {
+		c = *static_cast<natb*>(p_des->punt); //prelievo
+		if (c == 0) {
+			fine = true;
+			halt_outputse(p_des->indreg.iIER);
+		} else {
+			outputb(c, p_des->indreg.iTHR);
+			p_des->cont++;
+			p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
+		}
+	}
+
+	if (fine == true)
+		sem_signal(p_des->sincr);
+
+}
+
+// ( inizializzazione delle interfacce seriali
+extern "C" void com_setup(void);	// vedi "io.S"
+// interruzioni hardware delle interfacce seriali
 int com_irq[S] = { 4, 3 };
 
 bool com_init()
@@ -288,18 +293,33 @@ bool com_init()
 	flog(LOG_INFO, "com: inizializzate %d seriali", S);
 	return true;
 }
+// )
 
 ////////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE DELLA CONSOLE                            //
+//                         GESTIONE DELLA CONSOLE [9.5]                       //
 ////////////////////////////////////////////////////////////////////////////////
 
-const int MAX_CODE = 29; 
+const natl COLS = 80; 	// [9.5]
+const natl ROWS = 25;	// [9.5]
+const natl VIDEO_SIZE = COLS * ROWS;	// [9.5]
 
-struct interfkbd_reg {
+struct interfvid_reg {	// [9.5]
+	ioaddr iIND, iDAT;
+};
+
+struct des_vid {	// [9.5]
+	interfvid_reg indreg;
+	natw* video;
+	natl x, y;
+	natb attr;
+};
+
+const int MAX_CODE = 29; // [9.5]
+struct interfkbd_reg {	// [9.5]
 	ioaddr iRBR, iTBR, iCMR, iSTR;
 };
 
-struct des_kbd {
+struct des_kbd { // [9.5]
 	interfkbd_reg indreg;
 	addr punt;
 	natl cont;
@@ -309,52 +329,90 @@ struct des_kbd {
 	natb tabmai[MAX_CODE];
 };
 
-const natl COLS = 80;
-const natl ROWS = 25;
-const natl VIDEO_SIZE = COLS * ROWS;
-
-struct interfvid_reg {
-	ioaddr iIND, iDAT;
-};
-
-struct des_vid {
-	interfvid_reg indreg;
-	natw* video;
-	natl x, y;
-	natb attr;
-};
-
-struct des_console {
+struct des_console { // [9.5]
 	natl mutex;
 	natl sincr;
 	des_kbd kbd;
 	des_vid vid;
 };
 
-extern "C" des_console console;
+extern "C" des_console console; // [9.5]
 
-extern "C" void abilita_tastiera(void);
-extern "C" void halt_inputkbd(interfkbd_reg indreg);
-extern "C" void go_inputkbd(interfkbd_reg indreg);
-void writeelem(natb c);
-void writeseq(cstr buff);
-bool vid_init();
+extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); // [9.5]
 
-extern "C" void c_iniconsole(natb cc)
+void scroll(des_vid *p_des)	// [9.5]
 {
-	des_vid *p_des = &console.vid;
-	p_des->attr = cc;
-	vid_init();
+	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
+		p_des->video[i] = p_des->video[i + COLS];
+	for (int i = 0; i < COLS; i++)
+		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
+	p_des->y--;
 }
 
-void startkbd_in(des_kbd* p_des, str buff)
+void writeelem(natb c) {	// [9.5]
+	des_vid* p_des = &console.vid;
+	switch (c) {
+	case '\r':
+		p_des->x = 0;
+		break;
+	case '\n':
+		p_des->y++;
+		if (p_des->y >= ROWS)
+			scroll(p_des);
+		break;
+	case '\b':
+		if (p_des->x > 0 || p_des->y > 0) {
+			p_des->x--;
+			if (p_des->x < 0) {
+				p_des->x = COLS - 1;
+				p_des->y--;
+			}
+		}
+		break;
+	default:
+		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
+		p_des->x++;
+		if (p_des->x >= COLS) {
+			p_des->x = 0;
+			p_des->y++;
+		}
+		if (p_des->y >= ROWS) 
+			scroll(p_des);
+		break;
+	}
+	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
+		p_des->x, p_des->y);
+}
+
+void writeseq(cstr seq)	// [9.5]
+{
+	const natb* pn = static_cast<const natb*>(seq);
+	while (*pn != 0) {
+		writeelem(*pn);
+		pn++;
+	}
+}
+
+extern "C" void c_writeconsole(cstr buff) // [9.5]
+{
+	des_console *p_des = &console;
+	sem_wait(p_des->mutex);
+	writeseq(buff);
+	writeseq("\r\n");
+	sem_signal(p_des->mutex);
+}
+
+extern "C" void go_inputkbd(interfkbd_reg indreg); // [9.5]
+extern "C" void halt_inputkbd(interfkbd_reg indreg); // [9.5]
+
+void startkbd_in(des_kbd* p_des, str buff) // [9.5]
 {
 	p_des->punt = buff;
 	p_des->cont = 80;
 	go_inputkbd(p_des->indreg);
 }
 
-extern "C" void c_readconsole(str buff, natl& quanti)
+extern "C" void c_readconsole(str buff, natl& quanti) // [9.5]
 {
 	des_console *p_des;
 
@@ -366,7 +424,7 @@ extern "C" void c_readconsole(str buff, natl& quanti)
 	sem_signal(p_des->mutex);
 }
 
-natb converti(des_kbd* p_des, natb c) {
+natb converti(des_kbd* p_des, natb c) { // [9.5]
 	natb cc;
 	natl pos = 0;
 	while (pos < MAX_CODE && p_des->tab[pos] != c)
@@ -380,8 +438,7 @@ natb converti(des_kbd* p_des, natb c) {
 	return cc;
 }
 
-
-void estern_kbd(int h)
+void estern_kbd(int h) // [9.5]
 {
 	des_console *p_des = &console;
 	natb a, c;
@@ -436,6 +493,18 @@ void estern_kbd(int h)
 		nwfi(master);
 	}
 }
+
+// (* inizializzazioni
+extern "C" void abilita_tastiera(void);
+bool vid_init();
+
+extern "C" void c_iniconsole(natb cc)
+{
+	des_vid *p_des = &console.vid;
+	p_des->attr = cc;
+	vid_init();
+}
+
 // Interruzione hardware della tastiera
 const int KBD_IRQ = 1;
 
@@ -455,8 +524,6 @@ bool kbd_init()
 }
 
 extern "C" des_vid vid;
-
-extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y);
 
 bool vid_init()
 {
@@ -483,72 +550,10 @@ bool console_init() {
 	return kbd_init() && vid_init();
 }
 
-void scroll(des_vid *p_des)
-{
-	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
-		p_des->video[i] = p_des->video[i + COLS];
-	for (int i = 0; i < COLS; i++)
-		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
-	p_des->y--;
-}
+// *)
 
-void writeelem(natb c) {
-	des_vid* p_des = &console.vid;
-	switch (c) {
-	case '\r':
-		p_des->x = 0;
-		break;
-	case '\n':
-		p_des->y++;
-		if (p_des->y >= ROWS)
-			scroll(p_des);
-		break;
-	case '\b':
-		if (p_des->x > 0 || p_des->y > 0) {
-			p_des->x--;
-			if (p_des->x < 0) {
-				p_des->x = COLS - 1;
-				p_des->y--;
-			}
-		}
-		break;
-	default:
-		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
-		p_des->x++;
-		if (p_des->x >= COLS) {
-			p_des->x = 0;
-			p_des->y++;
-		}
-		if (p_des->y >= ROWS) 
-			scroll(p_des);
-		break;
-	}
-	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
-		p_des->x, p_des->y);
-}
-
-void writeseq(cstr seq)
-{
-	const natb* pn = static_cast<const natb*>(seq);
-	while (*pn != 0) {
-		writeelem(*pn);
-		pn++;
-	}
-}
-
-extern "C" void c_writeconsole(cstr buff)
-{
-	des_console *p_des = &console;
-	sem_wait(p_des->mutex);
-	writeseq(buff);
-	writeseq("\r\n");
-	sem_signal(p_des->mutex);
-}
-
-
-
-//////////////////////////////////////////////////////////////////////////////////
-//                  FUNZIONI DI LIBRERIA                                       
+/////////////////////////////////////////////////////////////////////////////////
+//                  FUNZIONI DI LIBRERIA                                       //
 /////////////////////////////////////////////////////////////////////////////////
 typedef char *va_list;
 

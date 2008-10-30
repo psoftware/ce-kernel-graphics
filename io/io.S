@@ -22,7 +22,7 @@
 //  sistema
 // Devono coincidere con quelli usati in sistema.s
 //
-.set tipo_ae,   TIPO_AE
+.set tipo_ape,  TIPO_APE
 .set tipo_nwfi, TIPO_NWFI
 .set tipo_va,   TIPO_VA
 .set tipo_p,    TIPO_P
@@ -203,7 +203,7 @@ _com:	.word	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].stato
 
 // descrittore console
-	.global _console		
+	.global _console	// [9.5]
 _console:
 	.long	0		// mutex
 	.long	0		// sincr
@@ -254,7 +254,7 @@ _activate_p:
 	int $tipo_a
 	ret
 
-	.global _terminate_p
+	.global _terminate_p // [7.1]
 _terminate_p:
 	int $tipo_t
 	ret
@@ -264,12 +264,12 @@ _sem_ini:
 	int $tipo_si
 	ret
 
-	.global _sem_wait
+	.global _sem_wait	// [7.1]
 _sem_wait:
 	int $tipo_w
 	ret
 
-	.global _sem_signal
+	.global _sem_signal	// [7.1]
 _sem_signal:
 	int $tipo_s
 	ret
@@ -279,11 +279,11 @@ _sem_signal:
 ////////////////////////////////////////////////////////////////////////////////
 
 	.global _activate_pe
-_activate_pe:
-	int $tipo_ae
+_activate_pe:	// [7.1]
+	int $tipo_ape
 	ret
 
-	.global _nwfi
+	.global _nwfi	// [9.1]
 _nwfi:
 	int $tipo_nwfi
 	ret

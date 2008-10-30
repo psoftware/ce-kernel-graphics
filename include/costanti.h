@@ -1,4 +1,4 @@
-#define MAX_SEMAFORI		4096
+#define MAX_SEM			4096
 
 #define SEL_CODICE_SISTEMA	8
 #define SEL_DATI_SISTEMA 	16
@@ -18,6 +18,7 @@
 #define DIM_SUPERPAGINA		(DIM_PAGINA * 1024)
 #define DIM_DESP		216
 #define DIM_DESS		8
+#define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define DELAY			59659		
 #define DEFAULT_HEAP_SIZE	(1024*1024)
 
@@ -40,7 +41,7 @@
 #define TIPO_R			0x3b
 #define TIPO_EP			0x3c
 
-#define TIPO_AE			0x40
+#define TIPO_APE		0x40
 #define TIPO_NWFI		0x41
 #define TIPO_FG			0x44
 #define TIPO_P			0x45
@@ -80,28 +81,7 @@
 #ifndef ASM
 const unsigned int T_STAT = 4;
 
-const unsigned int ntab_sistema_condiviso = 256;
-const unsigned int ntab_sistema_privato   = 1;
-const unsigned int ntab_io_condiviso	  = 255;
-const unsigned int ntab_utente_condiviso  = 256;
-const unsigned int ntab_utente_privato    = 255; // una tabella non viene usata (per future estensioni)
 
-const unsigned int dim_sistema_condiviso = ntab_sistema_condiviso * DIM_SUPERPAGINA;
-const unsigned int dim_sistema_privato   = ntab_sistema_privato   * DIM_SUPERPAGINA;
-const unsigned int dim_io_condiviso	 = ntab_io_condiviso	  * DIM_SUPERPAGINA;
-const unsigned int dim_utente_condiviso  = ntab_utente_condiviso  * DIM_SUPERPAGINA;
-const unsigned int dim_utente_privato    = ntab_utente_privato    * DIM_SUPERPAGINA;
-
-const unsigned int inizio_sistema_condiviso = 0x00000000;
-const unsigned int fine_sistema_condiviso   = inizio_sistema_condiviso + dim_sistema_condiviso;
-const unsigned int inizio_sistema_privato   = fine_sistema_condiviso;
-const unsigned int fine_sistema_privato     = inizio_sistema_privato + dim_sistema_privato;
-const unsigned int inizio_io_condiviso      = fine_sistema_privato;
-const unsigned int fine_io_condiviso	    = inizio_io_condiviso + dim_io_condiviso;
-const unsigned int inizio_utente_condiviso  = fine_io_condiviso;
-const unsigned int fine_utente_condiviso    = inizio_utente_condiviso + dim_utente_condiviso;
-const unsigned int inizio_utente_privato    = fine_utente_condiviso;
-const unsigned int fine_utente_privato      = inizio_utente_privato + dim_utente_privato;
 
 const unsigned int LOG_MSG_SIZE = 80;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };

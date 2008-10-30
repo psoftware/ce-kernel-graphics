@@ -67,6 +67,7 @@ int main(int argc, char* argv[])
 	int record = 0;
 	int count[2];
 	int bit, last_bit;
+	int i, *w, sum;
 
 	if (argc != 2) {
 		fprintf(stderr, "Uso: %s [p|s|b]\n", argv[0]);
@@ -89,11 +90,16 @@ int main(int argc, char* argv[])
 		printf("bm_start: %d\n", sb.bm_start);
 		printf("blocks: %d\n", sb.blocks);
 		printf("directory: %d\n", sb.directory);
-		printf("user_entry: %x\n", sb.user_entry);
-		printf("user_end: %x\n", sb.user_end);
-		printf("io_entry: %x\n", sb.io_entry);
-		printf("io_end: %x\n", sb.io_end);
-		printf("checksum: %u\n", sb.checksum);
+		printf("user_entry: %x\n", (unsigned int)sb.user_entry);
+		printf("user_end: %x\n", (unsigned int)sb.user_end);
+		printf("io_entry: %x\n", (unsigned int)sb.io_entry);
+		printf("io_end: %x\n", (unsigned int)sb.io_end);
+		printf("checksum: %u", sb.checksum);
+		w = (int*)&sb;
+		sum = 0;
+		for (i = 0; i < sizeof(sb) / sizeof(int); i++)
+			sum += w[i];
+		printf(" (%s)\n", sum? "BAD" : "OK");
 		break;
 	case 'b':
 		record = 0;

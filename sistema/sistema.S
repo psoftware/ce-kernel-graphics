@@ -373,8 +373,7 @@ inspronti:
 
 .set FPU, 104
 
-// salva lo stato del processo corrente nel suo descrittore
-//
+// salva lo stato del processo corrente nel suo descrittore [4.8]
 salva_stato:
         pushl %ebx
 	pushl %eax
@@ -417,8 +416,7 @@ salva_stato:
 
 	ret
 
-// carica lo stato del processo in _esecuzione
-//
+// carica lo stato del processo in _esecuzione [4.8]
 carica_stato:
         movl _esecuzione, %edx
 	movl $0, %ebx
@@ -522,7 +520,7 @@ init_gdt:
 .set tipo_ep, TIPO_EP
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
-.set tipo_ae, TIPO_AE
+.set tipo_ape, TIPO_APE
 .set tipo_nwfi, TIPO_NWFI
 .set tipo_va, TIPO_VA
 .set tipo_fg, TIPO_FG
@@ -563,7 +561,7 @@ init_idt:
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
 	// driver/handler
-	carica_gate	0x20		driver_t	LIV_SISTEMA
+	carica_gate	0x20		driver_td	LIV_SISTEMA
 	carica_gate	0x21		handler_1	LIV_SISTEMA
 	carica_gate	0x22		handler_2	LIV_SISTEMA
 	carica_gate	0x23		handler_3	LIV_SISTEMA
@@ -583,7 +581,6 @@ init_idt:
 	// primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
 	carica_gate	tipo_t		a_terminate_p	LIV_UTENTE
-	carica_gate	tipo_g		a_give_num	LIV_UTENTE
 	carica_gate	tipo_si		a_sem_ini	LIV_UTENTE
 	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
 	carica_gate	tipo_s		a_sem_signal	LIV_UTENTE
@@ -596,7 +593,7 @@ init_idt:
 	carica_gate	tipo_ep		a_end_program	LIV_UTENTE
 
 	// primitive per il livello I/O
-	carica_gate	tipo_ae		a_activate_pe	LIV_SISTEMA
+	carica_gate	tipo_ape	a_activate_pe	LIV_SISTEMA
 	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
@@ -769,7 +766,7 @@ _des_p:
 	leave
 	ret
 
-	.global _invalida_TLB
+	.global _invalida_TLB  // [6.6]
 _invalida_TLB:
 	pushl %eax
 	movl %cr3, %eax
@@ -835,7 +832,7 @@ a_end_program:
 
 // dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
 // eliminare la corrispondente traduzione dal TLB
-	.global _invalida_entrata_TLB
+	.global _invalida_entrata_TLB // [6.4]
 _invalida_entrata_TLB:
 	invlpg 4(%esp)
 	# non e' necessario predisporre e utilizzare EBP
@@ -1315,17 +1312,17 @@ comm_exc:
 // a loro volta invocare altre routine del nucleo stesso. In particolare, sono 
 // necessarie le seguenti:
 //
-	.global _sem_ini
+	.global _sem_ini	// [4.11]
 _sem_ini:
 	int $tipo_si
 	ret
 
-	.global _sem_wait
+	.global _sem_wait	// [4.11]
 _sem_wait:
 	int $tipo_w
 	ret
 
-	.global _sem_signal
+	.global _sem_signal	// [4.11]
 _sem_signal:
 	int $tipo_s
 	ret
@@ -1374,10 +1371,10 @@ _end_program:
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
 //
-// driver del timer
+// driver del timer	[4.16]
 	.extern _c_driver_td
-driver_t:
-	call salva_stato
+driver_td:
+	call salva_stato	// interruzioni disabilitate
 	call inspronti
 	call _c_driver_td
 	movb $EOI, %al         // ack al controllore
@@ -1386,7 +1383,7 @@ driver_t:
 	iret
 
 
-// handler generici
+// handler generici	([7.1])
 	.extern _proc_esterni
 handler_1:
 	call salva_stato
@@ -1573,7 +1570,7 @@ driver_hd1:
 // a_primitive                                        //
 ////////////////////////////////////////////////////////
         .extern _c_activate_p
-a_activate_p:	// routine int $tipo_a
+a_activate_p:	// routine int $tipo_a [4.6]
 	salva_reg_rit
         copia_param 4 6		// salva_registri ha inserito 6 long in pila
 	cavallo_di_troia 0
@@ -1583,21 +1580,14 @@ a_activate_p:	// routine int $tipo_a
         iret
 
         .extern _c_terminate_p
-a_terminate_p:	// routine int $tipo_t
+a_terminate_p:	// routine int $tipo_t [4.6]
 	movl $terminate_stack_end, %esp
         call _c_terminate_p
 	call carica_stato
 	iret
 
-        .extern _c_give_num
-a_give_num:	// routine int $tipo_g
-	salva_reg_rit
-        call _c_give_num
-        carica_reg_rit
-	iret
-
 	.extern _c_sem_ini
-a_sem_ini:	// routine int $tipo_si
+a_sem_ini:	// routine int $tipo_si [4.11]
 	salva_reg_rit
 	copia_param 1 6
 	call _c_sem_ini
@@ -1606,48 +1596,48 @@ a_sem_ini:	// routine int $tipo_si
 	iret
 
 	.extern _c_sem_wait
-a_sem_wait:	// routine int $tipo_w
+a_sem_wait:	// routine int $tipo_w [4.11]
 	call salva_stato
-	copia_param 1 0
+	copia_param 1 0	// ricopiamento del parametro sem
 	call _c_sem_wait
-	// addl $4, %esp			// non necessario
+	//addl $4, %esp	// ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
 	.extern _c_sem_signal
-a_sem_signal:	// routine int $tipo_s
+a_sem_signal:	// routine int $tipo_s [4.11]
 	call salva_stato
-	copia_param 1 0
+	copia_param 1 0	// ricopiamento del parametro sem
 	call _c_sem_signal
-	// addl $4, %esp			// non necessario
+	//addl $4, %esp	// ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
 	.extern _c_mem_alloc
-a_mem_alloc:	// routine int $tipo_ma
-	salva_reg_rit
-	copia_param 1 6
+a_mem_alloc:	// routine int $tipo_ma [4.14]
+	salva_reg_rit	// salvataggio dei registri (non di EAX)
+	copia_param 1 6	// ricopiamento del parametro dim
 	call _c_mem_alloc
-	addl $4, %esp
-	carica_reg_rit
+	addl $4, %esp	// ripulitura pila
+	carica_reg_rit	// ripristino dei registri (non EAX, che contiene il risultato)
 	iret
 
 	.extern _c_mem_free
-a_mem_free:	// routine int $tipo_mf
-	salva_registri
-	copia_param 1 7
-	cavallo_di_troia 0
+a_mem_free:	// routine int $tipo_mf [4.14]
+	salva_registri	// salvataggio dei registri
+	copia_param 1 7	// ricopiamento del parametro pv
+	cavallo_di_troia 0 // ... e verifica
 	call _c_mem_free
-	addl $4, %esp
-	carica_registri
+	addl $4, %esp	// ripulitura pila
+	carica_registri	// ripristino dei registri
 	iret
 
 	.extern _c_delay
-a_delay:	// routine int $tipo_d
+a_delay:	// routine int $tipo_d [4.16]
 	call salva_stato
-	copia_param 1 0
+	copia_param 1 0	// ricopiamento del parametro n
 	call _c_delay
-	// addl $4, %esp			// non necessario
+	// addl $4, %esp // ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
@@ -1661,12 +1651,12 @@ a_readlog:	// routine int $tipo_rl
 	carica_registri
 	iret
 
-	.extern _c_resident
+	.extern _c_resident 	// [10.6]
 a_resident:	// routine int $tipo_r
 	salva_reg_rit
-	copia_param 2 6
-	cavallo_di_troia 0
-	cavallo_di_troia2 0 1
+	copia_param 2 6		// ricopiamento dei parametri
+	cavallo_di_troia 0	// verifica ind_virt
+	cavallo_di_troia2 0 1	// verifica ind_virt+quanti
 	call _c_resident
 	addl $8, %esp
 	carica_reg_rit
@@ -1687,15 +1677,19 @@ a_activate_pe:
 	iret
 
 
-a_nwfi:		// routine int $tipo_nwfi
+a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
 	call salva_stato
-	copia_param 1 0
+	// ( ricopiamento del parametro "controllore"
+	copia_param 1 0 
+	// )
 	call inviaEOI
+	// ( ripulitura della pila
 	addl $4, %esp
+	// )
 	call _schedulatore
 	call carica_stato
 	iret
-inviaEOI:
+inviaEOI:		// [9.1]
 	cmpl $1, 8(%esp)
 	jne m_eoi
 
@@ -2037,7 +2031,7 @@ ms_out:	movl 12(%ebp),%edx
 	ret
 
 // invia un comando al drive correntemente selezionato di un canale ATA
-	.global _hd_write_command
+	.global _hd_write_command	// [9.3.1]
 _hd_write_command:
 	pushl %ebp
 	movl %esp, %ebp
@@ -2124,7 +2118,7 @@ um_end:	popl %eax
 // Scompone correttamente il blocco iniziale di una operazione su hard disk
 // e lo scrive nei registri opportuni
 	.global _hd_write_address
-_hd_write_address:
+_hd_write_address:	// [9.3.1]
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -2171,13 +2165,15 @@ _mem_upper:	 .long _end
 .global		_fine_codice_sistema
 _fine_codice_sistema:
 		.long _etext
-.global		 _esecuzione
-_esecuzione:	.long 0
-.global		_pronti
+.global		 _esecuzione	// [4.6]
+_esecuzione:	.long 0	
+.global		_pronti		// [4.6]
 _pronti:	.long 0
+.global		_processi	// [4.7]
+_processi:	.long 0
 // Descrittore Hard Disk
 	.global _hd
-_hd:	
+_hd:	// [9.3]
 	.word	0x01f0		//hd[0].indreg.iBR
 	.word	0x01f4		//hd[0].indreg.iCNL
 	.word	0x01f5		//hd[0].indreg.iCNH
@@ -2237,8 +2233,8 @@ idt_pointer:
 	.long idt			// base della IDT
 
 .bss
-.global		_array_dess
-_array_dess:	.space DIM_DESS * MAX_SEMAFORI 
+.global		_array_dess		// [4.11]
+_array_dess:	.space BYTE_SEM
 .balign 16
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 

@@ -16,12 +16,12 @@ process big8 body big_c(8), 10, LIV_UTENTE;
 process big9 body big_c(9), 10, LIV_UTENTE;
 
 const int N = 9000000;
-const int MSG_SIZE = 100;
+const int B_MSG_SIZE = 100;
 unsigned int values[N];
 
 process_body big_c(int a)
 {
-	char buf[MSG_SIZE];
+	char buf[B_MSG_SIZE];
 	char *ptr;
 	ptr = convint(a, buf);
 	copy(": scrivo i valori", ptr);
