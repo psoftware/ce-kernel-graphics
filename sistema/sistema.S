@@ -190,8 +190,8 @@
 // AVVIO                                                                  //
 //////////////////////////////////////////////////////////////////////////
 // Il bootstrap loader attiva il modo protetto (per poter accedere agli
-// indirizzi di memoria principale superiori a 1MB) e carica il sistema,
-// assieme agli eventuali moduli, in memoria. Quindi, salta alla prima
+// indirizzi di memoria principale superiori a 1MB) e carica il sistema
+// in memoria. Quindi, salta alla prima
 // istruzione del sistema. Il bootstrap loader puo' anche passare
 // delle informazioni al sistema (tramite i registri e la memoria).
 //
@@ -199,7 +199,7 @@
 // il file contentente il sistema deve rispettare e
 // il formato delle informazioni passate dal bootstrap loader al sistema.
 // Il formato del file contenente il sistema deve essere quello di un
-// normale file eseguibile, ma, nei primi 2*4K byte, deve contenere 
+// normale file eseguibile, ma, nei primi 2*4KiB, deve contenere 
 // la struttura multiboot_header, definita piu' avanti. 
 // Il boot loader, prima di saltare alla prima istruzione del sistema
 // (l'entry point specificato nel file eseguibile), lascia nel registro
@@ -1074,10 +1074,10 @@ _disattiva_timer:
 // alcune periferiche (in particolare gli hard disk che rispettano lo standard 
 // ATA) richiedono il rispetto di alcune temporizzazioni. Per esempio, e' 
 // richiesta un'attesa di 400 nanosecondi prima del test del bit BSY nel 
-// registro di stato degli hard disk. Per poter realizzare tali attese, si puo' 
+// registro di stato degli hard disk. Per poter realizzare tali attese si puo' 
 // utilizzare il Time Stamp Counter (tsc), un contatore che (dai processori 
 // Pentium in poi) e' presente nei processori Intel. Tale contatore e' grande 
-// 64 bit, viene incrementato ad ogni clock e puo' esseere letto tramite 
+// 64 bit, viene incrementato ad ogni clock e puo' essere letto tramite 
 // l'istruzione rdtsc (read tsc), che ne copia il contenuto nei registri %eax e 
 // %edx. Una attesa di un tempo T (troppo piccolo per essere realizzata tramite 
 // la primitiva delay) puo' essere realizzata leggendo una prima volta il tsc, 

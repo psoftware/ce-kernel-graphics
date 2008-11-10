@@ -1,43 +1,45 @@
 # utente.s
 #
+#define ASM 1
+#include <costanti.h>
 
 # Tipi di interruzione per le chiamate di sistema e per le primitive di IO
 #
 
-.set tipo_a, 0x30
-.set tipo_t, 0x31
-.set tipo_g, 0x33
-.set tipo_si, 0x34
-.set tipo_w, 0x35
-.set tipo_s, 0x36
-.set tipo_ma, 0x37
-.set tipo_mf, 0x38
-.set tipo_d, 0x39
-.set tipo_rl, 0x3a
-.set tipo_r, 0x3b
-.set tipo_l, 0x49
-.set tipo_ep, 0x3c
+.set tipo_a, TIPO_A
+.set tipo_t, TIPO_T
+.set tipo_g, TIPO_G
+.set tipo_si, TIPO_SI
+.set tipo_w, TIPO_W
+.set tipo_s, TIPO_S
+.set tipo_ma, TIPO_MA
+.set tipo_mf, TIPO_MF
+.set tipo_d, TIPO_D
+.set tipo_rl, TIPO_RL
+.set tipo_r, TIPO_R
+.set tipo_l, TIPO_L
+.set tipo_ep, TIPO_EP
 
-.set io_tipo_rsen, 0x60
-.set io_tipo_rseln, 0x61
-.set io_tipo_wsen, 0x62
-.set io_tipo_wse0, 0x63
-.set io_tipo_tr, 0x64
-.set io_tipo_trl, 0x65
-.set io_tipo_tw, 0x66
-.set io_tipo_rkbd, 0x64
-.set io_tipo_ikbd, 0x65
-.set io_tipo_wfikbd, 0x66
-.set io_tipo_skbd, 0x67
-.set io_tipo_smon, 0x68
-.set io_tipo_wmon, 0x69
-.set io_tipo_wvid, 0x69
-.set io_tipo_cmon, 0x6a
-.set io_tipo_gmon, 0x6b
-.set io_tipo_lkbd, 0x6c
-.set io_tipo_kmon, 0x6d
-.set io_tipo_pkbd, 0x6e
-.set io_tipo_icon, 0x6f
+.set io_tipo_rsen, IO_TIPO_RSEN
+.set io_tipo_rseln, IO_TIPO_RSELN
+.set io_tipo_wsen, IO_TIPO_WSEN
+.set io_tipo_wse0, IO_TIPO_WSE0
+.set io_tipo_tr, IO_TIPO_TR
+.set io_tipo_trl, IO_TIPO_TRL
+.set io_tipo_tw, IO_TIPO_TW
+.set io_tipo_rkbd, IO_TIPO_RKBD
+.set io_tipo_ikbd, IO_TIPO_IKBD
+.set io_tipo_wfikbd, IO_TIPO_WFIKBD
+.set io_tipo_skbd, IO_TIPO_SKBD
+.set io_tipo_smon, IO_TIPO_SMON
+.set io_tipo_wmon, IO_TIPO_WMON
+.set io_tipo_wvid, IO_TIPO_WVID
+.set io_tipo_cmon, IO_TIPO_CMON
+.set io_tipo_gmon, IO_TIPO_GMON
+.set io_tipo_lkbd, IO_TIPO_LKBD
+.set io_tipo_kmon, IO_TIPO_KMON
+.set io_tipo_pkbd, IO_TIPO_PKBD
+.set io_tipo_icon, IO_TIPO_ICON
 
 	.text
 	.global _activate_p
