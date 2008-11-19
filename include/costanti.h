@@ -23,14 +23,11 @@
 #define DEFAULT_HEAP_SIZE	(1024*1024)
 
 #define MAX_PRIORITY		0xfffffff
-#define MIN_PRIORITY		0x0000002
-#define DUMMY_PRIORITY		0x0000001
-#define FREEZE_PRIORITY		0x0000000
-
+#define MIN_PRIORITY		0x0000001
+#define DUMMY_PRIORITY		0x0000000
 
 #define TIPO_A			0x30
 #define TIPO_T			0x31
-#define TIPO_G			0x33
 #define TIPO_SI			0x34
 #define TIPO_W			0x35
 #define TIPO_S			0x36
@@ -69,19 +66,21 @@
 #define IO_TIPO_PKBD		0x6e
 #define IO_TIPO_ICON		0x6f
 
+#define DIM_BLOCK 512			// Dimensione del blocco (HD)
 
-#define DIM_BLOCK 512			// Dimensione del blocco (HD e FD)
-
-#define D_TIMEOUT 0x7FFF		// Timeout per l'accesso ai dischi
 #define D_ERR_NONE 0x00
 #define D_ERR_BOUNDS 0xFF
 #define D_ERR_PRESENCE 0xFE
 #define D_ERR_GENERIC  0xFD
 
+#define NTAB_SIS_C		256	// 1GiB
+#define NTAB_SIS_P		1	// 4MiB
+#define NTAB_MIO_C		255	// 1GiB - 4MiB
+#define NTAB_USR_C		256	// 1GiB
+#define NTAB_USR_P		256	// 1GiB
+
 #ifndef ASM
 const unsigned int T_STAT = 4;
-
-
 
 const unsigned int LOG_MSG_SIZE = 80;
 enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR };

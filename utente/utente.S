@@ -8,7 +8,6 @@
 
 .set tipo_a, TIPO_A
 .set tipo_t, TIPO_T
-.set tipo_g, TIPO_G
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
 .set tipo_s, TIPO_S
@@ -52,10 +51,6 @@ _terminate_p:
 	int $tipo_t
 	ret
 
-	.global _give_num
-_give_num:
-	int $tipo_g
-	ret
 
 	.global _end_program
 _end_program:

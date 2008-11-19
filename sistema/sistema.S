@@ -2231,7 +2231,8 @@ gdt_pointer:
 idt_pointer:
 	.word 0x7FF			// limite della IDT (256 entrate)
 	.long idt			// base della IDT
-
+param_err:
+	.asciz "parametro errato %x"
 .bss
 .global		_array_dess		// [4.11]
 _array_dess:	.space BYTE_SEM
@@ -2265,5 +2266,3 @@ shutdown_esp:
 	.long 0
 shutdown_ebp:
 	.long 0
-param_err:
-	.asciz "parametro errato %x"

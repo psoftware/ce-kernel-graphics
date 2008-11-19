@@ -19,6 +19,7 @@ typedef unsigned int uint;
 const uint UPB = DIM_PAGINA / sizeof(uint);
 const uint BPU = sizeof(uint) * 8;
 
+const uint fine_utente_condiviso = (NTAB_SIS_C + NTAB_SIS_P + NTAB_MIO_C + NTAB_USR_C + NTAB_USR_P) * DIM_PAGINA;
 
 // converte v in un indirizzo
 inline

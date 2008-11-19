@@ -447,12 +447,12 @@ extern "C" void attiva_paginazione();
 //   Ricordiamo che ogni tabella delle pagine mappa una porzione contigua dello spazio
 //   di indirizzamento virtuale, grande 4MiB e allineata ai 4MiB (a volte detta "superpagina").
 //   Le costanti che iniziano con "ntab_" indicano il numero di tabelle delle pagine
-//   dedicate alla parte di memoria virtuale corrispondente:
-const natl ntab_sistema_condiviso = 256; // 256*4MiB=1GiB
-const natl ntab_sistema_privato   = 1;	 // 1*4MiB=4MiB
-const natl ntab_io_condiviso	  = 255; // 255*4MiB=1GiB-4MiB
-const natl ntab_utente_condiviso  = 256; // 256*4MiB=1GiB
-const natl ntab_utente_privato    = 255; /* una tabella non viene usata (per future estensioni) */
+//   dedicate alla parte di memoria virtuale corrispondente (si veda "include/costanti.h" per i valori)
+const natl ntab_sistema_condiviso = NTAB_SIS_C;
+const natl ntab_sistema_privato   = NTAB_SIS_P;
+const natl ntab_io_condiviso	  = NTAB_MIO_C;
+const natl ntab_utente_condiviso  = NTAB_USR_C;
+const natl ntab_utente_privato    = NTAB_USR_P;
 
 //   Le costanti che iniziano con "i_" contengono l'indice (all'interno dei direttori
 //   di tutti i processi) della prima tabella corrispondente alla zona di memoria virtuale nominata
