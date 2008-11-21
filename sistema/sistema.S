@@ -2186,42 +2186,50 @@ _hd:	// [9.3]
 	.word	0x03f6		//hd[0].indreg.iDCR
 	.word	0x03f6		//hd[0].indreg.iASR
 	.word	0		//padding
-	.long	0		//hd[0].disco[0].{presente,dma} (sono byte!)
-	.long	0		//hd[0].disco[0].tot_sett
-	.long	0		//hd[0].disco[0].part
-	.long	0		//hd[0].disco[1].{presente,dma} (sono byte!)
-	.long	0		//hd[0].disco[1].tot_sett
-	.long	0		//hd[0].disco[1].part
 	.long	0		//hd[0].comando
-				//hd[0].errore (byte!)
-	.long	0		//hd[0].cont (byte!)
-	.long	0		//hd[0].punt
+	.byte	0		//hd[0].errore
+	.space  3, 0		//padding
 	.long	0		//hd[0].mutex
 	.long	0		//hd[0].sincr
-	.word	0x0170		//hd[0].indreg.iBR
-	.word	0x0174		//hd[0].indreg.iCNL
-	.word	0x0175		//hd[0].indreg.iCNH
-	.word	0x0173		//hd[0].indreg.iSNR
-	.word	0x0176		//hd[0].indreg.iHND
-	.word 	0x0172		//hd[0].indreg.iSCR
-	.word	0x0171		//hd[0].indreg.iERR
-	.word	0x0177		//hd[0].indreg.iCMD
-	.word	0x0177		//hd[0].indreg.iSTS
-	.word	0x0376		//hd[0].indreg.iDCR
-	.word	0x0376		//hd[0].indreg.iASR
+	.byte	0		//hd[0].cont
+	.space	3, 0		//padding
+	.long	0		//hd[0].punt
+	.byte	0		//hd[0].disco[0].presente
+	.space  3, 0		//padding
+	.long	0		//hd[0].disco[0].tot_sett
+	.long	0		//hd[0].disco[0].part
+	.byte	0		//hd[0].disco[1].presente
+	.space	3, 0		//padding
+	.long	0		//hd[0].disco[1].tot_sett
+	.long	0		//hd[0].disco[1].part
+	.word	0x0170		//hd[1].indreg.iBR
+	.word	0x0174		//hd[1].indreg.iCNL
+	.word	0x0175		//hd[1].indreg.iCNH
+	.word	0x0173		//hd[1].indreg.iSNR
+	.word	0x0176		//hd[1].indreg.iHND
+	.word 	0x0172		//hd[1].indreg.iSCR
+	.word	0x0171		//hd[1].indreg.iERR
+	.word	0x0177		//hd[1].indreg.iCMD
+	.word	0x0177		//hd[1].indreg.iSTS
+	.word	0x0376		//hd[1].indreg.iDCR
+	.word	0x0376		//hd[1].indreg.iASR
 	.word	0		//padding
-	.long	0		//hd[1].disco[0].{presente,dma} (sono byte!)
-	.long	0		//hd[1].disco[0].tot_sett
-	.long	0		//hd[1].disco[0].part
-	.long	0		//hd[1].disco[1].{presente,dma} (sono byte!)
-	.long	0		//hd[1].disco[1].tot_sett
-	.long	0		//hd[1].disco[1].part
 	.long	0		//hd[1].comando
-				//hd[1].errore (byte!)
-	.long	0		//hd[1].cont (byte!)
-	.long	0		//hd[1].punt
+	.byte	0		//hd[1].errore
+	.space  3, 0		//padding
 	.long	0		//hd[1].mutex
 	.long	0		//hd[1].sincr
+	.byte	0		//hd[1].cont
+	.space	3, 0		//padding
+	.long	0		//hd[1].punt
+	.byte	0		//hd[1].disco[0].presente
+	.space  3, 0		//padding
+	.long	0		//hd[1].disco[0].tot_sett
+	.long	0		//hd[1].disco[0].part
+	.byte	0		//hd[1].disco[1].presente
+	.space	3, 0		//padding
+	.long	0		//hd[1].disco[1].tot_sett
+	.long	0		//hd[1].disco[1].part
 	
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
