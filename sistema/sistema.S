@@ -854,7 +854,7 @@ _trova_bit:
 _inputb:
 	pushl %eax
 	pushl %edx
-	movl 12(%esp), %edx
+	movw 12(%esp), %dx
 	inb %dx, %al
 	movl 16(%esp), %edx
 	movb %al, (%edx)
@@ -868,7 +868,7 @@ _outputb:
 	pushl %eax
 	pushl %edx
 	movb 12(%esp), %al
-	movl 16(%esp), %edx
+	movw 16(%esp), %dx
 	outb %al, %dx
 	popl %edx
 	popl %eax

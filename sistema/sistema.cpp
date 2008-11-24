@@ -979,7 +979,7 @@ const int A = 2;
 extern "C" des_ata hd[A];	// [9.3]
 
 // [9.3], implementazione in [P_HARDDISK] avanti
-bool hd_sel_drv(des_ata* p_des, int drv);
+bool hd_sel_drv(des_ata* p_des, natl drv);
 
 void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
 // [9.3.1]
@@ -1017,7 +1017,7 @@ extern "C" void c_readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb qu
 	sem_signal(p_des->mutex);
 }
 
-void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti);
+void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti);
 // [9.3.1]
 extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
 {
@@ -1079,7 +1079,7 @@ void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
 }
 
 // [9.3.1]
-void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)	
+void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti)	
 {
 	p_des->cont = quanti;
 	p_des->punt = vetto + DIM_BLOCK / 2;
@@ -1091,7 +1091,6 @@ void starthd_out(des_ata *p_des, int drv, natw vetto[], natl primo, natb quanti)
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
 	hd_wait_data(p_des->indreg.iSTS);
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
-	return;
 }
 
 // [9.3.1]
@@ -1312,7 +1311,7 @@ error:
 }
 
 void usr_heap_init(addr start, addr end);
-bool aggiungi_pe(proc_elem *p, int irq);
+bool aggiungi_pe(proc_elem *p, natb irq);
 bool hd_init();
 bool log_init_usr();
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
@@ -2301,6 +2300,12 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pl = static_cast<natl*>(pila_utente);
 		pl[1022] = 0xffffffff;	// ind. di ritorno non significativo
 		pl[1023] = a;		// parametro del processo
+
+		// dobbiamo settare manualmente il bit D, perche' abbiamo
+		// scritto nella pila tramite la finestra FM, e non tramite
+		// il suo indirizzo virtuale
+		natl& dp = get_despag(p->id, fine_utente_privato - DIM_PAGINA);
+		set_D(dp, true);
 		// )
 
 		// ( infine, inizializziamo il descrittore di processo
@@ -2662,9 +2667,9 @@ void estern_generico(int h)
 // associa il processo esterno puntato da "p" all'interrupt "irq".
 // Fallisce se un processo esterno (non generico) era gia' stato associato a 
 // quello stesso interrupt
-bool aggiungi_pe(proc_elem *p, int irq)
+bool aggiungi_pe(proc_elem *p, natb irq)
 {
-	if (irq < 0 || irq >= MAX_IRQ || a_p_save[irq] == 0)
+	if (irq >= MAX_IRQ || a_p_save[irq] == 0)
 		return false;
 
 	a_p[irq] = p;
@@ -2734,10 +2739,10 @@ extern "C" void mask_hd(ioaddr h);
 extern "C" bool hd_software_reset(ioaddr dvctrl);
 extern "C" void hd_read_device(ioaddr i_drv_hd, int& ms);
 extern "C" void hd_select_device(short ms, ioaddr iHND);
-extern "C" void readhd_n(int ata, int drv, natw vetti[], natl primo, natb quanti, natb &errore);
-extern "C" void writehd_n(int ata, int drv, natw vetto[], natl primo, natb quanti, natb &errore);
+extern "C" void readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore);
+extern "C" void writehd_n(natl ata, natl drv, natw vetto[], natl primo, natb quanti, natb &errore);
 
-bool hd_sel_drv(des_ata* p_des, int drv) // [9.3]
+bool hd_sel_drv(des_ata* p_des, natl drv) // [9.3]
 {
 	natb stato;
 	int curr_drv;
