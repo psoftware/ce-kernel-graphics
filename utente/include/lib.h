@@ -15,8 +15,6 @@ typedef char *va_list;
 #define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
 #define va_end(ap)
 
-typedef unsigned int size_t;
-
 char* copy(const char* src, char* dst);
 char* convint(int n, char* out);
 int strlen(const char *s);
