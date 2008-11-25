@@ -21,6 +21,9 @@ char nome[LUN_NOME];		/* ultimo identificatore (o intero) letto */
 #define LUN_RIGA 1024
 char ultima_riga[LUN_RIGA];
 
+const char* currfile;
+int line_needed = 0;
+
 /*
  * Stampa di un messaggio di errore in presenza di un errore nel parsing
  *  ed uscita dal programma
@@ -62,10 +65,17 @@ void errore(const char *msg)
 /*
  * Legge il carattere successivo dall' ingresso
  */
+void emetti_line();
+inline void emetti(const char *t);
 inline void leggi_car()
 {
 	look = fgetc(input);
 	if(look == '\n') {
+		if (line_needed) {
+			emetti("\n");
+			emetti_line();
+			line_needed = 0;
+		}
 		++riga;
 		pos += colonna + 1;
 		colonna = 0;
@@ -214,6 +224,13 @@ inline void copia_nome()
 inline void emetti(const char *t)
 {
 	fprintf(output, "%s", t);
+}
+
+void emetti_line()
+{
+	char linep[LUN_RIGA];
+	sprintf(linep, "#line %d \"%s\"\n", riga, currfile);
+	emetti(linep);
 }
 
 /*
@@ -417,7 +434,8 @@ void process()
 	}
 
 	trova(';', 1);
-
+	emetti("\n");
+	emetti_line();
 	agg_proc(nome_proc, corpo_proc, pa, prio, liv);
 }
 
@@ -469,8 +487,9 @@ void process_body()
 		emetti(")");
 	}
 
+	line_needed = 1;
 	trova('{', 0);
-	emetti("\n{");
+	emetti("{");
 	avanza();
 	emetti("\n\tterminate_p();\n}\n");
 	trova('}', 1);
@@ -492,6 +511,7 @@ void semaphore()
 	emetti("extern int ");
 	emetti(nome_sem);
 	emetti(";\n");
+	emetti_line();
 
 	agg_sem(nome_sem, valore);
 }
@@ -501,7 +521,9 @@ void parse_file(const char* inname, FILE* output)
 	if(!(input = fopen(inname, "r")))
 		errore("impossibile aprire il file di ingresso");
 
-	riga = colonna = pos = 0;
+	riga = colonna = pos = 1;
+	currfile = inname;
+	emetti_line();
 	leggi_car();
 	
 	while(!feof(input)) {
