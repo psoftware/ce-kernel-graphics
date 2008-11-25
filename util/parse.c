@@ -100,6 +100,7 @@ inline void salta_commento()
 			leggi_car();
 		}
 		copia_car();
+		leggi_car();
 	} else if(look == '*') {
 		do {
 			copia_car();
@@ -113,8 +114,7 @@ inline void salta_commento()
 		} while(look != '/');
 		copia_car();
 		leggi_car();
-	} else
-		ungetc(look, input);
+	} 
 }
 
 /*
