@@ -278,7 +278,7 @@ extern "C" void c_driver_td(void)
 /////////////////////////////////////////////////////////////////////////////////
 
 
-enum cont_pf { LIBERA, DIRETTORIO, TABELLA, PAGINA_VIRTUALE };	// [6.3]
+enum cont_pf { LIBERA, DIRETTORIO, TABELLA, PAGINA_VIRTUALE, TABELLA_FM }; // [6.3]
 struct des_pf {			// [6.3]
 	cont_pf	contenuto;	// uno dei valori precedenti
 	union {
@@ -2303,8 +2303,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		pl[1023] = a;		// parametro del processo
 
 		// dobbiamo settare manualmente il bit D, perche' abbiamo
-		// scritto nella pila tramite la finestra FM, e non tramite
-		// il suo indirizzo virtuale
+		// scritto nella pila tramite la finestra FM, non tramite
+		// il suo indirizzo virtuale.
+		// (la "carica" lo setta gia', ma lo rifacciamo per sicurezza)
 		natl& dp = get_despag(p->id, fine_utente_privato - DIM_PAGINA);
 		set_D(dp, true);
 		// )
@@ -2620,9 +2621,7 @@ bool crea_finestra_FM(addr direttorio, addr max_mem)
 				return false;
 			}
 			des_pf *ppf = &dpf[indice];
-			// evitiamo di marcare la pagina come TABELLA
-			// in modo che "c_driver_stat" non la veda
-			// ppf->contenuto = TABELLA;
+			ppf->contenuto = TABELLA_FM;
 			ppf->pt.residente = true;
 			tabella = indirizzo_pf(indice);
 
