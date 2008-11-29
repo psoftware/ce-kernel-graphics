@@ -1410,7 +1410,7 @@ void main_sistema(int n)
 		flog(LOG_ERR, "Impossibile allocare il semaforo di sincr per l'IO");
 		goto error;
 	}
-	if (activate_p(swap_dev.sb.io_entry, sync_io, MAX_PRIORITY, LIV_SISTEMA) == 0) {
+	if (activate_p(swap_dev.sb.io_entry, sync_io, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "impossibile creare il processo main I/O");
 		goto error;
 	}
@@ -1419,7 +1419,7 @@ void main_sistema(int n)
 
 	// ( creazione del processo start_utente
 	flog(LOG_INFO, "creazione del processo start_utente...");
-	if (activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE) == 0) {
+	if (activate_p(swap_dev.sb.user_entry, 0, MAX_PRIORITY, LIV_UTENTE) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "impossibile creare il processo main utente");
 		goto error;
 	}
