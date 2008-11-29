@@ -3654,6 +3654,7 @@ natl crea_dummy()
 		return 0xFFFFFFFF;
 	}
 	inserimento_lista(pronti, di);
+	processi++;
 	return di->id;
 }
 void main_sistema(int n);
@@ -3663,8 +3664,8 @@ bool crea_main_sistema(natl dummy_proc)
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
-	processi = 1;
 	inserimento_lista(pronti, m);
+	processi++;
 	return true;
 }
 // )
