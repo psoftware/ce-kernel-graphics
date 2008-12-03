@@ -8,19 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// Priorita' dei processi esterni
-const int PRIO_ESTERN = 0x400;
+const natl PRIO = 1000;
+const natl LIV = LIV_SISTEMA;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 //                        CHIAMATE DI SISTEMA USATE                           //
 ////////////////////////////////////////////////////////////////////////////////
 
-extern "C" void terminate_p(void);
-extern "C" natl sem_ini(int val);
-extern "C" void sem_wait(int sem);
-extern "C" void sem_signal(int sem);
 extern "C" natl activate_pe(void f(int), int a, natl prio, natl liv, natb type);
+extern "C" void terminate_p();
+extern "C" void sem_wait(natl sem);
+extern "C" void sem_signal(natl sem);
+extern "C" natl sem_ini(int val);
 enum controllore { master=0, slave=1 };	// [9.1]
 extern "C" void nwfi(controllore c);	// [9.1]
 extern "C" void abort_p();
@@ -66,7 +66,7 @@ struct des_se {		// [9.2]
 	natb stato;
 };
 
-const int S = 2;
+const natl S = 2;
 extern "C" des_se com[S];	// [9.2]
 
 void input_com(des_se* p_des);	// [9.2]
@@ -267,7 +267,7 @@ bool com_init()
 {
 	des_se *p_des;
 	short id;
-	int i, com_base_prio = PRIO_ESTERN;
+	int i, com_base_prio = PRIO;
 
 	com_setup();
 
@@ -283,7 +283,7 @@ bool com_init()
 			return false;
 		}
 
-		id = activate_pe(estern_com, i, com_base_prio - i, LIV_SISTEMA, com_irq[i]);
+		id = activate_pe(estern_com, i, com_base_prio - i, LIV, com_irq[i]);
 		if (id == 0xFFFFFFFF) {
 			flog(LOG_ERR, "com: impossibile creare proc. esterno");
 			return false;
@@ -513,7 +513,7 @@ extern "C" void kbd_enable();
 bool kbd_init()
 {
 	des_kbd *p_des = &console.kbd;
-	if (activate_pe(estern_kbd, 0, PRIO_ESTERN, LIV_SISTEMA, KBD_IRQ) == 0xFFFFFFFF) {
+	if (activate_pe(estern_kbd, 0, PRIO, LIV, KBD_IRQ) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
 	}

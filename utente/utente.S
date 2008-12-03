@@ -15,7 +15,7 @@
 .set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
 .set tipo_rl, TIPO_RL
-.set tipo_r, TIPO_R
+.set tipo_re, TIPO_RE
 .set tipo_l, TIPO_L
 .set tipo_ep, TIPO_EP
 
@@ -24,7 +24,7 @@
 .set io_tipo_wsen, IO_TIPO_WSEN
 .set io_tipo_wse0, IO_TIPO_WSE0
 .set io_tipo_rcon, IO_TIPO_RCON
-.set io_tipo_icon, IO_TIPO_ICON
+.set io_tipo_inic, IO_TIPO_INIC
 .set io_tipo_wcon, IO_TIPO_WCON
 
 	.text
@@ -106,7 +106,7 @@ _writeconsole:
 
 	.global _iniconsole
 _iniconsole:
-	int $io_tipo_icon
+	int $io_tipo_inic
 	ret
 
 	.global _readlog
@@ -116,7 +116,7 @@ _readlog:
 
 	.global _resident
 _resident:
-	int $tipo_r
+	int $tipo_re
 	ret
 
 	.global _log

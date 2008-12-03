@@ -516,7 +516,7 @@ init_gdt:
 .set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
 .set tipo_rl, TIPO_RL
-.set tipo_r, TIPO_R
+.set tipo_re, TIPO_RE
 .set tipo_ep, TIPO_EP
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
@@ -529,8 +529,8 @@ init_gdt:
 .set tipo_l,  TIPO_L
 
 // interruzioni usate dal nucleo stesso (dalle routine della memoria virtuale)
-.set io_tipo_rhdn, IO_TIPO_RHDN
-.set io_tipo_whdn, IO_TIPO_WHDN
+.set io_tipo_hdr, IO_TIPO_HDR
+.set io_tipo_hdw, IO_TIPO_HDW
 
 // carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
@@ -588,7 +588,7 @@ init_idt:
 	carica_gate	tipo_mf		a_mem_free	LIV_UTENTE
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
-	carica_gate	tipo_r		a_resident	LIV_UTENTE
+	carica_gate	tipo_re		a_resident	LIV_UTENTE
 	carica_gate	tipo_l		a_log		LIV_UTENTE
 	carica_gate	tipo_ep		a_end_program	LIV_UTENTE
 
@@ -600,8 +600,8 @@ init_idt:
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
-	carica_gate	io_tipo_rhdn	a_readhd_n	LIV_SISTEMA
-	carica_gate	io_tipo_whdn	a_writehd_n	LIV_SISTEMA
+	carica_gate	io_tipo_hdr	a_readhd_n	LIV_SISTEMA
+	carica_gate	io_tipo_hdw	a_writehd_n	LIV_SISTEMA
 
 	leave
 	ret
@@ -1339,12 +1339,12 @@ _terminate_p:
 
 	.global _readhd_n
 _readhd_n:
-	int $io_tipo_rhdn
+	int $io_tipo_hdr
 	ret
 
 	.global _writehd_n
 _writehd_n:
-	int $io_tipo_whdn
+	int $io_tipo_hdw
 	ret
 
 	.global _panic

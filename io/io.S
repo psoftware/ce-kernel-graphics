@@ -39,7 +39,7 @@
 .set io_tipo_wse0,  IO_TIPO_WSE0
 .set io_tipo_rcon,  IO_TIPO_RCON		
 .set io_tipo_wcon,  IO_TIPO_WCON		
-.set io_tipo_icon,  IO_TIPO_ICON
+.set io_tipo_inic,  IO_TIPO_INIC
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -723,7 +723,7 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_wse0	a_writese_0
 	fill_io_gate	io_tipo_rcon	a_readconsole
 	fill_io_gate	io_tipo_wcon	a_writeconsole
-	fill_io_gate	io_tipo_icon	a_iniconsole
+	fill_io_gate	io_tipo_inic	a_iniconsole
 	leave
 	ret
 

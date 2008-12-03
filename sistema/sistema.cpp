@@ -974,9 +974,7 @@ struct des_ata {	// [9.3]
 	// *)
 };
 
-// (
-const int A = 2;
-// )
+const natl A = 2;		// [9.3]
 extern "C" des_ata hd[A];	// [9.3]
 
 // [9.3], implementazione in [P_HARDDISK] avanti

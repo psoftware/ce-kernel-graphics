@@ -35,7 +35,7 @@
 #define TIPO_MF			0x48
 #define TIPO_D			0x49
 #define TIPO_RL			0x4a
-#define TIPO_R			0x4b
+#define TIPO_RE			0x4b
 #define TIPO_EP			0x4c
 
 #define TIPO_APE		0x52
@@ -45,8 +45,8 @@
 #define TIPO_AB			0x56
 #define TIPO_L			0x57
 
-#define IO_TIPO_RHDN		0x62
-#define IO_TIPO_WHDN		0x63
+#define IO_TIPO_HDR		0x62
+#define IO_TIPO_HDW		0x63
 
 #define IO_TIPO_RSEN		0x72
 #define IO_TIPO_RSELN		0x73
@@ -54,7 +54,7 @@
 #define IO_TIPO_WSE0		0x75
 #define IO_TIPO_RCON		0x76
 #define IO_TIPO_WCON		0x77
-#define IO_TIPO_ICON		0x78
+#define IO_TIPO_INIC		0x78
 
 #define DIM_BLOCK 512			// Dimensione del blocco (HD)
 
