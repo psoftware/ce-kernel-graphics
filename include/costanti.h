@@ -26,45 +26,35 @@
 #define MIN_PRIORITY		0x0000001
 #define DUMMY_PRIORITY		0x0000000
 
-#define TIPO_A			0x30
-#define TIPO_T			0x31
-#define TIPO_SI			0x34
-#define TIPO_W			0x35
-#define TIPO_S			0x36
-#define TIPO_MA			0x37
-#define TIPO_MF			0x38
-#define TIPO_D			0x39
-#define TIPO_RL			0x3a
-#define TIPO_R			0x3b
-#define TIPO_EP			0x3c
+#define TIPO_A			0x42
+#define TIPO_T			0x43
+#define TIPO_SI			0x44
+#define TIPO_W			0x45
+#define TIPO_S			0x46
+#define TIPO_MA			0x47
+#define TIPO_MF			0x48
+#define TIPO_D			0x49
+#define TIPO_RL			0x4a
+#define TIPO_R			0x4b
+#define TIPO_EP			0x4c
 
-#define TIPO_APE		0x40
-#define TIPO_NWFI		0x41
-#define TIPO_FG			0x44
-#define TIPO_P			0x45
-#define TIPO_AB			0x48
-#define TIPO_L			0x49
+#define TIPO_APE		0x52
+#define TIPO_NWFI		0x53
+#define TIPO_FG			0x54
+#define TIPO_P			0x55
+#define TIPO_AB			0x56
+#define TIPO_L			0x57
 
-#define IO_TIPO_RHDN		0x50
-#define IO_TIPO_WHDN		0x51
+#define IO_TIPO_RHDN		0x62
+#define IO_TIPO_WHDN		0x63
 
-#define IO_TIPO_RSEN		0x60
-#define IO_TIPO_RSELN		0x61
-#define IO_TIPO_WSEN		0x62
-#define IO_TIPO_WSE0		0x63
-#define IO_TIPO_RKBD		0x64
-#define IO_TIPO_IKBD		0x65
-#define IO_TIPO_WFIKBD		0x66
-#define IO_TIPO_SKBD		0x67
-#define IO_TIPO_SMON		0x68
-#define IO_TIPO_WMON		0x69
-#define IO_TIPO_WVID		IO_TIPO_WMON
-#define IO_TIPO_CMON		0x6a
-#define IO_TIPO_GMON		0x6b
-#define IO_TIPO_LKBD		0x6c
-#define IO_TIPO_KMON		0x6d
-#define IO_TIPO_PKBD		0x6e
-#define IO_TIPO_ICON		0x6f
+#define IO_TIPO_RSEN		0x72
+#define IO_TIPO_RSELN		0x73
+#define IO_TIPO_WSEN		0x74
+#define IO_TIPO_WSE0		0x75
+#define IO_TIPO_RCON		0x76
+#define IO_TIPO_WCON		0x77
+#define IO_TIPO_ICON		0x78
 
 #define DIM_BLOCK 512			// Dimensione del blocco (HD)
 

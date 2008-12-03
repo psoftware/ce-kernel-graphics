@@ -37,10 +37,9 @@
 .set io_tipo_rseln, IO_TIPO_RSELN
 .set io_tipo_wsen,  IO_TIPO_WSEN
 .set io_tipo_wse0,  IO_TIPO_WSE0
-.set io_tipo_rkbd,  IO_TIPO_RKBD		
-.set io_tipo_wvid,  IO_TIPO_WVID		
+.set io_tipo_rcon,  IO_TIPO_RCON		
+.set io_tipo_wcon,  IO_TIPO_WCON		
 .set io_tipo_icon,  IO_TIPO_ICON
-.set io_tipo_gmon,  IO_TIPO_GMON		
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -314,7 +313,7 @@ _log:
 
 	.global _writevid
 _writevid:
-	int $io_tipo_wvid
+	int $io_tipo_wcon
 	ret
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -722,9 +721,8 @@ _fill_io_gates:
 	fill_io_gate	io_tipo_rseln	a_readse_ln
 	fill_io_gate	io_tipo_wsen	a_writese_n
 	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_rkbd	a_readconsole
-	fill_io_gate	io_tipo_wvid	a_writeconsole
-	fill_io_gate	io_tipo_gmon	a_vmon_getsize
+	fill_io_gate	io_tipo_rcon	a_readconsole
+	fill_io_gate	io_tipo_wcon	a_writeconsole
 	fill_io_gate	io_tipo_icon	a_iniconsole
 	leave
 	ret
@@ -801,10 +799,6 @@ a_writeconsole:
 	call _c_writeconsole
 	addl $4, %esp
 	carica_registri
-	iret
-
-a_vmon_getsize:
-	xorl %eax, %eax
 	iret
 
 	.extern _c_iniconsole
