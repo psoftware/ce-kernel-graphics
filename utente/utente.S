@@ -23,22 +23,9 @@
 .set io_tipo_rseln, IO_TIPO_RSELN
 .set io_tipo_wsen, IO_TIPO_WSEN
 .set io_tipo_wse0, IO_TIPO_WSE0
-.set io_tipo_tr, IO_TIPO_TR
-.set io_tipo_trl, IO_TIPO_TRL
-.set io_tipo_tw, IO_TIPO_TW
-.set io_tipo_rkbd, IO_TIPO_RKBD
-.set io_tipo_ikbd, IO_TIPO_IKBD
-.set io_tipo_wfikbd, IO_TIPO_WFIKBD
-.set io_tipo_skbd, IO_TIPO_SKBD
-.set io_tipo_smon, IO_TIPO_SMON
-.set io_tipo_wmon, IO_TIPO_WMON
-.set io_tipo_wvid, IO_TIPO_WVID
-.set io_tipo_cmon, IO_TIPO_CMON
-.set io_tipo_gmon, IO_TIPO_GMON
-.set io_tipo_lkbd, IO_TIPO_LKBD
-.set io_tipo_kmon, IO_TIPO_KMON
-.set io_tipo_pkbd, IO_TIPO_PKBD
+.set io_tipo_rcon, IO_TIPO_RCON
 .set io_tipo_icon, IO_TIPO_ICON
+.set io_tipo_wcon, IO_TIPO_WCON
 
 	.text
 	.global _activate_p
@@ -109,72 +96,17 @@ _writese_0:
 
 	.global _readconsole
 _readconsole:
-	int $io_tipo_rkbd
+	int $io_tipo_rcon
 	ret
 
 	.global _writeconsole
 _writeconsole:
-	int $io_tipo_wvid
+	int $io_tipo_wcon
 	ret
 
 	.global _iniconsole
 _iniconsole:
 	int $io_tipo_icon
-	ret
-
-	.global _vkbd_read
-_vkbd_read:
-	int $io_tipo_rkbd
-	ret
-
-	.global _vkbd_intr_enable	
-_vkbd_intr_enable:
-	int $io_tipo_ikbd
-	ret
-
-	.global _vkbd_wfi
-_vkbd_wfi:
-	int $io_tipo_wfikbd
-	ret
-
-	.global _vkbd_send
-_vkbd_send:
-	int $io_tipo_pkbd
-	ret
-
-	.global _vkbd_switch
-_vkbd_switch:
-	int $io_tipo_skbd
-	ret
-
-	.global _vmon_switch
-_vmon_switch:
-	int $io_tipo_smon
-	ret
-
-	.global _vmon_write_n
-_vmon_write_n:
-	int $io_tipo_wmon
-	ret
-
-	.global _vmon_setcursor
-_vmon_setcursor:
-	int $io_tipo_cmon
-	ret
-
-	.global _vmon_getsize
-_vmon_getsize:
-	int $io_tipo_gmon
-	ret
-
-	.global _vmon_cursor_shape
-_vmon_cursor_shape:
-	int $io_tipo_kmon
-	ret
-
-	.global _vkbd_leds
-_vkbd_leds:
-	int $io_tipo_lkbd
 	ret
 
 	.global _readlog

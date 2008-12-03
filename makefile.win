@@ -37,7 +37,7 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 	gxx $(CPPFLAGS) $(CXXFLAGS) -c io/io.cpp -o io/io_cpp.o
 
 # compilazione di utente.s e utente.cpp
-utente/uten_s.o: utente/utente.S
+utente/uten_s.o: utente/utente.S include/costanti.h
 	gcc $(CPPFLAGS) -c utente/utente.S -o utente/uten_s.o
 
 utente/utente.cpp: build/parse.exe utente/prog/*.in utente/include/*.h utente/prog
