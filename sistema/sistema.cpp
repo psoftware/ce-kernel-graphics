@@ -248,6 +248,7 @@ void inserimento_lista_attesa(richiesta *p)
 }
 
 // driver del timer [4.16][9.6]
+const natl T_STAT = 4; // [9.6]
 void c_driver_stat(); // [9.6]
 extern "C" void c_driver_td(void)
 {
@@ -977,6 +978,13 @@ struct des_ata {	// [9.3]
 const natl A = 2;		// [9.3]
 extern "C" des_ata hd[A];	// [9.3]
 
+// (* possibili errori nella gestione degli hard disk
+const natl D_ERR_NONE = 0x00;		/* nessun errore */
+const natl D_ERR_BOUNDS = 0xFF;		/* accesso al di fuori della partizione */
+const natl D_ERR_PRESENCE = 0xFE;	/* dispositivo non trovato */
+const natl D_ERR_GENERIC = 0xFD;	/* errore generico */
+// *)
+
 // [9.3], implementazione in [P_HARDDISK] avanti
 bool hd_sel_drv(des_ata* p_des, natl drv);
 
@@ -1052,6 +1060,7 @@ extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb q
 	sem_signal(p_des->mutex);
 }
 
+const natl DIM_BLOCK = 512;
 extern "C" void hd_write_address(des_ata *p, natl primo);	// [9.3.1]
 extern "C" void hd_write_command(hd_cmd cmd, ioaddr iCMD);	// [9.3.1]
 // (* hd_wait_data la implementiamo in C++ (vedi [P_HARDDISK] avanti)
@@ -1108,7 +1117,9 @@ extern "C" void c_driverhd(natl ata)
 			inserimento_lista(pronti, lavoro);
 		}
 	}
+	// (* usiamo delle costanti simboliche per gli errori
 	p_des->errore = D_ERR_NONE;
+	// *)
 	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
 	if (p_des->comando == READ_SECT) { 
 		if (!hd_wait_data(p_des->indreg.iSTS)) 
@@ -1132,12 +1143,15 @@ extern "C" void c_driverhd(natl ata)
 ///////////////////////////////////////////////////////////////////////////////////
 //                   INIZIALIZZAZIONE [10]                                       //
 ///////////////////////////////////////////////////////////////////////////////////
+const natl MAX_PRIORITY	= 0xfffffff;
+const natl MIN_PRIORITY	= 0x0000001;
+const natl DUMMY_PRIORITY = 0x0000000;
+const natl DEFAULT_HEAP_SIZE = 1024 * 1024;
+const natl DELAY = 59659;
 
 extern "C" void *memset(void* dest, int c, natl n);
 // restituisce true se le due stringe first e second sono uguali
 bool str_equal(const char* first, const char* second);
-
-// caricato in memoria l'immagine del modulo sistema
 extern addr max_mem_lower;
 extern addr max_mem_upper;
 extern addr mem_upper;
@@ -1145,8 +1159,8 @@ extern proc_elem init;
 char* str_token(char* src, char** cont);
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
 void parse_swap(char* arg, short& channel, short& drive, short& partition);
-void parse_heap(char* arg, int& heap_mem);
-int heap_mem = DEFAULT_HEAP_SIZE;
+void parse_heap(char* arg, natl& heap_mem);
+natl heap_mem = DEFAULT_HEAP_SIZE;
 int salta_a(addr indirizzo);
 extern "C" void init_8259();
 bool crea_finestra_FM(addr direttorio, addr max_mem);
@@ -3534,7 +3548,7 @@ error:
 }
 
 
-void parse_heap(char* arg, int& heap_mem)
+void parse_heap(char* arg, natl& heap_mem)
 {
 	int dim;
 

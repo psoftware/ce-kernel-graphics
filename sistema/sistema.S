@@ -142,6 +142,15 @@
 
 .endm
 
+// campi in un descrittore di segmento
+.set PRES, 0b10000000
+.set NON_P, 0b00000000
+.set SEG_CODICE, 0b00011010
+.set SEG_DATI, 0b00010010
+.set SEG_TSS, 0b00001001
+.set G_PAGINA, 0b10000000
+.set G_BYTE, 0b00000000
+
 // Carica un descrittore della GDT
 // num: indice (a partire da 0) in GDT del descrittore da caricare
 // base: base del segmento
