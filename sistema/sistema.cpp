@@ -2689,7 +2689,6 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
-	unmask_irq(irq);
 	return true;
 
 }
