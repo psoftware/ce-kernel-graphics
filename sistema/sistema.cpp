@@ -2679,6 +2679,7 @@ void estern_generico(int h)
 // associa il processo esterno puntato da "p" all'interrupt "irq".
 // Fallisce se un processo esterno (non generico) era gia' stato associato a 
 // quello stesso interrupt
+extern "C" void unmask_irq(natb irq);
 bool aggiungi_pe(proc_elem *p, natb irq)
 {
 	if (irq >= MAX_IRQ || a_p_save[irq] == 0)
@@ -2688,6 +2689,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
+	unmask_irq(irq);
 	return true;
 
 }

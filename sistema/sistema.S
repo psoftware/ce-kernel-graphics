@@ -199,8 +199,8 @@
 // AVVIO                                                                  //
 //////////////////////////////////////////////////////////////////////////
 // Il bootstrap loader attiva il modo protetto (per poter accedere agli
-// indirizzi di memoria principale superiori a 1MB) e carica il sistema
-// in memoria. Quindi, salta alla prima
+// indirizzi di memoria principale superiori a 1MiB) e carica il sistema
+// in memoria, quindi salta alla prima
 // istruzione del sistema. Il bootstrap loader puo' anche passare
 // delle informazioni al sistema (tramite i registri e la memoria).
 //
@@ -967,6 +967,8 @@ _init_8259:
 	outb %al, $ICW3M
 	movb $0x01, %al		// modo annidato
 	outb %al, $ICW4M
+	inb  $OCW1M, %al	// leggiamo la maschera corrente
+	movb %al, save_pic_m	// e la salviamo per il ritorno al DOS
 	movb $0b11111011, %al	// maschera tutte le interruzioni, tranne quelle
 	outb %al, $OCW1M	//  provenienti dallo slave
 	movb $0x48, %al
@@ -981,6 +983,8 @@ _init_8259:
 	outb %al, $ICW3S
 	movb $0x01, %al		// modo annidato
 	outb %al, $ICW4S
+	inb  $OCW1S, %al	// leggiamo la maschera corrente
+	movb %al, save_pic_s	// e la salviamo per il ritorno al DOS
 	movb $0b11111111, %al	// maschera tutte le interruzioni
 	outb %al, $OCW1S
 	movb $0x48, %al		// fully nested
@@ -991,7 +995,7 @@ _init_8259:
 	ret
 
 // ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
-// Inizializzo la modalit fully nasted e i tipi base sono rispettivamente 0x08 per il master
+// Inizializzo la modalita' fully nasted e i tipi base sono rispettivamente 0x08 per il master
 // e 0x70 per lo slave.
 		.global _reset_8259
 _reset_8259:
@@ -999,43 +1003,81 @@ _reset_8259:
 	movl %esp, %ebp
 	pushl %eax
 
-   	movb	$0x8f, %al		// Disabilita Le interruzioni non Mascherabili per modificare i 
-	outb	$0x70			// registri dei controllori di delle interruzioni.
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+	// master
+	movb $0x11, %al		// cascata
+	outb %al, $ICW1M
+	movb $0x08, %al		// nuova base
+	outb %al, $ICW2M
+	movb $0x04, %al		// slave connesso a IR2
+	outb %al, $ICW3M
+	movb $0x01, %al		// modo annidato
+	outb %al, $ICW4M
+	movb save_pic_m, %al	// maschera salvata in precedenza
+	outb %al, $OCW1M	
+	movb $0x48, %al
+	outb %al, $OCW3M	// fully nested
 
-	// re-inizializza il controllore delle interruzioni ai normali settaggi per la realmode
-		
-	movb	$0xff, %al		// OCW1
-	outb	$0x21			// maschera tutte le interruzioni
-	outb	$0xa1
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
+	// slave
+	movb $0x11, %al		// cascata
+	outb %al, $ICW1S
+	movb $0x70, %al		// nuova base
+	outb %al, $ICW2S
+	movb $0x02, %al		// id. dello slave
+	outb %al, $ICW3S
+	movb $0x01, %al		// modo annidato
+	outb %al, $ICW4S
+	movb save_pic_s, %al	// maschera salvata in precedenza
+	outb %al, $OCW1S
+	movb $0x48, %al		// fully nested
+	outb %al, $OCW3S
 
-	movb	$0x11, %al		// ICW1
-	outb	$0x20
-	outb	$0xa0
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
-
-	movb	$0x08, %al		// ICW2 - base Dos Master
-	outb	$0x21
-	movb	$0x70, %al		// ICW2 - base Dos Slave
-	outb	$0xa1
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
-
-	movb	$0x04, %al		// ICW3	- Il terzo terzo piedino IR  connesso allo slave
-	outb	$0x21
-	movb	$0x02, %al
-	outb	$0xa1
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
-
-	movb	$0x01, %al		// ICW4	-	Modo annidato
-	outb	$0x21
-	outb	$0xa1
-    outb    %al, $0x80		// delay necessario dopo le operazioni di I/O
- 
 	popl %eax
 	leave
 	ret
 
+	.global _unmask_irq
+_unmask_irq:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %ecx
+
+	xorw %cx, %cx
+	movb 8(%ebp), %cl
+	inb $OCW1S, %al
+	movb %al, %ah
+	inb $OCW1M, %al
+	btrw %cx, %ax
+	outb %al, $OCW1M
+	movb %ah, %al
+	outb %al, $OCW1S
+
+	popl %ecx
+	popl %eax
+	leave
+	ret
+
+	.global _mask_irq
+_mask_irq:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %ecx
+
+	xorw %cx, %cx
+	movb 8(%ebp), %cl
+	inb $OCW1S, %al
+	movb %al, %ah
+	inb $OCW1M, %al
+	btsw %cx, %ax
+	outb %al, $OCW1M
+	movb %ah, %al
+	outb %al, $OCW1S
+
+	popl %ecx
+	popl %eax
+	leave
+	ret
 
 // timer
 // registri dell'interfaccia di conteggio
@@ -2283,3 +2325,8 @@ shutdown_esp:
 	.long 0
 shutdown_ebp:
 	.long 0
+save_pic_m:
+	.byte 0
+save_pic_s:
+	.byte 0
+	.fill 2, 0
