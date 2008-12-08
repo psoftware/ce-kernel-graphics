@@ -1142,11 +1142,10 @@ _disattiva_timer:
 // 
 
 bump_ticks:
-	pushl %eax
 	incl _ticks
-	movb $EOI, %al         // ack al controllore
-	outb %al, $OCW2M
-	popl %eax
+	pushl $0
+	call inviaEOI
+	addl $4, %esp
 	iret
 
 	.global _calibra_tsc
@@ -1428,8 +1427,8 @@ driver_td:
 	call salva_stato	// interruzioni disabilitate
 	call inspronti
 	call _c_driver_td
-	movb $EOI, %al         // ack al controllore
-	outb %al, $OCW2M
+	pushl $0
+	call inviaEOI
 	call carica_stato
 	iret
 
@@ -1586,16 +1585,9 @@ driver_hd0:
 	call inspronti
 	pushl $0
 	call _c_driverhd
-	movb $EOI, %al		// ack al controllore slave
-	outb %al, $OCW2S
-	movb $READ_ISR, %al	// lettura di ISR dello slave
-	outb %al, $OCW3S
-	inb $OCW3S, %al
-	testb $0xff, %al
-	jnz 1f
-	movb $EOI, %al
-	outb %al, $OCW2M
-1:	call carica_stato
+	pushl $1
+	call inviaEOI
+	call carica_stato
 	iret
 
 // driver degli hard disk sul canale secondario
@@ -1604,16 +1596,9 @@ driver_hd1:
 	call inspronti
 	pushl $1
 	call _c_driverhd
-	movb $EOI, %al		// ack al controllore slave
-	outb %al, $OCW2S
-	movb $READ_ISR, %al	// lettura di ISR dello slave
-	outb %al, $OCW3S
-	inb $OCW3S, %al
-	testb $0xff, %al
-	jnz 1f
-	movb $EOI, %al
-	outb %al, $OCW2M
-1:	call carica_stato
+	pushl $1
+	call inviaEOI
+	call carica_stato
 	iret
 	
 
@@ -1741,7 +1726,7 @@ a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
 	call carica_stato
 	iret
 inviaEOI:		// [9.1]
-	cmpl $1, 8(%esp)
+	cmpl $1, 4(%esp)
 	jne m_eoi
 
 	movb $EOI, %al		// ack al controllore slave
