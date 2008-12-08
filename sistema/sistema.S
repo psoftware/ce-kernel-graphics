@@ -1726,7 +1726,8 @@ a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
 	call carica_stato
 	iret
 inviaEOI:		// [9.1]
-	cmpl $1, 4(%esp)
+	pushl %eax
+	cmpl $1, 8(%esp)
 	jne m_eoi
 
 	movb $EOI, %al		// ack al controllore slave
@@ -1741,6 +1742,7 @@ m_eoi:
 	movb $EOI, %al
 	outb %al, $OCW2M
 m_noeoi:	
+	popl %eax
 	ret
 
 a_fill_gate:
