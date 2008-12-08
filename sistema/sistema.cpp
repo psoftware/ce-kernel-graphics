@@ -2239,7 +2239,8 @@ extern "C" void rilascia_tss(int indice);
 proc_elem init;
 des_proc des_main;
 
-proc_elem* crea_processo(void f(int), int a, int prio, char liv)
+const natl BIT_IF = 1L << 9;
+proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	natl		identifier;		// indice del tss nella gdt 
@@ -2295,7 +2296,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 
 		pl[1019] = (natl)f;		// EIP (codice utente)
 		pl[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
-		pl[1021] = 0x00000200;		// EFLAG
+		pl[1021] = (IF? BIT_IF : 0);	// EFLAG
 		pl[1022] = (natl)(fine_utente_privato - 2 * sizeof(int)); // ESP (pila utente)
 		pl[1023] = SEL_DATI_UTENTE;	// SS (pila utente)
 		//   eseguendo una IRET da questa situazione, il processo
@@ -2348,7 +2349,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv)
 		natl* pl = static_cast<natl*>(pila_sistema);
 		pl[1019] = (natl)f;	  	// EIP (codice sistema)
 		pl[1020] = SEL_CODICE_SISTEMA;  // CS (codice sistema)
-		pl[1021] = 0x00000200;  	// EFLAG
+		pl[1021] = (IF? BIT_IF : 0);  	// EFLAG
 		pl[1022] = 0xffffffff;		// indirizzo ritorno?
 		pl[1023] = a;			// parametro
 		//   i processi esterni lavorano esclusivamente a livello
@@ -2401,7 +2402,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 	// (* accorpiamo le parti comuni tra c_activate_p e c_activate_pe
 	// nella funzione ausiliare crea_processo
 	// (questa svolge, tra l'altro, i punti 1-3 in [4.6])
-	p = crea_processo(f, a, prio, liv);
+	p = crea_processo(f, a, prio, liv, true);
 	// *)
 
 	if (p != 0) {
@@ -2705,7 +2706,7 @@ extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type
 
 	sem_wait(pf_mutex);
 
-	p = crea_processo(f, a, prio, liv);
+	p = crea_processo(f, a, prio, liv, true);
 	if (p == 0)
 		goto error1;
 		
@@ -2728,7 +2729,7 @@ error1:	sem_signal(pf_mutex);
 bool init_pe()
 {
 	for (int i = 0; i < MAX_IRQ; i++) {
-		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA);
+		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA, true);
 		if (p == 0) {
 			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
 			return false;
@@ -3661,7 +3662,7 @@ bool crea_spazio_condiviso(natl dummy_proc, addr& last_address)
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 natl crea_dummy()
 {
-	proc_elem* di = crea_processo(dd, 0, DUMMY_PRIORITY, LIV_SISTEMA);
+	proc_elem* di = crea_processo(dd, 0, DUMMY_PRIORITY, LIV_SISTEMA, true);
 	if (di == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return 0xFFFFFFFF;
@@ -3673,7 +3674,7 @@ natl crea_dummy()
 void main_sistema(int n);
 bool crea_main_sistema(natl dummy_proc)
 {
-	proc_elem* m = crea_processo(main_sistema, (int)dummy_proc, MAX_PRIORITY, LIV_SISTEMA);
+	proc_elem* m = crea_processo(main_sistema, (int)dummy_proc, MAX_PRIORITY, LIV_SISTEMA, false);
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
