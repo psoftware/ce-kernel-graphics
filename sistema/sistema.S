@@ -2110,49 +2110,7 @@ ms_ret:	movl 16(%esp),%edx
 	popl %eax
 	ret
 	
-// Disabilita il controllore di interruzioni ad inoltrare richieste provenienti
-//  da uno dei due controller ATA. Slave PIC, linee 14 o 15
-//
-	.global _mask_hd
-_mask_hd:
-	pushl %eax
-	movl 8(%esp),%eax
-	cmpl $0x01F7,%eax
-	je msk0
-	cmpl $0x0177,%eax
-	je msk1			// capisce qual'e` il canale
-	jmp m_end
-msk0:	inb $OCW1S,%al
-	orb $0b01000000,%al	// linea 14
-	outb %al,$OCW1S	
-	jmp m_end
-msk1:	inb $OCW1S,%al
-	orb $0b10000000,%al	// linea 15
-	outb %al,$OCW1S
-m_end:	popl %eax
-	ret
 
-// Abilita il controllore di interruzione ad inoltrere le richieste provenienti
-//  da uno dei due controller ATA. Slave PIC, linee 14 o 15
-	.global _umask_hd
-_umask_hd:
-	pushl %eax
-	movl 8(%esp),%eax
-	cmpl $0x01F7,%eax
-	je umsk0
-	cmpl $0x0177,%eax
-	je umsk1		// Capisce qual'e` il canale
-	jmp um_end
-umsk0:	inb $OCW1S,%al
-	andb $0b10111111,%al	// linea 14
-	outb %al,$OCW1S	
-	jmp um_end
-umsk1:	inb $OCW1S,%al
-	andb $0b01111111,%al	// linea 15
-	outb %al,$OCW1S
-um_end:	popl %eax
-	ret
-	
 // Scompone correttamente il blocco iniziale di una operazione su hard disk
 // e lo scrive nei registri opportuni
 	.global _hd_write_address

@@ -406,13 +406,6 @@ _outputbuffw:
 	popl %eax
 	ret
 
-// Indirizzi delle porte del controllore delle interruzioni
-.set OCW1M, 0x21
-.set OCW2M, 0x20
-.set OCW1S, 0xa1
-.set OCW2S, 0xa0
-.set EOI, 0x20
-
 // Inizio dell' ingresso da una interfaccia seriale
 	.global _go_inputse
 _go_inputse:
@@ -424,22 +417,6 @@ _go_inputse:
 	orb $0x01, %al			// abilitazione dell' interfaccia a
 					//  generare interruzioni in ingresso
 	outb %al, %dx
-
-	cmpw $0x03f9, %dx
-	jne 1f
-	movb $0b11101111, %ah
-	jmp 2f
-
-1:
-	movb $0b11110111, %ah
-2:
-	cli
-	inb $OCW1M, %al
-	andb %ah, %al
-	outb %al, $OCW1M		// abilitazione del controllore ad
-					//  accettare richieste di interruzione
-					//  da parte dell' interfaccia
-	sti
 
 	popl %edx
 	popl %eax
@@ -456,22 +433,6 @@ _halt_inputse:
 	and $0xfe, %al
 	outb %al, %dx			// disabilitazione della generazione
 					//  di interruzioni
-
-	cmpw $0x03f9, %dx
-	jne 1f
-	movb $0b00010000, %ah
-	jmp 2f
-
-1:
-	movb $0b00001000, %ah
-2:
-	cli
-	inb $OCW1M, %al
-	andb %ah, %al
-	outb %al, $OCW1M		// disabilitazione dell 'interruzione al
-					//  controllore
-	sti
-
 	popl %edx
 	popl %eax
 	ret
@@ -487,20 +448,6 @@ _go_outputse:
 	orb $0x02, %al
 	outb %al, %dx
 
-	cmpw $0x03f9, %dx
-	jne 1f
-	movb $0b11101111, %ah
-	jmp 2f
-
-1:
-	movb $0b11110111, %ah
-2:
-	cli
-	inb $OCW1M, %al
-	andb %ah, %al
-	outb %al, $OCW1M
-	sti
-
 	popl %edx
 	popl %eax
 	ret
@@ -515,20 +462,6 @@ _halt_outputse:
 	inb %dx, %al
 	and $0xfd, %al
 	outb %al, %dx
-
-	cmpw $0x03f9, %dx
-	jne 1f
-	movb $0b00010000, %ah
-	jmp 2f
-
-1:
-	movb $0b00001000, %ah
-2:
-	cli
-	inb $OCW1M, %al
-	andb %ah, %al
-	outb %al, $OCW1M
-	sti
 
 	popl %edx
 	popl %eax
@@ -658,15 +591,6 @@ _halt_inputkbd:
 	ret
 	ret
 
-// Abilitazione del controllore delle interruzioni ad inoltrare le richieste
-//  provenienti dalla tastiera
-	.global _kbd_enable
-_kbd_enable:
-	inb $OCW1M, %al
-	andb $0b11111101, %al
-	outb %al, $OCW1M
-	ret
-
 // indirizzi delle porte relative alla gestione del cursore, nel controllore 
 // della scheda video
 .set CUR_HIGH, 0x0e
@@ -778,8 +702,11 @@ a_readconsole:
 	salva_registri
 	copia_param 2 7
 	cavallo_di_troia 0
-	cavallo_di_troia2 0 1
 	cavallo_di_troia 1
+	movl 4(%esp), %ebx
+	pushl (%ebx)
+	cavallo_di_troia2 1 0
+	addl $4, %esp
 	call _c_readconsole
 	addl $8, %esp
 	carica_registri

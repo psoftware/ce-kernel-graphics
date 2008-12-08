@@ -24,13 +24,13 @@ extern "C" void writese_0(natl serial, natb vetto[], natl &quanti);
 extern "C" void writese_n(natl serial, natb vetto[], natl quanti);
 
 extern "C" void readlog(log_msg& m);
-extern "C" void log(log_sev sev, const char* msg, int quanti);
+extern "C" void log(log_sev sev, cstr msg, natl quanti);
 
-extern "C" int resident(void* start, int quanti);
+extern "C" int resident(void* start, natl quanti);
 
 extern "C" void iniconsole(natb cc);
-extern "C" void readconsole(char* buff, int& quanti);
-extern "C" void writeconsole(const char* buff);
+extern "C" void readconsole(str buff, natl& quanti);
+extern "C" void writeconsole(cstr buff);
 
 
 #endif

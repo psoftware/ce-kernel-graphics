@@ -2690,6 +2690,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
+	unmask_irq(irq);
 	return true;
 
 }
@@ -2748,8 +2749,6 @@ bool init_pe()
 
 extern "C" bool test_canale(ioaddr st, ioaddr stc, ioaddr stn);
 extern "C" int leggi_signature(ioaddr stc, ioaddr stn, ioaddr cyl, ioaddr cyh);
-extern "C" void umask_hd(ioaddr h);
-extern "C" void mask_hd(ioaddr h);
 extern "C" bool hd_software_reset(ioaddr dvctrl);
 extern "C" void hd_read_device(ioaddr i_drv_hd, int& ms);
 extern "C" void hd_select_device(short ms, ioaddr iHND);
@@ -2969,8 +2968,7 @@ void hd_reset(des_ata* p_des)
 bool hd_init()
 {
 	des_ata *p_des;
-	aggiungi_pe(ESTERN_BUSY, 14);
-	aggiungi_pe(ESTERN_BUSY, 15);
+	natb irq[2] = { 14, 15 };
 	for (int i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
 
@@ -3038,14 +3036,13 @@ bool hd_init()
 			p_des->disco[d].presente = false;
 			continue;
 		}
-		//mask_hd(p_des->indreg.iSTS);
-		umask_hd(p_des->indreg.iSTS);			// abilita int. nel PIC
 		if ( (p_des->mutex = c_sem_ini(1)) == 0xFFFFFFFF ||
 		     (p_des->sincr = c_sem_ini(0)) == 0xFFFFFFFF)
 		{
 			flog(LOG_ERR, "Impossibile allocare i semafori per l'hard disk");
 			return false;
 		}
+		aggiungi_pe(ESTERN_BUSY, irq[i]);
 		for (int d = 0; d < 2; d++) {
 			if (p_des->disco[d].presente)
 				leggi_partizioni(i, d);

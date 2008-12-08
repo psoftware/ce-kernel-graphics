@@ -508,8 +508,6 @@ extern "C" void c_iniconsole(natb cc)
 // Interruzione hardware della tastiera
 const int KBD_IRQ = 1;
 
-extern "C" void kbd_enable();
-
 bool kbd_init()
 {
 	des_kbd *p_des = &console.kbd;
@@ -517,9 +515,6 @@ bool kbd_init()
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
 	}
-
-	kbd_enable();
-
 	return true;
 }
 
