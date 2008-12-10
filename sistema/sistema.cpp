@@ -2145,7 +2145,7 @@ void usr_heap_init(addr start, addr end)
 
 // cerca una regione di dimensione almeno pari a dim nello heap utente e ne
 // resituisce l'indirizzo del primo byte (0 in caso di fallimento)
-extern "C" void *c_mem_alloc(int dim)
+extern "C" void *c_mem_alloc(natl dim)
 {
 	des_heap* nuovo;
 	addr p;
@@ -2186,7 +2186,7 @@ extern "C" void *c_mem_alloc(int dim)
 	} 
 	scorri->occupato = 1; // questo va fatto per ultimo, perche'
 	                      // modifica scorri->dimensione 
-	return reinterpret_cast<void*>(p);
+	return p;
 }
 
 // libera la regione dello heap il cui indirizzo di partenza e' pv

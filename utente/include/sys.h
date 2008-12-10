@@ -26,7 +26,7 @@ extern "C" void writese_n(natl serial, natb vetto[], natl quanti);
 extern "C" void readlog(log_msg& m);
 extern "C" void log(log_sev sev, cstr msg, natl quanti);
 
-extern "C" int resident(void* start, natl quanti);
+extern "C" bool resident(void* start, natl quanti);
 
 extern "C" void iniconsole(natb cc);
 extern "C" void readconsole(str buff, natl& quanti);
