@@ -362,11 +362,11 @@ void writeelem(natb c) {	// [9.5]
 		break;
 	case '\b':
 		if (p_des->x > 0 || p_des->y > 0) {
-			p_des->x--;
-			if (p_des->x < 0) {
+			if (p_des->x == 0) {
 				p_des->x = COLS - 1;
 				p_des->y--;
-			}
+			} else
+				p_des->x--;
 		}
 		break;
 	default:
