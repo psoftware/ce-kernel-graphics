@@ -685,6 +685,7 @@ addr collega(natl indice)	// [6.4]
 	ppf->pt.ind_massa = extr_IND_M(des);
 	set_IND_F(des, indirizzo_pf(indice));
 	set_P(des, true);
+	set_D(des, false);
 	ppf->pt.contatore  = 0x80000000;
 	if (ppf->contenuto == PAGINA_VIRTUALE) {
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
