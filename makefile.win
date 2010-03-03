@@ -10,8 +10,8 @@ all: build/sistema \
      build/parse.exe   \
      build/creatimg.exe
      
-build/sistema: sistema/sist_s.o sistema/sist_cpp.o sistema/sistema2.o
-	ld -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o sistema/sistema2.o
+build/sistema: sistema/sist_s.o sistema/sist_cpp.o
+	ld -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o 
 
 build/io: io/io_s.o io/io_cpp.o
 	ld -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
@@ -25,9 +25,6 @@ sistema/sist_s.o: sistema/sistema.S include/costanti.h
 
 sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
 	gxx $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
-
-sistema/sistema2.o: sistema/sistema2.cpp include/costanti.h
-	gxx $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema2.cpp -o sistema/sistema2.o
 
 # compilazione di io.s e io.cpp
 io/io_s.o: io/io.S include/costanti.h
