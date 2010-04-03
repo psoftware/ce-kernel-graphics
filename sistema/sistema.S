@@ -2240,13 +2240,13 @@ param_err:
 .bss
 .global		_array_dess		// [4.11]
 _array_dess:	.space BYTE_SEM
-.balign 16
+.balign 8
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 
 	// i descrittori verrano costruiti a tempo di esecuzione
 	.space 8 * 8192, 0
 
-.balign 16
+.balign 8
 idt:
 	// spazio per 256 gate
 	// verra' riempita a tempo di esecuzione
