@@ -3448,8 +3448,10 @@ extern "C" void c_panic(cstr     msg,
 	// in cima scriviamo il messaggio
 	writevid_n(nl++ * 80, "PANIC", 5);
 	writevid_n(nl++ * 80, msg, strlen(msg));
-	writevid_n(nl++ * 80, "ultimo errore:", 14);
+	writevid_n(nl++ * 80, "* ultimo errore:", 16);
 	writevid_n(nl++ * 80, last_log_err(), strlen(last_log_err()));
+	writevid_n(nl++ * 80, "* ultimo messaggio:", 19);
+	writevid_n(nl++ * 80, last_log(), strlen(last_log()));
 
 	nl++;
 
