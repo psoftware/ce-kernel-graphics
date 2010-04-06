@@ -746,10 +746,12 @@ void carica(natl indice) // [6.4][10.5]
 				}
 				// *)
 				set_IND_M(des, ind_massa);
-				set_D(des, true);
 			}
 			for (int i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
+			if (!ppf->pt.residente) {
+				scrivi_blocco(ind_massa, dest);
+			}
 		} else {
 			leggi_blocco(ind_massa, dest); /* vedi sopra */
 		}
