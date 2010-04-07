@@ -566,7 +566,7 @@ extern "C" void c_routine_pf(	// [6.4]
 		// )
 }
 
-addr swap_ent(natl proc, cont_pf tipo, addr ind_virt, bool residente = false /* vedi avanti */); // [6.4]
+addr swap_ent(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
 addr swap(natl proc, addr ind_virt)	// [6.4][10.2]
 {
 	bool bitP;
@@ -619,12 +619,7 @@ addr get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 }
 
 // [6.4]
-addr swap_ent(natl proc, cont_pf tipo, addr ind_virt,
-		// (* aggiungiamo un parametro che ci dica se l'entita'
-		//    da caricare deve essere residente o meno (*)
-		bool residente
-		// *)
-		)
+addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
 	// carica una tabella delle pagine o una pagina
@@ -644,7 +639,7 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt,
 	}
 	ppf = &dpf[nuovo_indice];
 	ppf->contenuto = tipo;
-	ppf->pt.residente = residente; /* usiamo il nuovo parametro */
+	ppf->pt.residente = false;
 	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virt;
 	carica(nuovo_indice);
@@ -652,12 +647,6 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt,
 	return indirizzo_pf(nuovo_indice);
 	// vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
 }
-
-// (*) questo parametro, insieme al fatto che la "carica"
-//     modificata non alloca blocchi per le pagine residenti,
-//     ci permette di usare "swap_ent" anche in fase
-//     di inizializzazione, quando lo swap non e' stato ancora
-//     inizializzato (e quindi non e' ancora possibile allocare blocchi).
 
 natl alloca_pagina_fisica_libera()	// [6.4]
 {
@@ -2266,8 +2255,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	// ( creazione del direttorio del processo (vedi [10.3]
 	//   e la funzione "carica()")
-	pdirettorio = swap_ent(p->id, DIRETTORIO, 0, true);
+	pdirettorio = swap_ent(p->id, DIRETTORIO, 0);
 	if (pdirettorio == 0) goto errore4;
+	dpf[indice_dpf(pdirettorio)].pt.residente = true;
 	pdes_proc->cr3 = pdirettorio;
 	// )
 
@@ -2275,10 +2265,12 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	//   La pila sistema e' grande 4MiB, ma allochiamo solo l'ultima
 	//   pagina. Non chiamiamo "swap", perche' vogliamo passare "true"
 	//   ad entrambe le "swap_ent".
-	tabella = swap_ent(p->id, TABELLA, fine_sistema_privato - DIM_PAGINA, true);
+	tabella = swap_ent(p->id, TABELLA, fine_sistema_privato - DIM_PAGINA);
 	if (tabella == 0) goto errore5;
-	pila_sistema = swap_ent(p->id, PAGINA_VIRTUALE, fine_sistema_privato - DIM_PAGINA, true);
+	dpf[indice_dpf(tabella)].pt.residente = true;
+	pila_sistema = swap_ent(p->id, PAGINA_VIRTUALE, fine_sistema_privato - DIM_PAGINA);
 	if (pila_sistema == 0) goto errore6;
+	dpf[indice_dpf(pila_sistema)].pt.residente = true;
 	// )
 
 	if (liv == LIV_UTENTE) {
@@ -3590,20 +3582,22 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 		natl dt = get_des(dir, j);
 		if (extr_P(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_SUPERPAGINA);
-			addr tabella = swap_ent(proc, TABELLA, ind, true);
+			addr tabella = swap_ent(proc, TABELLA, ind);
 			if (!tabella) {
 				flog(LOG_ERR, "Impossibile allocare tabella residente");
 				return false;
 			}
+			dpf[indice_dpf(tabella)].pt.residente = true;
 			for (int k = 0; k < 1024; k++) {
 				natl dp = get_des(tabella, k);
 				if (extr_P(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
-					addr ind_fis = swap_ent(proc, PAGINA_VIRTUALE, ind_virt, true);
+					addr ind_fis = swap_ent(proc, PAGINA_VIRTUALE, ind_virt);
 					if (ind_fis == 0) {
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
 						return false;
 					}
+					dpf[indice_dpf(ind_fis)].pt.residente = true;
 				}
 			}
 		}
