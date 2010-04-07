@@ -697,19 +697,28 @@ addr collega(natl indice)	// [6.4]
 }
 
 extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
+natl alloca_blocco();	// [10.5]
 bool scollega(natl indice)	// [6.4][10.5]
 {
 	bool bitD;
 	des_pf *ppf =&dpf[indice];
 	natl &des = get_desent(indice);
 	bitD = extr_D(des);
+	bool occorre_salvare = bitD || ppf->contenuto == TABELLA;
+	// (*
+	if (occorre_salvare && ppf->pt.ind_massa == 0) {
+		ppf->pt.ind_massa = alloca_blocco();
+		if (ppf->pt.ind_massa == 0) {
+			panic("spazio nello swap insufficiente");
+		}
+	}
+	// *)
 	set_IND_M(des, ppf->pt.ind_massa);
 	set_P(des, false);
 	invalida_entrata_TLB(ppf->pt.ind_virtuale);
-	return bitD || ppf->contenuto == TABELLA;	// [10.5]
+	return occorre_salvare;	// [10.5]
 }
 
-natl alloca_blocco();	// [10.5]
 // (per l'implementazione, si veda [P_SWAP] avanti)
 // (* oltre ad allocare, vogliamo anche deallocare blocchi
 //    (quando un processo termina, possiamo deallocare tutti blocchi che
@@ -736,22 +745,8 @@ void carica(natl indice) // [6.4][10.5]
 	switch (ppf->contenuto) {
 	case PAGINA_VIRTUALE:
 		if (ind_massa == 0) {
-			/* evitiamo di allocare un blocco per le pagine residenti */
-			/* (si veda la nota alla "swap_ent")                      */
-			if (!ppf->pt.residente) {
-				ind_massa = alloca_blocco();
-				// (* controlliamo che ci sia spazio
-				if (ind_massa == 0) {
-					panic("spazio nello swap insufficiente");
-				}
-				// *)
-				set_IND_M(des, ind_massa);
-			}
 			for (int i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
-			if (!ppf->pt.residente) {
-				scrivi_blocco(ind_massa, dest);
-			}
 		} else {
 			leggi_blocco(ind_massa, dest); /* vedi sopra */
 		}
@@ -762,13 +757,6 @@ void carica(natl indice) // [6.4][10.5]
 		//    Tutte le entrate della nuova tabella hanno P=0, ind_massa=0
 		//    e i bit S/U, R/W, PCD e PWT copiati dall'entrata del direttorio.
 		if (ind_massa == 0) {
-			if (!ppf->pt.residente) {
-				ind_massa = alloca_blocco();
-				if (ind_massa == 0) {
-					panic("spazio nello swap insufficiente");
-				}
-				set_IND_M(des, ind_massa);
-			}
 			/* costruiamo il descrittore che andra' copiato in tutte le entrate
 			 * della nuova tabella:
 			 *  - copiamo il descrittore nel direttorio (per avere
