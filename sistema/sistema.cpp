@@ -629,13 +629,13 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 		// non puo' essere scelto come vittima l'indice del descrittore di pagina fisica
 		// il cui indirizzo virtuale e' stato restituito da get_parent()
 		addr escludi = get_parent(proc, tipo, ind_virt);
-		natl vittima = scegli_vittima(indice_dpf(escludi));
-		if (vittima == 0xFFFFFFFF)
+		natl indice_vittima = scegli_vittima(indice_dpf(escludi));
+		if (indice_vittima == 0xFFFFFFFF)
 			return 0;
-		bool occorre_salvare = scollega(vittima);
+		bool occorre_salvare = scollega(indice_vittima);
 		if (occorre_salvare)
-			scarica(vittima);
-		nuovo_indice = vittima;
+			scarica(indice_vittima);
+		nuovo_indice = indice_vittima;
 	}
 	ppf = &dpf[nuovo_indice];
 	ppf->contenuto = tipo;
@@ -645,7 +645,7 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 	carica(nuovo_indice);
 	collega(nuovo_indice);
 	return indirizzo_pf(nuovo_indice);
-	// vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
+	// indice_vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
 }
 
 natl alloca_pagina_fisica_libera()	// [6.4]
@@ -794,16 +794,16 @@ void scarica(natl indice) // [6.4]
 
 natl scegli_vittima(natl indice_vietato) // [6.4]
 {
-	natl i, vittima;
+	natl i, indice_vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
 	while (i < NUM_DPF && dpf[i].pt.residente || i == indice_vietato)
 		i++;
 	if (i >= NUM_DPF) return 0xFFFFFFFF;
-	vittima = i;
+	indice_vittima = i;
 	for (i++; i < NUM_DPF; i++) {
 		ppf = &dpf[i];
-		pvittima = &dpf[vittima];
+		pvittima = &dpf[indice_vittima];
 		if (ppf->pt.residente || i == indice_vietato)
 			continue;
 		switch (ppf->contenuto) {
@@ -811,17 +811,17 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 			if (ppf->pt.contatore < pvittima->pt.contatore ||
 			    ppf->pt.contatore == pvittima->pt.contatore &&
 			    		pvittima->contenuto == TABELLA)
-				vittima = i;
+				indice_vittima = i;
 			break;
 		case TABELLA:
 			if (ppf->pt.contatore < pvittima->pt.contatore) 
-				vittima = i;
+				indice_vittima = i;
 			break;
 		default:
 			break;
 		}
 	}
-	return vittima;
+	return indice_vittima;
 }
 
 extern "C" void invalida_TLB(); // [6.6]
