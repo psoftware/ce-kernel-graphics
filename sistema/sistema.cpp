@@ -1439,7 +1439,7 @@ error:
 // fornite dalla libreria del C.
 //
 // copia n byte da src a dest
-void *memcpy(str dest, cstr src, natl n)
+extern "C" void *memcpy(str dest, cstr src, natl n)
 {
 	char       *dest_ptr = static_cast<char*>(dest);
 	const char *src_ptr  = static_cast<const char*>(src);
@@ -1451,7 +1451,7 @@ void *memcpy(str dest, cstr src, natl n)
 }
 
 // scrive n byte pari a c, a partire da dest
-void *memset(str dest, int c, natl n)
+extern "C" void *memset(str dest, int c, natl n)
 {
 	char *dest_ptr = static_cast<char*>(dest);
 
