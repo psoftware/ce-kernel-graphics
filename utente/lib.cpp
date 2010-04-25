@@ -32,9 +32,9 @@ char* convint(int n, char* out)
 	return copy(buf + i + 1, out);
 }
 
-int strlen(const char *s)
+natl strlen(const char *s)
 {
-	int l = 0;
+	natl l = 0;
 
 	while(*s++)
 		++l;
@@ -70,7 +70,7 @@ static void htostr(char *buf, unsigned long l)
 
 static void itostr(char *buf, unsigned int len, long l)
 {
-	int i, div = 1000000000, v, w = 0;
+	natl i, div = 1000000000, v, w = 0;
 
 	if(l == (-2147483647 - 1)) {
 		strncpy(buf, "-2147483648", 12);
@@ -101,9 +101,9 @@ static void itostr(char *buf, unsigned int len, long l)
 
 #define DEC_BUFSIZE 12
 
-int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
+int vsnprintf(char *str, natl size, const char *fmt, va_list ap)
 {
-	int in = 0, out = 0, tmp;
+	natl in = 0, out = 0, tmp;
 	char *aux, buf[DEC_BUFSIZE];
 
 	while(out < size - 1 && fmt[in]) {
@@ -178,7 +178,7 @@ void *memcpy(void *dest, const void *src, unsigned int n)
 	char       *dest_ptr = static_cast<char*>(dest);
 	const char *src_ptr  = static_cast<const char*>(src);
 
-	for (int i = 0; i < n; i++)
+	for (natl i = 0; i < n; i++)
 		dest_ptr[i] = src_ptr[i];
 
 	return dest;
@@ -189,7 +189,7 @@ void *memset(void *dest, int c, unsigned int n)
 {
 	char *dest_ptr = static_cast<char*>(dest);
 
-        for (int i = 0; i < n; i++)
+        for (natl i = 0; i < n; i++)
               dest_ptr[i] = static_cast<char>(c);
 
         return dest;

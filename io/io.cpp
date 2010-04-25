@@ -106,7 +106,7 @@ extern "C" void c_readse_n(natl serial, natb vetti[], natl quanti, natb& errore)
 	sem_signal(p_des->mutex);
 }
 
-extern "C" void c_readse_ln(int serial, natb vetti[], int& quanti, natb& errore)
+extern "C" void c_readse_ln(natl serial, natb vetti[], int& quanti, natb& errore)
 {
 	des_se *p_des;
 
@@ -156,20 +156,23 @@ void input_com(des_se *p_des) // [9.2.1]
 			p_des->cont--;
 			if(p_des->cont == 0)
 				fine = true;
-		} else if (p_des->funzione == input_ln)
-			if(c == '\r' || c == '\n') {
-				fine = true;
-				p_des->cont = 80 - p_des->cont;
-			} else {
-				*static_cast<natb*>(p_des->punt) = c; // memorizzazione
-				p_des->punt = static_cast<natb*>(p_des->punt) + 1;
-				p_des->cont--;
-				if (p_des->cont == 0) {
+		} else {
+			if ( (p_des->funzione == input_ln) ) {
+				if(c == '\r' || c == '\n') {
 					fine = true;
-					p_des->cont = 80;
+					p_des->cont = 80 - p_des->cont;
+				} else {
+					*static_cast<natb*>(p_des->punt) = c; // memorizzazione
+					p_des->punt = static_cast<natb*>(p_des->punt) + 1;
+					p_des->cont--;
+					if (p_des->cont == 0) {
+						fine = true;
+						p_des->cont = 80;
+					}
 				}
 			}
 		}
+	}
 
 	if(fine == true) {
 		*static_cast<natb*>(p_des->punt) = 0;	// carattere nullo
@@ -266,8 +269,8 @@ int com_irq[S] = { 4, 3 };
 bool com_init()
 {
 	des_se *p_des;
-	short id;
-	int i, com_base_prio = PRIO;
+	natw id;
+	natl i, com_base_prio = PRIO;
 
 	com_setup();
 
@@ -314,7 +317,7 @@ struct des_vid {	// [9.5]
 	natb attr;
 };
 
-const int MAX_CODE = 29; // [9.5]
+const natl MAX_CODE = 29; // [9.5]
 struct interfkbd_reg {	// [9.5]
 	ioaddr iRBR, iTBR, iCMR, iSTR;
 };
@@ -342,9 +345,9 @@ extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); // [9.5]
 
 void scroll(des_vid *p_des)	// [9.5]
 {
-	for (int i = 0; i < VIDEO_SIZE - COLS; i++) 
+	for (natl i = 0; i < VIDEO_SIZE - COLS; i++) 
 		p_des->video[i] = p_des->video[i + COLS];
-	for (int i = 0; i < COLS; i++)
+	for (natl i = 0; i < COLS; i++)
 		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
 	p_des->y--;
 }
@@ -510,7 +513,6 @@ const int KBD_IRQ = 1;
 
 bool kbd_init()
 {
-	des_kbd *p_des = &console.kbd;
 	if (activate_pe(estern_kbd, 0, PRIO, LIV, KBD_IRQ) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
@@ -523,7 +525,7 @@ extern "C" des_vid vid;
 bool vid_init()
 {
 	des_vid *p_des = &console.vid;
-	for (int i = 0; i < VIDEO_SIZE; i++) 
+	for (natl i = 0; i < VIDEO_SIZE; i++) 
 		p_des->video[i] = 0 | p_des->attr << 8;
 	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
 		p_des->x, p_des->y);
@@ -560,9 +562,9 @@ typedef char *va_list;
 #define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
 #define va_end(ap)
 
-int strlen(const char *s)
+natl strlen(const char *s)
 {
-	int l = 0;
+	natl l = 0;
 
 	while(*s++)
 		++l;
@@ -598,7 +600,7 @@ static void htostr(char *buf, unsigned long l)
 
 static void itostr(char *buf, unsigned int len, long l)
 {
-	int i, div = 1000000000, v, w = 0;
+	natl i, div = 1000000000, v, w = 0;
 
 	if(l == (-2147483647 - 1)) {
 		strncpy(buf, "-2147483648", 12);
@@ -629,9 +631,9 @@ static void itostr(char *buf, unsigned int len, long l)
 
 #define DEC_BUFSIZE 12
 
-int vsnprintf(char *str, unsigned long size, const char *fmt, va_list ap)
+int vsnprintf(char *str, natl size, const char *fmt, va_list ap)
 {
-	int in = 0, out = 0, tmp;
+	natl in = 0, out = 0, tmp;
 	char *aux, buf[DEC_BUFSIZE];
 
 	while(out < size - 1 && fmt[in]) {
@@ -694,7 +696,7 @@ void *memcpy(void *dest, const void *src, unsigned int n)
 		for (int i = n - 1; i >= 0; i--)
 			dest_ptr[i] = src_ptr[i];
 	else
-		for (int i = 0; i < n; i++)
+		for (natl i = 0; i < n; i++)
 			dest_ptr[i] = src_ptr[i];
 
 	return dest;
@@ -705,7 +707,7 @@ void *memset(void *dest, int c, unsigned int n)
 {
 	char *dest_ptr = static_cast<char*>(dest);
 
-        for (int i = 0; i < n; i++)
+        for (natl i = 0; i < n; i++)
               dest_ptr[i] = static_cast<char>(c);
 
         return dest;
@@ -737,7 +739,6 @@ extern "C" void fill_io_gates(void);
 //
 extern "C" void cmain(int sem_io)
 {
-	int error;
 
 	fill_io_gates();
 	if (!console_init())

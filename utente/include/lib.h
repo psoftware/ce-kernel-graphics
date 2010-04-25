@@ -17,11 +17,11 @@ typedef char *va_list;
 
 char* copy(const char* src, char* dst);
 char* convint(int n, char* out);
-int strlen(const char *s);
+natl strlen(const char *s);
 char *strncpy(char *dest, const char *src, size_t l);
 
-int vsnprintf(char *str, size_t size, const char *fmt, va_list ap);
-int snprintf(char *buf, size_t n, const char *fmt, ...);
+int vsnprintf(char *str, natl size, const char *fmt, va_list ap);
+int snprintf(char *buf, natl n, const char *fmt, ...);
 int printf(int term, const char *fmt, ...);
 //
 // copia n byte da src a dst

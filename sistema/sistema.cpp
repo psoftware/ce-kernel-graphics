@@ -124,7 +124,7 @@ extern des_sem array_dess[MAX_SEM];
 //   flog: invia un messaggio formatto al log (si veda [P_LOG] per l'implementazione)
 extern "C" void flog(log_sev, cstr fmt, ...);
 //   abort_p: termina forzatamente un processo (vedi [P_PROCESS] avanti)
-extern "C" void abort_p();
+extern "C" void abort_p() __attribute__ (( noreturn ));
 //   sem_valido: restituisce true se sem e' un semaforo effettivamente allocato
 bool sem_valido(natl sem);
 // )
@@ -488,7 +488,7 @@ natb* const fine_utente_privato      = inizio_utente_privato    + dim_utente_pri
 // per l'inizializzazione, si veda [P_INIT] avanti
 
 // (* in caso di errori fatali, useremo la segunte funzione, che blocca il sistema:
-extern "C" void panic(cstr msg);
+extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 // implementazione in [P_PANIC]
 // *)
 
@@ -572,7 +572,7 @@ addr swap(natl proc, addr ind_virt)	// [6.4][10.2]
 	bool bitP;
 	natl dt, dp;
 	des_pf *ppf;
-	addr ind_fis_tab, ind_fis_pag;
+	addr ind_fis_tab;
 
 	dt = get_destab(proc, ind_virt);
 	bitP = extr_P(dt);
@@ -593,7 +593,7 @@ addr swap(natl proc, addr ind_virt)	// [6.4][10.2]
 }
 
 natl alloca_pagina_fisica_libera();	// [6.4]
-addr collega(natl indice);		// [6.4]
+void collega(natl indice);		// [6.4]
 bool scollega(natl indice);		// [6.4]
 void carica(natl indice);		// [6.4]
 void scarica(natl indice);		// [6.4]
@@ -667,7 +667,7 @@ void rilascia_pagina_fisica(natl i)
 }
 // *)
 
-addr collega(natl indice)	// [6.4]
+void collega(natl indice)	// [6.4]
 {
 	des_pf* ppf = &dpf[indice];
 	natl& des = get_desent(indice);
@@ -734,7 +734,7 @@ void carica(natl indice) // [6.4][10.5]
 	switch (ppf->contenuto) {
 	case PAGINA_VIRTUALE:
 		if (ind_massa == 0) {
-			for (int i = 0; i < DIM_PAGINA; i++)
+			for (natl i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
 		} else {
 			leggi_blocco(ind_massa, dest); /* vedi sopra */
@@ -797,7 +797,7 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 	natl i, indice_vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
-	while (i < NUM_DPF && dpf[i].pt.residente || i == indice_vietato)
+	while ( (i < NUM_DPF && dpf[i].pt.residente) || i == indice_vietato)
 		i++;
 	if (i >= NUM_DPF) return 0xFFFFFFFF;
 	indice_vittima = i;
@@ -809,8 +809,8 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 		switch (ppf->contenuto) {
 		case PAGINA_VIRTUALE:
 			if (ppf->pt.contatore < pvittima->pt.contatore ||
-			    ppf->pt.contatore == pvittima->pt.contatore &&
-			    		pvittima->contenuto == TABELLA)
+			    (ppf->pt.contatore == pvittima->pt.contatore &&
+			    		pvittima->contenuto == TABELLA))
 				indice_vittima = i;
 			break;
 		case TABELLA:
@@ -882,7 +882,7 @@ extern "C" bool c_resident(addr ind_virt, natl quanti) // [10.6]
 	np = ceild(static_cast<natb*>(ind_virt) + quanti - 
 		   static_cast<natb*>(ind_virt_pag), DIM_PAGINA);
 	// )
-	for (int i = 0; i < np; i++) {
+	for (natl i = 0; i < np; i++) {
 		sem_wait(pf_mutex);
 		iff = swap(proc, ind_virt_pag);
 		if (iff != 0) {
@@ -1157,7 +1157,6 @@ extern "C" void disattiva_timer();
 extern "C" natl  calibra_tsc();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
-	des_proc* pdes_proc;
 	char *arg, *cont;
 	int indice;
 	addr direttorio;
@@ -1337,9 +1336,6 @@ extern "C" des_proc* des_p(natl id);
 void main_sistema(int n)
 {
 	natl clocks_per_sec;
-	int errore;
-	addr pila_utente;
-	des_proc *my_des = des_p(esecuzione->id);
 	natl sync_io;
 	natl dummy_proc = (natl)n; 
 
@@ -1444,7 +1440,7 @@ extern "C" void *memcpy(str dest, cstr src, natl n)
 	char       *dest_ptr = static_cast<char*>(dest);
 	const char *src_ptr  = static_cast<const char*>(src);
 
-	for (int i = 0; i < n; i++)
+	for (natl i = 0; i < n; i++)
 		dest_ptr[i] = src_ptr[i];
 
 	return dest;
@@ -1455,7 +1451,7 @@ extern "C" void *memset(str dest, int c, natl n)
 {
 	char *dest_ptr = static_cast<char*>(dest);
 
-        for (int i = 0; i < n; i++)
+        for (natl i = 0; i < n; i++)
               dest_ptr[i] = static_cast<char>(c);
 
         return dest;
@@ -1554,7 +1550,7 @@ static void htostr(str vbuf, natl l)
 // converte l in stringa (notazione decimale)
 static void itostr(str vbuf, natl len, long l)
 {
-	int i, div = 1000000000, v, w = 0;
+	natl i, div = 1000000000, v, w = 0;
 	char *buf = static_cast<char*>(vbuf);
 
 	if (l == (-2147483647 - 1)) {
@@ -1601,7 +1597,7 @@ int strtoi(char* buf)
 // stampa formattata su stringa
 int vsnprintf(str vstr, natl size, cstr vfmt, va_list ap)
 {
-	int in = 0, out = 0, tmp;
+	natl in = 0, out = 0, tmp;
 	char *aux, buf[DEC_BUFSIZE];
 	char *str = static_cast<char*>(vstr);
 	const char* fmt = static_cast<const char*>(vfmt);
@@ -2226,29 +2222,27 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	natl		identifier;		// indice del tss nella gdt 
 	des_proc	*pdes_proc;		// descrittore di processo
 	addr		pdirettorio;		// direttorio del processo
-	addr		ppdir;			// direttorio del padre
 	addr		pila_sistema,		// punt. di lavoro
 			tabella,
 			pila_utente;		// punt. di lavoro
-	des_pf*		ppf;
 	
 
 	// ( allocazione (e azzeramento preventivo) di un des_proc 
 	//   (parte del punto 3 in [4.6])
 	pdes_proc = static_cast<des_proc*>(alloca(sizeof(des_proc)));
-	if (pdes_proc == 0) goto errore2;
+	if (pdes_proc == 0) goto errore1;
 	memset(pdes_proc, 0, sizeof(des_proc));
 	// )
 
 	// ( selezione di un identificatore (punto 1 in [4.6])
 	identifier = alloca_tss(pdes_proc);
-	if (identifier == 0) goto errore3;
+	if (identifier == 0) goto errore2;
 	// )
 	
 	// ( allocazione e inizializzazione di un proc_elem
 	//   (punto 3 in [4.6])
 	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
-        if (p == 0) goto errore1;
+        if (p == 0) goto errore3;
         p->id = identifier << 3U;
         p->precedenza = prio;
 	// )
@@ -2358,9 +2352,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 errore6:	rilascia_tutto(pdirettorio, i_sistema_privato, ntab_sistema_privato);
 errore5:	rilascia_pagina_fisica(indice_dpf(pdirettorio));
-errore4:	rilascia_tss(identifier);
-errore3:	dealloca(pdes_proc);
-errore2:	dealloca(p);
+errore4:	dealloca(p);
+errore3:	rilascia_tss(identifier);
+errore2:	dealloca(pdes_proc);
 errore1:	return 0;
 }
 
@@ -2554,7 +2548,6 @@ natl& get_desent(natl indice) // [6.3]
 addr get_INDTAB(natl indice) // [6.3]
 {
 	des_pf *ppf = &dpf[indice];
-	natl dp;
 	switch (ppf->contenuto) {
 	case PAGINA_VIRTUALE:
 	case TABELLA:
@@ -2584,7 +2577,7 @@ void set_despag(addr tab, addr ind_virt, natl despag)
 void mset_des(addr dirtab, natl i, natl n, natl des)
 {
 	natl *pd = static_cast<natl*>(dirtab);
-	for (int j = i; j < i + n && j < 1024; j++)
+	for (natl j = i; j < i + n && j < 1024; j++)
 		pd[j] = des;
 }
 
@@ -2592,7 +2585,7 @@ void copy_des(addr src, addr dst, natl i, natl n)
 {
 	natl *pdsrc = static_cast<natl*>(src),
 	     *pddst = static_cast<natl*>(dst);
-	for (int j = i; j < i + n && j < 1024; j++)
+	for (natl j = i; j < i + n && j < 1024; j++)
 		pddst[j] = pdsrc[j];
 }
 
@@ -2712,7 +2705,7 @@ error1:	sem_signal(pf_mutex);
 // di processo esterno generico ad ogni interrupt
 bool init_pe()
 {
-	for (int i = 0; i < MAX_IRQ; i++) {
+	for (natl i = 0; i < MAX_IRQ; i++) {
 		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA, true);
 		if (p == 0) {
 			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
@@ -2733,7 +2726,7 @@ bool init_pe()
 extern "C" bool test_canale(ioaddr st, ioaddr stc, ioaddr stn);
 extern "C" int leggi_signature(ioaddr stc, ioaddr stn, ioaddr cyl, ioaddr cyh);
 extern "C" bool hd_software_reset(ioaddr dvctrl);
-extern "C" void hd_read_device(ioaddr i_drv_hd, int& ms);
+extern "C" void hd_read_device(ioaddr i_drv_hd, natl& ms);
 extern "C" void hd_select_device(short ms, ioaddr iHND);
 extern "C" void readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void writehd_n(natl ata, natl drv, natw vetto[], natl primo, natb quanti, natb &errore);
@@ -2741,7 +2734,7 @@ extern "C" void writehd_n(natl ata, natl drv, natw vetto[], natl primo, natb qua
 bool hd_sel_drv(des_ata* p_des, natl drv) // [9.3]
 {
 	natb stato;
-	int curr_drv;
+	natl curr_drv;
 
 	hd_select_device(drv, p_des->indreg.iHND);
 
@@ -2767,7 +2760,7 @@ bool hd_wait_data(ioaddr iSTS) // [9.3.1]
 
 // invia al log di sistema un messaggio che spiega l'errore passato come 
 // argomento
-void hd_print_error(int i, int d, int sect, natb error)
+void hd_print_error(natl i, natl d, natl sect, natb error)
 {
 	des_ata* p = &hd[i];
 	if (error == D_ERR_NONE)
@@ -2952,7 +2945,7 @@ bool hd_init()
 {
 	des_ata *p_des;
 	natb irq[2] = { 14, 15 };
-	for (int i = 0; i < A; i++) {			// primario/secondario
+	for (natl i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
 
 		hd_halt_inout(p_des->indreg.iDCR);	
@@ -3051,8 +3044,8 @@ struct des_log {
 	log_msg buf[LOG_MSG_NUM]; // coda circolare di messaggi
 	int first, last;	  // primo e ultimo messaggio
 	int nmsg;		  // numero di messaggi
-	int mutex;
-	int sync;
+	natl mutex;
+	natl sync;
 } log_buf; 
 
 // legge un messaggio dal log, bloccandosi se non ve ne sono
@@ -3102,8 +3095,6 @@ error: flog(LOG_ERR, "Semafori insufficienti in log_init_usr");
 // accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
 void do_log(log_sev sev, const natb* buf, natl quanti)
 {
-	static natl num = 0;
-
 	if (quanti > LOG_MSG_SIZE)
 		quanti = LOG_MSG_SIZE;
 
@@ -3205,7 +3196,7 @@ const char* last_log_err()
 
 // utile per il debug: invia al log un messaggio relativo all'errore che e' 
 // stato riscontrato
-void hd_print_error(int i, int d, int sect, natb errore);
+void hd_print_error(natl i, natl d, natl sect, natb errore);
 // cerca la partizione specificata
 partizione* hd_find_partition(short ind_ata, short drv, int p);
 
@@ -3216,7 +3207,7 @@ extern "C" int trova_bit(natl v);
 // vedi [10.5]
 natl alloca_blocco()
 {
-	int i = 0;
+	natl i = 0;
 	natl risu = 0;
 	natl vecsize = ceild(swap_dev.sb.blocks, sizeof(natl) * 8);
 
@@ -3355,7 +3346,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 
 	// controlliamo il checksum
 	int *w = (int*)&swap_dev.sb, sum = 0;
-	for (int i = 0; i < sizeof(swap_dev.sb) / sizeof(int); i++)
+	for (natl i = 0; i < sizeof(swap_dev.sb) / sizeof(int); i++)
 		sum += w[i];
 
 	if (sum != 0) {
