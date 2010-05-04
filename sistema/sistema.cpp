@@ -2371,6 +2371,13 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		abort_p();
 	}
 	// *)
+	
+	if (prio > esecuzione->precedenza || 
+	    (liv == LIV_SISTEMA && des_p(esecuzione->id)->cpl == LIV_UTENTE))
+	{
+		flog(LOG_WARN, "errore di protezione");
+		abort_p();
+	}
 
 	// ( per la necessita' di dover usare pf_mutex, vedi [10.3]
 	sem_wait(pf_mutex);
