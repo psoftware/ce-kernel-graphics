@@ -3289,13 +3289,14 @@ bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 {
 	natb errore;
 	natl sector = first + swap_dev.part->first;
+	natl nsect = ceild(bytes, 512);
 
-	if (first < 0 || first + bytes > swap_dev.part->dim) {
+	if (first < 0 || first + nsect > swap_dev.part->dim) {
 		flog(LOG_ERR, "Accesso al di fuori della partizione: %d+%d", first, bytes);
 		return false;
 	}
 	
-	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, ceild(bytes, 512), errore);
+	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
