@@ -23,6 +23,7 @@ char *strncpy(char *dest, const char *src, size_t l);
 int vsnprintf(char *str, natl size, const char *fmt, va_list ap);
 int snprintf(char *buf, natl n, const char *fmt, ...);
 int printf(int term, const char *fmt, ...);
+void pause();
 //
 // copia n byte da src a dst
 extern "C" void *memcpy(void *dest, const void *src, unsigned int n);

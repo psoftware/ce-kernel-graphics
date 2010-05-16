@@ -171,6 +171,14 @@ int printf(const char *fmt, ...)
 	return l;
 }
 
+void pause()
+{
+	char buf[1];
+	natl len = 1;
+	writeconsole("Premere INVIO per continuare");
+	readconsole(buf, len);
+}
+
 
 // copia n byte da src a dest
 void *memcpy(void *dest, const void *src, unsigned int n)
