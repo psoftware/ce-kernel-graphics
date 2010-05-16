@@ -833,6 +833,7 @@ _disattiva_paginazione:
 a_end_program:
 	cli
 	call _reset_8259
+	call _reset_kbd
 	movl shutdown_esp, %esp
 	movl shutdown_ebp, %ebp
 	call _disattiva_paginazione
@@ -1214,6 +1215,15 @@ _calibra_tsc:
 	popl %edx
 	popl %ecx
 	leave
+	ret
+
+_reset_kbd:
+	pushl %eax
+	movb $0x60, %al
+	outb %al, $0x64
+	movb $0x61, %al
+	outb %al, $0x60
+	popl %eax
 	ret
 
 
