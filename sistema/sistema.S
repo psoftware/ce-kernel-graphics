@@ -599,7 +599,7 @@ init_idt:
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
 	carica_gate	tipo_re		a_resident	LIV_UTENTE
 	carica_gate	tipo_l		a_log		LIV_UTENTE
-	carica_gate	tipo_ep		a_end_program	LIV_UTENTE
+	carica_gate	tipo_ep		a_end_program	LIV_SISTEMA
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ape	a_activate_pe	LIV_SISTEMA
