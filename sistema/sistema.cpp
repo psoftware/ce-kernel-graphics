@@ -1218,8 +1218,8 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	
 	// ( per come abbiamo organizzato il sistema non possiamo gestire piu' di
 	//   1GiB di memoria fisica (vedi [10.1])
-	if (max_mem_upper > fine_sistema_privato) {
-		max_mem_upper = fine_sistema_privato;
+	if (max_mem_upper > fine_sistema_condiviso) {
+		max_mem_upper = fine_sistema_condiviso;
 		flog(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
 	}
 	// )
