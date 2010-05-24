@@ -160,6 +160,15 @@
 	check_cavallo
 .endm
 
+.macro cavallo_di_troia3 offset1 offset2
+
+	movl (\offset1 * 4) (%esp), %eax
+	movl (\offset2 * 4) (%esp), %ebx
+	addl (%ebx), %eax
+	decl %eax
+	check_cavallo
+.endm
+
 .global start, _start
 start:
 _start:	jmp _cmain
@@ -666,8 +675,8 @@ a_readse_ln:
 	salva_registri
 	copia_param 4 7
 	cavallo_di_troia 1
-	cavallo_di_troia2 1 2
 	cavallo_di_troia 2
+	cavallo_di_troia3 1 2
 	cavallo_di_troia 3
 	call _c_readse_ln
 	addl $16, %esp
@@ -690,8 +699,8 @@ a_writese_0:
 	salva_registri
 	copia_param 3 7
 	cavallo_di_troia 1
-	cavallo_di_troia2 1 2
 	cavallo_di_troia 2
+	cavallo_di_troia3 1 2
 	call _c_writese_0
 	addl $12, %esp
 	carica_registri
@@ -703,10 +712,7 @@ a_readconsole:
 	copia_param 2 7
 	cavallo_di_troia 0
 	cavallo_di_troia 1
-	movl 4(%esp), %ebx
-	pushl (%ebx)
-	cavallo_di_troia2 1 0
-	addl $4, %esp
+	cavallo_di_troia3 0 1
 	call _c_readconsole
 	addl $8, %esp
 	carica_registri

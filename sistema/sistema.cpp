@@ -446,7 +446,7 @@ extern "C" void attiva_paginazione();
 //   (vedi [6.1][10.1]).
 //   Per semplicita' ragioniamo sempre in termini di intere "tabelle delle pagine". 
 //   Ricordiamo che ogni tabella delle pagine mappa una porzione contigua dello spazio
-//   di indirizzamento virtuale, grande 4MiB e allineata ai 4MiB (a volte detta "superpagina").
+//   di indirizzamento virtuale, grande 4MiB e allineata ai 4MiB ( "macropagina").
 //   Le costanti che iniziano con "ntab_" indicano il numero di tabelle delle pagine
 //   dedicate alla parte di memoria virtuale corrispondente (si veda "include/costanti.h" per i valori)
 const natl ntab_sistema_condiviso = NTAB_SIS_C;
