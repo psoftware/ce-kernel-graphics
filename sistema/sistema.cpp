@@ -465,11 +465,11 @@ const natl i_utente_privato    = i_utente_condiviso  + ntab_utente_condiviso;
 
 //   Le costanti che iniziano con "dim_" contengono la dimensione della corrispondente
 //   zona, in byte
-const natl dim_sistema_condiviso = ntab_sistema_condiviso * DIM_SUPERPAGINA;
-const natl dim_sistema_privato   = ntab_sistema_privato   * DIM_SUPERPAGINA;
-const natl dim_io_condiviso	 = ntab_io_condiviso	  * DIM_SUPERPAGINA;
-const natl dim_utente_condiviso  = ntab_utente_condiviso  * DIM_SUPERPAGINA;
-const natl dim_utente_privato    = ntab_utente_privato    * DIM_SUPERPAGINA;
+const natl dim_sistema_condiviso = ntab_sistema_condiviso * DIM_MACROPAGINA;
+const natl dim_sistema_privato   = ntab_sistema_privato   * DIM_MACROPAGINA;
+const natl dim_io_condiviso	 = ntab_io_condiviso	  * DIM_MACROPAGINA;
+const natl dim_utente_condiviso  = ntab_utente_condiviso  * DIM_MACROPAGINA;
+const natl dim_utente_privato    = ntab_utente_privato    * DIM_MACROPAGINA;
 
 //   Le costanti "inizio_" ("fine_") contengono l'indirizzo del primo byte che fa parte
 //   (del primo byte che non fa piu' parte) della zona corrispondente
@@ -3577,10 +3577,10 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 	addr dir = get_dir(proc);
 	for (natl j = i; j < i + n && j < 1024; j++)
 	{
-		addr ind = (addr)(j * DIM_SUPERPAGINA);
+		addr ind = (addr)(j * DIM_MACROPAGINA);
 		natl dt = get_des(dir, j);
 		if (extr_P(dt)) {	  
-			last_addr = (addr)((j + 1) * DIM_SUPERPAGINA);
+			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
 			addr tabella = swap_ent(proc, TABELLA, ind);
 			if (!tabella) {
 				flog(LOG_ERR, "Impossibile allocare tabella residente");
