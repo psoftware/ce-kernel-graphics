@@ -16,6 +16,7 @@
 #define DIM_DESP		216 	// descrittore di processo
 #define DIM_DESS		8	// descrittore di semaforo
 #define BYTE_SEM		(DIM_DESS * MAX_SEM)
+#define MAX_PRD			16
 // )
 
 // ( tipi delle primitive
@@ -24,8 +25,6 @@
 #define TIPO_SI			0x44	// sem_ini
 #define TIPO_W			0x45	// sem_wait
 #define TIPO_S			0x46	// sem_signal
-#define TIPO_MA			0x47	// mem_alloc
-#define TIPO_MF			0x48	// mem_free
 #define TIPO_D			0x49	// delay
 #define TIPO_RL			0x4a	// *read_log
 #define TIPO_RE			0x4b	// resident
@@ -36,6 +35,7 @@
 #define TIPO_P			0x55	// *panic
 #define TIPO_AB			0x56	// *abort_p
 #define TIPO_L			0x57	// *log
+#define TIPO_TRA		0x58	// trasforma
 
 #define IO_TIPO_HDR		0x62	// readhd_n
 #define IO_TIPO_HDW		0x63	// writehd_n
@@ -49,6 +49,11 @@
 // * in piu' rispetto al libro
 // )
 
+#define IO_TIPO_PCIF		0x64	// pci_find
+#define IO_TIPO_PCIR		0x65	// pci_read
+#define IO_TIPO_PCIW		0x66	// pci_write
+#define IO_TIPO_DMAHDR		0x67	// dmareadhd_n
+#define IO_TIPO_DMAHDW		0x68	// dmawritehd_n
 // ( suddivisione della memoria virtuale
 //   NTAB = Numero di Tabelle delle pagine
 //   SIS  = SIStema
@@ -58,7 +63,8 @@
 //   P    = privato
 #define NTAB_SIS_C		256	// 1GiB
 #define NTAB_SIS_P		1	// 4MiB
-#define NTAB_MIO_C		255	// 1GiB - 4MiB
+#define NTAB_MIO_C		250	// 1GiB - 4MiB - 20MiB
+#define NTAB_PCI_C		5	// 20MiB
 #define NTAB_USR_C		256	// 1GiB
 #define NTAB_USR_P		256	// 1GiB
 // )

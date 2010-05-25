@@ -15,8 +15,6 @@ extern "C" void end_program();
 extern "C" natl sem_ini(int val);
 extern "C" void sem_wait(natl sem);
 extern "C" void sem_signal(natl sem);
-extern "C" void *mem_alloc(natl dim);
-extern "C" void mem_free(void *pv);
 extern "C" void delay(natl n);
 extern "C" void readse_n(natl serial, natb vetti[], natl quanti, natb &errore);
 extern "C" void readse_ln(natl serial, natb vetti[], natl &quanti, natb &errore);

@@ -11,8 +11,6 @@
 .set tipo_si, TIPO_SI
 .set tipo_w, TIPO_W
 .set tipo_s, TIPO_S
-.set tipo_ma, TIPO_MA
-.set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
 .set tipo_rl, TIPO_RL
 .set tipo_re, TIPO_RE
@@ -57,16 +55,6 @@ _sem_wait:
 	.global _sem_signal
 _sem_signal:
 	int $tipo_s
-	ret
-
-	.global _mem_alloc
-_mem_alloc:
-	int $tipo_ma
-	ret
-
-	.global _mem_free
-_mem_free:
-	int $tipo_mf
 	ret
 
 	.global _delay
@@ -128,4 +116,5 @@ _log:
 	.global start, _start
 start:
 _start:
+	call _lib_init
 	jmp _main

@@ -19,6 +19,8 @@ char* copy(const char* src, char* dst);
 char* convint(int n, char* out);
 natl strlen(const char *s);
 char *strncpy(char *dest, const char *src, size_t l);
+void *mem_alloc(natl quanti);
+void mem_free(void *ptr);
 
 int vsnprintf(char *str, natl size, const char *fmt, va_list ap);
 int snprintf(char *buf, natl n, const char *fmt, ...);

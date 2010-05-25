@@ -216,3 +216,115 @@ void flog(log_sev sev, const char *fmt, ...)
         log(sev, buf, l);
 }
 
+
+struct des_mem {
+	natl dimensione;
+	des_mem* next;
+};
+
+des_mem* memlibera = 0;
+natl mem_mutex;
+
+void* mem_alloc(natl dim)
+{
+	natl quanti = (dim % sizeof(int) == 0) ? dim : ((dim + sizeof(int) - 1) / sizeof(int)) * sizeof(int);
+
+	sem_wait(mem_mutex);
+	
+	des_mem *prec = 0, *scorri = memlibera;
+	while (scorri != 0 && scorri->dimensione < quanti) {
+		prec = scorri;
+		scorri = scorri->next;
+	}
+
+	addr p = 0;
+	if (scorri != 0) {
+		p = scorri + 1; // puntatore al primo byte dopo il descrittore
+
+		if (scorri->dimensione - quanti >= sizeof(des_mem) + sizeof(int)) {
+
+			addr pnuovo = static_cast<natb*>(p) + quanti;
+			des_mem* nuovo = static_cast<des_mem*>(pnuovo);
+
+			nuovo->dimensione = scorri->dimensione - quanti - sizeof(des_mem);
+			scorri->dimensione = quanti;
+
+			nuovo->next = scorri->next;
+			if (prec != 0) 
+				prec->next = nuovo;
+			else
+				memlibera = nuovo;
+
+		} else {
+
+			if (prec != 0)
+				prec->next = scorri->next;
+			else
+				memlibera = scorri->next;
+		}
+		
+		scorri->next = reinterpret_cast<des_mem*>(0xdeadbeef);
+		
+	}
+
+	sem_signal(mem_mutex);
+
+	return p;
+}
+
+void free_interna(addr indirizzo, natl quanti);
+
+void mem_free(void* p)
+{
+	if (p == 0) return;
+	des_mem* des = reinterpret_cast<des_mem*>(p) - 1;
+	sem_wait(mem_mutex);
+	free_interna(des, des->dimensione + sizeof(des_mem));
+	sem_signal(mem_mutex);
+}
+
+void free_interna(addr indirizzo, natl quanti)
+{
+	if (quanti == 0) return;
+	des_mem *prec = 0, *scorri = memlibera;
+	while (scorri != 0 && scorri < indirizzo) {
+		prec = scorri;
+		scorri = scorri->next;
+	}
+	if (prec != 0 && (natb*)(prec + 1) + prec->dimensione == indirizzo) {
+		if (scorri != 0 && static_cast<natb*>(indirizzo) + quanti == (addr)scorri) {
+			
+			prec->dimensione += quanti + sizeof(des_mem) + scorri->dimensione;
+			prec->next = scorri->next;
+
+		} else {
+
+			prec->dimensione += quanti;
+		}
+	} else if (scorri != 0 && static_cast<natb*>(indirizzo) + quanti == (addr)scorri) {
+		des_mem salva = *scorri; 
+		des_mem* nuovo = reinterpret_cast<des_mem*>(indirizzo);
+		*nuovo = salva;
+		nuovo->dimensione += quanti;
+		if (prec != 0) 
+			prec->next = nuovo;
+		else
+			memlibera = nuovo;
+	} else if (quanti >= sizeof(des_mem)) {
+		des_mem* nuovo = reinterpret_cast<des_mem*>(indirizzo);
+		nuovo->dimensione = quanti - sizeof(des_mem);
+		nuovo->next = scorri;
+		if (prec != 0)
+			prec->next = nuovo;
+		else
+			memlibera = nuovo;
+	}
+}
+
+extern "C" natl end;
+
+extern "C" void lib_init()
+{
+	mem_mutex = sem_ini(1);
+	free_interna(&end, 0xC0000000 - (natl)(&end));
+}

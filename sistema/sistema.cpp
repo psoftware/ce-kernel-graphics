@@ -186,8 +186,6 @@ extern "C" void sem_signal(natl);	// [4.11]
 //               MEMORIA DINAMICA [4]                                          //
 /////////////////////////////////////////////////////////////////////////////////
 
-// - per c_mem_alloc/c_mem_free ([4.14]) si veda [P_MEM_ALLOC] avanti
-
 void *alloca(natl dim);			// [4.14]
 void dealloca(void* p);			// [4.14]
 // (per l'implementazione, si veda [P_SYS_HEAP] avanti)
@@ -452,6 +450,7 @@ extern "C" void attiva_paginazione();
 const natl ntab_sistema_condiviso = NTAB_SIS_C;
 const natl ntab_sistema_privato   = NTAB_SIS_P;
 const natl ntab_io_condiviso	  = NTAB_MIO_C;
+const natl ntab_pci_condiviso     = NTAB_PCI_C;
 const natl ntab_utente_condiviso  = NTAB_USR_C;
 const natl ntab_utente_privato    = NTAB_USR_P;
 
@@ -460,7 +459,8 @@ const natl ntab_utente_privato    = NTAB_USR_P;
 const natl i_sistema_condiviso = 0;
 const natl i_sistema_privato   = i_sistema_condiviso + ntab_sistema_condiviso;
 const natl i_io_condiviso      = i_sistema_privato   + ntab_sistema_privato;
-const natl i_utente_condiviso  = i_io_condiviso      + ntab_io_condiviso;
+const natl i_pci_condiviso     = i_io_condiviso      + ntab_io_condiviso;
+const natl i_utente_condiviso  = i_pci_condiviso     + ntab_pci_condiviso;
 const natl i_utente_privato    = i_utente_condiviso  + ntab_utente_condiviso;
 
 //   Le costanti che iniziano con "dim_" contengono la dimensione della corrispondente
@@ -470,6 +470,7 @@ const natl dim_sistema_privato   = ntab_sistema_privato   * DIM_MACROPAGINA;
 const natl dim_io_condiviso	 = ntab_io_condiviso	  * DIM_MACROPAGINA;
 const natl dim_utente_condiviso  = ntab_utente_condiviso  * DIM_MACROPAGINA;
 const natl dim_utente_privato    = ntab_utente_privato    * DIM_MACROPAGINA;
+const natl dim_pci_condiviso     = ntab_pci_condiviso     * DIM_MACROPAGINA;
 
 //   Le costanti "inizio_" ("fine_") contengono l'indirizzo del primo byte che fa parte
 //   (del primo byte che non fa piu' parte) della zona corrispondente
@@ -479,7 +480,9 @@ natb* const inizio_sistema_privato   = fine_sistema_condiviso;
 natb* const fine_sistema_privato     = inizio_sistema_privato   + dim_sistema_privato;
 natb* const inizio_io_condiviso      = fine_sistema_privato;
 natb* const fine_io_condiviso	     = inizio_io_condiviso      + dim_io_condiviso;
-natb* const inizio_utente_condiviso  = fine_io_condiviso;
+natb* const inizio_pci_condiviso     = fine_io_condiviso;
+natb* const fine_pci_condiviso       = inizio_pci_condiviso     + dim_pci_condiviso;
+natb* const inizio_utente_condiviso  = fine_pci_condiviso;
 natb* const fine_utente_condiviso    = inizio_utente_condiviso  + dim_utente_condiviso;
 natb* const inizio_utente_privato    = fine_utente_condiviso;
 natb* const fine_utente_privato      = inizio_utente_privato    + dim_utente_privato;
@@ -776,6 +779,7 @@ void carica(natl indice) // [6.4][10.5]
 		  copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
 		  mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
 		  copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
+		  copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);
 		  copy_des(pdir, dest, i_utente_condiviso,  ntab_utente_condiviso);
 		  mset_des(	 dest, i_utente_privato,    ntab_utente_privato, BIT_RW|BIT_US);
 		}
@@ -908,6 +912,161 @@ proc_elem *a_p[MAX_IRQ];  // [7.1]
 
 // per la parte "C++" della activate_pe, si veda [P_EXTERN_PROC] avanti
 
+
+/////////////////////////////////////////////////////////////////////////////////
+//                    SUPPORTO PCI                                             //
+/////////////////////////////////////////////////////////////////////////////////
+const ioaddr PCI_CAP = 0x0CF8;
+const ioaddr PCI_CDP = 0x0CFC;
+const addr PCI_startmem = reinterpret_cast<addr>(0x00000000 - dim_pci_condiviso);
+
+extern "C" void inputb(ioaddr reg, natb &a);	// [9.3.1]
+extern "C" void outputb(natb a, ioaddr reg);	// [9.3.1]
+// (*
+extern "C" void inputw(ioaddr reg, natw &a);	
+extern "C" void outputw(natw a, ioaddr reg);
+extern "C" void inputl(ioaddr reg, natl &a);	
+extern "C" void outputl(natl a, ioaddr reg);
+// *)
+
+natl make_CAP(natw w, natb off)
+{
+	return 0x80000000 | (w << 8) | (off & 0xFC);
+}
+
+natb pci_read_confb(natw w, natb off)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	natb ret;
+	inputb(PCI_CDP + (off & 0x03), ret);
+	return ret;
+}
+
+natw pci_read_confw(natw w, natb off)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	natw ret;
+	inputw(PCI_CDP + (off & 0x03), ret);
+	return ret;
+}
+
+natl pci_read_confl(natw w, natb off)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	natl ret;
+	inputl(PCI_CDP, ret);
+	return ret;
+}
+
+void pci_write_confb(natw w, natb off, natb data)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	outputb(data, PCI_CDP + (off & 0x03));
+}
+
+void pci_write_confw(natw w, natb off, natw data)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	outputw(data, PCI_CDP + (off & 0x03));
+}
+
+void pci_write_confl(natw w, natb off, natl data)
+{
+	natl l = make_CAP(w, off);
+	outputl(l, PCI_CAP);
+	outputl(data, PCI_CDP);
+}
+
+bool pci_find_dev(natw& w, natw devID, natw vendID)
+{
+	for( ; w != 0xFFFF; w++) {
+		natw work;
+
+		if ( (work = pci_read_confw(w, 0)) == 0xFFFF ) 
+			continue;
+		if ( work == vendID && pci_read_confw(w, 2) == devID) 
+			return true;
+	}
+	return false;
+}
+
+bool pci_find_class(natw& w, natb code[])
+{
+	for ( ; w != 0xFFFF; w++) {
+		if (pci_read_confw(w, 0) == 0xFFFF)
+			continue;
+		natb work[3];
+		natl i;
+		for (i = 0; i < 3; i++) {
+			work[i] = pci_read_confb(w, 2 * 4 + i + 1);
+			if (code[i] != 0xFF && code[i] != work[i])
+				break;
+		}
+		if (i == 3) {
+			for (i = 0; i < 3; i++)
+				code[i] = work[i];
+			return true;
+		}
+	} 
+	return false;
+}
+
+extern "C" natl c_pci_find(natl code, natw i)
+{
+	natb* pcode = (natb*)&code;
+	natw w, j = 0;
+	for(w = 0; w != 0xFFFF; w++) {
+		if (! pci_find_class(w, pcode)) 
+			return 0xFFFFFFFF;
+		if (j == i)
+			return w;
+		j++;
+	} 
+	return 0xFFFFFFFF;
+}
+
+extern "C" natl c_pci_read(natw l, natw regn, natl size)
+{
+	natl res;
+	switch (size) {
+	case 1:
+		res = pci_read_confb(l, regn);
+		break;
+	case 2:
+		res = pci_read_confw(l, regn);
+		break;
+	case 4:
+		res = pci_read_confl(l, regn);
+		break;
+	default:
+		flog(LOG_WARN, "pci_read(%x, %d, %d): parametro errato", l, regn, size);
+		abort_p();
+	}
+	return res;
+}
+
+extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
+{
+	switch (size) {
+	case 1:
+		pci_write_confb(l, regn, res);
+		break;
+	case 2:
+		pci_write_confw(l, regn, res);
+		break;
+	case 4:
+		pci_write_confl(l, regn, res);
+		break;
+	default:
+		flog(LOG_WARN, "pci_write(%x, %d, %d, %d): parametro errato", l, regn, res, size);
+		abort_p();
+	}
+}
 /////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DEI DISCHI RIGIDI [9]                           //
 /////////////////////////////////////////////////////////////////////////////////
@@ -916,6 +1075,8 @@ enum hd_cmd {			// [9.3]
 	// (* useremo anche il comando per l'identificazione del dispositivo
 	IDENTIFY	= 0xEC, 
 	// *)
+	WRITE_DMA	= 0xCA,
+	READ_DMA	= 0xC8,
 	WRITE_SECT	= 0x30,
 	READ_SECT	= 0x20
 };
@@ -937,13 +1098,19 @@ struct partizione {
 /* informazioni aggiuntive specifiche per ogni drive */
 struct drive {			
 	bool presente;	/* disco presente o assente */
+	bool dma;		/* DMA abilitato? */
 	natl tot_sett;	/* numero di settori dell'intero disco */
 	partizione* part; /* partizioni all'interno del disco */
 };
 // *)
+struct des_pci_ide {
+	ioaddr iCMD, iSTATUS, iDTPR;
+};
 
 struct des_ata {	// [9.3]	
 	interfata_reg indreg;
+	des_pci_ide bus_master;
+	natl prd[MAX_PRD];
 	hd_cmd comando;
 	natb errore;
 	natl mutex;
@@ -963,6 +1130,8 @@ const natl D_ERR_NONE = 0x00;		/* nessun errore */
 const natl D_ERR_BOUNDS = 0xFF;		/* accesso al di fuori della partizione */
 const natl D_ERR_PRESENCE = 0xFE;	/* dispositivo non trovato */
 const natl D_ERR_GENERIC = 0xFD;	/* errore generico */
+const natl D_ERR_NODMA   = 0xFC;	/* DMA non disponibile */
+const natl D_ERR_NOPRD	 = 0xFB;	/* PRD insufficienti */
 // *)
 
 // [9.3], implementazione in [P_HARDDISK] avanti
@@ -1040,6 +1209,107 @@ extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb q
 	sem_signal(p_des->mutex);
 }
 
+
+// (* DMA
+void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
+extern "C" void c_dmareadhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
+{
+	des_ata *p_des;
+	
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (ata >= A || drv >= 2) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	p_des = &hd[ata];
+
+	// (* controllo che si voglia usare un drive effettivamente presente
+	if (!p_des->disco[drv].presente) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che siano stati chiesti settori esistenti
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
+		errore = D_ERR_BOUNDS;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che il DMA sia abilitato per questo dispositivo
+	if (!p_des->disco[drv].dma) {
+		errore = D_ERR_NODMA;
+		return;
+	}
+	// *)
+	
+	// (* controlliamo di avere sicuramente sufficienti PRD
+	if (quanti * 512 > (MAX_PRD - 2) * DIM_PAGINA) {
+		errore = D_ERR_NOPRD;
+		return;
+	}
+	// *)
+
+	sem_wait(p_des->mutex);
+	dmastarthd_in(p_des, drv, vetti, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+
+void dmastarthd_out(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
+extern "C" void c_dmawritehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb& errore)
+{
+	des_ata *p_des;
+	
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (ata >= A || drv >= 2) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	p_des = &hd[ata];
+
+	// (* controllo che si voglia usare un drive effettivamente presente
+	if (!p_des->disco[drv].presente) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che siano stati chiesti settori esistenti
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
+		errore = D_ERR_BOUNDS;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che il DMA sia abilitato per questo dispositivo
+	if (!p_des->disco[drv].dma) {
+		errore = D_ERR_NODMA;
+		return;
+	}
+	// *)
+	
+	// (* controlliamo di avere sicuramente sufficienti PRD
+	if (quanti * 512 > (MAX_PRD - 2) * DIM_PAGINA) {
+		errore = D_ERR_NOPRD;
+		return;
+	}
+	// *)
+
+	sem_wait(p_des->mutex);
+	dmastarthd_out(p_des, drv, vetti, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+// *)
+
 const natl DIM_BLOCK = 512;
 extern "C" void hd_write_address(des_ata *p, natl primo);	// [9.3.1]
 extern "C" void hd_write_command(hd_cmd cmd, ioaddr iCMD);	// [9.3.1]
@@ -1052,6 +1322,8 @@ extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti); // [9.3.1]
 extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg); // [9.3.1]
 extern "C" void inputb(ioaddr reg, natb &a);	// [9.3.1]
 extern "C" void outputb(natb a, ioaddr reg);	// [9.3.1]
+extern "C" void outputl(natl a, ioaddr reg);
+void hd_prepare_prd(addr prd, addr punt, natl quanti);
 
 // [9.3.1]
 void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
@@ -1081,11 +1353,74 @@ void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
 }
 
+void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
+{
+	natb work;
+
+	p_des->comando = READ_DMA;
+	p_des->cont = 1;
+
+	// 1) preparare il PRD
+	hd_prepare_prd(p_des->prd, vetti, quanti * DIM_BLOCK);
+	// 2) comunicarne l'indirizzo al controllore PCI-IDE
+	outputl((natl)p_des->prd, p_des->bus_master.iDTPR);
+	//    specificare la direzione del trasferimento nel registro di comando
+	inputb(p_des->bus_master.iCMD, work);
+	work |= 0x8;	// scritture in memoria
+	outputb(work, p_des->bus_master.iCMD);
+	//    resettare i bit Interrupt e Error nel registro di stato
+	inputb(p_des->bus_master.iSTATUS, work);
+	work &= ~0x6;
+	outputb(work, p_des->bus_master.iSTATUS);
+
+	// 3) inviare il comando di lettura DMA al dispositivo
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);			
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);	
+	hd_write_command(READ_DMA, p_des->indreg.iCMD); 
+	// 4) avviare la funzione di bus mastering
+	inputb(p_des->bus_master.iCMD, work);
+	work |= 1;
+	outputb(work, p_des->bus_master.iCMD);
+}
+
+void dmastarthd_out(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)	
+{
+	natb work;
+
+	p_des->comando = WRITE_DMA;
+	p_des->cont = 1;
+
+	// 1) preparare il PRD
+	hd_prepare_prd(p_des->prd, vetti, quanti * DIM_BLOCK);
+	// 2) comunicarne l'indirizzo al controllore PCI-IDE
+	outputl((natl)p_des->prd, p_des->bus_master.iDTPR);
+	//    specificare la direzione del trasferimento nel registro di comando
+	inputb(p_des->bus_master.iCMD, work);
+	work &= ~0x8;	// letture dalla memoria
+	outputb(work, p_des->bus_master.iCMD);
+	//    resettare i bit Interrupt e Error nel registro di stato
+	inputb(p_des->bus_master.iSTATUS, work);
+	work &= ~0x6;
+	outputb(work, p_des->bus_master.iSTATUS);
+
+	// 3) inviare il comando di scrittura DMA al dispositivo
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);		
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);
+	hd_write_command(WRITE_DMA, p_des->indreg.iCMD);
+	// 4) avviare la funzione di bus mastering
+	inputb(p_des->bus_master.iCMD, work);
+	work |= 1;
+	outputb(work, p_des->bus_master.iCMD);
+}
 // [9.3.1]
 extern "C" void c_driverhd(natl ata)
 {	
 	proc_elem* lavoro; des_sem* s; des_ata* p_des;
-	natb stato;
+	natb stato, work;
 	p_des = &hd[ata];
 	p_des->cont--; 
 	if (p_des->cont == 0) {	
@@ -1101,20 +1436,36 @@ extern "C" void c_driverhd(natl ata)
 	p_des->errore = D_ERR_NONE;
 	// *)
 	inputb(p_des->indreg.iSTS, stato); // ack dell'interrupt
-	if (p_des->comando == READ_SECT) { 
+	switch (p_des->comando) {
+	case READ_SECT:
 		if (!hd_wait_data(p_des->indreg.iSTS)) 
 			inputb(p_des->indreg.iERR, p_des->errore);
 		else
 			inputbw(p_des->indreg.iBR, static_cast<natw*>(p_des->punt), DIM_BLOCK / 2);
-	} else {
+		p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
+		break;
+	case WRITE_SECT:
 		if (p_des->cont != 0) {
 			if (!hd_wait_data(p_des->indreg.iSTS)) 
 				inputb(p_des->indreg.iERR, p_des->errore);
 			else
 				outputbw(static_cast<natw*>(p_des->punt), DIM_BLOCK / 2, p_des->indreg.iBR);
+			p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
 		}
+	case WRITE_DMA:
+	case READ_DMA:
+		// 7) reset del bit Start/Stop nel registro di comando del contr. PCI-IDE
+		inputb(p_des->bus_master.iCMD, work);
+		work &= ~0x01;
+		outputb(work, p_des->bus_master.iCMD);
+		//   lettura dello stato del controllore PCI-IDE
+		inputb(p_des->bus_master.iSTATUS, stato);
+		if ((stato & 0x05) == 0)
+			inputb(p_des->indreg.iERR, p_des->errore);
+		break;
+	default:
+		break;
 	}
-	p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
 	schedulatore();
 }
 
@@ -1138,12 +1489,14 @@ extern addr mem_upper;
 extern proc_elem init;
 char* str_token(char* src, char** cont);
 short swap_ch = -1, swap_drv = -1, swap_part = -1;
+bool swap_usedma = false;
 void parse_swap(char* arg, short& channel, short& drive, short& partition);
 void parse_heap(char* arg, natl& heap_mem);
 natl heap_mem = DEFAULT_HEAP_SIZE;
 int salta_a(addr indirizzo);
 extern "C" void init_8259();
 bool crea_finestra_FM(addr direttorio, addr max_mem);
+bool crea_finestra_PCI(addr direttorio);
 natl crea_dummy();
 bool init_pe();
 bool crea_main_sistema(natl dummy_proc);
@@ -1210,6 +1563,9 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 			//indiazioni sullo heap
 			parse_heap(&arg[2], heap_mem);
 		break;
+			case 'd':
+				swap_usedma = true;
+				break;
 		default:
 			flog(LOG_WARN, "Opzione sconosciuta: '%s'", arg[1]);
 		}
@@ -1254,6 +1610,9 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
 	// )
 
+	if (!crea_finestra_PCI(direttorio))
+		goto error;
+	flog(LOG_INFO, "Mappata memoria PCI in memoria virtuale");
 	// ( inizializziamo il registro CR3 con l'indirizzo del direttorio ([10.4])
 	loadCR3(direttorio);
 	// )
@@ -1302,12 +1661,11 @@ error:
 	c_panic("Errore di inizializzazione", 0, 0, 0, 0);
 }
 
-void usr_heap_init(addr start, addr end);
 bool aggiungi_pe(proc_elem *p, natb irq);
 bool hd_init();
 bool log_init_usr();
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
-bool swap_init(int swap_ch, int swap_drv, int swap_part);
+bool swap_init(int swap_ch, int swap_drv, int swap_part, bool swap_usedma);
 
 // super blocco (vedi [10.5] e [P_SWAP] avanti)
 struct superblock_t {
@@ -1328,6 +1686,7 @@ struct des_swap {
 	natw drive;		// dispositivo: 0 = master, 1 = slave
 	partizione* part;	// partizione all'interno del dispositivo
 	natl *free;		// bitmap dei blocchi liberi
+	bool dma;
 	superblock_t sb;	// contenuto del superblocco 
 } swap_dev; 	// c'e' un unico oggetto swap
 
@@ -1356,7 +1715,7 @@ void main_sistema(int n)
 
 	// ( inizializzazione dello swap, che comprende la lettura
 	//   degli entry point di start_io e start_utente (vedi [10.4])
-	if (!swap_init(swap_ch, swap_drv, swap_part))
+	if (!swap_init(swap_ch, swap_drv, swap_part, swap_usedma))
 			goto error;
 	flog(LOG_INFO, "partizione di swap: %d+%d", swap_dev.part->first, swap_dev.part->dim);
 	flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
@@ -1373,10 +1732,6 @@ void main_sistema(int n)
 	if (!crea_spazio_condiviso(dummy_proc, last_address))
 		goto error;
  	// )
-
-	// (* inizializzazione dello heap utente
-	usr_heap_init(swap_dev.sb.user_end, last_address);
-	// *)
 
 	// ( semaforo per la mutua esclusione nella gestione dei page fault
 	pf_mutex = sem_ini(1);
@@ -2065,145 +2420,6 @@ bool init_dpf()
 }
 // )
 
-// ( [P_MEM_ALLOC] (vedi [4.14])
-//    (si consiglia di leggere prima [P_SYS_HEAP])
-// Lo heap utente e' gestito tramite un allocatore a lista, come lo heap di
-// sistema, ma le strutture dati non sono immerse nello heap stesso
-// (diversamente dallo heap di sistema).  Infatti, la memoria allocata dallo
-// heap utente e' virtuale e, se il sistema vi scrivesse le proprie strutture
-// dati, potrebbe causare page fault. Per questo motivo, i descrittori di heap
-// utente vengono allocati dallo heap di sistema.
-
-// Lo heap utente e' diviso in "regioni" contigue, di dimensioni variabili, che
-// possono essere libere o occupate.  Ogni descrittore di heap utente descrive
-// una regione dello heap virtuale.  Descrizione dei campi:
-// - start: indirizzo del primo byte della regione
-// - dimensione: dimensione in byte della regione
-// - occupato: indica se la regione e' occupata (1)
-//             o libera (0)
-// - next: puntatore al prossimo descrittore di heap utente
-struct des_heap {
-	addr start;	
-	union {
-		natl dimensione;
-		natl occupato : 1;
-	};
-	des_heap* next;
-};
-
-// I descrittori vengono mantenuti in una lista ordinata tramite il campo
-// start. Inoltre, devono essere sempre valide le identita' (se des->next !=
-// 0): 
-// (1) des->start + des->dimensione == des->next->start (per la contiguita'
-// delle regioni)
-// (2) (des->occupato == 0) => (des->next->occupato == 1) (ogni regione libera
-// e' massima)
-// (3) des->dimensione % sizeof(int) == 0 (per motivi di efficienza)
-
-// se sizeof(int) >= 2, l'identita' (3) permette di utilizzare il bit meno
-// significativo del campo dimensione per allocarvi il campo occupato (per noi,
-// sizeof(int) = 4) (vedere "union" nella struttura)
-
-// la testa della lista dei descrittori di heap e' allocata staticamente.
-// Questo implica che la lista non e' mai vuota (contiene almeno 'heap'), ma
-// non che lo heap utente non e' mai vuoto (heap->dimensione puo' essere 0)
-des_heap heap;  // testa della lista di descrittori di heap
-
-// per inizializzare lo heap dobbiamo sapere il primo indirizzo che ne fa parte (start)
-// e il primo indirizzo (end, successivo a start) che non ne fa parte
-void usr_heap_init(addr start, addr end)
-{
-	heap.start = allineav(start, sizeof(int));
-	heap.dimensione = static_cast<natb*>(end) - static_cast<natb*>(heap.start);
-	flog(LOG_INFO, "heap utente a %x, dimensione: %d B (%d MiB)",
-			heap.start, heap.dimensione, heap.dimensione / (1024 * 1024));
-}
-
-// cerca una regione di dimensione almeno pari a dim nello heap utente e ne
-// resituisce l'indirizzo del primo byte (0 in caso di fallimento)
-extern "C" void *c_mem_alloc(natl dim)
-{
-	des_heap* nuovo;
-	addr p;
-
-	// imponiamo il rispetto di (3)
-	dim = allinea(dim, sizeof(int));
-
-	// cerchiamo la prima regione libera di dimensioni sufficienti
-	// (strategia first-fit)
-	des_heap *prec = 0, *scorri = &heap;
-	while (scorri != 0 && (scorri->occupato || scorri->dimensione < dim)) {
-		prec = scorri;
-		scorri = scorri->next;
-	}
-	// assert(prec != 0) // perche' la lista e' sicuramente non vuota
-
-	if (scorri == 0)     // se non abbiamo trovato la regione
-	    	return 0;    // l'allocazione fallisce
-
-	// assert(scorri != 0 && !scorri->occupato && scorri->dimensione >= dim)
-		
-	p = scorri->start;
-
-	// se scorri->dimensione e' sufficientemente piu' grande di dim, e
-	// riusciamo ad allocare un nuovo descrittore di heap, non occupiamo
-	// tutta la regione, ma la dividiamo in due parti: una di dimensione
-	// pari a dim, occupata, e il resto libero
-	if (scorri->dimensione - dim >= sizeof(des_heap) &&
-	    (nuovo = static_cast<des_heap*>(alloca(sizeof(des_heap)))) != 0)
-	{
-		// inseriamo nuovo nella lista, dopo scorri
-		nuovo->start = static_cast<natb*>(scorri->start) + dim; // rispettiamo (2)
-		nuovo->dimensione = scorri->dimensione - dim;
-		scorri->dimensione = dim;
-		nuovo->next = scorri->next; 
-		scorri->next = nuovo;
-		nuovo->occupato = 0; 
-	} 
-	scorri->occupato = 1; // questo va fatto per ultimo, perche'
-	                      // modifica scorri->dimensione 
-	return p;
-}
-
-// libera la regione dello heap il cui indirizzo di partenza e' pv
-// nota: se pv e' 0, o pv non e' l'indirizzo di partenza di nessuna regione,
-// oppure se tale regione e' gia' libera, non si esegue alcuna azione
-extern "C" void c_mem_free(void* pv)
-{
-	if (pv == 0) return;
-	addr p = pv;
-
-	des_heap *prec = 0, *scorri = &heap;
-	while (scorri != 0 && (!scorri->occupato || scorri->start != p)) {
-		prec = scorri;
-		scorri = scorri->next;
-	}
-	if (scorri == 0) return;
-	// assert(scorri != 0 && scorri->occupato && pv == scorri->start);
-	
-	scorri->occupato = 0;	// questo va fatto per primo, in modo
-				// che scorri->dimensione sia valido
-	if (!prec->occupato) {
-		// assert(prec->start + prec->dimensione == pv) // relazione (1)
-		// dobbiamo riunire la regione con la precedente, per rispettare (2)
-		prec->dimensione += scorri->dimensione;
-		prec->next = scorri->next;
-		dealloca(scorri);
-		scorri = prec;
-	}
-	des_heap *next = scorri->next;
-	// qualunque ramo dell'if sia stato preso, possiamo affermare:
-	// assert(next == 0 || scorri->start + scorri->dimensione == next->dimensione);
-	if (next != 0 && !next->occupato) {
-		// dobbiamo riunire anche la regione successiva
-		scorri->dimensione += next->dimensione;
-		scorri->next = next->next;
-		dealloca(next);
-	}
-}
-
-// )
-
 // ( [P_PROCESS] (si veda [4.6][4.7])
 // funzioni usate da crea_processo
 void rilascia_tutto(addr direttorio, natl i, natl n);
@@ -2295,7 +2511,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// dobbiamo settare manualmente il bit D, perche' abbiamo
 		// scritto nella pila tramite la finestra FM, non tramite
 		// il suo indirizzo virtuale.
-		// (la "carica" lo setta gia', ma lo rifacciamo per sicurezza)
 		natl& dp = get_despag(p->id, fine_utente_privato - DIM_PAGINA);
 		set_D(dp, true);
 		// )
@@ -2596,19 +2811,29 @@ void copy_des(addr src, addr dst, natl i, natl n)
 		pddst[j] = pdsrc[j];
 }
 
+extern "C" addr c_trasforma(addr ind_virt)
+{
+	natl dp = get_despag(esecuzione->id, ind_virt);
+	natl ind_fis_pag = (natl)extr_IND_F(dp);
+	return (addr)(ind_fis_pag | ((natl)ind_virt & 0x00000FFF));
+
+}
 
 
 
 // )
 
 // ( [P_MEM_VIRT]
-// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
-// memoria virtuale gestita dal direttorio pdir
-// (la funzione viene usata in fase di inizializzazione)
-bool crea_finestra_FM(addr direttorio, addr max_mem)
+//
+// mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli 
+// indirizzi fisici
+// che partono da phys_start, in sequenza.
+bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag, natl flags)
 {
-	for (addr ind = (addr)0; ind < max_mem; ind = static_cast<natb*>(ind) + DIM_PAGINA) {
-		natl dt = get_destab(direttorio, ind);
+	natb *indv = static_cast<natb*>(virt_start),
+	     *indf = static_cast<natb*>(phys_start);
+	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA) {
+		natl dt = get_destab(direttorio, indv);
 		addr tabella;
 		if (! extr_P(dt)) {
 			natl indice = alloca_pagina_fisica_libera();
@@ -2618,19 +2843,61 @@ bool crea_finestra_FM(addr direttorio, addr max_mem)
 			}
 			des_pf *ppf = &dpf[indice];
 			ppf->contenuto = TABELLA_FM;
-			ppf->pt.residente = true;
+			ppf->pt.residente = 1;
 			tabella = indirizzo_pf(indice);
 
-			dt = ((natl)tabella & ADDR_MASK) | BIT_RW | BIT_P;
-			set_destab(direttorio, ind, dt);
+			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
+			set_destab(direttorio, indv, dt);
 		} else {
 			tabella = extr_IND_F(dt);
 		}
-		natl dp = get_despag(tabella, ind);
-		dp = ((natl)ind & ADDR_MASK) | BIT_RW | BIT_P; // | BIT_GLOBAL
-		set_despag(tabella, ind, dp);
+		natl dp = get_despag(tabella, indv);
+		dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
+		set_despag(tabella, indv, dp);
 	}
 	return true;
+}
+// mappa tutti gli indirizzi a partire da start (incluso) fino ad end (escluso)
+// in modo che l'indirizzo virtuale coincida con l'indirizzo fisico.
+// start e end devono essere allineati alla pagina.
+bool identity_map(addr direttorio, addr start, addr end, natl flags)
+{
+	natl npag = (static_cast<natb*>(end) - static_cast<natb*>(start)) / DIM_PAGINA;
+	return sequential_map(direttorio, start, start, npag, flags);
+}
+// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
+// memoria virtuale gestita dal direttorio pdir
+// (la funzione viene usata in fase di inizializzazione)
+bool crea_finestra_FM(addr direttorio, addr max_mem)
+{
+	return identity_map(direttorio, (addr)0, max_mem, BIT_RW);
+}
+
+// ( [P_PCI]
+
+// mappa in memoria virtuale la porzione di spazio fisico dedicata all'I/O (PCI e altro)
+bool crea_finestra_PCI(addr direttorio)
+{
+	return sequential_map(direttorio,
+			PCI_startmem,
+			inizio_pci_condiviso,
+			ntab_pci_condiviso * 1024,
+			BIT_RW | BIT_PCD);
+}
+
+natb pci_getbus(natw l)
+{
+	return l >> 8;
+}
+
+natb pci_getdev(natw l)
+{
+	return (l & 0x00FF) >> 3;
+}
+
+natb pci_getfun(natw l)
+{
+	return l & 0x0007;
 }
 // )
 
@@ -2737,6 +3004,8 @@ extern "C" void hd_read_device(ioaddr i_drv_hd, natl& ms);
 extern "C" void hd_select_device(short ms, ioaddr iHND);
 extern "C" void readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void writehd_n(natl ata, natl drv, natw vetto[], natl primo, natb quanti, natb &errore);
+extern "C" void dmareadhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore);
+extern "C" void dmawritehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore);
 
 bool hd_sel_drv(des_ata* p_des, natl drv) // [9.3]
 {
@@ -2787,6 +3056,12 @@ void hd_print_error(natl i, natl d, natl sect, natb error)
 			break;
 		case D_ERR_GENERIC:
 			flog(LOG_ERR, "errore generico (DRQ=0)");
+			break;
+		case D_ERR_NODMA:
+			flog(LOG_ERR, "DMA non abilitato");
+			break;
+		case D_ERR_NOPRD:
+			flog(LOG_ERR, "PRD insufficienti");
 			break;
 		default:
 			if (error & 4) 
@@ -2946,14 +3221,101 @@ void hd_reset(des_ata* p_des)
 		}
 	}
 }
+// (*
+void hd_prepare_prd(addr prd, addr vett, natl quanti)
+{
+	natl* pp = static_cast<natl*>(prd) - 1;
+
+	natl start = reinterpret_cast<natl>(vett);
+	natl diff = ceild(start, DIM_PAGINA) * DIM_PAGINA - start;
+	natl first = diff > quanti ? quanti : diff;
+	if (first > 0) {
+		*++pp = (natl)c_trasforma((addr)start);
+		*++pp = first;
+		start  += first;
+		quanti -= first;
+	}
+	while (quanti >= DIM_PAGINA) {
+		*++pp = (natl)c_trasforma((addr)start);
+		*++pp = DIM_PAGINA;
+		start  += DIM_PAGINA;
+		quanti -= DIM_PAGINA;
+	}
+	if (quanti > 0) {
+		*++pp = (natl)c_trasforma((addr)start);
+		*++pp = quanti;
+	}
+	*pp |= 0x80000000;
+}
+// *)
+
 // Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
 // 
 bool hd_init()
 {
 	des_ata *p_des;
 	natb irq[2] = { 14, 15 };
+ 
+	// (* PCI_IDE
+	natb code[] = { 0xFF, 0x01, 0x01 };
+	natw l = 0;
+	natb prog_if;
+	bool bus_master = false;
+	if (pci_find_class(l, code)) {
+		prog_if = code[0];
+		natw venID = pci_read_confw(l, 0x00);
+		natw devID = pci_read_confw(l, 0x02);
+		flog(LOG_INFO, "PCI-IDE(%4x:%4x) %2x:%2x:%2x, prog_if=%2x",
+				venID, devID, pci_getbus(l), pci_getdev(l), pci_getfun(l), prog_if);
+		bus_master = prog_if & 0x80;
+		if (bus_master) {
+			natl base =  pci_read_confl(l, 0x20);
+			base &= ~0x1;
+			hd[0].bus_master.iCMD    = (ioaddr)base;
+			hd[0].bus_master.iSTATUS = (ioaddr)(base + 0x02);
+			hd[0].bus_master.iDTPR   = (ioaddr)(base + 0x04);
+			hd[1].bus_master.iCMD    = (ioaddr)(base + 0x08);
+			hd[1].bus_master.iSTATUS = (ioaddr)(base + 0x0a);
+			hd[1].bus_master.iDTPR   = (ioaddr)(base + 0x0c);
+
+			natw cmd = pci_read_confw(l, 0x04);
+			pci_write_confw(l, 0x04, cmd | 0x5);
+			natw cmd2 = pci_read_confw(l, 0x04);
+			flog(LOG_DEBUG, "PCI-IDE: base=%4x, cmd=%2x, I/O:%d->%d, MasterEN:%d->%d",
+					base, cmd, (cmd & 1), (cmd2 & 1),
+					(cmd & 4) >> 2, (cmd2 & 4) >> 2);
+		}
+		for (int i = 0; i < 2; i++)  {
+			if (prog_if & (0x01 + i*2)) {
+				natl base = pci_read_confl(l, 0x10 + i*4);
+				base &= ~1;
+				hd[i].indreg.iBR = (ioaddr)base;
+				hd[i].indreg.iERR = (ioaddr)(base + 0x01);
+				hd[i].indreg.iSCR = (ioaddr)(base + 0x02);
+				hd[i].indreg.iSNR = (ioaddr)(base + 0x03);
+				hd[i].indreg.iCNL = (ioaddr)(base + 0x04);
+				hd[i].indreg.iCNH = (ioaddr)(base + 0x05);
+				hd[i].indreg.iHND = (ioaddr)(base + 0x06);
+				hd[i].indreg.iCMD = (ioaddr)(base + 0x07);
+				hd[i].indreg.iSTS = (ioaddr)(base + 0x07);
+				natl base2 = pci_read_confl(l, 0x10 + i*4 + 4);
+				base2 &= ~1;
+				hd[i].indreg.iDCR = (ioaddr)(base2 + 0x02);
+				hd[i].indreg.iASR = (ioaddr)(base2 + 0x02);
+				irq[i] = pci_read_confb(l,  0x3C);	
+				flog(LOG_INFO, "PCI-IDE: ide(%d) ComB=%4x ConB=%4x irq=%d", i, base, base2, irq[i]);
+			}
+		}
+	}
+	// *)
 	for (natl i = 0; i < A; i++) {			// primario/secondario
 		p_des = &hd[i];
+		natb ide_status;
+
+		if (bus_master) {
+			inputb(p_des->bus_master.iSTATUS, ide_status);
+			flog(LOG_DEBUG, "PCI-IDE: ide(%d) status=%2x", i, ide_status);
+		}
 
 		hd_halt_inout(p_des->indreg.iDCR);	
 		// cerchiamo di capire quali (tra master e slave) sono presenti
@@ -2988,7 +3350,7 @@ bool hd_init()
 		// che lo slave ci sia davvero fino a quando non inviamo un 
 		// comando. Inviamo quindi il comando IDENTIFY DEVICE
 		for (int d = 0; d < 2; d++) {
-			unsigned short st_sett[256];
+			natw st_sett[256];
 			char serial[41], *ptr = serial;
 			natb stato;
 
@@ -3012,6 +3374,11 @@ bool hd_init()
 				(i ? "S" : "P"), (d ? "S" : "M"),
 				serial,
 				p_des->disco[d].tot_sett);
+
+			if (bus_master) {
+				p_des->disco[d].dma = true;
+				flog(LOG_INFO, "  - %s%s: DMA abilitato");
+			}
 
 			continue;
 
@@ -3192,7 +3559,7 @@ const char* last_log_err()
 // - l'indirizzo virtuale dell'entry point del programma contenuto nello swap 
 // (l'indirizzo di main)
 // - l'indirizzo virtuale successivo all'ultima istruzione del programma 
-// contenuto nello swap (serve come indirizzo di partenza dello heap utente)
+// contenuto nello swap
 // - l'indirizzo virtuale dell'entry point del modulo io contenuto nello swap
 // - l'indirizzo virtuale successivo all'ultimo byte occupato dal modulo io
 // - checksum: somma dei valori precedenti (serve ad essere ragionevolmente 
@@ -3255,7 +3622,10 @@ void leggi_blocco(natl blocco, void* dest)
 		panic("Errore interno");
 	}
 
-	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
+	if (swap_dev.dma)
+		dmareadhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
+	else 
+		readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
@@ -3275,7 +3645,10 @@ void scrivi_blocco(natl blocco, void* dest)
 		panic("Errore interno");
 	}
 	
-	writehd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
+	if (swap_dev.dma)
+		dmawritehd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
+	else
+		writehd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
@@ -3296,7 +3669,10 @@ bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 		return false;
 	}
 	
-	readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
+	if (swap_dev.dma)
+		dmareadhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
+	else
+		readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
@@ -3308,7 +3684,7 @@ bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 
 // inizializzazione del descrittore di swap
 char read_buf[512];
-bool swap_init(int swap_ch, int swap_drv, int swap_part)
+bool swap_init(int swap_ch, int swap_drv, int swap_part, bool swap_usedma)
 {
 	partizione* part;
 
@@ -3334,6 +3710,10 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part)
 	swap_dev.channel = swap_ch;
 	swap_dev.drive   = swap_drv;
 	swap_dev.part    = part;
+
+	swap_dev.dma = hd[swap_ch].disco[swap_drv].dma && swap_usedma;
+	if (swap_dev.dma)
+		flog(LOG_INFO, "Swap: DMA abilitato");
 
 	// lettura del superblocco
 	flog(LOG_DEBUG, "lettura del superblocco dall'area di swap...");

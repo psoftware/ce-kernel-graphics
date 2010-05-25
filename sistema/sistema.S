@@ -527,6 +527,7 @@ init_gdt:
 .set tipo_rl, TIPO_RL
 .set tipo_re, TIPO_RE
 .set tipo_ep, TIPO_EP
+.set tipo_tra, TIPO_TRA
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 .set tipo_ape, TIPO_APE
@@ -540,6 +541,13 @@ init_gdt:
 // interruzioni usate dal nucleo stesso (dalle routine della memoria virtuale)
 .set io_tipo_hdr, IO_TIPO_HDR
 .set io_tipo_hdw, IO_TIPO_HDW
+.set io_tipo_dmahdr, IO_TIPO_DMAHDR
+.set io_tipo_dmahdw, IO_TIPO_DMAHDW
+
+// funzioni PCI
+.set io_tipo_pcif, IO_TIPO_PCIF
+.set io_tipo_pcir, IO_TIPO_PCIR
+.set io_tipo_pciw, IO_TIPO_PCIW
 
 // carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
@@ -593,8 +601,6 @@ init_idt:
 	carica_gate	tipo_si		a_sem_ini	LIV_UTENTE
 	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
 	carica_gate	tipo_s		a_sem_signal	LIV_UTENTE
-	carica_gate	tipo_ma		a_mem_alloc	LIV_UTENTE
-	carica_gate	tipo_mf		a_mem_free	LIV_UTENTE
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
 	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
 	carica_gate	tipo_re		a_resident	LIV_UTENTE
@@ -607,10 +613,18 @@ init_idt:
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
+	carica_gate	tipo_tra	a_trasforma	LIV_SISTEMA
 
 	// gestione HD (derivato da Faggioli)
 	carica_gate	io_tipo_hdr	a_readhd_n	LIV_SISTEMA
 	carica_gate	io_tipo_hdw	a_writehd_n	LIV_SISTEMA
+	carica_gate	io_tipo_dmahdr	a_dmareadhd_n	LIV_SISTEMA
+	carica_gate	io_tipo_dmahdw	a_dmawritehd_n	LIV_SISTEMA
+
+	// PCI
+	carica_gate	io_tipo_pcif	a_pci_find	LIV_SISTEMA
+	carica_gate	io_tipo_pcir	a_pci_read	LIV_UTENTE
+	carica_gate	io_tipo_pciw	a_pci_write	LIV_SISTEMA
 
 	leave
 	ret
@@ -880,6 +894,56 @@ _outputb:
 	movb 12(%esp), %al
 	movw 16(%esp), %dx
 	outb %al, %dx
+	popl %edx
+	popl %eax
+	ret
+
+// Ingresso di una word da una porta di IO
+	.global _inputw
+_inputw:
+	pushl %eax
+	pushl %edx
+	movl 12(%esp), %edx
+	inw %dx, %ax
+	movl 16(%esp), %edx
+	movw %ax, (%edx)
+	popl %edx
+	popl %eax
+	ret
+
+// Uscita di una word su una porta di IO
+	.global _outputw
+_outputw:
+	pushl %eax
+	pushl %edx
+	movw 12(%esp), %ax
+	movl 16(%esp), %edx
+	outw %ax, %dx
+	popl %edx
+	popl %eax
+	ret
+
+// Ingresso di una doppia parola da una porta di IO
+	.global _inputl
+_inputl:
+	pushl %eax
+	pushl %edx
+	movl 12(%esp), %edx
+	inl %dx, %eax
+	movl 16(%esp), %edx
+	movl %eax, (%edx)
+	popl %edx
+	popl %eax
+	ret
+
+// scrive una doppia parola in una porta di I/O
+	.global _outputl
+_outputl:
+	pushl %eax
+	pushl %edx
+	movl 12(%esp), %eax
+	movl 16(%esp), %edx
+	outl %eax, %dx
 	popl %edx
 	popl %eax
 	ret
@@ -1407,6 +1471,16 @@ _writehd_n:
 	int $io_tipo_hdw
 	ret
 
+	.global _dmareadhd_n
+_dmareadhd_n:
+	int $io_tipo_dmahdr
+	ret
+
+	.global _dmawritehd_n
+_dmawritehd_n:
+	int $io_tipo_dmahdw
+	ret
+
 	.global _panic
 _panic:
 	int $tipo_p
@@ -1659,25 +1733,6 @@ a_sem_signal:	// routine int $tipo_s [4.11]
 	call carica_stato
 	iret
 
-	.extern _c_mem_alloc
-a_mem_alloc:	// routine int $tipo_ma [4.14]
-	salva_reg_rit	// salvataggio dei registri (non di EAX)
-	copia_param 1 6	// ricopiamento del parametro dim
-	call _c_mem_alloc
-	addl $4, %esp	// ripulitura pila
-	carica_reg_rit	// ripristino dei registri (non EAX, che contiene il risultato)
-	iret
-
-	.extern _c_mem_free
-a_mem_free:	// routine int $tipo_mf [4.14]
-	salva_registri	// salvataggio dei registri
-	copia_param 1 7	// ricopiamento del parametro pv
-	cavallo_di_troia 0 // ... e verifica
-	call _c_mem_free
-	addl $4, %esp	// ripulitura pila
-	carica_registri	// ripristino dei registri
-	iret
-
 	.extern _c_delay
 a_delay:	// routine int $tipo_d [4.16]
 	call salva_stato
@@ -1779,6 +1834,14 @@ a_abort_p:
 	call carica_stato
 	iret
 
+	.extern _c_trasforma
+a_trasforma:
+	salva_reg_rit
+	copia_param 1 6
+	call _c_trasforma
+	addl $4, %esp
+	carica_reg_rit
+	iret
 	.extern _c_log
 a_log:
 	call salva_stato
@@ -1823,6 +1886,68 @@ a_writehd_n:
 	addl $24, %esp
 	carica_registri
 	iret
+
+// lettura di n settori
+	.global a_dmareadhd_n
+	.extern _c_dmareadhd_n
+a_dmareadhd_n:
+	salva_registri
+	copia_param 6 7
+	cavallo_di_troia 2
+	cavallo_di_troia2 2 4
+	cavallo_di_troia 5
+	call _c_dmareadhd_n
+	addl $24, %esp
+	carica_registri
+	iret
+
+// scrittura di n settori
+	.global a_dmawritehd_n
+	.extern _c_dmawritehd_n
+a_dmawritehd_n:
+	salva_registri
+	copia_param 6 7
+	cavallo_di_troia 2
+	cavallo_di_troia2 2 4
+	cavallo_di_troia 5
+	call _c_dmawritehd_n
+	addl $24, %esp
+	carica_registri
+	iret
+
+////////////////////////////////////////////////////////
+// PCI
+////////////////////////////////////////////////////////
+	.global a_pci_find
+	.extern _c_pci_find
+a_pci_find:
+	salva_reg_rit
+	copia_param 2 6
+	call _c_pci_find
+	addl $8, %esp
+	carica_reg_rit
+	iret
+
+	.global a_pci_read
+	.extern _c_pci_read
+a_pci_read:
+	salva_reg_rit
+	copia_param 3 6
+	call _c_pci_read
+	addl $12, %esp
+	carica_reg_rit
+	iret
+
+	.global a_pci_write
+	.extern _c_pci_write
+a_pci_write:
+	salva_registri
+	copia_param 4 7
+	call _c_pci_write
+	addl $24, %esp
+	carica_registri
+	iret
+
 
 // Esegue un probing del canale ATA specificato tentando di capire se
 //  ad esso sono collegati nessuno, uno o piu` dispositivi
@@ -2191,7 +2316,10 @@ _hd:	// [9.3]
 	.word	0x01f7		//hd[0].indreg.iSTS
 	.word	0x03f6		//hd[0].indreg.iDCR
 	.word	0x03f6		//hd[0].indreg.iASR
-	.word	0		//padding
+	.word	0		//hd[0].bus_master.iCMD
+	.word	0		//hd[0].bus_master.iSTATUS
+	.word	0		//hd[0].bus_master.iDPTR
+	.space	8*MAX_PRD, 0	//hd[0].prd
 	.long	0		//hd[0].comando
 	.byte	0		//hd[0].errore
 	.space  3, 0		//padding
@@ -2201,11 +2329,13 @@ _hd:	// [9.3]
 	.space	3, 0		//padding
 	.long	0		//hd[0].punt
 	.byte	0		//hd[0].disco[0].presente
-	.space  3, 0		//padding
+	.byte 	0		//hd[0].disco[0].dma
+	.space  2, 0		//padding
 	.long	0		//hd[0].disco[0].tot_sett
 	.long	0		//hd[0].disco[0].part
 	.byte	0		//hd[0].disco[1].presente
-	.space	3, 0		//padding
+	.byte 	0		//hd[0].disco[1].dma
+	.space	2, 0		//padding
 	.long	0		//hd[0].disco[1].tot_sett
 	.long	0		//hd[0].disco[1].part
 	.word	0x0170		//hd[1].indreg.iBR
@@ -2219,7 +2349,10 @@ _hd:	// [9.3]
 	.word	0x0177		//hd[1].indreg.iSTS
 	.word	0x0376		//hd[1].indreg.iDCR
 	.word	0x0376		//hd[1].indreg.iASR
-	.word	0		//padding
+	.word	0		//hd[1].bus_master.iCMD
+	.word	0		//hd[1].bus_master.iSTATUS
+	.word	0		//hd[1].bus_master.iDPTR
+	.space  8*MAX_PRD, 0	//hd[1].prd
 	.long	0		//hd[1].comando
 	.byte	0		//hd[1].errore
 	.space  3, 0		//padding
@@ -2229,11 +2362,13 @@ _hd:	// [9.3]
 	.space	3, 0		//padding
 	.long	0		//hd[1].punt
 	.byte	0		//hd[1].disco[0].presente
-	.space  3, 0		//padding
+	.byte 	0		//hd[1].disco[0].dma
+	.space  2, 0		//padding
 	.long	0		//hd[1].disco[0].tot_sett
 	.long	0		//hd[1].disco[0].part
 	.byte	0		//hd[1].disco[1].presente
-	.space	3, 0		//padding
+	.byte 	0		//hd[1].disco[0].dma
+	.space	2, 0		//padding
 	.long	0		//hd[1].disco[1].tot_sett
 	.long	0		//hd[1].disco[1].part
 	
