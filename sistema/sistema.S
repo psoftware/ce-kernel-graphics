@@ -2157,9 +2157,9 @@ _busywait_clock:
 1:	rdtsc
 	subl %ebx, %eax
 	sbbl %ecx, %edx
-	cmpl 8(%ebp), %edx
+	cmpl 12(%ebp), %edx
 	ja 2f
-	cmpl 12(%ebp), %eax
+	cmpl 8(%ebp), %eax
 	jbe 1b
 2:	popl %ecx
 	popl %ebx
