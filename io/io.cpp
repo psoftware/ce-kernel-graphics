@@ -269,7 +269,7 @@ int com_irq[S] = { 4, 3 };
 bool com_init()
 {
 	des_se *p_des;
-	natw id;
+	natl id;
 	natl i, com_base_prio = PRIO;
 
 	com_setup();

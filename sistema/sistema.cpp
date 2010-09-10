@@ -2581,15 +2581,22 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 	natl id = 0xFFFFFFFF;		// id da restituire in caso di fallimento
 
 	// (* non possiamo accettare una priorita' minore di quella di dummy
-	if (prio < MIN_PRIORITY) {
+	//    o maggiore di quella del processo chiamante
+	if (prio < MIN_PRIORITY || prio > esecuzione->precedenza) {
 		flog(LOG_WARN, "priorita' non valida: %d", prio);
 		abort_p();
 	}
 	// *)
 	
-	if (prio > esecuzione->precedenza || 
-	    (liv == LIV_SISTEMA && des_p(esecuzione->id)->cpl == LIV_UTENTE))
-	{
+	// (* controlliamo che 'liv' contenga un valore ammesso 
+	//    [segnalazione di E. D'Urso]
+	if (liv != LIV_UTENTE && liv != LIV_SISTEMA) {
+		flog(LOG_WARN, "livello non valido: %d", liv);
+		abort_p();
+	}
+	// *)
+
+	if (liv == LIV_SISTEMA && des_p(esecuzione->id)->cpl == LIV_UTENTE) {
 		flog(LOG_WARN, "errore di protezione");
 		abort_p();
 	}
