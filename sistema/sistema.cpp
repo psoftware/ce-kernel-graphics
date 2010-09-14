@@ -246,17 +246,9 @@ void inserimento_lista_attesa(richiesta *p)
 }
 
 // driver del timer [4.16][9.6]
-const natl T_STAT = 4; // [9.6]
-void c_driver_stat(); // [9.6]
 extern "C" void c_driver_td(void)
 {
-	static natl istanza = 0;	// [9.6]
 	richiesta *p;
-
-	istanza++;
-
-	if (istanza % T_STAT == 0)	// [9.6]
-		c_driver_stat();
 
 	if(p_sospesi != 0)
 		p_sospesi->d_attesa--;
@@ -524,6 +516,15 @@ extern "C" addr fine_codice_sistema;
 // *)
 
 natl pf_mutex;			// [6.4]
+natl pf_sync1;			// 
+natl pf_sync2;			//
+
+struct {
+	natl id;
+	addr ind_virt_non_tradotto;
+	addr risu;
+} pf_des;
+
 extern "C" addr readCR2();	// [6.4]
 addr swap(natl processo, addr ind_virt);  // [6.4]
 extern "C" void c_routine_pf(	// [6.4]
@@ -561,12 +562,26 @@ extern "C" void c_routine_pf(	// [6.4]
 	// *)
 
 	sem_wait(pf_mutex);
-	risu = swap(esecuzione->id, ind_virt_non_tradotto);
+	pf_des.id = esecuzione->id;
+	pf_des.ind_virt_non_tradotto = ind_virt_non_tradotto;
+	pf_des.risu = 0;
+	sem_signal(pf_sync1);
+	sem_wait(pf_sync2);
+	risu = pf_des.risu;
 	sem_signal(pf_mutex);
 	if (risu == 0) 
 		// ( aborto del processo in esecuzione
 		abort_p();
 		// )
+}
+
+void pf_proc(int i)
+{
+	for (;;) {
+		sem_wait(pf_sync1);
+		pf_des.risu = swap(pf_des.id, pf_des.ind_virt_non_tradotto);
+		sem_signal(pf_sync2);
+	}
 }
 
 addr swap_ent(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
@@ -829,7 +844,7 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 }
 
 extern "C" void invalida_TLB(); // [6.6]
-void c_driver_stat()		// [6.6]
+void pf_stat()		// [6.6]
 {
 	des_pf *ppf1, *ppf2;
 	addr ff1, ff2;
@@ -859,6 +874,17 @@ void c_driver_stat()		// [6.6]
 		}
 	}
 	invalida_TLB();
+}
+
+extern "C" void delay(natl t);
+void pf_stat_proc(int i)
+{
+	for (;;) {
+		sem_wait(pf_mutex);
+		pf_stat();
+		sem_signal(pf_mutex);
+		delay(4);
+	}
 }
 
 natl proc_corrente()
@@ -1736,7 +1762,25 @@ void main_sistema(int n)
 	// ( semaforo per la mutua esclusione nella gestione dei page fault
 	pf_mutex = sem_ini(1);
 	if (pf_mutex == 0xFFFFFFFF) {
-		flog(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
+		flog(LOG_ERR, "Impossibile allocare il semaforo mutex per i page fault");
+		goto error;
+	}
+	pf_sync1 = sem_ini(0);
+	if (pf_sync1 == 0xFFFFFFFF) {
+		flog(LOG_ERR, "Impossibile allocare il semaforo sync1 per i page fault");
+		goto error;
+	}
+	pf_sync2 = sem_ini(0);
+	if (pf_sync2 == 0xFFFFFFFF) {
+		flog(LOG_ERR, "Impossibile allocare il semaforo sync2 per i page fault");
+		goto error;
+	}
+	if (activate_p(pf_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossibile creare il processo pf_proc");
+		goto error;
+	}
+	if (activate_p(pf_stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossibile creare il processo pf_stat_proc");
 		goto error;
 	}
 	// )
