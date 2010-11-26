@@ -314,10 +314,10 @@ struct des_vid {	// [9.5]
 	interfvid_reg indreg;
 	natw* video;
 	natl x, y;
-	natb attr;
+	natw attr;
 };
 
-const natl MAX_CODE = 29; // [9.5]
+const natl MAX_CODE = 30; // [9.5]
 struct interfkbd_reg {	// [9.5]
 	ioaddr iRBR, iTBR, iCMR, iSTR;
 };
@@ -348,17 +348,20 @@ void scroll(des_vid *p_des)	// [9.5]
 	for (natl i = 0; i < VIDEO_SIZE - COLS; i++) 
 		p_des->video[i] = p_des->video[i + COLS];
 	for (natl i = 0; i < COLS; i++)
-		p_des->video[VIDEO_SIZE - COLS + i] = 0 | p_des->attr << 8;
+		p_des->video[VIDEO_SIZE - COLS + i] = p_des->attr | ' ';
 	p_des->y--;
 }
 
 void writeelem(natb c) {	// [9.5]
 	des_vid* p_des = &console.vid;
 	switch (c) {
+	case 0:
+		break;
 	case '\r':
 		p_des->x = 0;
 		break;
 	case '\n':
+		p_des->x = 0;
 		p_des->y++;
 		if (p_des->y >= ROWS)
 			scroll(p_des);
@@ -373,7 +376,7 @@ void writeelem(natb c) {	// [9.5]
 		}
 		break;
 	default:
-		p_des->video[p_des->y * COLS + p_des->x] = c | p_des->attr << 8;
+		p_des->video[p_des->y * COLS + p_des->x] = p_des->attr | c;
 		p_des->x++;
 		if (p_des->x >= COLS) {
 			p_des->x = 0;
@@ -401,7 +404,7 @@ extern "C" void c_writeconsole(cstr buff) // [9.5]
 	des_console *p_des = &console;
 	sem_wait(p_des->mutex);
 	writeseq(buff);
-	writeseq("\r\n");
+	writeelem('\n');
 	sem_signal(p_des->mutex);
 }
 
@@ -504,7 +507,7 @@ bool vid_init();
 extern "C" void c_iniconsole(natb cc)
 {
 	des_vid *p_des = &console.vid;
-	p_des->attr = cc;
+	p_des->attr = static_cast<natw>(cc) << 8;
 	vid_init();
 }
 
@@ -526,7 +529,7 @@ bool vid_init()
 {
 	des_vid *p_des = &console.vid;
 	for (natl i = 0; i < VIDEO_SIZE; i++) 
-		p_des->video[i] = 0 | p_des->attr << 8;
+		p_des->video[i] = p_des->attr | ' ';
 	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
 		p_des->x, p_des->y);
 	flog(LOG_INFO, "vid: video inizializzato");

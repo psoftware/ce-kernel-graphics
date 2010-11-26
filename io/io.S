@@ -223,25 +223,41 @@ _console:
 	.long   0		// kbd.cont
 	.byte	0		// kbd.shift
 	// tab
-	.byte	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19
-	.byte	0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26
-	.byte	0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x39, 0x1C, 0x0e
+	.byte	0x10, 0x11, 0x12
+	.byte   0x13, 0x14, 0x15, 0x16
+	.byte   0x17, 0x18, 0x19, 0x1E 
+	.byte   0x1F, 0x20, 0x21, 0x22
+	.byte   0x23, 0x24, 0x25, 0x26
+	.byte	0x2C, 0x2D, 0x2E, 0x2F
+	.byte   0x30, 0x31, 0x32, 0x39
+	.byte   0x1C, 0x0e, 0x01
 	// tabmin
-        .byte  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' 
-        .byte  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l' 
-        .byte  'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '\n', '\b'
+        .byte  'q'
+	.byte  'w', 'e', 'r', 't'
+	.byte  'y', 'u', 'i', 'o'
+	.byte  'p', 'a', 's', 'd'
+	.byte  'f', 'g', 'h', 'j'
+	.byte  'k', 'l', 'z', 'x'
+	.byte  'c', 'v', 'b', 'n'
+	.byte  'm', ' ', '\n', '\b'
+	.byte  0x1B
 	// tabmai
-        .byte  'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'
-        .byte  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'
-        .byte  'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '\r', '\b'
+        .byte  'Q', 'W', 'E'
+	.byte  'R', 'T', 'Y', 'U'
+	.byte  'I', 'O', 'P', 'A'
+	.byte  'S', 'D', 'F', 'G'
+	.byte  'H', 'J', 'K', 'L'
+        .byte  'Z', 'X', 'C', 'V'
+	.byte  'B', 'N', 'M', ' '
+	.byte  '\r', '\b', 0x1B
+	.byte  0	// allineamento
 	// Descrittore del video
 	.word	0x03D4		// vid.indreg.iIND
 	.word	0x03D5		// vid.indreg.iDAT
 	.long	0xB8000 	// vid.video
 	.long	0		// vid.x
 	.long   0		// vid.y
-	.byte   0x4B		// vid.attr
-	.byte	0		// allineamento
+	.word   0x4B00		// vid.attr
 	.word	0		// allineamento
 
 
