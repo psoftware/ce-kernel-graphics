@@ -694,6 +694,7 @@ void collega(natl indice)	// [6.4]
 	set_IND_F(des, indirizzo_pf(indice));
 	set_P(des, true);
 	set_D(des, false);
+	set_A(des, false);
 }
 
 extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
@@ -2864,8 +2865,7 @@ bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag
 		} else {
 			tabella = extr_IND_F(dt);
 		}
-		natl dp = get_despag(tabella, indv);
-		dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
+		natl dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
 		set_despag(tabella, indv, dp);
 	}
 	return true;
