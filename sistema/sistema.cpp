@@ -601,6 +601,7 @@ bool scollega(natl indice);		// [6.4]
 void carica(natl indice);		// [6.4]
 void scarica(natl indice);		// [6.4]
 natl scegli_vittima(natl indice);	// [6.4]
+void aggiusta_parent(natl indice);
 
 addr get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 {
@@ -645,6 +646,10 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 	ppf->pt.residente = false;
 	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virt;
+	natl des = get_desent(nuovo_indice);
+	ppf->pt.ind_massa = extr_IND_M(des);
+	ppf->pt.contatore  = 0x80000000;
+	aggiusta_parent(nuovo_indice);
 	carica(nuovo_indice);
 	collega(nuovo_indice);
 	return indirizzo_pf(nuovo_indice);
@@ -670,15 +675,9 @@ void rilascia_pagina_fisica(natl i)
 }
 // *)
 
-void collega(natl indice)	// [6.4]
+void aggiusta_parent(natl indice)
 {
-	des_pf* ppf = &dpf[indice];
-	natl& des = get_desent(indice);
-	ppf->pt.ind_massa = extr_IND_M(des);
-	set_IND_F(des, indirizzo_pf(indice));
-	set_P(des, true);
-	set_D(des, false);
-	ppf->pt.contatore  = 0x80000000;
+	des_pf *ppf = &dpf[indice];
 	if (ppf->contenuto == PAGINA_VIRTUALE) {
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
 		// contenente la tabella delle pagine coinvolta
@@ -686,6 +685,15 @@ void collega(natl indice)	// [6.4]
 		ppf = &dpf[indice_dpf(ind_fis_tab)];
 		ppf->pt.contatore |= 0x80000000;
 	}
+}
+
+void collega(natl indice)	// [6.4]
+{
+	des_pf* ppf = &dpf[indice];
+	natl& des = get_desent(indice);
+	set_IND_F(des, indirizzo_pf(indice));
+	set_P(des, true);
+	set_D(des, false);
 }
 
 extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
@@ -730,30 +738,28 @@ void scrivi_blocco(natl blocco, void* dest);
 void carica(natl indice) // [6.4][10.5]
 {
 	/* natb ERR non serve, perche' non usiamo direttamente readhd_n */
-	natl& des = get_desent(indice);
-	natl ind_massa = extr_IND_M(des);
 	addr dest = indirizzo_pf(indice);
 	des_pf *ppf = &dpf[indice];
 	switch (ppf->contenuto) {
 	case PAGINA_VIRTUALE:
-		if (ind_massa == 0) {
+		if (ppf->pt.ind_massa == 0) {
 			for (natl i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
 		} else {
-			leggi_blocco(ind_massa, dest); /* vedi sopra */
+			leggi_blocco(ppf->pt.ind_massa, dest); /* vedi sopra */
 		}
 		break;
 	case TABELLA:
 		// (* gestiamo l'allocazione dinamica anche per le tabelle.
-		//    Se ind_massa e' zero nell'entrata del direttorio, allochiamo una nuova tabella.
-		//    Tutte le entrate della nuova tabella hanno P=0, ind_massa=0
+		//    Se ppf->pt.ind_massa e' zero nell'entrata del direttorio, allochiamo una nuova tabella.
+		//    Tutte le entrate della nuova tabella hanno P=0, ppf->pt.ind_massa=0
 		//    e i bit S/U, R/W, PCD e PWT copiati dall'entrata del direttorio.
-		if (ind_massa == 0) {
+		if (ppf->pt.ind_massa == 0) {
 			/* costruiamo il descrittore che andra' copiato in tutte le entrate
 			 * della nuova tabella:
 			 *  - copiamo il descrittore nel direttorio (per avere
 			 *   una copia dei bit S/U, R/W, PWT e PCD */
-			natl ndes = des;	
+			natl ndes = get_desent(indice);
 			/* - azzeriamo il bit P nella copia */
 			set_P(ndes, false);
 			/* - azzeriamo l'indirizzo in memoria di massa */
@@ -761,7 +767,7 @@ void carica(natl indice) // [6.4][10.5]
 			/* Copiamo il descrittore cosi' ottenuto in tutte le entrate */
 			mset_des(dest, 0,  1024, ndes);
 		} else {
-			leggi_blocco(ind_massa, dest); /* vedi sopra */
+			leggi_blocco(ppf->pt.ind_massa, dest); /* vedi sopra */
 		}
 		// *)
 		break;
@@ -770,9 +776,9 @@ void carica(natl indice) // [6.4][10.5]
 	//    caso (si veda [10.3]), le parti condivise vengono copiate dalle corrispondenti
 	//    parti del processo padre (il cui direttorio e' puntato da CR3),
 	//    mentre le parti private vengono inizializzate nel seguente modo
-	//    - parte sistema_privata: tutti i descrittori hanno P=0, ind_massa=0,
+	//    - parte sistema_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
 	//      S/U=0 (sistema), R/W=1, PWT=PCD=0
-	//    - parte utente_privata: tutti i descrittori hanno P=0, ind_massa=0,
+	//    - parte utente_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
 	//      S/U=1 (utente), R/W=1, PWT=PCD=0
 	case DIRETTORIO:
 		{ addr pdir = readCR3();
