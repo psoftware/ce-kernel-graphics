@@ -3390,7 +3390,7 @@ bool hd_init()
 
 			if (bus_master) {
 				p_des->disco[d].dma = true;
-				flog(LOG_INFO, "  - %s%s: DMA abilitato");
+				flog(LOG_INFO, "  -   : DMA abilitato");
 			}
 
 			continue;
