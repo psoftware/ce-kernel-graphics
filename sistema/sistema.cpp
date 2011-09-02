@@ -283,6 +283,7 @@ struct des_pf {			// [6.3]
 	union {
 		struct { 
 			bool	residente;	// pagina residente o meno
+			bool	in_carica;	// pagina in caricamento
 			natl	processo;	// identificatore di processo
 			natl	ind_massa;	// indirizzo della pagina in memoria di massa
 			addr	ind_virtuale;
@@ -650,7 +651,9 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 	ppf->pt.ind_massa = extr_IND_M(des);
 	ppf->pt.contatore  = 0x80000000;
 	aggiusta_parent(nuovo_indice);
+	ppf->pt.in_carica = true;
 	carica(nuovo_indice);
+	ppf->pt.in_carica = false;
 	collega(nuovo_indice);
 	return indirizzo_pf(nuovo_indice);
 	// indice_vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
@@ -752,7 +755,7 @@ void carica(natl indice) // [6.4][10.5]
 		break;
 	case TABELLA:
 		// (* gestiamo l'allocazione dinamica anche per le tabelle.
-		//    Se ppf->pt.ind_massa e' zero nell'entrata del direttorio, allochiamo una nuova tabella.
+		//    Se ppf->pt.ind_massa e' zero allochiamo una nuova tabella.
 		//    Tutte le entrate della nuova tabella hanno P=0, ppf->pt.ind_massa=0
 		//    e i bit S/U, R/W, PCD e PWT copiati dall'entrata del direttorio.
 		if (ppf->pt.ind_massa == 0) {
@@ -844,6 +847,8 @@ void c_driver_stat()		// [6.6]
 
 	for (natl i = 0; i < NUM_DPF; i++) {
 		ppf1 = &dpf[i];
+		if (ppf1->pt.in_carica)
+			continue;
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
 		case TABELLA:
@@ -2857,7 +2862,8 @@ bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag
 			}
 			des_pf *ppf = &dpf[indice];
 			ppf->contenuto = TABELLA_FM;
-			ppf->pt.residente = 1;
+			ppf->pt.residente = true;
+			ppf->pt.in_carica = false;
 			tabella = indirizzo_pf(indice);
 
 			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
