@@ -346,8 +346,8 @@ const natl INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di ma
 // per le implementazioni mancanti, vedi [P_PAGING] avanti
 natl& get_destab(natl processo, addr ind_virt); // [6.3]
 natl& get_despag(natl processo, addr ind_virt); // [6.3]
+natl& get_desent(natl processo, cont_pf tipo, addr ind_virt); // [6.3]
 natl& get_des(addr iff, natl index);		// [6.3]
-natl& get_desent(natl indice);			// [6.3]
 addr  get_INDTAB(natl indice);			// [6.3]
 bool  extr_P(natl descrittore)			// [6.3]
 { // (
@@ -641,12 +641,12 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 			scarica(indice_vittima);
 		nuovo_indice = indice_vittima;
 	}
+	natl des = get_desent(proc, tipo, ind_virt);
 	ppf = &dpf[nuovo_indice];
 	ppf->contenuto = tipo;
 	ppf->pt.residente = false;
 	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virt;
-	natl des = get_desent(nuovo_indice);
 	ppf->pt.ind_massa = extr_IND_M(des);
 	ppf->pt.contatore  = 0x80000000;
 	aggiusta_parent(nuovo_indice);
@@ -690,7 +690,7 @@ void aggiusta_parent(natl indice)
 void collega(natl indice)	// [6.4]
 {
 	des_pf* ppf = &dpf[indice];
-	natl& des = get_desent(indice);
+	natl& des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	set_IND_F(des, indirizzo_pf(indice));
 	set_P(des, true);
 	set_D(des, false);
@@ -703,7 +703,7 @@ bool scollega(natl indice)	// [6.4][10.5]
 {
 	bool bitD;
 	des_pf *ppf =&dpf[indice];
-	natl &des = get_desent(indice);
+	natl &des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
 	bool occorre_salvare = bitD || ppf->contenuto == TABELLA;
 	// (*
@@ -760,7 +760,7 @@ void carica(natl indice) // [6.4][10.5]
 			 * della nuova tabella:
 			 *  - copiamo il descrittore nel direttorio (per avere
 			 *   una copia dei bit S/U, R/W, PWT e PCD */
-			natl ndes = get_desent(indice);
+			natl ndes = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 			/* - azzeriamo il bit P nella copia */
 			set_P(ndes, false);
 			/* - azzeriamo l'indirizzo in memoria di massa */
@@ -2760,14 +2760,13 @@ addr get_tab(natl proc, addr ind_virt)
 // ( si veda "case DIRETTORIO:" sotto
 natl dummy_des;
 // )
-natl& get_desent(natl indice) // [6.3]
+natl& get_desent(natl processo, cont_pf tipo, addr ind_virt)
 {
-	des_pf *ppf = &dpf[indice];
-	switch (ppf->contenuto) {
+	switch (tipo) {
 	case PAGINA_VIRTUALE:
-		return get_despag(ppf->pt.processo, ppf->pt.ind_virtuale);
+		return get_despag(processo, ind_virt);
 	case TABELLA:
-		return get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
+		return get_destab(processo, ind_virt);
 	// ( per poter usare swap anche per caricare direttori prevediamo
 	//   questo ulteriore caso (restituiamo un descrittore fasullo,
 	//   perché il direttorio non e' puntato da un descrittore)
@@ -2776,7 +2775,7 @@ natl& get_desent(natl indice) // [6.3]
 		return dummy_des;
 	// )
 	default:
-		flog(LOG_ERR, "get_desent(%d) su cont=%d", indice, ppf->contenuto);
+		flog(LOG_ERR, "get_desent(%d, %d, %x)", processo, tipo, ind_virt);
 		panic("Errore di sistema");  // ****
 	}
 }
