@@ -3,7 +3,7 @@ START_IO=        0x40400000
 START_UTENTE=	 0x80000000
 SWAP=		 swap.img
 
-CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -fno-stack-protector -nopie -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32 -O2 -save-temps
+CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -fno-stack-protector -nopie -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32 -O2 
 CPPFLAGS=-nostdinc -Iinclude -g -m32 -O2
 
 all: build/sistema \
