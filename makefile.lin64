@@ -3,7 +3,7 @@ START_IO=        0x40400000
 START_UTENTE=	 0x80000000
 SWAP=		 swap.img
 
-CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -fno-stack-protector -nopie -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32 -O2 
+CXXFLAGS=-fleading-underscore -fno-exceptions -fno-rtti -fno-stack-protector -fno-pic -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32 -O2 
 CPPFLAGS=-nostdinc -Iinclude -g -m32 -O2
 
 all: build/sistema \
@@ -11,13 +11,13 @@ all: build/sistema \
      build/creatimg
      
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
-	ld -melf_i386 -nostdlib -nopie -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
+	ld -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
 
 build/io: io/io_s.o io/io_cpp.o
-	ld -melf_i386 -nostdlib -nopie -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
+	ld -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
 
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
-	ld -melf_i386 -nostdlib -nopie -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
+	ld -melf_i386 -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
 
 # compilazione di sistema.s e sistema.cpp
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
