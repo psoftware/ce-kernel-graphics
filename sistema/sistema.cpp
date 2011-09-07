@@ -246,17 +246,9 @@ void inserimento_lista_attesa(richiesta *p)
 }
 
 // driver del timer [4.16][9.6]
-const natl T_STAT = 4; // [9.6]
-void c_driver_stat(); // [9.6]
 extern "C" void c_driver_td(void)
 {
-	static natl istanza = 0;	// [9.6]
 	richiesta *p;
-
-	istanza++;
-
-	if (istanza % T_STAT == 0)	// [9.6]
-		c_driver_stat();
 
 	if(p_sospesi != 0)
 		p_sospesi->d_attesa--;
@@ -866,6 +858,17 @@ void c_driver_stat()		// [6.6]
 		}
 	}
 	invalida_TLB();
+}
+
+extern "C" void delay(natl t);
+void pf_stat_proc(int i)
+{
+	for (;;) {
+		sem_wait(pf_mutex);
+		c_driver_stat();
+		sem_signal(pf_mutex);
+		delay(4);
+	}
 }
 
 natl proc_corrente()
@@ -1744,6 +1747,10 @@ void main_sistema(int n)
 	pf_mutex = sem_ini(1);
 	if (pf_mutex == 0xFFFFFFFF) {
 		flog(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
+		goto error;
+	}
+	if (activate_p(pf_stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossibile creare il processo pf_stat_proc");
 		goto error;
 	}
 	// )
