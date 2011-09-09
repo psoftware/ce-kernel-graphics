@@ -1721,7 +1721,16 @@ a_sem_ini:	// routine int $tipo_si [4.11]
 	iret
 
 	.extern _c_sem_wait
-a_sem_wait:	// routine int $tipo_w [4.11]
+	.global _possibile_pf1
+a_sem_wait:	// routine int $tipo_w [4.11][6.5]
+	pushl %edx		// salvataggio di un registro, sia EDX
+	movl 12(%esp), %edx	// indiritto del top della pila utente
+_possibile_pf1:
+	movl 4(%edx), %edx	// prelievo del parametro,
+	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
+	// interruzioni (mascherabili) di nuovo abilitate
+	movl %edx, par		// memorizz. in una variabile di sistema
+	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
 	call _c_sem_wait
@@ -1730,7 +1739,16 @@ a_sem_wait:	// routine int $tipo_w [4.11]
 	iret
 
 	.extern _c_sem_signal
-a_sem_signal:	// routine int $tipo_s [4.11]
+	.global _possibile_pf2
+a_sem_signal:	// routine int $tipo_s [4.11][6.5]
+	pushl %edx		// salvataggio di un registro, sia EDX
+	movl 12(%esp), %edx	// indiritto del top della pila utente
+_possibile_pf2:
+	movl 4(%edx), %edx	// prelievo del parametro,
+	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
+	// interruzioni (mascherabili) di nuovo abilitate
+	movl %edx, par		// memorizz. in una variabile di sistema
+	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
 	call _c_sem_signal
@@ -1739,7 +1757,16 @@ a_sem_signal:	// routine int $tipo_s [4.11]
 	iret
 
 	.extern _c_delay
-a_delay:	// routine int $tipo_d [4.16]
+	.global _possibile_pf3
+a_delay:	// routine int $tipo_d [4.16][6.5]
+	pushl %edx		// salvataggio di un registro, sia EDX
+	movl 12(%esp), %edx	// indiritto del top della pila utente
+_possibile_pf3:
+	movl 4(%edx), %edx	// prelievo del parametro,
+	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
+	// interruzioni (mascherabili) di nuovo abilitate
+	movl %edx, par		// memorizz. in una variabile di sistema
+	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro n
 	call _c_delay
@@ -2289,8 +2316,7 @@ _hd_write_address:	// [9.3.1]
 // sezione dati: tabelle e stack				      //
 ////////////////////////////////////////////////////////////////
 .data
-.global		_dpf
-_dpf:		.long 0
+par:		.long 0
 .global		_ticks
 _ticks:		.long 0
 .global		_clocks_per_usec

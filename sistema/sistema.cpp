@@ -288,7 +288,7 @@ struct des_pf {			// [6.3]
 	};
 };
 
-extern des_pf* dpf;	// puntatore al vettore di descrittori di pagine fisiche [6.3]
+des_pf* dpf;		// puntatore al vettore di descrittori di pagine fisiche [6.3]
 natl pagine_libere;	// indice del descrittore della prima pagina libera [6.3]
 addr prima_pf_utile;	// indirizzo fisico della prima pagina utile [6.3]
 // (
@@ -338,8 +338,8 @@ const natl INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di ma
 // per le implementazioni mancanti, vedi [P_PAGING] avanti
 natl& get_destab(natl processo, addr ind_virt); // [6.3]
 natl& get_despag(natl processo, addr ind_virt); // [6.3]
-natl& get_desent(natl processo, cont_pf tipo, addr ind_virt); // [6.3]
 natl& get_des(addr iff, natl index);		// [6.3]
+natl& get_desent(natl processo, cont_pf tipo, addr ind_virt); // [6.3]
 addr  get_INDTAB(natl indice);			// [6.3]
 bool  extr_P(natl descrittore)			// [6.3]
 { // (
@@ -393,23 +393,15 @@ void set_IND_M(natl& descrittore, natl ind_massa) // [6.3]
 	descrittore |= (ind_massa << INDMASS_SHIFT); // )
 }
 
-// (* useremo anche le seguenti funzioni (implementazioni mancanti in [P_PAGING]):
-// get_dir: restituisce un puntatore al direttorio del processo
-addr get_dir(natl processo);	
-// get_destab: versione sovrapposta di get_destab, che parte direttamente dall'indirizzo
-//  di un direttorio
-natl& get_destab(addr dir, addr ind_virt);
-// get_despag: versione sovrapposta di get_despag, che parte direttamente dall'indirizzo
-//  di una tabella delle pagine
-natl& get_despag(addr tab, addr ind_virt);
-// set_D: modifica il bit D nel descrittore
-void set_D(natl& descrittore, bool bitD)
-{
+void set_D(natl& descrittore, bool bitD) // [6.3]
+{ // (
 	if (bitD)
 		descrittore |= BIT_D;
 	else
-		descrittore &= ~BIT_D;
+		descrittore &= ~BIT_D; // )
 }
+
+// (* useremo anche le seguenti funzioni (implementazioni mancanti in [P_PAGING])
 // mset_des: copia "descrittore" nelle "n" entrate della tabella/direttorio puntata
 //  da "dest" partendo dalla "i"-esima
 void mset_des(addr dest, natl i, natl n, natl descrittore);
@@ -436,7 +428,7 @@ extern "C" void attiva_paginazione();
 //   (vedi [6.1][10.1]).
 //   Per semplicita' ragioniamo sempre in termini di intere "tabelle delle pagine". 
 //   Ricordiamo che ogni tabella delle pagine mappa una porzione contigua dello spazio
-//   di indirizzamento virtuale, grande 4MiB e allineata ai 4MiB ( "macropagina").
+//   di indirizzamento virtuale, grande 4MiB e allineata ai 4MiB ("macropagina").
 //   Le costanti che iniziano con "ntab_" indicano il numero di tabelle delle pagine
 //   dedicate alla parte di memoria virtuale corrispondente (si veda "include/costanti.h" per i valori)
 const natl ntab_sistema_condiviso = NTAB_SIS_C;
@@ -518,6 +510,9 @@ extern "C" addr fine_codice_sistema;
 natl pf_mutex;			// [6.4]
 extern "C" addr readCR2();	// [6.4]
 addr swap(natl processo, addr ind_virt);  // [6.4]
+// (* punti in cui possiamo accettare un page fault dal modulo sistema (vedi "sistema.S")
+extern "C" addr possibile_pf1, possibile_pf2, possibile_pf3;
+// *)
 extern "C" void c_routine_pf(	// [6.4]
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -531,7 +526,12 @@ extern "C" void c_routine_pf(	// [6.4]
 	// (* il sistema non e' progettato per gestire page fault causati 
 	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
 	//   si tratta di un bug
-	if (eip < fine_codice_sistema || errore.res == 1) {
+	if ((eip < fine_codice_sistema && 
+	     eip != possibile_pf1      &&
+	     eip != possibile_pf2      &&
+	     eip != possibile_pf3)     ||
+	     errore.res == 1)
+	{
 		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
@@ -593,26 +593,8 @@ bool scollega(natl indice);		// [6.4]
 void carica(natl indice);		// [6.4]
 void scarica(natl indice);		// [6.4]
 natl scegli_vittima(natl indice);	// [6.4]
-void aggiusta_parent(natl indice);
-
-addr get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
-{
-// (
-	switch (tipo) {
-	case DIRETTORIO:
-		return (addr)0xFFFFFFFF;
-	case TABELLA:
-		/* per completezza, nel caso di tabella restituiamo il puntatore
-		 * al direttorio */
-		return get_dir(proc);
-	case PAGINA_VIRTUALE:
-		return extr_IND_F(get_destab(proc, ind_virt));
-	default:
-		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
-		abort_p();
-	}
-// )
-}
+addr get_parent(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
+void aggiusta_parent(natl indice);	// [6.4]
 
 // [6.4]
 addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
@@ -648,6 +630,37 @@ addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
 	// indice_vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
 }
 
+addr get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
+{
+// (
+	switch (tipo) {
+	case PAGINA_VIRTUALE:
+		return extr_IND_F(get_destab(proc, ind_virt));
+	case TABELLA:
+	// (* per completezza consideriamo anche il caso DIRETTORIO
+	case DIRETTORIO:
+	// *)
+		return (addr)0xFFFFFFFF;
+	default:
+		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
+		abort_p();
+	}
+// )
+}
+
+void aggiusta_parent(natl indice)	// [6.4]
+{
+	des_pf *ppf = &dpf[indice];
+	if (ppf->contenuto == PAGINA_VIRTUALE) {
+		// aggiornamento del contatore anche nel descrittore di pagina fisica
+		// contenente la tabella delle pagine coinvolta
+		addr ind_fis_tab = get_INDTAB(indice);
+		ppf = &dpf[indice_dpf(ind_fis_tab)];
+		ppf->pt.contatore |= 0x80000000;
+	}
+}
+
+
 natl alloca_pagina_fisica_libera()	// [6.4]
 {
 	natl p = pagine_libere;
@@ -667,17 +680,6 @@ void rilascia_pagina_fisica(natl i)
 }
 // *)
 
-void aggiusta_parent(natl indice)
-{
-	des_pf *ppf = &dpf[indice];
-	if (ppf->contenuto == PAGINA_VIRTUALE) {
-		// aggiornamento del contatore anche nel descrittore di pagina fisica
-		// contenente la tabella delle pagine coinvolta
-		addr ind_fis_tab = get_INDTAB(indice);
-		ppf = &dpf[indice_dpf(ind_fis_tab)];
-		ppf->pt.contatore |= 0x80000000;
-	}
-}
 
 void collega(natl indice)	// [6.4]
 {
@@ -698,7 +700,7 @@ bool scollega(natl indice)	// [6.4][10.5]
 	natl &des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
 	bool occorre_salvare = bitD || ppf->contenuto == TABELLA;
-	// (*
+	// (* 
 	if (occorre_salvare && ppf->pt.ind_massa == 0) {
 		ppf->pt.ind_massa = alloca_blocco();
 		if (ppf->pt.ind_massa == 0) {
@@ -712,7 +714,6 @@ bool scollega(natl indice)	// [6.4][10.5]
 	return occorre_salvare;	// [10.5]
 }
 
-// (per l'implementazione, si veda [P_SWAP] avanti)
 // (* oltre ad allocare, vogliamo anche deallocare blocchi
 //    (quando un processo termina, possiamo deallocare tutti blocchi che
 //    contengono le sue pagine private)
@@ -726,6 +727,7 @@ void leggi_blocco(natl blocco, void* dest);
 //    scrivi_blocco: copia il blocco in memoria puntato da "dest" nel blocco numero
 //      "blocco" nell'area di swap
 void scrivi_blocco(natl blocco, void* dest);
+// (per le implementazioni si veda [P_SWAP] avanti)
 // *)
 
 void carica(natl indice) // [6.4][10.5]
@@ -797,6 +799,8 @@ void scarica(natl indice) // [6.4]
 
 natl scegli_vittima(natl indice_vietato) // [6.4]
 {
+	// "indice_vietato" non puo' essere scelto come indice del descrittore
+	// della pagina fisica vittma
 	natl i, indice_vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
@@ -828,7 +832,20 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 }
 
 extern "C" void invalida_TLB(); // [6.6]
-void c_driver_stat()		// [6.6]
+extern "C" void delay(natl t);
+
+void routine_stat();		// [6.6]
+void stat_proc(int i)		// [6.6]
+{
+	for (;;) {
+		sem_wait(pf_mutex);
+		routine_stat();	// routine per le statistiche
+		sem_signal(pf_mutex);
+		delay(4);
+	}
+}
+
+void routine_stat()		// [6.6]
 {
 	des_pf *ppf1, *ppf2;
 	addr ff1, ff2;
@@ -860,16 +877,6 @@ void c_driver_stat()		// [6.6]
 	invalida_TLB();
 }
 
-extern "C" void delay(natl t);
-void pf_stat_proc(int i)
-{
-	for (;;) {
-		sem_wait(pf_mutex);
-		c_driver_stat();
-		sem_signal(pf_mutex);
-		delay(4);
-	}
-}
 
 natl proc_corrente()
 {
@@ -1749,7 +1756,7 @@ void main_sistema(int n)
 		flog(LOG_ERR, "Impossibile allocare il semaforo per i page fault");
 		goto error;
 	}
-	if (activate_p(pf_stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
+	if (activate_p(stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "impossibile creare il processo pf_stat_proc");
 		goto error;
 	}
