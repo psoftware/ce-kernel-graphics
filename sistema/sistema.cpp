@@ -2681,7 +2681,10 @@ void rilascia_tutto(addr direttorio, natl i, natl n)
 				}
 			}
 			rilascia_pagina_fisica(indice_dpf(tabella));
-		} 
+		} else {
+			natl blocco = extr_IND_M(dt);
+			dealloca_blocco(blocco);
+		}
 	}
 }
 
