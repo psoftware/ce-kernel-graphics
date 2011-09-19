@@ -654,7 +654,8 @@ void aggiusta_parent(natl indice)	// [6.4]
 	if (ppf->contenuto == PAGINA_VIRTUALE) {
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
 		// contenente la tabella delle pagine coinvolta
-		addr ind_fis_tab = get_INDTAB(indice);
+		natl dt = get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
+		addr ind_fis_tab = extr_IND_F(dt);
 		ppf = &dpf[indice_dpf(ind_fis_tab)];
 		ppf->pt.contatore |= 0x80000000;
 	}
@@ -2796,20 +2797,6 @@ natl& get_desent(natl processo, cont_pf tipo, addr ind_virt)
 		panic("Errore di sistema");  // ****
 	}
 }
-
-addr get_INDTAB(natl indice) // [6.3]
-{
-	des_pf *ppf = &dpf[indice];
-	switch (ppf->contenuto) {
-	case PAGINA_VIRTUALE:
-	case TABELLA:
-		return get_tab(ppf->pt.processo, ppf->pt.ind_virtuale);
-	default:
-		flog(LOG_ERR, "get_INDTAB(%d) su cont=%d", indice, ppf->contenuto);
-		panic("Errore di sistema");
-	}
-}
-
 
 void set_des(addr dirtab, int index, natl des)
 {
