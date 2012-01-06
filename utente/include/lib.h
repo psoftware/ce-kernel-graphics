@@ -24,7 +24,7 @@ void mem_free(void *ptr);
 
 int vsnprintf(char *str, natl size, const char *fmt, va_list ap);
 int snprintf(char *buf, natl n, const char *fmt, ...);
-int printf(int term, const char *fmt, ...);
+int printf(const char *fmt, ...);
 void pause();
 //
 // copia n byte da src a dst
