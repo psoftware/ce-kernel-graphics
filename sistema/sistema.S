@@ -707,45 +707,46 @@ _init_descrittore:
 // (0 se tutti occupati)
 // lo stato occupato/libero del descrittore e' dato
 // dal valore del suo bit di presenza
-	.global _alloca_tss
+
+        .global _alloca_tss
 _alloca_tss:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %ebx
-	pushl %ecx
-	
-	movl $gdt, %ebx
-	movl $0, %eax
-	movl $5, %ecx
+        pushl %ebp
+        movl %esp, %ebp
+        pushl %ebx
+        pushl %ecx
+
+        movl $gdt, %ebx
+        movl $0, %eax
+        movl last_tss, %ecx
 1:
-	cmpl $8192, %ecx
-	jl 2f
-	jmp 3f
+        incl %ecx
+        andl $8191, %ecx
+        cmpl last_tss, %ecx
+        jne 2f
+        movl $0xFFFFFFFF, %eax
+        jmp 4f
 2:
-	testb $PRES, 5(%ebx, %ecx, 8)
-	jnz 4f
+        testb $PRES, 5(%ebx, %ecx, 8)
+        jnz 1b
 
-	pushl $0		// gran. byte
-	pushl $SEG_TSS		// tipo
-	pushl $LIV_SISTEMA	// dpl
-	pushl $PRES		// bit presenza
-	pushl $(DIM_DESP - 1)	// limite
-	pushl 8(%ebp)		// base
-	pushl %ecx		// indice descr.
-	call  _init_descrittore
-	addl $28, %esp
+        pushl $0                // gran. byte
+        pushl $SEG_TSS          // tipo
+        pushl $LIV_SISTEMA      // dpl
+        pushl $PRES             // bit presenza
+        pushl $(DIM_DESP - 1)   // limite
+        pushl 8(%ebp)           // base
+        pushl %ecx              // indice descr.
+        call  _init_descrittore
+        addl $28, %esp
 
-	movl %ecx, %eax
-	jmp 3f
-4:	
-	incl %ecx
-	jmp 1b
+        movl %ecx, last_tss
+        movl %ecx, %eax
+4:
+        popl %ecx
+        popl %ebx
+        leave
+        ret
 
-3:
-	popl %ecx
-	popl %ebx
-	leave
-	ret
 
 // rende nuovamente libero un descrittore di segmento TSS
 // precedentemente occupato
@@ -2451,3 +2452,5 @@ save_pic_m:
 save_pic_s:
 	.byte 0
 	.fill 2, 0
+last_tss:
+	.long 4
