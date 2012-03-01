@@ -124,12 +124,12 @@
 
 .endm
 
-// Chiama _fill_gate con i parametri specificati
+// Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
 	pushl $LIV_UTENTE
 	pushl $\off
 	pushl $\gate
-	call _fill_gate
+	call fill_gate
 	addl $12, %esp
 .endm
 
@@ -139,7 +139,7 @@
 	pushl %eax
 	pushl $param_err
 	pushl $2
-	call _flog
+	call flog
 	addl $12, %esp
 	int $tipo_ab
 1:
@@ -169,9 +169,9 @@
 	check_cavallo
 .endm
 
-.global start, _start
-start:
-_start:	jmp _cmain
+.global _start, start
+_start:
+start:	jmp cmain
 
 ////////////////////////////////////////////////////////////////////////////////
 //                             SEZIONE DATI                                   //
@@ -183,8 +183,8 @@ param_err:
 	.asciz "parametro errato %x"
 
 // Descrittori delle interfacce seriali
-	.global _com		// non comi, como
-_com:	.word	0x03f8		// com[0].indreg.iRBR
+	.global com		// non comi, como
+com:	.word	0x03f8		// com[0].indreg.iRBR
 	.word	0x03f8		// com[0].indreg.iTHR
 	.word	0x03fd		// com[0].indreg.iLSR
 	.word	0x03f9		// com[0].indreg.iIER
@@ -210,8 +210,8 @@ _com:	.word	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].stato
 
 // descrittore console
-	.global _console	// [9.5]
-_console:
+	.global console	// [9.5]
+console:
 	.long	0		// mutex
 	.long	0		// sincr
 	// descrittore tastiera
@@ -266,28 +266,28 @@ _console:
 ////////////////////////////////////////////////////////////////////////////////
 
 	.text
-	.global _activate_p
-_activate_p:
+	.global activate_p
+activate_p:
 	int $tipo_a
 	ret
 
-	.global _terminate_p // [7.1]
-_terminate_p:
+	.global terminate_p // [7.1]
+terminate_p:
 	int $tipo_t
 	ret
 
-	.global _sem_ini
-_sem_ini:
+	.global sem_ini
+sem_ini:
 	int $tipo_si
 	ret
 
-	.global _sem_wait	// [7.1]
-_sem_wait:
+	.global sem_wait	// [7.1]
+sem_wait:
 	int $tipo_w
 	ret
 
-	.global _sem_signal	// [7.1]
-_sem_signal:
+	.global sem_signal	// [7.1]
+sem_signal:
 	int $tipo_s
 	ret
 
@@ -295,43 +295,43 @@ _sem_signal:
 //                     INTERFACCIA VERSO IL MODULO SISTEMA                    //
 ////////////////////////////////////////////////////////////////////////////////
 
-	.global _activate_pe
-_activate_pe:	// [7.1]
+	.global activate_pe
+activate_pe:	// [7.1]
 	int $tipo_ape
 	ret
 
-	.global _nwfi	// [9.1]
-_nwfi:
+	.global nwfi	// [9.1]
+nwfi:
 	int $tipo_nwfi
 	ret
 
-	.global _panic
-_panic:
+	.global panic
+panic:
 	int $tipo_p
 	ret
 
-	.global _abort_p
-_abort_p:
+	.global abort_p
+abort_p:
 	int $tipo_ab
 	ret
 
-	.global _fill_gate
-_fill_gate:
+	.global fill_gate
+fill_gate:
 	int $tipo_fg
 	ret
 
-	.global _delay
-_delay:
+	.global delay
+delay:
 	int $tipo_d
 	ret
 
-	.global _log
-_log:
+	.global log
+log:
 	int $tipo_l
 	ret
 
-	.global _writevid
-_writevid:
+	.global writevid
+writevid:
 	int $io_tipo_wcon
 	ret
 
@@ -340,8 +340,8 @@ _writevid:
 ////////////////////////////////////////////////////////////////////////////////
 
 // Ingresso di un byte da una porta di IO
-	.global _inputb
-_inputb:
+	.global inputb
+inputb:
 	pushl %eax
 	pushl %edx
 	movl 12(%esp), %edx
@@ -353,8 +353,8 @@ _inputb:
 	ret
 
 // Uscita di un byte su una porta di IO
-	.global _outputb
-_outputb:
+	.global outputb
+outputb:
 	pushl %eax
 	pushl %edx
 	movb 12(%esp), %al
@@ -365,8 +365,8 @@ _outputb:
 	ret
 
 // Ingresso di una word da una porta di IO
-	.global _inputw
-_inputw:
+	.global inputw
+inputw:
 	pushl %eax
 	pushl %edx
 	movl 12(%esp), %edx
@@ -378,8 +378,8 @@ _inputw:
 	ret
 
 // Uscita di una word su una porta di IO
-	.global _outputw
-_outputw:
+	.global outputw
+outputw:
 	pushl %eax
 	pushl %edx
 	movw 12(%esp), %ax
@@ -390,8 +390,8 @@ _outputw:
 	ret
 
 // Ingresso di un buffer continuo da un buffer di IO di word
-	.global _inputbuffw
-_inputbuffw:
+	.global inputbuffw
+inputbuffw:
 	pushl %eax
 	pushl %edx
 	pushl %edi
@@ -411,8 +411,8 @@ _inputbuffw:
 	ret
 
 // Uscita di un buffer continuo su una buffer di IO di word
-	.global _outputbuffw
-_outputbuffw:
+	.global outputbuffw
+outputbuffw:
 	pushl %eax
 	pushl %edx
 	pushl %esi
@@ -432,8 +432,8 @@ _outputbuffw:
 	ret
 
 // Inizio dell' ingresso da una interfaccia seriale
-	.global _go_inputse
-_go_inputse:
+	.global go_inputse
+go_inputse:
 	pushl %eax
 	pushl %edx
 
@@ -448,8 +448,8 @@ _go_inputse:
 	ret
 
 // Fine dell' ingresso da un' interfaccia seriale
-	.global _halt_inputse
-_halt_inputse:
+	.global halt_inputse
+halt_inputse:
 	pushl %eax
 	pushl %edx
 
@@ -463,8 +463,8 @@ _halt_inputse:
 	ret
 
 // Inizio dell' uscita su interfaccia seriale
-	.global _go_outputse
-_go_outputse:
+	.global go_outputse
+go_outputse:
 	pushl %eax
 	pushl %edx
 
@@ -478,8 +478,8 @@ _go_outputse:
 	ret
 
 // Fine dell' uscita su interfaccia seriale
-	.global _halt_outputse
-_halt_outputse:
+	.global halt_outputse
+halt_outputse:
 	pushl %eax
 	pushl %edx
 
@@ -508,8 +508,8 @@ _halt_outputse:
 
 
 // Inizializzazione delle interfacce seriali
-	.global _com_setup
-_com_setup:
+	.global com_setup
+com_setup:
 	pushl %eax
 	pushl %edx
 
@@ -570,8 +570,8 @@ _com_setup:
 	jnz 1b
 .endm
 
-	.global _go_inputkbd
-_go_inputkbd:
+	.global go_inputkbd
+go_inputkbd:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -594,8 +594,8 @@ _go_inputkbd:
 	
 	ret
 
-	.global _halt_inputkbd
-_halt_inputkbd:
+	.global halt_inputkbd
+halt_inputkbd:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -624,8 +624,8 @@ _halt_inputkbd:
 
 
 // visualizza il cursore nella posizione passata come parametro
-	.global _cursore
-_cursore:
+	.global cursore
+cursore:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -655,8 +655,8 @@ _cursore:
 	ret
 
 // Inizializzazione dei gate per le primitive di IO
-	.global _fill_io_gates
-_fill_io_gates:
+	.global fill_io_gates
+fill_io_gates:
 	pushl %ebp
 	movl %esp, %ebp
 
@@ -674,19 +674,19 @@ _fill_io_gates:
 //                              PRIMITIVE DI IO                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-	.extern _c_readse_n
+	.extern c_readse_n
 a_readse_n:
 	salva_registri
 	copia_param 4 7
 	cavallo_di_troia 1
 	cavallo_di_troia2 1 2
 	cavallo_di_troia 3
-	call _c_readse_n
+	call c_readse_n
 	addl $16, %esp
 	carica_registri
 	iret
 
-	.extern _c_readse_ln
+	.extern c_readse_ln
 a_readse_ln:
 	salva_registri
 	copia_param 4 7
@@ -694,61 +694,61 @@ a_readse_ln:
 	cavallo_di_troia 2
 	cavallo_di_troia3 1 2
 	cavallo_di_troia 3
-	call _c_readse_ln
+	call c_readse_ln
 	addl $16, %esp
 	carica_registri
 	iret
 
-	.extern _c_writese_n
+	.extern c_writese_n
 a_writese_n:
 	salva_registri
 	copia_param 3 7
 	cavallo_di_troia 1
 	cavallo_di_troia2 1 2
-	call _c_writese_n
+	call c_writese_n
 	addl $12, %esp
 	carica_registri
 	iret
 
-	.extern _c_writese_0	// non _c_writese_ln, che va lo stesso
+	.extern c_writese_0	// non c_writese_ln, che va lo stesso
 a_writese_0:
 	salva_registri
 	copia_param 3 7
 	cavallo_di_troia 1
 	cavallo_di_troia 2
 	cavallo_di_troia3 1 2
-	call _c_writese_0
+	call c_writese_0
 	addl $12, %esp
 	carica_registri
 	iret
 
-	.extern _c_readconsole
+	.extern c_readconsole
 a_readconsole:
 	salva_registri
 	copia_param 2 7
 	cavallo_di_troia 0
 	cavallo_di_troia 1
 	cavallo_di_troia3 0 1
-	call _c_readconsole
+	call c_readconsole
 	addl $8, %esp
 	carica_registri
 	iret
 
-	.extern _c_writeconsole
+	.extern c_writeconsole
 a_writeconsole:
 	salva_registri
 	copia_param 1 7
 	cavallo_di_troia 0
-	call _c_writeconsole
+	call c_writeconsole
 	addl $4, %esp
 	carica_registri
 	iret
 
-	.extern _c_iniconsole
+	.extern c_iniconsole
 a_iniconsole:
 	salva_registri
 	copia_param 1 7
-	call _c_iniconsole
+	call c_iniconsole
 	addl $4, %esp
 	carica_registri
 	iret

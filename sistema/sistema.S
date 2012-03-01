@@ -103,7 +103,7 @@
 	pushl %eax
 	pushl $param_err
 	pushl $2
-	call _flog
+	call flog
 	addl $12, %esp
 	int $tipo_ab
 1:
@@ -129,7 +129,7 @@
 // num: indice (a partire da 0) in IDT del gate da caricare
 // routine: indirizzo della routine da associare al gate
 // dpl: dpl del gate (LIV_SISTEMA o LIV_UTENTE)
-// NOTA: la macro si limita a chiamare la routine _init_gate
+// NOTA: la macro si limita a chiamare la routine init_gate
 //       con gli stessi parametri. Verra' utilizzata per
 //       motivi puramente estetici
 .macro carica_gate num routine dpl
@@ -137,7 +137,7 @@
 	pushl $\dpl
 	pushl $\routine
 	pushl $\num
-	call _init_gate
+	call init_gate
 	addl $12, %esp
 
 .endm
@@ -159,7 +159,7 @@
 // dpl: dpl del segmento (usare le costanti LIV_SISTEMA o LIV_UTENTE)
 // tipo: tipo del gate (usare le costanti SEG_CODICE, SEG_DATI o SEG_TSS)
 // gran: granularita' (usare le costanti G_PAGINA o G_BYTE)
-// NOTA: la macro si limita a chiamare la routine _init_descrittore
+// NOTA: la macro si limita a chiamare la routine init_descrittore
 //       con gli stessi parametri. Verra' utilizzata per
 //       motivi puramente estetici
 .macro carica_descr num base limite pres dpl tipo gran
@@ -171,7 +171,7 @@
 	pushl $\limite
 	pushl $\base
 	pushl $\num
-	call  _init_descrittore
+	call  init_descrittore
 	addl $28, %esp
 
 .endm
@@ -219,9 +219,9 @@
 // stati caricati gli eventuali moduli)
      .text
 
-     .globl  start, _start
-start:				// entry point
-_start:
+     .globl  _start, start
+_start:				// entry point
+start:
      jmp     multiboot_entry	// scavalchiamo la struttra richiesta
      				// dal bootstrap loader, che deve
 				// trovarsi verso l'inizio del file
@@ -232,17 +232,17 @@ multiboot_header:
      .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
      .long   MULTIBOOT_HEADER_FLAGS   				// flag
      .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
-#ifndef __ELF__
+#ifndef _ELF__
      .long   multiboot_header
-     .long   _start
-     .long   _edata
-     .long   _end
+     .long   start
+     .long   edata
+     .long   end
      .long   multiboot_entry
 #endif 
 
 multiboot_entry:
      movl    %esp, save_esp
-     movl    $(_stack + STACK_SIZE), %esp // inizializziamo lo stack
+     movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
 
      pushf
      pushal
@@ -280,7 +280,7 @@ qui:
 					// abbiamo azzerato anche IF)
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			
-     call    _cmain			// il resto dell'inizializzazione
+     call    cmain			// il resto dell'inizializzazione
      					// e' scritto in C++
      addl    $8, %esp     
 	
@@ -312,8 +312,8 @@ count_backtrace:
 	.long 0
 off_backtrace:
 	.long 0
-	.global _backtrace
-_backtrace:
+	.global backtrace
+backtrace:
 	pushl %esi
 	pushl %eax
 
@@ -334,12 +334,12 @@ _backtrace:
 	pushl $stringa_backtrace
 	pushl $80
 	pushl $buf_backtrace
-	call _snprintf
+	call snprintf
 	addl $16, %esp
 	pushl %eax
 	pushl $buf_backtrace
 	pushl off_backtrace
-	call _writevid_n
+	call writevid_n
 	addl $12, %esp
 	addl $10, off_backtrace
 	
@@ -352,14 +352,14 @@ _backtrace:
 	ret
 	
 
-// inserimento del processo in _esecuzione in testa alla coda dei pronti
+// inserimento del processo in esecuzione in testa alla coda dei pronti
 //  (non salva i registri, viene chiamata dopo salva_stato)
 //
 inspronti:
-        movl _esecuzione, %eax
-        movl _pronti, %ebx
+        movl esecuzione, %eax
+        movl pronti, %ebx
         movl %ebx, 8(%eax)
-        movl %eax, _pronti
+        movl %eax, pronti
 	ret
 
 // offset, all'interno della struttura des_proc, dei campi
@@ -387,7 +387,7 @@ salva_stato:
         pushl %ebx
 	pushl %eax
 
-	movl _esecuzione, %eax
+	movl esecuzione, %eax
 	movl $0, %ebx
         movw (%eax), %bx		// esecuzione->identifier in ebx
 	shrl $3, %ebx			// trasformo selettore->indice
@@ -425,9 +425,9 @@ salva_stato:
 
 	ret
 
-// carica lo stato del processo in _esecuzione [4.8]
+// carica lo stato del processo in esecuzione [4.8]
 carica_stato:
-        movl _esecuzione, %edx
+        movl esecuzione, %edx
 	movl $0, %ebx
         movw (%edx), %bx		// esecuzione->identifier in ebx
 	
@@ -631,8 +631,8 @@ init_idt:
 
 // carica un gate nella IDT
 // parametri: (vedere la macro carica_gate)
-.global _init_gate
-_init_gate:
+.global init_gate
+init_gate:
 	pushl %ebp
 	movl %esp, %ebp
 
@@ -666,8 +666,8 @@ _init_gate:
 
 // carica un descrittore di segmento in GDT
 // parametri: (vedere la macro carica_descr)
-.global _init_descrittore
-_init_descrittore:
+.global init_descrittore
+init_descrittore:
 	pushl %ebp
 	movl %esp, %ebp
 
@@ -708,8 +708,8 @@ _init_descrittore:
 // lo stato occupato/libero del descrittore e' dato
 // dal valore del suo bit di presenza
 
-        .global _alloca_tss
-_alloca_tss:
+        .global alloca_tss
+alloca_tss:
         pushl %ebp
         movl %esp, %ebp
         pushl %ebx
@@ -736,7 +736,7 @@ _alloca_tss:
         pushl $(DIM_DESP - 1)   // limite
         pushl 8(%ebp)           // base
         pushl %ecx              // indice descr.
-        call  _init_descrittore
+        call  init_descrittore
         addl $28, %esp
 
         movl %ecx, last_tss
@@ -751,8 +751,8 @@ _alloca_tss:
 // rende nuovamente libero un descrittore di segmento TSS
 // precedentemente occupato
 // parametri: indice in GDT del descrittore da rilasciare
-	.global _rilascia_tss
-_rilascia_tss:
+	.global rilascia_tss
+rilascia_tss:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %ebx
@@ -773,8 +773,8 @@ _rilascia_tss:
 
 // dato l'identificatore di un processo,
 // ne restituisce il puntatore al descrittore
-	.global _des_p
-_des_p:	
+	.global des_p
+des_p:	
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %ebx
@@ -790,8 +790,8 @@ _des_p:
 	leave
 	ret
 
-	.global _invalida_TLB  // [6.6]
-_invalida_TLB:
+	.global invalida_TLB  // [6.6]
+invalida_TLB:
 	pushl %eax
 	movl %cr3, %eax
 	movl %eax, %cr3
@@ -800,8 +800,8 @@ _invalida_TLB:
 
 // carica il registro cr3
 // parametri: indirizzo fisico del nuovo direttorio
-	.global _loadCR3
-_loadCR3:
+	.global loadCR3
+loadCR3:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -814,14 +814,14 @@ _loadCR3:
 	ret
 
 // restituisce in %eax il contenuto di cr3
-	.global _readCR3
-_readCR3:
+	.global readCR3
+readCR3:
 	movl %cr3, %eax
 	ret
 
 // attiva la paginazione
-	.global _attiva_paginazione
-_attiva_paginazione:
+	.global attiva_paginazione
+attiva_paginazione:
 	pushl %eax
 
 	movl $0, %eax
@@ -834,8 +834,8 @@ _attiva_paginazione:
 	ret
 
 // disattiva la paginazione
-	.global _disattiva_paginazione
-_disattiva_paginazione:
+	.global disattiva_paginazione
+disattiva_paginazione:
 	pushl %eax
 
 	movl %cr0, %eax
@@ -847,26 +847,26 @@ _disattiva_paginazione:
 
 a_end_program:
 	cli
-	call _reset_8259
-	call _reset_kbd
+	call reset_8259
+	call reset_kbd
 	movl shutdown_esp, %esp
 	movl shutdown_ebp, %ebp
-	call _disattiva_paginazione
+	call disattiva_paginazione
 	ret
 	
 
 // dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
 // eliminare la corrispondente traduzione dal TLB
-	.global _invalida_entrata_TLB // [6.4]
-_invalida_entrata_TLB:
+	.global invalida_entrata_TLB // [6.4]
+invalida_entrata_TLB:
 	invlpg 4(%esp)
 	# non e' necessario predisporre e utilizzare EBP
 	ret
 	
 // trova efficientemente il primo bit a 0 nella doppia parola passata come 
 // parametro (usato nella realizzazione dell'allocatore a mappa di bit)
-	.global _trova_bit
-_trova_bit:
+	.global trova_bit
+trova_bit:
 	bsfl 4(%esp), %eax
 	ret
 
@@ -875,8 +875,8 @@ _trova_bit:
 //  PIC, timer, console, swap					 //
 //////////////////////////////////////////////////////////////////
 // legge un byte da una porta di I/O
-	.global _inputb
-_inputb:
+	.global inputb
+inputb:
 	pushl %eax
 	pushl %edx
 	movw 12(%esp), %dx
@@ -888,8 +888,8 @@ _inputb:
 	ret
 
 // scrive un byte in una porta di I/O
-	.global _outputb
-_outputb:
+	.global outputb
+outputb:
 	pushl %eax
 	pushl %edx
 	movb 12(%esp), %al
@@ -900,8 +900,8 @@ _outputb:
 	ret
 
 // Ingresso di una word da una porta di IO
-	.global _inputw
-_inputw:
+	.global inputw
+inputw:
 	pushl %eax
 	pushl %edx
 	movl 12(%esp), %edx
@@ -913,8 +913,8 @@ _inputw:
 	ret
 
 // Uscita di una word su una porta di IO
-	.global _outputw
-_outputw:
+	.global outputw
+outputw:
 	pushl %eax
 	pushl %edx
 	movw 12(%esp), %ax
@@ -925,8 +925,8 @@ _outputw:
 	ret
 
 // Ingresso di una doppia parola da una porta di IO
-	.global _inputl
-_inputl:
+	.global inputl
+inputl:
 	pushl %eax
 	pushl %edx
 	movl 12(%esp), %edx
@@ -938,8 +938,8 @@ _inputl:
 	ret
 
 // scrive una doppia parola in una porta di I/O
-	.global _outputl
-_outputl:
+	.global outputl
+outputl:
 	pushl %eax
 	pushl %edx
 	movl 12(%esp), %eax
@@ -950,8 +950,8 @@ _outputl:
 	ret
 
 // legge una sequenza di parole da una porta di I/O
-	.global _inputbw
-_inputbw:
+	.global inputbw
+inputbw:
 	pushl %eax
 	pushl %edx
 	pushl %edi
@@ -971,8 +971,8 @@ _inputbw:
 	ret
 
 // scrive una sequenza di parole in una porta di I/O
-	.global _outputbw
-_outputbw:
+	.global outputbw
+outputbw:
 	pushl %eax
 	pushl %edx
 	pushl %esi
@@ -1018,8 +1018,8 @@ _outputbw:
 // cambiata rispetto a quella impostata dal BIOS. Infatti, in modo protetto,
 // esistono piu' tipi di eccezioni che in modo reale e la base impostata dal
 // BIOS va a collidere con alcune di queste.
-	.global _init_8259
-_init_8259:
+	.global init_8259
+init_8259:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -1063,8 +1063,8 @@ _init_8259:
 // ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
 // Inizializzo la modalita' fully nasted e i tipi base sono rispettivamente 0x08 per il master
 // e 0x70 per lo slave.
-		.global _reset_8259
-_reset_8259:
+		.global reset_8259
+reset_8259:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -1101,8 +1101,8 @@ _reset_8259:
 	leave
 	ret
 
-	.global _unmask_irq
-_unmask_irq:
+	.global unmask_irq
+unmask_irq:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -1123,8 +1123,8 @@ _unmask_irq:
 	leave
 	ret
 
-	.global _mask_irq
-_mask_irq:
+	.global mask_irq
+mask_irq:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -1153,8 +1153,8 @@ _mask_irq:
 
 // attiva il timer di sistema
 // parametri: il valore da caricare nel registro CTR del timer
-	.global _attiva_timer
-_attiva_timer:
+	.global attiva_timer
+attiva_timer:
 	pushl %ebp
 	movl %esp, %ebp
         pushl %eax
@@ -1174,8 +1174,8 @@ _attiva_timer:
 	leave
 	ret
 
-	.global _disattiva_timer
-_disattiva_timer:
+	.global disattiva_timer
+disattiva_timer:
 	pushl %ebp
 	movl %esp, %ebp
         pushl %eax
@@ -1208,14 +1208,14 @@ _disattiva_timer:
 // 
 
 bump_ticks:
-	incl _ticks
+	incl ticks
 	pushl $0
 	call inviaEOI
 	addl $4, %esp
 	iret
 
-	.global _calibra_tsc
-_calibra_tsc:
+	.global calibra_tsc
+calibra_tsc:
 	pushl %ebp
 	movl %esp, %ebp
 	subl $16, %esp
@@ -1245,8 +1245,8 @@ _calibra_tsc:
 				// precedendo l'istruzione rdtsc con 
 				// l'istruzione cpuid
 	sti			// abilitiamo il timer ad interrompere e, quindi, ad 
-				// incrementare la variabile _ticks
-1:	movl _ticks, %ecx
+				// incrementare la variabile ticks
+1:	movl ticks, %ecx
 	cmpl $0, %ecx
 	je 1b			// aspettiamo che venga incrementata una prima volta
 	movl %ecx, -8(%ebp)	// quindi salviamo il suo valore iniziale
@@ -1254,9 +1254,9 @@ _calibra_tsc:
 	movl %eax, -4(%ebp)	// salviamo solo %eax (parte bassa del tsc): 
 				// cio' e' sufficiente a calcolare la 
 				// differenza che ci serve
-2:	movl _ticks, %ecx
+2:	movl ticks, %ecx
 	subl -8(%ebp), %ecx
-	cmpl $20, %ecx		// aspettiamo che il valore di _ticks aumenti di 20
+	cmpl $20, %ecx		// aspettiamo che il valore di ticks aumenti di 20
 				// (corrispondenti a circa un secondo di tempo 
 				// reale)
 	jbe 2b
@@ -1282,7 +1282,7 @@ _calibra_tsc:
 	leave
 	ret
 
-_reset_kbd:
+reset_kbd:
 	pushl %eax
 	movb $0x60, %al
 	outb %al, $0x64
@@ -1292,8 +1292,8 @@ _reset_kbd:
 	ret
 
 
-	.global _salta_a_main
-_salta_a_main:
+	.global salta_a_main
+salta_a_main:
 	movl %esp, shutdown_esp
 	movl %ebp, shutdown_ebp
 	call carica_stato		// carichiamo tr
@@ -1381,7 +1381,7 @@ prot_fault:
 
 // l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
 // per realizzare la memoria virtuale. Per far cio', invochiamo la routine 
-// _c_page_fault passandole tre parametri:
+// c_page_fault passandole tre parametri:
 // - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale 
 // coppia ci permette di individuare l'istruzione che aveva causato il fault e 
 // di sapere se il fault si e' verificato mentre il processore era in stato 
@@ -1395,13 +1395,13 @@ int_tipo_pf:
 	movl 32(%esp), %ebx // eip
 	pushl %ebx
 	pushl %eax
-	call _c_routine_pf
+	call c_routine_pf
 	addl $8, %esp
 	carica_registri
 	addl $4, %esp
 	iret
-.global _readCR2
-_readCR2:
+.global readCR2
+readCR2:
 	movl %cr2, %eax
 	ret
 
@@ -1426,7 +1426,7 @@ simd_exc:
 
 
 comm_exc:
-	call _gestore_eccezioni
+	call gestore_eccezioni
 	addl $8, %esp
 	jmp a_abort_p
 
@@ -1437,73 +1437,73 @@ comm_exc:
 // a loro volta invocare altre routine del nucleo stesso. In particolare, sono 
 // necessarie le seguenti:
 //
-	.global _sem_ini	// [4.11]
-_sem_ini:
+	.global sem_ini	// [4.11]
+sem_ini:
 	int $tipo_si
 	ret
 
-	.global _sem_wait	// [4.11]
-_sem_wait:
+	.global sem_wait	// [4.11]
+sem_wait:
 	int $tipo_w
 	ret
 
-	.global _sem_signal	// [4.11]
-_sem_signal:
+	.global sem_signal	// [4.11]
+sem_signal:
 	int $tipo_s
 	ret
 
-	.global _activate_p
-_activate_p:
+	.global activate_p
+activate_p:
 	int $tipo_a
 	ret
 
-	.global _terminate_p
-_terminate_p:
+	.global terminate_p
+terminate_p:
 	int $tipo_t
 	ret
 
-	.global _readhd_n
-_readhd_n:
+	.global readhd_n
+readhd_n:
 	int $io_tipo_hdr
 	ret
 
-	.global _writehd_n
-_writehd_n:
+	.global writehd_n
+writehd_n:
 	int $io_tipo_hdw
 	ret
 
-	.global _dmareadhd_n
-_dmareadhd_n:
+	.global dmareadhd_n
+dmareadhd_n:
 	int $io_tipo_dmahdr
 	ret
 
-	.global _dmawritehd_n
-_dmawritehd_n:
+	.global dmawritehd_n
+dmawritehd_n:
 	int $io_tipo_dmahdw
 	ret
 
-	.global _panic
-_panic:
+	.global panic
+panic:
 	int $tipo_p
 	ret
 
-	.global _abort_p
-_abort_p:
+	.global abort_p
+abort_p:
 	int $tipo_ab
 	ret
 
-	.global _nwfi
-_nwfi:
+	.global nwfi
+nwfi:
 	int $tipo_nwfi
 	ret
 
-	.global _end_program
-_end_program:
+	.global end_program
+end_program:
 	int $tipo_ep
 	ret
 
-	.global _delay
-_delay:
+	.global delay
+delay:
 	int $tipo_d
 	ret
 
@@ -1512,11 +1512,11 @@ _delay:
 ////////////////////////////////////////////////////////
 //
 // driver del timer	[4.16]
-	.extern _c_driver_td
+	.extern c_driver_td
 driver_td:
 	call salva_stato	// interruzioni disabilitate
 	call inspronti
-	call _c_driver_td
+	call c_driver_td
 	pushl $0
 	call inviaEOI
 	call carica_stato
@@ -1524,14 +1524,14 @@ driver_td:
 
 
 // handler generici	([7.1])
-	.extern _proc_esterni
+	.extern proc_esterni
 handler_1:
 	call salva_stato
 	call inspronti
 
 	movl $1, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1541,8 +1541,8 @@ handler_2:
 	call inspronti
 
 	movl $2, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1552,8 +1552,8 @@ handler_3:
 	call inspronti
 
 	movl $3, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1563,8 +1563,8 @@ handler_4:
 	call inspronti
 
 	movl $4, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1574,8 +1574,8 @@ handler_5:
 	call inspronti
 
 	movl $5, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1585,8 +1585,8 @@ handler_6:
 	call inspronti
 
 	movl $6, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1596,8 +1596,8 @@ handler_7:
 	call inspronti
 
 	movl $7, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1607,8 +1607,8 @@ handler_8:
 	call inspronti
 
 	movl $8, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1618,8 +1618,8 @@ handler_9:
 	call inspronti
 
 	movl $9, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1629,8 +1629,8 @@ handler_10:
 	call inspronti
 
 	movl $10, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1640,8 +1640,8 @@ handler_11:
 	call inspronti
 
 	movl $11, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1651,8 +1651,8 @@ handler_12:
 	call inspronti
 
 	movl $12, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
@@ -1662,19 +1662,19 @@ handler_13:
 	call inspronti
 
 	movl $13, %ecx
-	movl _a_p(, %ecx, 4), %eax
-	movl %eax, _esecuzione
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
 
 	call carica_stato
 	iret
 
 // driver degli hard disk sul canale primario
-	.extern _c_driverhd
+	.extern c_driverhd
 driver_hd0:
 	call salva_stato
 	call inspronti
 	pushl $0
-	call _c_driverhd
+	call c_driverhd
 	pushl $1
 	call inviaEOI
 	call carica_stato
@@ -1685,7 +1685,7 @@ driver_hd1:
 	call salva_stato
 	call inspronti
 	pushl $1
-	call _c_driverhd
+	call c_driverhd
 	pushl $1
 	call inviaEOI
 	call carica_stato
@@ -1695,38 +1695,38 @@ driver_hd1:
 ////////////////////////////////////////////////////////
 // a_primitive                                        //
 ////////////////////////////////////////////////////////
-        .extern _c_activate_p
+        .extern c_activate_p
 a_activate_p:	// routine int $tipo_a [4.6]
 	salva_reg_rit
         copia_param 4 6		// salva_registri ha inserito 6 long in pila
 	cavallo_di_troia 0
-        call _c_activate_p
+        call c_activate_p
         addl $16, %esp
         carica_reg_rit
         iret
 
-        .extern _c_terminate_p
+        .extern c_terminate_p
 a_terminate_p:	// routine int $tipo_t [4.6]
 	movl $terminate_stack_end, %esp
-        call _c_terminate_p
+        call c_terminate_p
 	call carica_stato
 	iret
 
-	.extern _c_sem_ini
+	.extern c_sem_ini
 a_sem_ini:	// routine int $tipo_si [4.11]
 	salva_reg_rit
 	copia_param 1 6
-	call _c_sem_ini
+	call c_sem_ini
 	addl $4, %esp
 	carica_reg_rit
 	iret
 
-	.extern _c_sem_wait
-	.global _possibile_pf1
+	.extern c_sem_wait
+	.global possibile_pf1
 a_sem_wait:	// routine int $tipo_w [4.11][6.5]
 	pushl %edx		// salvataggio di un registro, sia EDX
 	movl 12(%esp), %edx	// indiritto del top della pila utente
-_possibile_pf1:
+possibile_pf1:
 	movl 4(%edx), %edx	// prelievo del parametro,
 	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
 	// interruzioni (mascherabili) di nuovo abilitate
@@ -1734,17 +1734,17 @@ _possibile_pf1:
 	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
-	call _c_sem_wait
+	call c_sem_wait
 	//addl $4, %esp	// ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
-	.extern _c_sem_signal
-	.global _possibile_pf2
+	.extern c_sem_signal
+	.global possibile_pf2
 a_sem_signal:	// routine int $tipo_s [4.11][6.5]
 	pushl %edx		// salvataggio di un registro, sia EDX
 	movl 12(%esp), %edx	// indiritto del top della pila utente
-_possibile_pf2:
+possibile_pf2:
 	movl 4(%edx), %edx	// prelievo del parametro,
 	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
 	// interruzioni (mascherabili) di nuovo abilitate
@@ -1752,17 +1752,17 @@ _possibile_pf2:
 	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
-	call _c_sem_signal
+	call c_sem_signal
 	//addl $4, %esp	// ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
-	.extern _c_delay
-	.global _possibile_pf3
+	.extern c_delay
+	.global possibile_pf3
 a_delay:	// routine int $tipo_d [4.16][6.5]
 	pushl %edx		// salvataggio di un registro, sia EDX
 	movl 12(%esp), %edx	// indiritto del top della pila utente
-_possibile_pf3:
+possibile_pf3:
 	movl 4(%edx), %edx	// prelievo del parametro,
 	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
 	// interruzioni (mascherabili) di nuovo abilitate
@@ -1770,28 +1770,28 @@ _possibile_pf3:
 	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro n
-	call _c_delay
+	call c_delay
 	// addl $4, %esp // ripulitura pila (non necessaria)
 	call carica_stato
 	iret
 
-	.extern _c_readlog
+	.extern c_readlog
 a_readlog:	// routine int $tipo_rl
 	salva_registri
 	copia_param 1 7
 	cavallo_di_troia 0
-	call _c_readlog
+	call c_readlog
 	addl $4, %esp
 	carica_registri
 	iret
 
-	.extern _c_resident 	// [10.6]
+	.extern c_resident 	// [10.6]
 a_resident:	// routine int $tipo_r
 	salva_reg_rit
 	copia_param 2 6		// ricopiamento dei parametri
 	cavallo_di_troia 0	// verifica ind_virt
 	cavallo_di_troia2 0 1	// verifica ind_virt+quanti
-	call _c_resident
+	call c_resident
 	addl $8, %esp
 	carica_reg_rit
 	iret
@@ -1800,12 +1800,12 @@ a_resident:	// routine int $tipo_r
 // Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
 //
 
-	.extern _c_activate_pe
+	.extern c_activate_pe
 a_activate_pe:
 	salva_reg_rit
         copia_param 5 6		// salva_registri ha inserito 7 long in pila
 	cavallo_di_troia 0
-        call _c_activate_pe
+        call c_activate_pe
         addl $20, %esp	
 	carica_reg_rit
 	iret
@@ -1820,7 +1820,7 @@ a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
 	// ( ripulitura della pila
 	addl $4, %esp
 	// )
-	call _schedulatore
+	call schedulatore
 	call carica_stato
 	iret
 inviaEOI:		// [9.1]
@@ -1846,42 +1846,42 @@ m_noeoi:
 a_fill_gate:
 	salva_registri
 	copia_param 3 7
-	call _init_gate
+	call init_gate
 	addl $12, %esp
 	carica_registri
 	iret
 
-	.extern _c_panic
+	.extern c_panic
 a_panic:	// routine int $tipo_p
 	call salva_stato
 	copia_param 1 0
 	cavallo_di_troia 1
-	call _c_panic
+	call c_panic
 1:	nop
 	jmp 1b
 
-	.extern _c_abort_p
+	.extern c_abort_p
 a_abort_p:
 	movl $terminate_stack_end, %esp
-        call _c_abort_p
+        call c_abort_p
 	call carica_stato
 	iret
 
-	.extern _c_trasforma
+	.extern c_trasforma
 a_trasforma:
 	salva_reg_rit
 	copia_param 1 6
-	call _c_trasforma
+	call c_trasforma
 	addl $4, %esp
 	carica_reg_rit
 	iret
-	.extern _c_log
+	.extern c_log
 a_log:
 	call salva_stato
 	copia_param 3 0
 	cavallo_di_troia 1
 	cavallo_di_troia2 1 2
-	call _c_log
+	call c_log
 	addl $12, %esp
 	call carica_stato
 	iret
@@ -1894,56 +1894,56 @@ a_log:
 
 // lettura di n settori
 	.global a_readhd_n
-	.extern _c_readhd_n
+	.extern c_readhd_n
 a_readhd_n:
 	salva_registri
 	copia_param 6 7
 	cavallo_di_troia 2
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
-	call _c_readhd_n
+	call c_readhd_n
 	addl $24, %esp
 	carica_registri
 	iret
 
 // scrittura di n settori
 	.global a_writehd_n
-	.extern _c_writehd_n
+	.extern c_writehd_n
 a_writehd_n:
 	salva_registri
 	copia_param 6 7
 	cavallo_di_troia 2
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
-	call _c_writehd_n
+	call c_writehd_n
 	addl $24, %esp
 	carica_registri
 	iret
 
 // lettura di n settori
 	.global a_dmareadhd_n
-	.extern _c_dmareadhd_n
+	.extern c_dmareadhd_n
 a_dmareadhd_n:
 	salva_registri
 	copia_param 6 7
 	cavallo_di_troia 2
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
-	call _c_dmareadhd_n
+	call c_dmareadhd_n
 	addl $24, %esp
 	carica_registri
 	iret
 
 // scrittura di n settori
 	.global a_dmawritehd_n
-	.extern _c_dmawritehd_n
+	.extern c_dmawritehd_n
 a_dmawritehd_n:
 	salva_registri
 	copia_param 6 7
 	cavallo_di_troia 2
 	cavallo_di_troia2 2 4
 	cavallo_di_troia 5
-	call _c_dmawritehd_n
+	call c_dmawritehd_n
 	addl $24, %esp
 	carica_registri
 	iret
@@ -1952,31 +1952,31 @@ a_dmawritehd_n:
 // PCI
 ////////////////////////////////////////////////////////
 	.global a_pci_find
-	.extern _c_pci_find
+	.extern c_pci_find
 a_pci_find:
 	salva_reg_rit
 	copia_param 2 6
-	call _c_pci_find
+	call c_pci_find
 	addl $8, %esp
 	carica_reg_rit
 	iret
 
 	.global a_pci_read
-	.extern _c_pci_read
+	.extern c_pci_read
 a_pci_read:
 	salva_reg_rit
 	copia_param 3 6
-	call _c_pci_read
+	call c_pci_read
 	addl $12, %esp
 	carica_reg_rit
 	iret
 
 	.global a_pci_write
-	.extern _c_pci_write
+	.extern c_pci_write
 a_pci_write:
 	salva_registri
 	copia_param 4 7
-	call _c_pci_write
+	call c_pci_write
 	addl $24, %esp
 	carica_registri
 	iret
@@ -1985,8 +1985,8 @@ a_pci_write:
 // Esegue un probing del canale ATA specificato tentando di capire se
 //  ad esso sono collegati nessuno, uno o piu` dispositivi
 //
-	.global _test_canale
-_test_canale:
+	.global test_canale
+test_canale:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %ebx
@@ -2038,8 +2038,8 @@ chret1:	popl %edx
 // Assmendo che il canale sia "attivo" cerca di capire se il dispositivo
 //  indirizzato e` un ATA (hard disk) o ATAPI (chrom)
 //
-	.global _leggi_signature
-_leggi_signature:
+	.global leggi_signature
+leggi_signature:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %edx
@@ -2082,8 +2082,8 @@ sgret:
 	ret
 
 // invia un software reset agli hard disk del canale passato come parametro
-	.global _hd_software_reset
-_hd_software_reset:
+	.global hd_software_reset
+hd_software_reset:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %edx
@@ -2092,7 +2092,7 @@ _hd_software_reset:
 	// il bit di reset deve essere a 0 per almeno 5usec
 	pushl $5
 	pushl $0
-	call _busywait_usec
+	call busywait_usec
 	addl $8, %esp
 
 	movw 8(%ebp),%dx
@@ -2102,7 +2102,7 @@ _hd_software_reset:
 	// il bit di reset deve essere a 1 per almeno 5usec
 	pushl $5
 	pushl $0
-	call _busywait_usec
+	call busywait_usec
 	addl $8, %esp
 
 	movw 8(%ebp),%dx
@@ -2112,7 +2112,7 @@ _hd_software_reset:
 	// il bit di reset deve essere mantenuto a 0 per almeno 2msec 
 	pushl $2000
 	pushl $0
-	call _busywait_usec
+	call busywait_usec
 	addl $8, %esp
 
 	popl %eax
@@ -2123,8 +2123,8 @@ _hd_software_reset:
 // Abilita il controller ATA specificato a generare richieste di interruzione
 //  utili sia per l'ingresso che per l'uscita
 //
-	.global _hd_go_inout
-_hd_go_inout:
+	.global hd_go_inout
+hd_go_inout:
 	pushl %eax
 	pushl %edx
 
@@ -2138,8 +2138,8 @@ _hd_go_inout:
 
 // Disabilita il controller ATA specificato a generare richeste di interruzione
 //
-	.global _hd_halt_inout
-_hd_halt_inout:
+	.global hd_halt_inout
+hd_halt_inout:
 	pushl %eax
 	pushl %edx
 
@@ -2152,21 +2152,21 @@ _hd_halt_inout:
 	ret
 
 // attende che sia trascorso il numero di microsecondi passato come parametro.
-// Fa uso della variabile globale _clocks_per_usec (numero di cicli di clock 
+// Fa uso della variabile globale clocks_per_usec (numero di cicli di clock 
 // per microsecondo), il cui valore e' stato calcolato nella fase di 
-// inizializzazione del sistema (vedere _calibra_tsc)
-	.global _busywait_usec
-_busywait_usec:
+// inizializzazione del sistema (vedere calibra_tsc)
+	.global busywait_usec
+busywait_usec:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
 	pushl %edx
 
 	movl 8(%ebp), %eax
-	mull _clocks_per_usec
+	mull clocks_per_usec
 	pushl %edx
 	pushl %eax
-	call _busywait_clock
+	call busywait_clock
 	addl $8, %esp
 
 	popl %edx
@@ -2176,8 +2176,8 @@ _busywait_usec:
 	
 
 // attende che sia trascorso un certo numero di cicli di clock
-	.global _busywait_clock
-_busywait_clock:
+	.global busywait_clock
+busywait_clock:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -2205,16 +2205,16 @@ _busywait_clock:
 // (serve a realizzare l'attesa di 400 ns richiesta dallo standard ATA, 
 // mantenendo un certo margine di sicurezza)
 wait_500ns:
-	pushl _clocks_per_usec
+	pushl clocks_per_usec
 	shrl (%esp)
 	pushl $0
-	call _busywait_clock
+	call busywait_clock
 	addl $8, %esp
 	ret
 	
 // Seleziona uno dei due drive di un canale ATA
-	.global _hd_select_device
-_hd_select_device:
+	.global hd_select_device
+hd_select_device:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -2237,8 +2237,8 @@ ms_out:	movl 12(%ebp),%edx
 	ret
 
 // invia un comando al drive correntemente selezionato di un canale ATA
-	.global _hd_write_command	// [9.3.1]
-_hd_write_command:
+	.global hd_write_command	// [9.3.1]
+hd_write_command:
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %edx
@@ -2258,8 +2258,8 @@ _hd_write_command:
 
 // Legge lo stato attuale del registro di stato di un canale, per capire quale 
 // drive e` attivo
-	.global _hd_read_device
-_hd_read_device:
+	.global hd_read_device
+hd_read_device:
 	pushl %eax
 	pushl %edx
 
@@ -2281,8 +2281,8 @@ ms_ret:	movl 16(%esp),%edx
 
 // Scompone correttamente il blocco iniziale di una operazione su hard disk
 // e lo scrive nei registri opportuni
-	.global _hd_write_address
-_hd_write_address:	// [9.3.1]
+	.global hd_write_address
+hd_write_address:	// [9.3.1]
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %eax
@@ -2318,25 +2318,25 @@ _hd_write_address:	// [9.3.1]
 ////////////////////////////////////////////////////////////////
 .data
 par:		.long 0
-.global		_ticks
-_ticks:		.long 0
-.global		_clocks_per_usec
-_clocks_per_usec:
+.global		ticks
+ticks:		.long 0
+.global		clocks_per_usec
+clocks_per_usec:
 		.long 1
-.global		_mem_upper
-_mem_upper:	 .long _end
-.global		_fine_codice_sistema
-_fine_codice_sistema:
-		.long _etext
-.global		 _esecuzione	// [4.6]
-_esecuzione:	.long 0	
-.global		_pronti		// [4.6]
-_pronti:	.long 0
-.global		_processi	// [4.7]
-_processi:	.long 0
+.global		mem_upper
+mem_upper:	 .long end
+.global		fine_codice_sistema
+fine_codice_sistema:
+		.long etext
+.global		 esecuzione	// [4.6]
+esecuzione:	.long 0	
+.global		pronti		// [4.6]
+pronti:	.long 0
+.global		processi	// [4.7]
+processi:	.long 0
 // Descrittore Hard Disk
-	.global _hd
-_hd:	// [9.3]
+	.global hd
+hd:	// [9.3]
 	.word	0x01f0		//hd[0].indreg.iBR
 	.word	0x01f4		//hd[0].indreg.iCNL
 	.word	0x01f5		//hd[0].indreg.iCNH
@@ -2415,8 +2415,8 @@ idt_pointer:
 param_err:
 	.asciz "parametro errato %x"
 .bss
-.global		_array_dess		// [4.11]
-_array_dess:	.space BYTE_SEM
+.global		array_dess		// [4.11]
+array_dess:	.space BYTE_SEM
 .balign 8
 gdt:
 	// spazio per 5 descrittori piu' i descrittori di TSS 
@@ -2429,8 +2429,8 @@ idt:
 	// verra' riempita a tempo di esecuzione
 	.space 8 * 256, 0
 
-	.global _stack
-_stack:
+	.global stack
+stack:
 	.space STACK_SIZE, 0
 terminate_stack:
 	.space STACK_SIZE, 0

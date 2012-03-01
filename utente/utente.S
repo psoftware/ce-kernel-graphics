@@ -26,95 +26,95 @@
 .set io_tipo_wcon, IO_TIPO_WCON
 
 	.text
-	.global _activate_p
-_activate_p:
+	.global activate_p
+activate_p:
 	int $tipo_a
 	ret
 
-	.global _terminate_p
-_terminate_p:
+	.global terminate_p
+terminate_p:
 	int $tipo_t
 	ret
 
 
-	.global _end_program
-_end_program:
+	.global end_program
+end_program:
 	int $tipo_ep
 	ret
 
-	.global _sem_ini
-_sem_ini:
+	.global sem_ini
+sem_ini:
 	int $tipo_si
 	ret
 
-	.global _sem_wait
-_sem_wait:
+	.global sem_wait
+sem_wait:
 	int $tipo_w
 	ret
 
-	.global _sem_signal
-_sem_signal:
+	.global sem_signal
+sem_signal:
 	int $tipo_s
 	ret
 
-	.global _delay
-_delay:
+	.global delay
+delay:
 	int $tipo_d
 	ret
 
-	.global _readse_n
-_readse_n:
+	.global readse_n
+readse_n:
 	int $io_tipo_rsen
 	ret
 
-	.global _readse_ln
-_readse_ln:
+	.global readse_ln
+readse_ln:
 	int $io_tipo_rseln
 	ret
 
-	.global _writese_n
-_writese_n:
+	.global writese_n
+writese_n:
 	int $io_tipo_wsen
 	ret
 
-	.global _writese_0
-_writese_0:
+	.global writese_0
+writese_0:
 	int $io_tipo_wse0
 	ret
 
-	.global _readconsole
-_readconsole:
+	.global readconsole
+readconsole:
 	int $io_tipo_rcon
 	ret
 
-	.global _writeconsole
-_writeconsole:
+	.global writeconsole
+writeconsole:
 	int $io_tipo_wcon
 	ret
 
-	.global _iniconsole
-_iniconsole:
+	.global iniconsole
+iniconsole:
 	int $io_tipo_inic
 	ret
 
-	.global _readlog
-_readlog:
+	.global readlog
+readlog:
 	int $tipo_rl
 	ret
 
-	.global _resident
-_resident:
+	.global resident
+resident:
 	int $tipo_re
 	ret
 
-	.global _log
-_log:
+	.global log
+log:
 	int $tipo_l
 	ret
 
 
-	.global start, _start
-start:
+	.global _start, start
 _start:
-	call _lib_init
-	jmp _main
+start:
+	call lib_init
+	jmp main
