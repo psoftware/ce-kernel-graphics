@@ -1,7 +1,6 @@
 #!/bin/bash
 
 QEMU=${QEMU:-qemu}
-SWAP=${SWAP:-swap.img}
 
 DEBUG=
 if [ "$1" == -g ]; then
@@ -14,7 +13,7 @@ trap 'stty sane' exit
 
 "$QEMU" -kernel build/sistema \
 	-append -sPM0 	      \
-	-hda ${SWAP} 	      \
+	-hda .swap	      \
 	-serial stdio 	      \
 	-no-reboot 	      \
 	$DEBUG

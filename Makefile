@@ -78,7 +78,7 @@ $(SWAP):
 
 .PHONY: swap clean reset
 swap: build/creatimg build/io build/utente $(SWAP)
-	build/creatimg $(SWAP) build/io build/utente
+	build/creatimg $(SWAP) build/io build/utente && ln -fs $(SWAP) .swap
 
 clean:
 	rm -f sistema/*.o io/*.o utente/*.o util/*.o
