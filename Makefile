@@ -1,6 +1,7 @@
 START_SISTEMA=   0x00100000
 START_IO=        0x40400000
 START_UTENTE=	 0x80000000
+SWAP_SIZE=	 20M
 SWAP=		 swap.img
 
 CXXFLAGS=-fno-exceptions -fno-rtti -fno-stack-protector -fno-pic -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32
@@ -71,8 +72,12 @@ util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
 build/creatimg: util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
 	g++ -m32 -g -o build/creatimg util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
+# creazione del file di swap
+$(SWAP):
+	truncate -s $(SWAP_SIZE) $(SWAP)
+
 .PHONY: swap clean reset
-swap: build/creatimg build/io build/utente
+swap: build/creatimg build/io build/utente $(SWAP)
 	build/creatimg $(SWAP) build/io build/utente
 
 clean:
