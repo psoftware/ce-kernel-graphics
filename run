@@ -14,6 +14,6 @@ trap 'stty sane' exit
 "$QEMU" -kernel build/sistema \
 	-append -sPM0 	      \
 	-hda .swap	      \
-	-serial stdio 	      \
+	-nographic 	      \
 	-no-reboot 	      \
 	$DEBUG
