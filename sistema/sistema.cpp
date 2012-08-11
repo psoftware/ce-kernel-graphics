@@ -2886,7 +2886,7 @@ bool identity_map(addr direttorio, addr start, addr end, natl flags)
 // (la funzione viene usata in fase di inizializzazione)
 bool crea_finestra_FM(addr direttorio, addr max_mem)
 {
-	return identity_map(direttorio, (addr)0, max_mem, BIT_RW);
+	return identity_map(direttorio, (addr)DIM_PAGINA, max_mem, BIT_RW);
 }
 
 // ( [P_PCI]
