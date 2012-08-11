@@ -1,14 +1,12 @@
 #ifndef INTERP_H__
 #define INTERP_H__
-#if __GNUC__ >= 3 && !defined(WIN)
-	#include <cstdio>
-	#include <cstdlib>
 
-	using namespace std;
-#else
-	#include <stdio.h>
-	#include <stdlib.h>
-#endif
+#include <stdint.h>
+
+#include <cstdio>
+#include <cstdlib>
+
+using namespace std;
 
 // interfaccia generica ai tipi di file eseguibile
 class Segmento {
@@ -26,7 +24,7 @@ public:
 class Eseguibile {
 public:
 	virtual Segmento* prossimo_segmento() = 0;
-	virtual void* entry_point() const = 0;
+	virtual uint32_t entry_point() const = 0;
 	virtual ~Eseguibile() {}
 };
 

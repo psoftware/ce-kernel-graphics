@@ -1,37 +1,19 @@
-#if __GNUC__ >= 3 && !defined(WIN)
-	#include <cstdio>
-	#include <cstdlib>
-	#include <cstring>
+#include <stdint.h>
 
-	using namespace std;
-#else
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <string.h>
-#endif
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+using namespace std;
 
 #include "costanti.h"
 #include "interp.h"
 #include "swap.h"
 
-typedef unsigned int uint;
+const uint32_t UPB = DIM_PAGINA / sizeof(uint32_t);
+const uint32_t BPU = sizeof(uint32_t) * 8;
 
-const uint UPB = DIM_PAGINA / sizeof(uint);
-const uint BPU = sizeof(uint) * 8;
-
-const uint fine_utente_condiviso = (NTAB_SIS_C + NTAB_SIS_P + NTAB_MIO_C + NTAB_USR_C) * DIM_MACROPAGINA;
-
-// converte v in un indirizzo
-inline
-void* addr(unsigned int v) {
-	return reinterpret_cast<void*>(v);
-}
-
-// converte un indirizzo in un unsigned int
-inline
-unsigned int a2i(void* v) {
-	return reinterpret_cast<unsigned int>(v);
-}
+const uint32_t fine_utente_condiviso = (NTAB_SIS_C + NTAB_SIS_P + NTAB_MIO_C + NTAB_USR_C) * DIM_MACROPAGINA;
 
 union descrittore_pagina {
 	// caso di pagina presente
@@ -82,11 +64,11 @@ struct pagina {
 	};
 };
 
-short indice_direttorio(uint indirizzo) {
+short indice_direttorio(uint32_t indirizzo) {
 	return (indirizzo & 0xffc00000) >> 22;
 }
 
-short indice_tabella(uint indirizzo) {
+short indice_tabella(uint32_t indirizzo) {
 	return (indirizzo & 0x003ff000) >> 12;
 }
 
@@ -210,7 +192,7 @@ public:
 };
 
 
-void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
+void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
 {
 	FILE* exe;
 	TabCache tabc;
@@ -244,9 +226,9 @@ void do_map(char* fname, int liv, void*& entry_point, uint& last_address)
 	last_address = 0;
 	Segmento *s = NULL;
 	while (s = e->prossimo_segmento()) {
-		uint ind_virtuale = s->ind_virtuale();
-		uint dimensione = s->dimensione();
-		uint end_addr = ind_virtuale + dimensione;
+		uint32_t ind_virtuale = s->ind_virtuale();
+		uint32_t dimensione = s->dimensione();
+		uint32_t end_addr = ind_virtuale + dimensione;
 
 		if (end_addr > last_address) 
 			last_address = end_addr;
@@ -321,7 +303,7 @@ int main(int argc, char* argv[])
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	
-	bm_create(&blocks, new uint[nbmblocks * UPB], dim);
+	bm_create(&blocks, new uint32_t[nbmblocks * UPB], dim);
 
 	for (int i = 0; i < dim; i++)
 		bm_free(&blocks, i);
@@ -335,12 +317,12 @@ int main(int argc, char* argv[])
 
 	memset(&main_dir, 0, sizeof(direttorio));
 
-	uint last_address;
+	uint32_t last_address;
 	do_map(argv[2], 0, superblock.io_entry, last_address);
-	superblock.io_end = addr(last_address);
+	superblock.io_end = last_address;
 
 	do_map(argv[3], 1, superblock.user_entry, last_address);
-	superblock.user_end = addr(last_address);
+	superblock.user_end = last_address;
 
 	// le tabelle condivise per lo heap:
 	// - prima, eventuali descrittori di pagina nell'ultima tabella 

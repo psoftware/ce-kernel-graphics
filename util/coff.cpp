@@ -1,14 +1,11 @@
-#if __GNUC__ >= 3 && !defined(WIN)
-	#include <cstdio>
-	#include <cstdlib>
-	#include <cstring>
+#include <stdint.h>
 
-	using namespace std;
-#else
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <string.h>
-#endif
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+using namespace std;
+
 #include "costanti.h"
 #include "interp.h"
 #include "coff.h"
@@ -60,7 +57,7 @@ public:
 	EseguibileCoff_go32(FILE* pexe_);
 	bool init();
 	virtual Segmento* prossimo_segmento();
-	virtual void* entry_point() const;
+	virtual uint32_t entry_point() const;
 	~EseguibileCoff_go32();
 };
 
@@ -137,9 +134,9 @@ Segmento* EseguibileCoff_go32::prossimo_segmento()
 	return NULL;
 }
 
-void* EseguibileCoff_go32::entry_point() const
+uint32_t EseguibileCoff_go32::entry_point() const
 {
-	return (void*)ah.entry;
+	return ah.entry;
 }
 
 
