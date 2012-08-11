@@ -1,25 +1,24 @@
 #ifndef SWAP_H__
 #define SWAP_H__
-#if __GNUC__ >= 3 && !defined(WIN)
-	#include <cstdlib>
 
-	using namespace std;
-#else
-	#include <stdlib.h>
-#endif
+#include <stdint.h>
 
-typedef unsigned int block_t;
+#include <cstdlib>
+
+using namespace std;
+
+typedef uint32_t block_t;
 
 struct superblock_t {
-	char	magic[4];
-	block_t	bm_start;
-	int	blocks;
-	block_t	directory;
-	void*   user_entry;
-	void*   user_end;
-	void*	io_entry;
-	void*   io_end;
-	unsigned int	checksum;
+	int8_t		magic[4];
+	block_t		bm_start;
+	uint32_t	blocks;
+	block_t		directory;
+	uint32_t	user_entry;
+	uint32_t	user_end;
+	uint32_t	io_entry;
+	uint32_t	io_end;
+	uint32_t	checksum;
 };
 
 // interfaccia generica agli swap

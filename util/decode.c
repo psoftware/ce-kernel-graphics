@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -34,15 +35,15 @@ union descrittore_pagina {
 };
 
 struct superblock_t {
-	char		magic[4];
-	unsigned int	bm_start;
-	int		blocks;
-	unsigned int	directory;
-	int		(*user_entry)(int);
-	void*		user_end;
-	int		(*io_entry)(int);
-	void*		io_end;
-	unsigned int	checksum;
+	int8_t		magic[4];
+	uint32_t	bm_start;
+	uint32_t	blocks;
+	uint32_t	directory;
+	uint32_t	user_entry;
+	uint32_t	user_end;
+	uint32_t	io_entry;
+	uint32_t	io_end;
+	uint32_t	checksum;
 };
 
 int get_bit() {

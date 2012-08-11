@@ -52,25 +52,25 @@ build/parse: util/parse.c util/src.h
 	gcc -m32 -o build/parse util/parse.c
 
 util/coff.o: include/costanti.h util/interp.h util/coff.h util/dos.h util/coff.cpp
-	g++ -m32 -c -g -Iinclude -o util/coff.o util/coff.cpp
+	g++ -c -g -Iinclude -o util/coff.o util/coff.cpp
 
 util/elf.o:  include/costanti.h util/interp.h util/elf.h util/elf.cpp
-	g++ -m32 -c -g -Iinclude -o util/elf.o util/elf.cpp
+	g++ -c -g -Iinclude -o util/elf.o util/elf.cpp
 
 util/interp.o: include/costanti.h util/interp.h util/interp.cpp
-	g++ -m32 -c -g -Iinclude -o util/interp.o util/interp.cpp
+	g++ -c -g -Iinclude -o util/interp.o util/interp.cpp
 
 util/swap.o: include/costanti.h util/swap.h util/swap.cpp
-	g++ -m32 -c -g -Iinclude -o util/swap.o util/swap.cpp
+	g++ -c -g -Iinclude -o util/swap.o util/swap.cpp
 
 util/fswap.o: include/costanti.h util/swap.h util/fswap.cpp
-	g++ -m32 -c -g -Iinclude -o util/fswap.o util/fswap.cpp
+	g++ -c -g -Iinclude -o util/fswap.o util/fswap.cpp
 
 util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
-	g++ -m32 -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
+	g++ -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
 
 build/creatimg: util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
-	g++ -m32 -g -o build/creatimg util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
+	g++ -g -o build/creatimg util/creatimg.o util/elf.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
 $(SWAP):

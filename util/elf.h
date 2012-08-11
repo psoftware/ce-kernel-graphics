@@ -1,7 +1,12 @@
-typedef unsigned short Elf32_Half;
-typedef unsigned int   Elf32_Word;
-typedef unsigned int   Elf32_Off;
-typedef void*          Elf32_Addr;
+#ifndef ELF_H_
+#define ELF_H_
+
+#include <stdint.h>
+
+typedef uint16_t   Elf32_Half;
+typedef uint32_t   Elf32_Word;
+typedef uint32_t   Elf32_Off;
+typedef uint32_t   Elf32_Addr;
 
 
 #define ET_NONE		0
@@ -127,4 +132,4 @@ typedef struct {
 #define SHF_EXECINSTR              0x4
 #define SHF_MASKPROC               0xf0000000
                      
-
+#endif

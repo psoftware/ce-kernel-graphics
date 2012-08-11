@@ -1,19 +1,16 @@
-#if __GNUC__ >= 3 && !defined(WIN)
-	#include <cstdio>
-	#include <cstdlib>
-	#include <cstring>
+#include <stdint.h>
 
-	using namespace std;
-#else
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <string.h>
-#endif
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+using namespace std;
+
 #include "costanti.h"
 #include "interp.h"
 #include "elf.h"
 
-typedef unsigned int uint;
+typedef unsigned int uint32_t;
 
 // interprete per formato elf
 class InterpreteElf32: public Interprete {
@@ -36,15 +33,15 @@ class EseguibileElf32: public Eseguibile {
 	class SegmentoElf32: public Segmento {
 		EseguibileElf32 *padre;
 		Elf32_Phdr* ph;
-		uint curr_offset;
-		uint curr;
-		uint da_leggere;
-		uint ancora;
+		uint32_t curr_offset;
+		uint32_t curr;
+		uint32_t da_leggere;
+		uint32_t ancora;
 	public:
 		SegmentoElf32(EseguibileElf32 *padre_, Elf32_Phdr* ph_);
 		virtual bool scrivibile() const;
-		virtual uint ind_virtuale() const;
-		virtual uint dimensione() const;
+		virtual uint32_t ind_virtuale() const;
+		virtual uint32_t dimensione() const;
 		virtual bool finito() const;
 		virtual bool copia_pagina(void* dest);
 		virtual bool prossima_pagina();
@@ -57,7 +54,7 @@ public:
 	EseguibileElf32(FILE* pexe_);
 	bool init();
 	virtual Segmento* prossimo_segmento();
-	virtual void* entry_point() const;
+	virtual uint32_t entry_point() const;
 	~EseguibileElf32();
 };
 
@@ -124,7 +121,7 @@ Segmento* EseguibileElf32::prossimo_segmento()
 	return NULL;
 }
 
-void* EseguibileElf32::entry_point() const
+uint32_t EseguibileElf32::entry_point() const
 {
 	return h.e_entry;
 }
@@ -149,12 +146,12 @@ bool EseguibileElf32::SegmentoElf32::scrivibile() const
 	return (ph->p_flags & PF_W);
 }
 
-uint EseguibileElf32::SegmentoElf32::ind_virtuale() const
+uint32_t EseguibileElf32::SegmentoElf32::ind_virtuale() const
 {
-	return (uint)(ph->p_vaddr);
+	return ph->p_vaddr;
 }
 
-uint EseguibileElf32::SegmentoElf32::dimensione() const
+uint32_t EseguibileElf32::SegmentoElf32::dimensione() const
 {
 	return ph->p_memsz;
 }
