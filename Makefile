@@ -49,7 +49,7 @@ utente/lib.o: utente/lib.cpp utente/include/lib.h
 
 # creazione di parse e createimg
 build/parse: util/parse.c util/src.h
-	gcc -m32 -o build/parse util/parse.c
+	gcc -o build/parse util/parse.c
 
 util/coff.o: include/costanti.h util/interp.h util/coff.h util/dos.h util/coff.cpp
 	g++ -c -g -Iinclude -o util/coff.o util/coff.cpp
