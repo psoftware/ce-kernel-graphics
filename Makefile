@@ -4,48 +4,61 @@ START_UTENTE=	 0x80000000
 SWAP_SIZE=	 20M
 SWAP=		 swap.img
 
-CXXFLAGS=-fno-exceptions -fno-rtti -fno-stack-protector -fno-pic -g -fcall-saved-esi -fcall-saved-edi -fcall-saved-ebx -m32
-CPPFLAGS=-nostdinc -Iinclude -g -m32
+NCC ?= g++
+NLD ?= ld
+
+NCFLAGS=\
+	-nostdlib		\
+	-fno-exceptions 	\
+	-fno-rtti 		\
+	-fno-stack-protector 	\
+	-fno-pic 		\
+	-fcall-saved-esi 	\
+	-fcall-saved-edi 	\
+	-fcall-saved-ebx 	\
+	-Iinclude		\
+	-m32			\
+	-g
 
 all: build/sistema \
      build/parse   \
      build/creatimg
      
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
-	ld -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
+	$(NLD) -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
 
 build/io: io/io_s.o io/io_cpp.o
-	ld -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
+	$(NLD) -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
 
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
-	ld -melf_i386 -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
+	$(NLD) -melf_i386 -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
 
 # compilazione di sistema.s e sistema.cpp
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
-	gcc $(CPPFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
+	$(NCC) $(NCFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
 sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
-	g++ $(CPPFLAGS) $(CXXFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
+	$(NCC) $(NCFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
 io/io_s.o: io/io.S include/costanti.h
-	gcc $(CPPFLAGS) -c io/io.S -o io/io_s.o
+	$(NCC) $(NCFLAGS) -c io/io.S -o io/io_s.o
 
 io/io_cpp.o: io/io.cpp include/costanti.h
-	g++ $(CPPFLAGS) $(CXXFLAGS) -c io/io.cpp -o io/io_cpp.o
+	$(NCC) $(NCFLAGS) -c io/io.cpp -o io/io_cpp.o
 
 # compilazione di utente.s e utente.cpp
 utente/uten_s.o: utente/utente.S include/costanti.h
-	gcc $(CPPFLAGS) -c utente/utente.S -o utente/uten_s.o
+	$(NCC) $(NCFLAGS) -c utente/utente.S -o utente/uten_s.o
 
 utente/utente.cpp: build/parse utente/prog/*.in utente/include/* utente/prog
 	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
-	g++ $(CXXFLAGS) $(CPPFLAGS) -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
+	$(NCC) $(NCFLAGS) -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
 
 utente/lib.o: utente/lib.cpp utente/include/lib.h
-	g++ $(CXXFLAGS) $(CPPFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
+	$(NCC) $(NCFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
 
 # creazione di parse e createimg
 build/parse: util/parse.c util/src.h
