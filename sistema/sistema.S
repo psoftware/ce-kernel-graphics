@@ -592,8 +592,8 @@ init_idt:
 	carica_gate	0x2B		handler_11	LIV_SISTEMA
 	carica_gate	0x2C		handler_12	LIV_SISTEMA
 	carica_gate	0x2D		handler_13	LIV_SISTEMA
-	carica_gate	0x2E 		driver_hd0 	LIV_SISTEMA
-	carica_gate	0x2F 		driver_hd1 	LIV_SISTEMA
+	carica_gate	0x2E 		handler_14 	LIV_SISTEMA
+	carica_gate	0x2F 		handler_15 	LIV_SISTEMA
 
 	// primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
@@ -602,8 +602,6 @@ init_idt:
 	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
 	carica_gate	tipo_s		a_sem_signal	LIV_UTENTE
 	carica_gate	tipo_d		a_delay		LIV_UTENTE
-	carica_gate	tipo_rl		a_readlog	LIV_UTENTE
-	carica_gate	tipo_re		a_resident	LIV_UTENTE
 	carica_gate	tipo_l		a_log		LIV_UTENTE
 	carica_gate	tipo_ep		a_end_program	LIV_SISTEMA
 
@@ -614,12 +612,6 @@ init_idt:
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 	carica_gate	tipo_tra	a_trasforma	LIV_SISTEMA
-
-	// gestione HD (derivato da Faggioli)
-	carica_gate	io_tipo_hdr	a_readhd_n	LIV_SISTEMA
-	carica_gate	io_tipo_hdw	a_writehd_n	LIV_SISTEMA
-	carica_gate	io_tipo_dmahdr	a_dmareadhd_n	LIV_SISTEMA
-	carica_gate	io_tipo_dmahdw	a_dmawritehd_n	LIV_SISTEMA
 
 	// PCI
 	carica_gate	io_tipo_pcif	a_pci_find	LIV_SISTEMA
@@ -1431,56 +1423,8 @@ comm_exc:
 	jmp a_abort_p
 
 //////////////////////////////////////////////////////////
-// primitive richiamate dal nucleo stesso (page fault)  //
+// primitive richiamate dal nucleo stesso	        //
 //////////////////////////////////////////////////////////
-// le routine che gestiscono il page fault sono particolari, in quanto possono 
-// a loro volta invocare altre routine del nucleo stesso. In particolare, sono 
-// necessarie le seguenti:
-//
-	.global sem_ini	// [4.11]
-sem_ini:
-	int $tipo_si
-	ret
-
-	.global sem_wait	// [4.11]
-sem_wait:
-	int $tipo_w
-	ret
-
-	.global sem_signal	// [4.11]
-sem_signal:
-	int $tipo_s
-	ret
-
-	.global activate_p
-activate_p:
-	int $tipo_a
-	ret
-
-	.global terminate_p
-terminate_p:
-	int $tipo_t
-	ret
-
-	.global readhd_n
-readhd_n:
-	int $io_tipo_hdr
-	ret
-
-	.global writehd_n
-writehd_n:
-	int $io_tipo_hdw
-	ret
-
-	.global dmareadhd_n
-dmareadhd_n:
-	int $io_tipo_dmahdr
-	ret
-
-	.global dmawritehd_n
-dmawritehd_n:
-	int $io_tipo_dmahdw
-	ret
 
 	.global panic
 panic:
@@ -1492,20 +1436,11 @@ abort_p:
 	int $tipo_ab
 	ret
 
-	.global nwfi
-nwfi:
-	int $tipo_nwfi
-	ret
-
 	.global end_program
 end_program:
 	int $tipo_ep
 	ret
 
-	.global delay
-delay:
-	int $tipo_d
-	ret
 
 ////////////////////////////////////////////////////////
 // handler/driver                                     //
@@ -1668,28 +1603,28 @@ handler_13:
 	call carica_stato
 	iret
 
-// driver degli hard disk sul canale primario
-	.extern c_driverhd
-driver_hd0:
+handler_14:
 	call salva_stato
 	call inspronti
-	pushl $0
-	call c_driverhd
-	pushl $1
-	call inviaEOI
+
+	movl $14, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
 	call carica_stato
 	iret
 
-// driver degli hard disk sul canale secondario
-driver_hd1:
+handler_15:
 	call salva_stato
 	call inspronti
-	pushl $1
-	call c_driverhd
-	pushl $1
-	call inviaEOI
+
+	movl $15, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
 	call carica_stato
 	iret
+
 	
 
 ////////////////////////////////////////////////////////
@@ -1722,16 +1657,7 @@ a_sem_ini:	// routine int $tipo_si [4.11]
 	iret
 
 	.extern c_sem_wait
-	.global possibile_pf1
 a_sem_wait:	// routine int $tipo_w [4.11][6.5]
-	pushl %edx		// salvataggio di un registro, sia EDX
-	movl 12(%esp), %edx	// indiritto del top della pila utente
-possibile_pf1:
-	movl 4(%edx), %edx	// prelievo del parametro,
-	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
-	// interruzioni (mascherabili) di nuovo abilitate
-	movl %edx, par		// memorizz. in una variabile di sistema
-	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
 	call c_sem_wait
@@ -1740,16 +1666,7 @@ possibile_pf1:
 	iret
 
 	.extern c_sem_signal
-	.global possibile_pf2
 a_sem_signal:	// routine int $tipo_s [4.11][6.5]
-	pushl %edx		// salvataggio di un registro, sia EDX
-	movl 12(%esp), %edx	// indiritto del top della pila utente
-possibile_pf2:
-	movl 4(%edx), %edx	// prelievo del parametro,
-	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
-	// interruzioni (mascherabili) di nuovo abilitate
-	movl %edx, par		// memorizz. in una variabile di sistema
-	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro sem
 	call c_sem_signal
@@ -1758,16 +1675,7 @@ possibile_pf2:
 	iret
 
 	.extern c_delay
-	.global possibile_pf3
 a_delay:	// routine int $tipo_d [4.16][6.5]
-	pushl %edx		// salvataggio di un registro, sia EDX
-	movl 12(%esp), %edx	// indiritto del top della pila utente
-possibile_pf3:
-	movl 4(%edx), %edx	// prelievo del parametro,
-	// possibile page-fault e riabilitazione delle interruzioni (mascherabili)
-	// interruzioni (mascherabili) di nuovo abilitate
-	movl %edx, par		// memorizz. in una variabile di sistema
-	popl %edx		// ripristino registro utilizzato
 	call salva_stato
 	copia_param 1 0	// ricopiamento del parametro n
 	call c_delay
@@ -1775,27 +1683,7 @@ possibile_pf3:
 	call carica_stato
 	iret
 
-	.extern c_readlog
-a_readlog:	// routine int $tipo_rl
-	salva_registri
-	copia_param 1 7
-	cavallo_di_troia 0
-	call c_readlog
-	addl $4, %esp
-	carica_registri
-	iret
 
-	.extern c_resident 	// [10.6]
-a_resident:	// routine int $tipo_r
-	salva_reg_rit
-	copia_param 2 6		// ricopiamento dei parametri
-	cavallo_di_troia 0	// verifica ind_virt
-	cavallo_di_troia2 0 1	// verifica ind_virt+quanti
-	call c_resident
-	addl $8, %esp
-	carica_reg_rit
-	iret
-	
 //
 // Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
 //
@@ -1891,34 +1779,6 @@ a_log:
 // Funzioni di utilita' per la gestione degli hard disk
 ////////////////////////////////////////////////////////////////////
 
-
-// lettura di n settori
-	.global a_readhd_n
-	.extern c_readhd_n
-a_readhd_n:
-	salva_registri
-	copia_param 6 7
-	cavallo_di_troia 2
-	cavallo_di_troia2 2 4
-	cavallo_di_troia 5
-	call c_readhd_n
-	addl $24, %esp
-	carica_registri
-	iret
-
-// scrittura di n settori
-	.global a_writehd_n
-	.extern c_writehd_n
-a_writehd_n:
-	salva_registri
-	copia_param 6 7
-	cavallo_di_troia 2
-	cavallo_di_troia2 2 4
-	cavallo_di_troia 5
-	call c_writehd_n
-	addl $24, %esp
-	carica_registri
-	iret
 
 // lettura di n settori
 	.global a_dmareadhd_n
