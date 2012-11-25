@@ -1425,6 +1425,29 @@ comm_exc:
 //////////////////////////////////////////////////////////
 // primitive richiamate dal nucleo stesso	        //
 //////////////////////////////////////////////////////////
+	.global sem_ini
+sem_ini:
+	int $tipo_si
+	ret
+
+	.global sem_wait
+sem_wait:
+	int $tipo_w
+	ret
+
+	.global activate_p
+activate_p:
+	int $tipo_a
+	ret
+	
+	.global terminate_p
+terminate_p:
+	int $tipo_t
+	ret
+
+	.global nwfi
+nwfi:
+	int $tipo_nwfi
 
 	.global panic
 panic:

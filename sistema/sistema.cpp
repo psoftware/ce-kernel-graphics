@@ -1107,6 +1107,78 @@ bool hd_sel_drv(des_ata* p_des, natl drv);
 bool hd_wait_data(ioaddr iSTS);
 // *)
 
+void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
+// [9.3.1]
+extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti); // [9.3.1]
+extern "C" void c_readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
+{
+	des_ata *p_des;
+
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (ata >= A || drv >= 2) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	p_des = &hd[ata];
+
+	// (* controllo che si voglia usare un drive effettivamente presente
+	if (!p_des->disco[drv].presente) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che siano stati chiesti settori esistenti
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
+		errore = D_ERR_BOUNDS;
+		return;
+	}
+	// *)
+
+	errore = 0;
+	starthd_in(p_des, drv, vetti, primo, quanti);
+        if (!hd_wait_data(p_des->indreg.iSTS))
+       		inputb(p_des->indreg.iERR, p_des->errore);
+        else
+                inputbw(p_des->indreg.iBR, vetti, quanti * 256);
+}
+
+void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti);
+// [9.3.1]
+extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
+{
+	des_ata *p_des;
+	
+	// (* le primitive non devono mai fidarsi dei parametri
+	if (ata >= A || drv >= 2) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	p_des = &hd[ata];
+
+	// (* controllo che si voglia usare un drive effettivamente presente
+	if (!p_des->disco[drv].presente) {
+		errore = D_ERR_PRESENCE;
+		return;
+	}
+	// *)
+
+	// (* controlliamo che siano stati chiesti settori esistenti
+	if (primo + quanti > p_des->disco[drv].tot_sett) {
+		errore = D_ERR_BOUNDS;
+		return;
+	}
+	// *)
+
+	starthd_out(p_des, drv, vetti, primo, quanti);
+	hd_wait_data(p_des->indreg.iSTS);
+	errore = p_des->errore;
+}
+
 
 // (* DMA
 void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
@@ -2887,7 +2959,7 @@ bool leggi_partizioni(int ata, int drv)
 
 	// lettura del Master Boot Record (LBA = 0)
 	settore = 0;
-	//readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
+	c_readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
 	if (errore != 0)
 		goto errore;
 		
@@ -2919,7 +2991,7 @@ bool leggi_partizioni(int ata, int drv)
 		natl offset_logica = offset_estesa;
 		while (1) {
 			settore = offset_logica;
-			//readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
+			c_readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
 			if (errore != 0)
 				goto errore;
 			p = reinterpret_cast<des_part*>(buf + 446);
@@ -3033,6 +3105,34 @@ void hd_prepare_prd(addr prd, addr vett, natl quanti)
 	*pp |= 0x80000000;
 }
 // *)
+
+// [9.3.1]
+void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
+{
+	p_des->cont = quanti;
+	p_des->punt = vetti;
+	p_des->comando = READ_SECT;
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);	
+	hd_write_command(READ_SECT, p_des->indreg.iCMD);
+}
+
+// [9.3.1]
+void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti)	
+{
+	p_des->cont = quanti;
+	p_des->punt = vetto + DIM_BLOCK / 2;
+	p_des->comando = WRITE_SECT;
+	hd_sel_drv(p_des, drv);
+	hd_write_address(p_des, primo);	
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);	
+	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
+	hd_wait_data(p_des->indreg.iSTS);
+	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
+}
 
 // Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
 // 
@@ -3394,7 +3494,7 @@ void leggi_blocco(natl blocco, void* dest)
 		panic("Errore interno");
 	}
 
-	c_dmareadhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
+	c_readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
@@ -3435,7 +3535,7 @@ bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
 		return false;
 	}
 	
-	c_dmareadhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
+	c_readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
 
 	if (errore != 0) { 
 		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
