@@ -1,0 +1,10 @@
+- swap sempre su PM0
+	- rimozione codice lettura partizioni
+	- riconoscimento hard disk?
+- heap sempre della stessa dimensione
+	- rimozione argomenti nucleo
+- parte utente condivisa residente
+	- semplificazione swap
+- log sempre su seriale
+	- rimozione logger.in
+	- COM1 riservata
