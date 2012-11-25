@@ -8,3 +8,4 @@
 - log sempre su seriale
 	- rimozione logger.in
 	- COM1 riservata
+- passare ad IOAPIC
