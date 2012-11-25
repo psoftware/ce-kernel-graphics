@@ -1312,7 +1312,7 @@ void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quan
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);			
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_go_inout(p_des->indreg.iDCR);	
+	//hd_go_inout(p_des->indreg.iDCR);	
 	hd_write_command(READ_DMA, p_des->indreg.iCMD); 
 	// 4) avviare la funzione di bus mastering
 	inputb(p_des->bus_master.iCMD, work);
@@ -1344,7 +1344,7 @@ void dmastarthd_out(des_ata *p_des, natl drv, natw vetti[], natl primo, natb qua
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);		
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_go_inout(p_des->indreg.iDCR);
+	//hd_go_inout(p_des->indreg.iDCR);
 	hd_write_command(WRITE_DMA, p_des->indreg.iCMD);
 	// 4) avviare la funzione di bus mastering
 	inputb(p_des->bus_master.iCMD, work);
@@ -3115,7 +3115,7 @@ void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_go_inout(p_des->indreg.iDCR);	
+	//hd_go_inout(p_des->indreg.iDCR);	
 	hd_write_command(READ_SECT, p_des->indreg.iCMD);
 }
 
@@ -3128,7 +3128,7 @@ void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti
 	hd_sel_drv(p_des, drv);
 	hd_write_address(p_des, primo);	
 	outputb(quanti, p_des->indreg.iSCR);
-	hd_go_inout(p_des->indreg.iDCR);	
+	//hd_go_inout(p_des->indreg.iDCR);	
 	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
 	hd_wait_data(p_des->indreg.iSTS);
 	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
