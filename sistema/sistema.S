@@ -839,8 +839,6 @@ disattiva_paginazione:
 
 a_end_program:
 	cli
-	call reset_8259
-	call reset_kbd
 	movl shutdown_esp, %esp
 	movl shutdown_ebp, %ebp
 	call disattiva_paginazione
@@ -1052,47 +1050,6 @@ init_8259:
 	leave
 	ret
 
-// ripristina il controllore delle interruzioni, con la base compatibile con il DOS.
-// Inizializzo la modalita' fully nasted e i tipi base sono rispettivamente 0x08 per il master
-// e 0x70 per lo slave.
-		.global reset_8259
-reset_8259:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-
-	// master
-	movb $0x11, %al		// cascata
-	outb %al, $ICW1M
-	movb $0x08, %al		// nuova base
-	outb %al, $ICW2M
-	movb $0x04, %al		// slave connesso a IR2
-	outb %al, $ICW3M
-	movb $0x01, %al		// modo annidato
-	outb %al, $ICW4M
-	movb save_pic_m, %al	// maschera salvata in precedenza
-	outb %al, $OCW1M	
-	movb $0x48, %al
-	outb %al, $OCW3M	// fully nested
-
-	// slave
-	movb $0x11, %al		// cascata
-	outb %al, $ICW1S
-	movb $0x70, %al		// nuova base
-	outb %al, $ICW2S
-	movb $0x02, %al		// id. dello slave
-	outb %al, $ICW3S
-	movb $0x01, %al		// modo annidato
-	outb %al, $ICW4S
-	movb save_pic_s, %al	// maschera salvata in precedenza
-	outb %al, $OCW1S
-	movb $0x48, %al		// fully nested
-	outb %al, $OCW3S
-
-	popl %eax
-	leave
-	ret
-
 	.global unmask_irq
 unmask_irq:
 	pushl %ebp
@@ -1165,16 +1122,6 @@ attiva_timer:
         popl %eax
 	leave
 	ret
-
-reset_kbd:
-	pushl %eax
-	movb $0x60, %al
-	outb %al, $0x64
-	movb $0x61, %al
-	outb %al, $0x60
-	popl %eax
-	ret
-
 
 	.global salta_a_main
 salta_a_main:
