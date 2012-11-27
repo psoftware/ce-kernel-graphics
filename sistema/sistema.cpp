@@ -1063,8 +1063,6 @@ extern "C" void c_panic(cstr msg, natl eip1, natw cs, natl eflags, natl eip2);
 extern natl ticks;
 extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
-extern "C" void disattiva_timer();
-extern "C" natl  calibra_tsc();
 void ini_COM1();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
@@ -1227,18 +1225,8 @@ natl ceild(natl v, natl q)
 
 void main_sistema(int n)
 {
-	natl clocks_per_sec;
 	natl sync_io;
 	natl dummy_proc = (natl)n; 
-
-	// (* attiviamo il timer e calibriamo il contatore per i microdelay
-	//    (necessari nella corretta realizzazione del driver dell'hard disk)
-	attiva_timer(DELAY);
-	clocks_per_sec = calibra_tsc();
-	clocks_per_usec = ceild(clocks_per_sec, 1000000UL);
-	flog(LOG_INFO, "calibrazione del tsc: %d clocks/usec", clocks_per_usec);
-	disattiva_timer();
-	// *)
 
 	// ( inizializzazione dello swap, che comprende la lettura
 	//   degli entry point di start_io e start_utente (vedi [10.4])
