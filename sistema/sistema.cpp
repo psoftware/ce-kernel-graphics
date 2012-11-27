@@ -1034,325 +1034,6 @@ extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
 		abort_p();
 	}
 }
-/////////////////////////////////////////////////////////////////////////////////
-//                    GESTIONE DEI DISCHI RIGIDI [9]                           //
-/////////////////////////////////////////////////////////////////////////////////
-
-enum hd_cmd {			// [9.3]
-	// (* useremo anche il comando per l'identificazione del dispositivo
-	IDENTIFY	= 0xEC, 
-	// *)
-	WRITE_DMA	= 0xCA,
-	READ_DMA	= 0xC8,
-	WRITE_SECT	= 0x30,
-	READ_SECT	= 0x20
-};
-
-struct interfata_reg {	// [9.3]
-	ioaddr iBR;			
-	ioaddr iCNL, iCNH, iSNR, iHND, iSCR, iERR,
-	       iCMD, iSTS, iDCR, iASR;
-};
-
-// (* gestiamo anche la partizioni (vedi [9.4])
-struct partizione {
-	int  type;	/* tipo della partizione */
-	natl first;	/* primo settore della partizione */
-	natl dim;	/* dimensione in settori */
-	partizione*  next;
-};
-
-/* informazioni aggiuntive specifiche per ogni drive */
-struct drive {			
-	bool presente;	/* disco presente o assente */
-	bool dma;		/* DMA abilitato? */
-	natl tot_sett;	/* numero di settori dell'intero disco */
-	partizione* part; /* partizioni all'interno del disco */
-};
-// *)
-struct des_pci_ide {
-	ioaddr iCMD, iSTATUS, iDTPR;
-};
-
-struct des_ata {	// [9.3]	
-	interfata_reg indreg;
-	des_pci_ide bus_master;
-	natl prd[MAX_PRD];
-	hd_cmd comando;
-	natb errore;
-	natl mutex;
-	natl sincr;
-	natb cont;
-	addr punt;	
-	// (* manteniamo delle informazioni aggiuntive per ogni dispositivo
-	drive disco[2];
-	// *)
-};
-
-const natl A = 2;		// [9.3]
-extern "C" des_ata hd[A];	// [9.3]
-
-// (* possibili errori nella gestione degli hard disk
-const natl D_ERR_NONE = 0x00;		/* nessun errore */
-const natl D_ERR_BOUNDS = 0xFF;		/* accesso al di fuori della partizione */
-const natl D_ERR_PRESENCE = 0xFE;	/* dispositivo non trovato */
-const natl D_ERR_GENERIC = 0xFD;	/* errore generico */
-const natl D_ERR_NODMA   = 0xFC;	/* DMA non disponibile */
-const natl D_ERR_NOPRD	 = 0xFB;	/* PRD insufficienti */
-// *)
-
-// [9.3], implementazione in [P_HARDDISK] avanti
-bool hd_sel_drv(des_ata* p_des, natl drv);
-// (* hd_wait_data la implementiamo in C++ (vedi [P_HARDDISK] avanti)
-bool hd_wait_data(ioaddr iSTS);
-// *)
-
-void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
-// [9.3.1]
-extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti); // [9.3.1]
-extern "C" void c_readhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
-{
-	des_ata *p_des;
-
-	// (* le primitive non devono mai fidarsi dei parametri
-	if (ata >= A || drv >= 2) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	p_des = &hd[ata];
-
-	// (* controllo che si voglia usare un drive effettivamente presente
-	if (!p_des->disco[drv].presente) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che siano stati chiesti settori esistenti
-	if (primo + quanti > p_des->disco[drv].tot_sett) {
-		errore = D_ERR_BOUNDS;
-		return;
-	}
-	// *)
-
-	errore = 0;
-	starthd_in(p_des, drv, vetti, primo, quanti);
-        if (!hd_wait_data(p_des->indreg.iSTS))
-       		inputb(p_des->indreg.iERR, p_des->errore);
-        else
-                inputbw(p_des->indreg.iBR, vetti, quanti * 256);
-}
-
-void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti);
-// [9.3.1]
-extern "C" void c_writehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
-{
-	des_ata *p_des;
-	
-	// (* le primitive non devono mai fidarsi dei parametri
-	if (ata >= A || drv >= 2) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	p_des = &hd[ata];
-
-	// (* controllo che si voglia usare un drive effettivamente presente
-	if (!p_des->disco[drv].presente) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che siano stati chiesti settori esistenti
-	if (primo + quanti > p_des->disco[drv].tot_sett) {
-		errore = D_ERR_BOUNDS;
-		return;
-	}
-	// *)
-
-	starthd_out(p_des, drv, vetti, primo, quanti);
-	hd_wait_data(p_des->indreg.iSTS);
-	errore = p_des->errore;
-}
-
-
-// (* DMA
-void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
-extern "C" void c_dmareadhd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb &errore)
-{
-	des_ata *p_des;
-	
-	// (* le primitive non devono mai fidarsi dei parametri
-	if (ata >= A || drv >= 2) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	p_des = &hd[ata];
-
-	// (* controllo che si voglia usare un drive effettivamente presente
-	if (!p_des->disco[drv].presente) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che siano stati chiesti settori esistenti
-	if (primo + quanti > p_des->disco[drv].tot_sett) {
-		errore = D_ERR_BOUNDS;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che il DMA sia abilitato per questo dispositivo
-	if (!p_des->disco[drv].dma) {
-		errore = D_ERR_NODMA;
-		return;
-	}
-	// *)
-	
-	// (* controlliamo di avere sicuramente sufficienti PRD
-	if (quanti * 512 > (MAX_PRD - 2) * DIM_PAGINA) {
-		errore = D_ERR_NOPRD;
-		return;
-	}
-	// *)
-
-	dmastarthd_in(p_des, drv, vetti, primo, quanti);
-	hd_wait_data(p_des->indreg.iSTS);
-	errore = p_des->errore;
-}
-
-void dmastarthd_out(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti);
-extern "C" void c_dmawritehd_n(natl ata, natl drv, natw vetti[], natl primo, natb quanti, natb& errore)
-{
-	des_ata *p_des;
-	
-	// (* le primitive non devono mai fidarsi dei parametri
-	if (ata >= A || drv >= 2) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	p_des = &hd[ata];
-
-	// (* controllo che si voglia usare un drive effettivamente presente
-	if (!p_des->disco[drv].presente) {
-		errore = D_ERR_PRESENCE;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che siano stati chiesti settori esistenti
-	if (primo + quanti > p_des->disco[drv].tot_sett) {
-		errore = D_ERR_BOUNDS;
-		return;
-	}
-	// *)
-
-	// (* controlliamo che il DMA sia abilitato per questo dispositivo
-	if (!p_des->disco[drv].dma) {
-		errore = D_ERR_NODMA;
-		return;
-	}
-	// *)
-	
-	// (* controlliamo di avere sicuramente sufficienti PRD
-	if (quanti * 512 > (MAX_PRD - 2) * DIM_PAGINA) {
-		errore = D_ERR_NOPRD;
-		return;
-	}
-	// *)
-
-	dmastarthd_out(p_des, drv, vetti, primo, quanti);
-	hd_wait_data(p_des->indreg.iSTS);
-	errore = p_des->errore;
-}
-// *)
-
-const natl DIM_BLOCK = 512;
-extern "C" void hd_write_address(des_ata *p, natl primo);	// [9.3.1]
-extern "C" void hd_write_command(hd_cmd cmd, ioaddr iCMD);	// [9.3.1]
-extern "C" void hd_go_inout(ioaddr i_dev_ctl);	// [9.3.1]
-extern "C" void hd_halt_inout(ioaddr i_dev_ctl);// [9.3.1]
-extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti); // [9.3.1]
-extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg); // [9.3.1]
-extern "C" void inputb(ioaddr reg, natb &a);	// [9.3.1]
-extern "C" void outputb(natb a, ioaddr reg);	// [9.3.1]
-extern "C" void outputl(natl a, ioaddr reg);
-void hd_prepare_prd(addr prd, addr punt, natl quanti);
-
-void dmastarthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
-{
-	natb work;
-
-	p_des->comando = READ_DMA;
-	p_des->cont = 1;
-
-	// 1) preparare il PRD
-	hd_prepare_prd(p_des->prd, vetti, quanti * DIM_BLOCK);
-	// 2) comunicarne l'indirizzo al controllore PCI-IDE
-	outputl((natl)p_des->prd, p_des->bus_master.iDTPR);
-	//    specificare la direzione del trasferimento nel registro di comando
-	inputb(p_des->bus_master.iCMD, work);
-	work |= 0x8;	// scritture in memoria
-	outputb(work, p_des->bus_master.iCMD);
-	//    resettare i bit Interrupt e Error nel registro di stato
-	inputb(p_des->bus_master.iSTATUS, work);
-	work &= ~0x6;
-	outputb(work, p_des->bus_master.iSTATUS);
-
-	// 3) inviare il comando di lettura DMA al dispositivo
-	hd_sel_drv(p_des, drv);
-	hd_write_address(p_des, primo);			
-	outputb(quanti, p_des->indreg.iSCR);
-	//hd_go_inout(p_des->indreg.iDCR);	
-	hd_write_command(READ_DMA, p_des->indreg.iCMD); 
-	// 4) avviare la funzione di bus mastering
-	inputb(p_des->bus_master.iCMD, work);
-	work |= 1;
-	outputb(work, p_des->bus_master.iCMD);
-}
-
-void dmastarthd_out(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)	
-{
-	natb work;
-
-	p_des->comando = WRITE_DMA;
-	p_des->cont = 1;
-
-	// 1) preparare il PRD
-	hd_prepare_prd(p_des->prd, vetti, quanti * DIM_BLOCK);
-	// 2) comunicarne l'indirizzo al controllore PCI-IDE
-	outputl((natl)p_des->prd, p_des->bus_master.iDTPR);
-	//    specificare la direzione del trasferimento nel registro di comando
-	inputb(p_des->bus_master.iCMD, work);
-	work &= ~0x8;	// letture dalla memoria
-	outputb(work, p_des->bus_master.iCMD);
-	//    resettare i bit Interrupt e Error nel registro di stato
-	inputb(p_des->bus_master.iSTATUS, work);
-	work &= ~0x6;
-	outputb(work, p_des->bus_master.iSTATUS);
-
-	// 3) inviare il comando di scrittura DMA al dispositivo
-	hd_sel_drv(p_des, drv);
-	hd_write_address(p_des, primo);		
-	outputb(quanti, p_des->indreg.iSCR);
-	//hd_go_inout(p_des->indreg.iDCR);
-	hd_write_command(WRITE_DMA, p_des->indreg.iCMD);
-	// 4) avviare la funzione di bus mastering
-	inputb(p_des->bus_master.iCMD, work);
-	work |= 1;
-	outputb(work, p_des->bus_master.iCMD);
-}
-
-// per le inizializzazioni e le implementazioni mancanti, si veda [P_HARDDISK] avanti
 
 ///////////////////////////////////////////////////////////////////////////////////
 //                   INIZIALIZZAZIONE [10]                                       //
@@ -1548,7 +1229,7 @@ bool aggiungi_pe(proc_elem *p, natb irq);
 bool hd_init();
 bool log_init_usr();
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
-bool swap_init(int swap_ch, int swap_drv, int swap_part, bool swap_usedma);
+bool swap_init();
 
 // super blocco (vedi [10.5] e [P_SWAP] avanti)
 struct superblock_t {
@@ -1565,11 +1246,7 @@ struct superblock_t {
 
 // descrittore di swap (vedi [P_SWAP] avanti)
 struct des_swap {
-	natw channel;		// canale: 0 = primario, 1 = secondario
-	natw drive;		// dispositivo: 0 = master, 1 = slave
-	partizione* part;	// partizione all'interno del dispositivo
 	natl *free;		// bitmap dei blocchi liberi
-	bool dma;
 	superblock_t sb;	// contenuto del superblocco 
 } swap_dev; 	// c'e' un unico oggetto swap
 
@@ -1597,17 +1274,10 @@ void main_sistema(int n)
 	disattiva_timer();
 	// *)
 
-	// (* inizializziamo il driver dell'hard disk, in modo da poter leggere lo  swap
-	flog(LOG_INFO, "inizializzazione e riconoscimento hard disk...");
-	if (!hd_init())
-		goto error;
-	// *)
-
 	// ( inizializzazione dello swap, che comprende la lettura
 	//   degli entry point di start_io e start_utente (vedi [10.4])
-	if (!swap_init(swap_ch, swap_drv, swap_part, swap_usedma))
+	if (!swap_init())
 			goto error;
-	flog(LOG_INFO, "partizione di swap: %d+%d", swap_dev.part->first, swap_dev.part->dim);
 	flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
 			swap_dev.sb.blocks,
 			swap_dev.sb.user_entry,
@@ -2854,437 +2524,69 @@ bool init_pe()
 // )
 
 // ( [P_HARDDISK]
-#define HD_STS_ERR 0x01
-#define HD_STS_DRQ 0x08
-#define HD_STS_BSY 0x80
 
-extern "C" bool test_canale(ioaddr st, ioaddr stc, ioaddr stn);
-extern "C" int leggi_signature(ioaddr stc, ioaddr stn, ioaddr cyl, ioaddr cyh);
-extern "C" bool hd_software_reset(ioaddr dvctrl);
-extern "C" void hd_read_device(ioaddr i_drv_hd, natl& ms);
-extern "C" void hd_select_device(short ms, ioaddr iHND);
+const ioaddr iBR = 0x01F0;
+const ioaddr iCNL = 0x01F4;
+const ioaddr iCNH = 0x01F5;
+const ioaddr iSNR = 0x01F3;
+const ioaddr iHND = 0x01F6;
+const ioaddr iSCR = 0x01F2;
+const ioaddr iERR = 0x01F1;
+const ioaddr iCMD = 0x01F7;
+const ioaddr iSTS = 0x01F7;
+const ioaddr iDCR = 0x03F6;
 
-bool hd_sel_drv(des_ata* p_des, natl drv) // [9.3]
-{
-	natb stato;
-	natl curr_drv;
+void leggisett(natl lba, natb quanti, natw vetti[])
+{	
+	natb lba_0 = lba,
+		lba_1 = lba >> 8,
+		lba_2 = lba >> 16,
+		lba_3 = lba >> 24;
 
-	hd_select_device(drv, p_des->indreg.iHND);
+	outputb(lba_0, iSNR); 			// indirizzo del settore e selezione drive
+	outputb(lba_1, iCNL);
+	outputb(lba_2, iCNH);
+	natb hnd = (lba_3 & 0x0F) | 0xE0;
+	outputb(hnd, iHND);
+	outputb(quanti, iSCR); 			// numero di settori
+	outputb(0x0A, iDCR);			// disabilitazione richieste di interruzione
+	outputb(0x20, iCMD);			// comando di lettura
 
-	do {
-		inputb(p_des->indreg.iSTS, stato);
-	} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
-
-	hd_read_device(p_des->indreg.iHND, curr_drv);
-
-	return  (curr_drv == drv);
-}
-
-bool hd_wait_data(ioaddr iSTS) // [9.3.1]
-{
-	natb stato;
-
-	do {
-		inputb(iSTS, stato);
-	} while (stato & HD_STS_BSY);
-
-	return ( (stato & HD_STS_DRQ) && !(stato & HD_STS_ERR) );
-}
-
-// invia al log di sistema un messaggio che spiega l'errore passato come 
-// argomento
-void hd_print_error(natl i, natl d, natl sect, natb error)
-{
-	des_ata* p = &hd[i];
-	if (error == D_ERR_NONE)
-		return;
-
-	flog(LOG_ERR, "Errore su hard disk:");
-	if (i < 0 || i > A || d < 0 || d > 2) {
-		flog(LOG_ERR, "valori errati (%d, %d)");
-	} else {
-		flog(LOG_ERR, "%s/%s: ", (i ? "secondario" : "primario"), (d ? "slave"      : "master"));
-		switch (error) {
-		case D_ERR_PRESENCE:
-			flog(LOG_ERR, "assente o non rilevato");
-			break;
-		case D_ERR_BOUNDS:
-			flog(LOG_ERR, "accesso al settore %d fuori dal range [0, %d)", sect, p->disco[d].tot_sett);
-			break;
-		case D_ERR_GENERIC:
-			flog(LOG_ERR, "errore generico (DRQ=0)");
-			break;
-		case D_ERR_NODMA:
-			flog(LOG_ERR, "DMA non abilitato");
-			break;
-		case D_ERR_NOPRD:
-			flog(LOG_ERR, "PRD insufficienti");
-			break;
-		default:
-			if (error & 4) 
-				flog(LOG_ERR, "comando abortito");
-			else
-				flog(LOG_ERR, "error register = %d", error);
-			break;
-		}
+	for (int i = 0; i < quanti; i++) {
+		natb s;
+		do
+			inputb(iSTS, s);
+		while ((s & 0x88) != 0x08);
+		for (int j = 0; j < 512/2; j++)
+			inputw(iBR, vetti[i*512/2 + j]);
 	}
 }
 
-// descrittore di partizione. Le uniche informazioni che ci interessano sono 
-// "offset" e "sectors"
-struct des_part {	// (vedi [9.4])
-	natl active	: 8;
-	natl head_start	: 8;
-	natl sec_start	: 6;
-	natl cyl_start_H: 2;
-	natl cyl_start_L: 8;
-	natl type	: 8;
-	natl head_end	: 8;
-	natl sec_end	: 6;
-	natl cyl_end_H	: 2;
-	natl cyl_end_L	: 8;
-	natl offset;
-	natl sectors;
-};
-
-bool leggi_partizioni(int ata, int drv)
-{
-	natb errore;
-	des_part* p;
-	partizione *estesa, **ptail;
-	des_ata* p_des = &hd[ata];
-	static natb buf[512];
-	natl settore;
-	partizione* pp;
-
-	// lettura del Master Boot Record (LBA = 0)
-	settore = 0;
-	c_readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
-	if (errore != 0)
-		goto errore;
-		
-	p = reinterpret_cast<des_part*>(buf + 446);
-	// interpretiamo i descrittori delle partizioni primarie
-	estesa = 0;
-	pp = static_cast<partizione*>(alloca(sizeof(partizione)));
-	// la partizione 0 corrisponde all'intero hard disk
-	pp->first = 0;
-	pp->dim = p_des->disco[drv].tot_sett;
-	p_des->disco[drv].part = pp;
-	ptail = &pp->next;
-	for (int i = 0; i < 4; i++) {
-		pp = *ptail = static_cast<partizione*>(alloca(sizeof(partizione)));
-
-		pp->type  = p->type;
-		pp->first = p->offset;
-		pp->dim   = p->sectors;
-		
-		if (pp->type == 5)
-			estesa = *ptail;
-
-		ptail = &pp->next;
-		p++;
-	}
-	if (estesa != 0) {
-		// dobbiamo leggere le partizioni logiche
-		natl offset_estesa = estesa->first;
-		natl offset_logica = offset_estesa;
-		while (1) {
-			settore = offset_logica;
-			c_readhd_n(ata, drv, reinterpret_cast<natw*>(buf), settore, 1, errore);
-			if (errore != 0)
-				goto errore;
-			p = reinterpret_cast<des_part*>(buf + 446);
-			
-			*ptail = static_cast<partizione*>(alloca(sizeof(partizione)));
-			
-			(*ptail)->type  = p->type;
-			(*ptail)->first = p->offset + offset_logica;
-			(*ptail)->dim   = p->sectors;
-
-			ptail = &(*ptail)->next;
-			p++;
-
-			if (p->type != 5) break;
-
-			offset_logica = p->offset + offset_estesa;
-		}
-	}
-	*ptail = 0;
-	
-	return true;
-
-errore:
-	hd_print_error(ata, drv, settore, errore);
-	return false;
-}
-
-partizione* hd_find_partition(short ch, short drv, int p)
-{
-	des_ata* pdes_ata = &hd[ch];
-	partizione* part;
-
-	if (!pdes_ata->disco[drv].presente) 
-		return 0;
-	int i;
-	for (i = 0, part = pdes_ata->disco[drv].part;
-	     i < p && part != 0;
-	     i++, part = part->next)
-		;
-	if (i != p)
-		return 0;
-
-	return part;
-}
-
-
-// esegue un software reset di entrambi gli hard disk collegati al canale 
-// descritto da p_des
-void hd_reset(des_ata* p_des)
-{
-	// selezione del drive 0 (master)
-	hd_select_device(0, p_des->indreg.iHND);
-	// invio del comando di reset
-	hd_software_reset(p_des->indreg.iDCR);
-	// se il drive 0 (master) era stato trovato, aspettiamo che porti i bit 
-	// BSY e DRQ a 0
-	if (p_des->disco[0].presente) {
-		natb stato;
-		do {
-			inputb(p_des->indreg.iSTS, stato);
-		} while ( (stato & HD_STS_BSY) || (stato & HD_STS_DRQ) );
-	}
-
-	// se il drive 1 (slave) era stato trovato, aspettiamo che permetta 
-	// l'accesso ai registri
-	if (p_des->disco[1].presente) {
-		hd_select_device(1, p_des->indreg.iHND);
-		do {
-			natb b1, b2;
-
-			inputb(p_des->indreg.iSCR, b1);
-			inputb(p_des->indreg.iSNR, b2);
-			if (b1 == 0x01 && b2 == 0x01) break;
-			// ... timeout usando i ticks
-		} while (p_des->disco[1].presente);
-		// ora dobbiamo controllare che lo slave abbia messo 
-		// busy a 0
-		if (p_des->disco[1].presente) {
-			natb stato;
-
-			inputb(p_des->indreg.iSTS, stato);
-			if ( (stato & HD_STS_BSY) != 0 ) 
-				p_des->disco[1].presente = false;
-		}
+void scrivisett(natl lba, natb quanti, natw vetto[])
+{	
+	natb lba_0 = lba,
+		lba_1 = lba >> 8,
+		lba_2 = lba >> 16,
+		lba_3 = lba >> 24;
+	outputb(lba_0, iSNR);					// indirizzo del settore e selezione drive
+	outputb(lba_1, iCNL);
+	outputb(lba_2, iCNH);
+	natb hnd = (lba_3 & 0x0F) | 0xE0;
+	outputb(hnd, iHND);
+	outputb(quanti, iSCR);					// numero di settori
+	outputb(0x0A, iDCR);					// disabilitazione richieste di interruzione
+	outputb(0x30, iCMD);					// comando di scrittura
+	for (int i = 0; i < quanti; i++) {
+		natb s; 
+		do
+			inputb(iSTS, s);
+		while ((s & 0x88) != 0x08);
+		for (int j = 0; j < 512/2; j++)
+			outputw(vetto[i*512/2 + j], iBR);
 	}
 }
-// (*
-void hd_prepare_prd(addr prd, addr vett, natl quanti)
-{
-	natl* pp = static_cast<natl*>(prd) - 1;
 
-	natl start = reinterpret_cast<natl>(vett);
-	natl diff = ceild(start, DIM_PAGINA) * DIM_PAGINA - start;
-	natl first = diff > quanti ? quanti : diff;
-	if (first > 0) {
-		*++pp = (natl)c_trasforma((addr)start);
-		*++pp = first;
-		start  += first;
-		quanti -= first;
-	}
-	while (quanti >= DIM_PAGINA) {
-		*++pp = (natl)c_trasforma((addr)start);
-		*++pp = DIM_PAGINA;
-		start  += DIM_PAGINA;
-		quanti -= DIM_PAGINA;
-	}
-	if (quanti > 0) {
-		*++pp = (natl)c_trasforma((addr)start);
-		*++pp = quanti;
-	}
-	*pp |= 0x80000000;
-}
-// *)
 
-// [9.3.1]
-void starthd_in(des_ata *p_des, natl drv, natw vetti[], natl primo, natb quanti)
-{
-	p_des->cont = quanti;
-	p_des->punt = vetti;
-	p_des->comando = READ_SECT;
-	hd_sel_drv(p_des, drv);
-	hd_write_address(p_des, primo);
-	outputb(quanti, p_des->indreg.iSCR);
-	//hd_go_inout(p_des->indreg.iDCR);	
-	hd_write_command(READ_SECT, p_des->indreg.iCMD);
-}
-
-// [9.3.1]
-void starthd_out(des_ata *p_des, natl drv, natw vetto[], natl primo, natb quanti)	
-{
-	p_des->cont = quanti;
-	p_des->punt = vetto + DIM_BLOCK / 2;
-	p_des->comando = WRITE_SECT;
-	hd_sel_drv(p_des, drv);
-	hd_write_address(p_des, primo);	
-	outputb(quanti, p_des->indreg.iSCR);
-	//hd_go_inout(p_des->indreg.iDCR);	
-	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
-	hd_wait_data(p_des->indreg.iSTS);
-	outputbw(vetto, DIM_BLOCK / 2, p_des->indreg.iBR);
-}
-
-// Inizializzazione e autoriconoscimento degli hard disk collegati ai canali ATA
-// 
-bool hd_init()
-{
-	des_ata *p_des;
-	natb irq[2] = { 14, 15 };
- 
-	// (* PCI_IDE
-	natb code[] = { 0xFF, 0x01, 0x01 };
-	natw l = 0;
-	natb prog_if;
-	bool bus_master = false;
-	if (pci_find_class(l, code)) {
-		prog_if = code[0];
-		natw venID = pci_read_confw(l, 0x00);
-		natw devID = pci_read_confw(l, 0x02);
-		flog(LOG_INFO, "PCI-IDE(%4x:%4x) %2x:%2x:%2x, prog_if=%2x",
-				venID, devID, pci_getbus(l), pci_getdev(l), pci_getfun(l), prog_if);
-		bus_master = prog_if & 0x80;
-		if (bus_master) {
-			natl base =  pci_read_confl(l, 0x20);
-			base &= ~0x1;
-			hd[0].bus_master.iCMD    = (ioaddr)base;
-			hd[0].bus_master.iSTATUS = (ioaddr)(base + 0x02);
-			hd[0].bus_master.iDTPR   = (ioaddr)(base + 0x04);
-			hd[1].bus_master.iCMD    = (ioaddr)(base + 0x08);
-			hd[1].bus_master.iSTATUS = (ioaddr)(base + 0x0a);
-			hd[1].bus_master.iDTPR   = (ioaddr)(base + 0x0c);
-
-			natw cmd = pci_read_confw(l, 0x04);
-			pci_write_confw(l, 0x04, cmd | 0x5);
-			natw cmd2 = pci_read_confw(l, 0x04);
-			flog(LOG_DEBUG, "PCI-IDE: base=%4x, cmd=%2x, I/O:%d->%d, MasterEN:%d->%d",
-					base, cmd, (cmd & 1), (cmd2 & 1),
-					(cmd & 4) >> 2, (cmd2 & 4) >> 2);
-		}
-		for (int i = 0; i < 2; i++)  {
-			if (prog_if & (0x01 + i*2)) {
-				natl base = pci_read_confl(l, 0x10 + i*4);
-				base &= ~1;
-				hd[i].indreg.iBR = (ioaddr)base;
-				hd[i].indreg.iERR = (ioaddr)(base + 0x01);
-				hd[i].indreg.iSCR = (ioaddr)(base + 0x02);
-				hd[i].indreg.iSNR = (ioaddr)(base + 0x03);
-				hd[i].indreg.iCNL = (ioaddr)(base + 0x04);
-				hd[i].indreg.iCNH = (ioaddr)(base + 0x05);
-				hd[i].indreg.iHND = (ioaddr)(base + 0x06);
-				hd[i].indreg.iCMD = (ioaddr)(base + 0x07);
-				hd[i].indreg.iSTS = (ioaddr)(base + 0x07);
-				natl base2 = pci_read_confl(l, 0x10 + i*4 + 4);
-				base2 &= ~1;
-				hd[i].indreg.iDCR = (ioaddr)(base2 + 0x02);
-				hd[i].indreg.iASR = (ioaddr)(base2 + 0x02);
-				irq[i] = pci_read_confb(l,  0x3C);	
-				flog(LOG_INFO, "PCI-IDE: ide(%d) ComB=%4x ConB=%4x irq=%d", i, base, base2, irq[i]);
-			}
-		}
-	}
-	// *)
-	for (natl i = 0; i < A; i++) {			// primario/secondario
-		p_des = &hd[i];
-		natb ide_status;
-
-		if (bus_master) {
-			inputb(p_des->bus_master.iSTATUS, ide_status);
-			flog(LOG_DEBUG, "PCI-IDE: ide(%d) status=%2x", i, ide_status);
-		}
-
-		hd_halt_inout(p_des->indreg.iDCR);	
-		// cerchiamo di capire quali (tra master e slave) sono presenti
-		// (inizializziamo i campi "presente" della struttura des_ata)
-		for (int d = 0; d < 2; d++) {
-			hd_select_device(d, p_des->indreg.iHND);	//LBA e drive drv
-			p_des->disco[d].presente =
-				test_canale(p_des->indreg.iSTS,
-					    p_des->indreg.iSCR,
-					    p_des->indreg.iSNR);
-		}
-		if (!p_des->disco[0].presente && !p_des->disco[1].presente)
-			continue; // non abbiamo trovato niente, passiamo al prossimo canale
-		// se abbiamo trovato qualcosa, inviamo un software reset
-		hd_reset(p_des);
-		// quindi proviamo a leggere le firme (ci interessano solo i 
-		// dispositivi ATA)
-		for (int d = 0; d < 2; d++) {
-			if (!p_des->disco[d].presente)
-				continue;
-
-			hd_select_device(d, p_des->indreg.iHND);	//LBA e drive drv
-			p_des->disco[d].presente = 
-				(leggi_signature(p_des->indreg.iSCR,
-						p_des->indreg.iSNR,
-						p_des->indreg.iCNL,
-						p_des->indreg.iCNH) == 0);
-		}
-		// lo standard dice che, se lo slave e' assente, il master puo' 
-		// rispondere alle letture/scritture nei registri al posto 
-		// dello slave. Cio' vuol dire che non possiamo essere sicuri 
-		// che lo slave ci sia davvero fino a quando non inviamo un 
-		// comando. Inviamo quindi il comando IDENTIFY DEVICE
-		for (int d = 0; d < 2; d++) {
-			natw st_sett[256];
-			char serial[41], *ptr = serial;
-			natb stato;
-
-			if (!p_des->disco[d].presente) 
-				continue;
-			hd_halt_inout(p_des->indreg.iDCR);	
-			if (!hd_sel_drv(p_des, d))
-				goto error;
-			hd_write_command(IDENTIFY, p_des->indreg.iCMD);
-			if (!hd_wait_data(p_des->indreg.iSTS))
-				goto error;
-			inputb(p_des->indreg.iSTS, stato); // ack
-			inputbw(p_des->indreg.iBR, st_sett, DIM_BLOCK / 2);
-			p_des->disco[d].tot_sett = (st_sett[61] << 16) + st_sett[60];
-			for (int j = 27; j <= 46; j++) {
-				*ptr++ = (char)(st_sett[j] >> 8);
-				*ptr++ = (char)(st_sett[j]);
-			}
-			*ptr = 0;
-			flog(LOG_INFO, "  - %s%s: %s - (%d)",
-				(i ? "S" : "P"), (d ? "S" : "M"),
-				serial,
-				p_des->disco[d].tot_sett);
-
-			if (bus_master) {
-				p_des->disco[d].dma = true;
-				flog(LOG_INFO, "  -   : DMA abilitato");
-			}
-
-			continue;
-
-		error:
-			p_des->disco[d].presente = false;
-			continue;
-		}
-		if ( (p_des->mutex = c_sem_ini(1)) == 0xFFFFFFFF ||
-		     (p_des->sincr = c_sem_ini(0)) == 0xFFFFFFFF)
-		{
-			flog(LOG_ERR, "Impossibile allocare i semafori per l'hard disk");
-			return false;
-		}
-		aggiungi_pe(ESTERN_BUSY, irq[i]);
-		for (int d = 0; d < 2; d++) {
-			if (p_des->disco[d].presente)
-				leggi_partizioni(i, d);
-		}
-	}
-	return true;
-}
 // )
 // ( [P_LOG]
 // Il log e' un buffer circolare di messaggi, dove ogni messaggio e' composto 
@@ -3440,12 +2742,6 @@ const char* last_log_err()
 // corrotto)
 //
 
-// utile per il debug: invia al log un messaggio relativo all'errore che e' 
-// stato riscontrato
-void hd_print_error(natl i, natl d, natl sect, natb errore);
-// cerca la partizione specificata
-partizione* hd_find_partition(short ind_ata, short drv, int p);
-
 // usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
 // efficiente il primo bit a 1 in v
 extern "C" int trova_bit(natl v);
@@ -3479,108 +2775,36 @@ void dealloca_blocco(natl blocco)
 // copiandone il contenuto a partire dall'indirizzo "dest"
 void leggi_blocco(natl blocco, void* dest)
 {
-	natb errore;
+	natl sector = blocco * 8;
 
-	// ogni blocco (4096 byte) e' grande 8 settori (512 byte)
-	// calcoliamo l'indice del primo settore da leggere
-	natl sector = blocco * 8 + swap_dev.part->first;
-
-	// il seguente controllo e' di fondamentale importanza: l'hardware non 
-	// sa niente dell'esistenza delle partizioni, quindi niente ci 
-	// impedisce di leggere o scrivere, per sbaglio, in un'altra partizione
-	if (sector + 8 > (swap_dev.part->first + swap_dev.part->dim)) {
-		flog(LOG_ERR, "Accesso al di fuori della partizione");
-		// fermiamo tutto
-		panic("Errore interno");
-	}
-
-	c_readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
-
-	if (errore != 0) { 
-		flog(LOG_ERR, "Impossibile leggere il blocco %d", blocco);
-		hd_print_error(swap_dev.channel, swap_dev.drive, blocco * 8, errore);
-		panic("Errore sull'hard disk");
-	}
+	leggisett(sector, 8, static_cast<natw*>(dest));
 }
 
 void scrivi_blocco(natl blocco, void* dest)
 {
-	natb errore;
-	natl sector = blocco * 8 + swap_dev.part->first;
+	natl sector = blocco * 8;
 
-	if (sector + 8 > (swap_dev.part->first + swap_dev.part->dim)) {
-		flog(LOG_ERR, "Accesso al di fuori della partizione");
-		// come sopra
-		panic("Errore interno");
-	}
-	
-	c_dmawritehd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(dest), sector, 8, errore);
-
-	if (errore != 0) { 
-		flog(LOG_ERR, "Impossibile scrivere il blocco %d", blocco);
-		hd_print_error(swap_dev.channel, swap_dev.drive, blocco * 8, errore);
-		panic("Errore sull'hard disk");
-	}
+	scrivisett(sector, 8, static_cast<natw*>(dest));
 }
 
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
-bool leggi_swap(void* buf, natl first, natl bytes, const char* msg)
+bool leggi_swap(void* buf, natl first, natl bytes)
 {
-	natb errore;
-	natl sector = first + swap_dev.part->first;
+	natl sector = first;
 	natl nsect = ceild(bytes, 512);
 
-	if (first < 0 || first + nsect > swap_dev.part->dim) {
-		flog(LOG_ERR, "Accesso al di fuori della partizione: %d+%d", first, bytes);
-		return false;
-	}
-	
-	c_readhd_n(swap_dev.channel, swap_dev.drive, static_cast<natw*>(buf), sector, nsect, errore);
+	leggisett(first, nsect, static_cast<natw*>(buf));
 
-	if (errore != 0) { 
-		flog(LOG_ERR, "\nImpossibile leggere %s", msg);
-		hd_print_error(swap_dev.channel, swap_dev.drive, sector, errore);
-		return false;
-	}
 	return true;
 }
 
 // inizializzazione del descrittore di swap
 char read_buf[512];
-bool swap_init(int swap_ch, int swap_drv, int swap_part, bool swap_usedma)
+bool swap_init()
 {
-	partizione* part;
-
-	// l'utente *deve* specificare una partizione
-	if (swap_ch == -1 || swap_drv == -1 || swap_part == -1) {
-		flog(LOG_ERR, "Partizione di swap non specificata!");
-		return false;
-	}
-
-	part = hd_find_partition(swap_ch, swap_drv, swap_part);
-	if (part == 0) {
-		flog(LOG_ERR, "Swap: partizione non esistente o non rilevata");
-		return false;
-	}
-		
-	// se la partizione non comprende l'intero hard disk (swap_part > 0), 
-	// controlliamo che abbia il tipo giusto
-	if (swap_part && part->type != 0x3f) {
-		flog(LOG_ERR, "Tipo della partizione di swap scorretto (%d)", part->type);
-		return false;
-	}
-
-	swap_dev.channel = swap_ch;
-	swap_dev.drive   = swap_drv;
-	swap_dev.part    = part;
-
-	swap_dev.dma = hd[swap_ch].disco[swap_drv].dma && swap_usedma;
-	if (swap_dev.dma)
-		flog(LOG_INFO, "Swap: DMA abilitato");
-
 	// lettura del superblocco
 	flog(LOG_DEBUG, "lettura del superblocco dall'area di swap...");
-	if (!leggi_swap(read_buf, 1, sizeof(superblock_t), "il superblocco"))
+	if (!leggi_swap(read_buf, 1, sizeof(superblock_t)))
 		return false;
 
 	swap_dev.sb = *reinterpret_cast<superblock_t*>(read_buf);
@@ -3618,7 +2842,7 @@ bool swap_init(int swap_ch, int swap_drv, int swap_part, bool swap_usedma)
 	}
 	// infine, leggiamo la mappa di bit dalla partizione di swap
 	return leggi_swap(swap_dev.free,
-		swap_dev.sb.bm_start * 8, pages * DIM_PAGINA, "la bitmap dei blocchi");
+		swap_dev.sb.bm_start * 8, pages * DIM_PAGINA);
 }
 // )
 
@@ -3857,7 +3081,7 @@ bool crea_spazio_condiviso(natl dummy_proc, addr& last_address)
 		flog(LOG_ERR, "memoria insufficiente");
 		return false;
 	}
-	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA, "il direttorio principale"))
+	if (!leggi_swap(tmp, swap_dev.sb.directory * 8, DIM_PAGINA))
 		return false;
 	// )
 

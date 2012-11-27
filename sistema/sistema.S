@@ -1797,40 +1797,6 @@ a_log:
 	call carica_stato
 	iret
 
-/////////////////////////////////////////////////////////////////////
-// SWAP                                                           
-// Funzioni di utilita' per la gestione degli hard disk
-////////////////////////////////////////////////////////////////////
-
-
-// lettura di n settori
-	.global a_dmareadhd_n
-	.extern c_dmareadhd_n
-a_dmareadhd_n:
-	salva_registri
-	copia_param 6 7
-	cavallo_di_troia 2
-	cavallo_di_troia2 2 4
-	cavallo_di_troia 5
-	call c_dmareadhd_n
-	addl $24, %esp
-	carica_registri
-	iret
-
-// scrittura di n settori
-	.global a_dmawritehd_n
-	.extern c_dmawritehd_n
-a_dmawritehd_n:
-	salva_registri
-	copia_param 6 7
-	cavallo_di_troia 2
-	cavallo_di_troia2 2 4
-	cavallo_di_troia 5
-	call c_dmawritehd_n
-	addl $24, %esp
-	carica_registri
-	iret
-
 ////////////////////////////////////////////////////////
 // PCI
 ////////////////////////////////////////////////////////
