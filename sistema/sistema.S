@@ -74,6 +74,8 @@
 .data
 .global possibili_pf
 possibili_pf:
+	.long 1f
+1:
 .text
 
 .macro copia_param n_long n_reg
@@ -94,11 +96,10 @@ possibili_pf:
 					//  primo parametro in EDI
         movl $\n_long, %ecx
         cld
-        rep
 .data
 	.long 3f
 .text
-3:	movsl				// copia dei parametri
+3:	rep movsl				// copia dei parametri
 
 .endm
 

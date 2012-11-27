@@ -515,7 +515,6 @@ extern "C" addr* possibili_pf;
 bool possibile_pf(addr eip)
 {
 	for (addr *p = possibili_pf; *p; p++) {
-		flog(LOG_DEBUG, "check %x", *p);
 		if (*p == eip)
 			return true;
 	}
@@ -532,16 +531,16 @@ extern "C" void c_routine_pf(	// [6.4]
 	addr risu;
 	addr ind_virt_non_tradotto = readCR2();
 
-	flog(LOG_DEBUG, "%x: pf at %x", eip, ind_virt_non_tradotto);
 	// (* il sistema non e' progettato per gestire page fault causati 
 	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
 	//   si tratta di un bug
 	if ((eip < fine_codice_sistema && !possibile_pf(eip)) || errore.res == 1) {
-		flog(LOG_WARN, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
+		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
+		panic("page fault dal modulo sistema");
 	}
 	// *)
 	
