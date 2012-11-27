@@ -1066,6 +1066,7 @@ extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
 extern "C" void disattiva_timer();
 extern "C" natl  calibra_tsc();
+void ini_COM1();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
 	char *arg, *cont;
@@ -1079,6 +1080,8 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	init.precedenza = MAX_PRIORITY;
 	esecuzione = &init;
 	// *)
+	
+	ini_COM1();
 
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v1.0");
 
@@ -1193,7 +1196,6 @@ error:
 }
 
 bool aggiungi_pe(proc_elem *p, natb irq);
-bool log_init_usr();
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
 bool swap_init();
 
