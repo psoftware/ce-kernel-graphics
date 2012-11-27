@@ -1046,16 +1046,10 @@ const natl DELAY = 59659;
 
 extern "C" void *memset(void* dest, int c, natl n);
 // restituisce true se le due stringe first e second sono uguali
-bool str_equal(const char* first, const char* second);
 extern addr max_mem_lower;
 extern addr max_mem_upper;
 extern addr mem_upper;
 extern proc_elem init;
-char* str_token(char* src, char** cont);
-short swap_ch = -1, swap_drv = -1, swap_part = -1;
-bool swap_usedma = false;
-void parse_swap(char* arg, short& channel, short& drive, short& partition);
-void parse_heap(char* arg, natl& heap_mem);
 natl heap_mem = DEFAULT_HEAP_SIZE;
 int salta_a(addr indirizzo);
 extern "C" void init_8259();
@@ -1109,33 +1103,6 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, (natl)max_mem_upper >> 20 );
 	// *)
 
-	// (* interpretiamo i parametri
-	for (arg = str_token(mbi->cmdline, &cont);
-	     cont != 0 || arg != 0;
-	     arg = str_token(cont, &cont))
-	{
-		if (arg[0] != '-')
-			continue;
-		switch (arg[1]) {
-		case '\0':
-			break;
-		case 's':
-			// indicazione sulla partizione di swap
-			parse_swap(&arg[2], swap_ch, swap_drv, swap_part);
-			break;
-		case 'h':
-			//indiazioni sullo heap
-			parse_heap(&arg[2], heap_mem);
-		break;
-			case 'd':
-				swap_usedma = true;
-				break;
-		default:
-			flog(LOG_WARN, "Opzione sconosciuta: '%s'", arg[1]);
-		}
-	}
-	// *)
-	
 	// ( per come abbiamo organizzato il sistema non possiamo gestire piu' di
 	//   1GiB di memoria fisica (vedi [10.1])
 	if (max_mem_upper > fine_sistema_condiviso) {
@@ -1226,7 +1193,6 @@ error:
 }
 
 bool aggiungi_pe(proc_elem *p, natb irq);
-bool hd_init();
 bool log_init_usr();
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
 bool swap_init();
@@ -1392,48 +1358,6 @@ natb *strncpy(str dest, cstr src, natl l)
 		bdest[i] = bsrc[i];
 
 	return bdest;
-}
-
-// restituisce true se le stringhe puntate da first e second
-// sono uguali
-bool str_equal(const char* first, const char* second)
-{
-
-	while (*first && *second && *first++ == *second++)
-		;
-
-	return (!*first && !*second);
-}
-
-// isola nella stringa puntata da src la prima parola (dove ogni parola e' 
-// delimitata da spazi) e ne restituisce il puntatore al primo carattere.
-// In cont viene restituito, invece, il puntatore al primo carattere successivo 
-// alla parola trovata
-char* str_token(char* src, char** cont)
-{
-	if (src == 0) {
-		if (cont != 0) *cont = 0;
-		return 0;
-	}
-	// assert(src != 0);
-
-	char *stok = src, *etok;
-	// assert(stok != 0);
-
-	// eliminiamo gli spazi iniziali
-	while (*stok == ' ') stok++;
-	// assert(stok != 0 && *stok != ' ');
-	etok = stok;
-	// assert(etok != 0 && *etok != ' ');
-	// quindi, raggiungiamo la fine della parola trovata
-	while (*etok != '\0' && *etok != ' ') etok++;
-	// assert(etok != 0 && (*etok == '\0' || *etok == ' '));
-	if (*etok != '\0' && cont != 0)
-		*cont = etok + 1;
-	else
-		*cont = 0;
-	*etok = '\0';
-	return stok;
 }
 
 static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
@@ -2926,119 +2850,6 @@ extern "C" void c_panic(cstr     msg,
 }
 // )
 // ( [P_INIT]
-void parse_swap(char* arg, short& channel, short& drive, short& partition)
-{
-	channel = -1;
-	drive   = -1;
-	partition = -1;
-
-	// il primo carattere indica il canale (primaprio/secondario)
-	switch (*arg) {
-	case '\0':
-		flog(LOG_WARN, "Opzione -s: manca l'argomento");
-		goto error;
-	case 'P':
-	case 'p':
-		// primario
-		channel = 0;
-		break;
-	case 'S':
-	case 's':
-		// secondario
-		channel = 1;
-		break;
-	default:
-		flog(LOG_WARN, "Opzione -s: il canale deve essere 'P' o 'S'");
-		goto error;
-	}
-
-	arg++;
-
-	// il secondo carattere indica il dispositivo (master/slave)
-	switch (*arg) {
-	case '\0':
-		flog(LOG_WARN, "Opzione -s: parametro incompleto");
-		goto error;
-	case 'M':
-	case 'm':
-		// master
-		drive = 0;
-		break;
-	case 'S':
-	case 's':
-		// slave
-		drive = 1;
-		break;
-	default:
-		flog(LOG_WARN, "Opzione -s: il drive deve essere 'M' o 'S'");
-		goto error;
-	}
-
-	arg++;
-
-	if (*arg == '\0') {
-		flog(LOG_WARN, "Opzione -s: manca il numero di partizione");
-		goto error;
-	}
-
-	partition = strtoi(arg);
-
-	flog(LOG_INFO, "Opzione -s: swap su %s/%s/%d",
-			(channel ? "secondario" : "primario"),
-			(drive   ? "slave"      : "master"),
-			partition);
-	return;
-
-
-error:
-	channel = -1;
-	drive = -1;
-	partition = -1;
-	return;
-}
-
-
-void parse_heap(char* arg, natl& heap_mem)
-{
-	int dim;
-
-	 
-	// il Primo carattere indica l'unita' di misura 
-	switch (*arg) {
-	case '\0':
-		flog(LOG_WARN, "Opzione -h: parametro incompleto");
-		goto errore;
-	case 'M':
-	case 'm':
-		// Megabyte
-		dim = 1024*1024;
-		break;
-	case 'K':
-	case 'k':
-		// Kilobyte
-		dim = 1024;
-		break;
-	case 'B':
-	case 'b':
-		// Byte
-		dim = 1;
-		break;
-	default:
-		flog(LOG_WARN, "Opzione -h: la dimensione deve essere 'M', 'K' o 'B'");
-		goto errore;
-	}
-	arg++;
-	if (*arg == '\0') {
-		flog(LOG_WARN, "Opzione -h: manca la dimensione");
-		goto errore;
-	}
-	heap_mem = strtoi(arg)*dim;
-
-	return;
-errore:
-	flog(LOG_WARN, "Assumo dimensione di default per lo heap");
-
-}
 bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 {
 	addr dir = get_dir(proc);
