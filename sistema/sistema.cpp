@@ -2513,25 +2513,6 @@ void scrivisett(natl lba, natb quanti, natw vetto[])
 
 // )
 // ( [P_LOG]
-// Il log e' un buffer circolare di messaggi, dove ogni messaggio e' composto 
-// da tre campi:
-// - sev: la severita' del messaggio (puo' essere un messaggio di debug, 
-// informativi, un avviso o un errore)
-// - identifier: l'identificatore del processo che era in esecuzione quando il 
-// messaggio e' stato inviato
-// - msg: il messaggio vero e proprio
-
-// numero di messaggi nella coda circolare
-const natl LOG_MSG_NUM = 100;
-
-// descrittore del log
-struct des_log {
-	log_msg buf[LOG_MSG_NUM]; // coda circolare di messaggi
-	int first, last;	  // primo e ultimo messaggio
-	int nmsg;		  // numero di messaggi
-	natl mutex;
-	natl sync;
-} log_buf; 
 
 
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
@@ -2546,60 +2527,69 @@ extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
 }
-// log_init_usr viene chiamata prima di passare a livello utente, per 
-// inizializzare i semafori necessari alla primitiva che permette di leggere, 
-// da livello utente, i messaggi del log
-bool log_init_usr()
-{
-	if ( (log_buf.mutex = c_sem_ini(1)) == 0xFFFFFFFF)
-		goto error;
 
-	if ( (log_buf.sync = c_sem_ini(0)) == 0xFFFFFFFF)
-		goto error;
+const ioaddr iRBR = 0x03F8;		// DLAB deve essere 0
+const ioaddr iTHR = 0x03F8;		// DLAB deve essere 0
+const ioaddr iLSR = 0x03FD;
+const ioaddr iLCR = 0x03FB;
+const ioaddr iDLR_LSB = 0x03F8;		// DLAB deve essere 1
+const ioaddr iDLR_MSB = 0x03F9;		// DLAB deve essere 1
+const ioaddr iIER = 0x03F9;		// DLAB deve essere 0
+const ioaddr iMCR = 0x03FC;
+const ioaddr iIIR = 0x03FA;
 
-	return true;
 
-error: flog(LOG_ERR, "Semafori insufficienti in log_init_usr");
-	return false;
+void ini_COM1()
+{	natw CBITR = 0x000C;		// 9600 bit/sec.
+	natb dummy;
+	outputb(0x80, iLCR);		// DLAB 1
+	outputb(CBITR, iDLR_LSB);
+	outputb(CBITR >> 8, iDLR_MSB);
+	outputb(0x03, iLCR);		// 1 bit STOP, 8 bit/car, parita dis, DLAB 0
+	outputb(0x00, iIER);		// richieste di interruzione disabilitate
+	inputb(iRBR, dummy);		// svuotamento buffer RBR
 }
 
+void serial_o(natb c)
+{	natb s;
+	do 
+	{	inputb(iLSR, s);    }
+	while (! (s & 0x20));
+	outputb(c, iTHR);
+}
 
-// accoda un nuovo messaggio e sveglia un eventuale processo che era in attesa
+// invia un nuovo messaggio sul log
 void do_log(log_sev sev, const natb* buf, natl quanti)
 {
+	const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
+	if (sev > MAX_LOG) {
+		flog(LOG_WARN, "Livello di log errato: %d", sev);
+		abort_p();
+	}
+	const natb* l = (const natb*)lev[sev];
+	while (*l)
+		serial_o(*l++);
+	serial_o((natb)'\t');
+	natb idbuf[10];
+	snprintf(idbuf, 10, "%d", esecuzione->id);
+	l = idbuf;
+	while (*l)
+		serial_o(*l++);
+	serial_o((natb)'\t');
 	if (quanti > LOG_MSG_SIZE)
 		quanti = LOG_MSG_SIZE;
 
-	log_buf.buf[log_buf.last].sev = sev;
-	log_buf.buf[log_buf.last].identifier = esecuzione->id;
-	strncpy(log_buf.buf[log_buf.last].msg, buf, quanti);
-	log_buf.buf[log_buf.last].msg[quanti] = 0;
-
-	log_buf.last = (log_buf.last + 1) % LOG_MSG_NUM;
-	log_buf.nmsg++;
-	if (log_buf.last == log_buf.first) {
-		log_buf.first = (log_buf.first + 1) % LOG_MSG_NUM;
-		log_buf.nmsg--;
-	}
-	if (log_buf.sync && log_buf.nmsg > 0) {
-		proc_elem* lavoro;
-		des_sem *s = &array_dess[log_buf.sync];
-		if (s->counter < 0) {
-			s->counter++;
-			rimozione_lista(s->pointer, lavoro);
-			inserimento_lista(pronti, lavoro);
-		}
-	}
+	for (int i = 0; i < quanti; i++)
+		serial_o(buf[i]);
+	serial_o((natb)'\n');
 }
 extern "C" void c_log(log_sev sev, const natb* buf, natl quanti)
 {
-	inserimento_lista(pronti, esecuzione);
 	do_log(sev, buf, quanti);
-	schedulatore();
 }
 
 // log formattato
-void flog(log_sev sev, cstr fmt, ...)
+extern "C" void flog(log_sev sev, cstr fmt, ...)
 {
 	va_list ap;
 	natb buf[LOG_MSG_SIZE];
@@ -2612,27 +2602,6 @@ void flog(log_sev sev, cstr fmt, ...)
 		do_log(sev, buf, l - 1);
 }
 
-
-// restituisce un puntatore all'ultimo messaggio inviato al log
-const char* last_log()
-{
-	int last = log_buf.last - 1;
-	if (last < 0) last += LOG_MSG_NUM;
-	return log_buf.buf[last].msg;
-}
-
-// restituisce un puntatore all'ultimo messaggio di errore inviato al log
-const char* last_log_err()
-{
-	int last = log_buf.last - 1;
-	while (last != log_buf.first) {
-		if (log_buf.buf[last].sev == LOG_ERR)
-			return log_buf.buf[last].msg;
-		last--;
-		if (last < 0) last += LOG_MSG_NUM;
-	}
-	return "";
-}
 // )
 
 // ( [P_SWAP]
@@ -2806,47 +2775,20 @@ extern "C" void c_panic(cstr     msg,
 			natl	 eflags,
 			natl 	 eip2)
 {
-	natb* ptr;
-	static natb buf[80];
-	natl l, nl = 0;
-
-	// puliamo lo schermo, sfondo rosso
-	ptr = VIDEO_MEM_BASE;
-	while (ptr < VIDEO_MEM_BASE + VIDEO_MEM_SIZE) {
-		*ptr++ = ' ';
-		*ptr++ = 0x4f;
-	}
-
-	// in cima scriviamo il messaggio
-	writevid_n(nl++ * 80, "PANIC", 5);
-	writevid_n(nl++ * 80, msg, strlen(msg));
-	writevid_n(nl++ * 80, "* ultimo errore:", 16);
-	writevid_n(nl++ * 80, last_log_err(), strlen(last_log_err()));
-	writevid_n(nl++ * 80, "* ultimo messaggio:", 19);
-	writevid_n(nl++ * 80, last_log(), strlen(last_log()));
-
-	nl++;
-
 	des_proc* p = des_p(esecuzione->id);
-	// scriviamo lo stato dei registri
-	l = snprintf(buf, 80, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
+	flog(LOG_ERR, "PANIC");
+	flog(LOG_ERR, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
 		 p->contesto[I_EAX], p->contesto[I_EBX],
 		 p->contesto[I_ECX], p->contesto[I_EDX]);
-	writevid_n(nl++ * 80, buf, l);
-	l = snprintf(buf, 80, "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
+	flog(LOG_ERR,  "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
 		 p->contesto[I_ESI], p->contesto[I_EDI], p->contesto[I_EBP], p->contesto[I_ESP]);
-	writevid_n(nl++ * 80, buf, l);
-	l = snprintf(buf, 80, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
+	flog(LOG_ERR, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
 		cs, p->contesto[I_DS], p->contesto[I_ES],
 		p->contesto[I_FS], p->contesto[I_GS], p->contesto[I_SS]);
-	writevid_n(nl++ * 80, buf, l);
-	l = snprintf(buf, 80, "EIP=%x  EFLAGS=%x", eip2, eflags);
-	writevid_n(nl++ * 80, buf, l);
-
-	nl++;
-
-	backtrace(nl++ * 80);
-	
+	flog(LOG_ERR, "EIP=%x  EFLAGS=%x", eip2, eflags);
+	flog(LOG_ERR, "BACKTRACE:");
+	backtrace(0);
+	end_program();
 }
 // )
 // ( [P_INIT]
