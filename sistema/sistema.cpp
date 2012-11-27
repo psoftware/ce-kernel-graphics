@@ -559,7 +559,6 @@ addr swap(natl proc, addr ind_virt)	// [6.4][10.2]
 {
 	bool bitP;
 	natl dt, dp;
-	des_pf *ppf;
 	addr ind_fis_tab;
 
 	dt = get_destab(proc, ind_virt);
@@ -1069,7 +1068,6 @@ extern "C" natl  calibra_tsc();
 void ini_COM1();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
-	char *arg, *cont;
 	int indice;
 	addr direttorio;
 	natl dummy_proc;
@@ -2581,7 +2579,7 @@ void do_log(log_sev sev, const natb* buf, natl quanti)
 	if (quanti > LOG_MSG_SIZE)
 		quanti = LOG_MSG_SIZE;
 
-	for (int i = 0; i < quanti; i++)
+	for (natl i = 0; i < quanti; i++)
 		serial_o(buf[i]);
 	serial_o((natb)'\n');
 }
@@ -2685,7 +2683,6 @@ void scrivi_blocco(natl blocco, void* dest)
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
 bool leggi_swap(void* buf, natl first, natl bytes)
 {
-	natl sector = first;
 	natl nsect = ceild(bytes, 512);
 
 	leggisett(first, nsect, static_cast<natw*>(buf));

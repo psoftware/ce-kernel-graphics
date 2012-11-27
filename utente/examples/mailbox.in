@@ -25,7 +25,6 @@ mess mailbox;
 process_body pms(int a)
 {
 	char buf[MSG_SIZE];
-	int m = a;
 	char *ptr;
 	for (int i = 0; i < NMESG; i++) {
 		ptr = copy("Messaggio numero ", buf);

@@ -8,6 +8,7 @@ NCC ?= g++
 NLD ?= ld
 
 NCFLAGS=\
+	-Wall 			\
 	-nostdlib		\
 	-fno-exceptions 	\
 	-fno-rtti 		\
