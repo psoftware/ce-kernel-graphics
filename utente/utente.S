@@ -97,15 +97,6 @@ iniconsole:
 	int $io_tipo_inic
 	ret
 
-	.global readlog
-readlog:
-	int $tipo_rl
-	ret
-
-	.global resident
-resident:
-	int $tipo_re
-	ret
 
 	.global log
 log:

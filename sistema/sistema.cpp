@@ -50,7 +50,7 @@ extern "C" void terminate_p();	// [4.6]
 // - per la crezione/terminazione di un processo, si veda [P_PROCESS] piu' avanti
 // - per la creazione del processo start_utente, si veda "main_sistema" avanti
 
-extern natl processi;		// [4.7]
+extern volatile natl processi;		// [4.7]
 extern "C" void end_program();	// [4.7]
 // corpo del processo dummy	// [4.7]
 void dd(int i)
@@ -1414,11 +1414,20 @@ int vsnprintf(str vstr, natl size, cstr vfmt, va_list ap)
 	char *aux, buf[DEC_BUFSIZE];
 	char *str = static_cast<char*>(vstr);
 	const char* fmt = static_cast<const char*>(vfmt);
+	natl cifre;
 
 	while (out < size - 1 && fmt[in]) {
 		switch(fmt[in]) {
 			case '%':
+				cifre = 8;
+			again:
 				switch(fmt[++in]) {
+					case '1':
+					case '2':
+					case '4':
+					case '8':
+						cifre = fmt[in] - '0';
+						goto again;
 					case 'd':
 						tmp = va_arg(ap, int);
 						itostr(buf, DEC_BUFSIZE, tmp);
@@ -1430,7 +1439,7 @@ int vsnprintf(str vstr, natl size, cstr vfmt, va_list ap)
 						break;
 					case 'x':
 						tmp = va_arg(ap, int);
-						if(out > size - 9)
+						if(out > size - (cifre + 1))
 							goto end;
 						htostr(&str[out], tmp);
 						out += 8;

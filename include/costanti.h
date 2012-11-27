@@ -26,7 +26,6 @@
 #define TIPO_W			0x45	// sem_wait
 #define TIPO_S			0x46	// sem_signal
 #define TIPO_D			0x49	// delay
-#define TIPO_RL			0x4a	// *read_log
 #define TIPO_RE			0x4b	// resident
 #define TIPO_EP			0x4c	// end_program
 #define TIPO_APE		0x52	// activate_pe

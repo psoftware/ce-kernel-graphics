@@ -173,10 +173,12 @@ int printf(const char *fmt, ...)
 
 void pause()
 {
+#ifndef AUTOCORR
 	char buf[1];
 	natl len = 1;
 	writeconsole("Premere INVIO per continuare");
 	readconsole(buf, len);
+#endif
 }
 
 

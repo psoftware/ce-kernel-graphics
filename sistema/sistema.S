@@ -518,7 +518,6 @@ init_gdt:
 .set tipo_ma, TIPO_MA
 .set tipo_mf, TIPO_MF
 .set tipo_d, TIPO_D
-.set tipo_rl, TIPO_RL
 .set tipo_re, TIPO_RE
 .set tipo_ep, TIPO_EP
 .set tipo_tra, TIPO_TRA

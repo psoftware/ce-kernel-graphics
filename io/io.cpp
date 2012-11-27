@@ -403,8 +403,12 @@ extern "C" void c_writeconsole(cstr buff) // [9.5]
 {
 	des_console *p_des = &console;
 	sem_wait(p_des->mutex);
+#ifndef AUTOCORR
 	writeseq(buff);
 	writeelem('\n');
+#else /* AUTOCORR */
+	flog(LOG_USR, "%s", buff);
+#endif /* AUTOCORR */
 	sem_signal(p_des->mutex);
 }
 
