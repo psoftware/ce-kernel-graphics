@@ -302,7 +302,7 @@ qui:
 // funzioni di utilita'						//
 //////////////////////////////////////////////////////////////////
 
-// stampa sulla console lo stack degli indirizzi di ritorno
+// stampa sulla seriale lo stack degli indirizzi di ritorno
 // attualmente in pila (utile per il debugging)
 stringa_backtrace:
 	.asciz "%x  "
@@ -332,16 +332,9 @@ backtrace:
 
 	pushl 4(%esi)
 	pushl $stringa_backtrace
-	pushl $80
-	pushl $buf_backtrace
-	call snprintf
-	addl $16, %esp
-	pushl %eax
-	pushl $buf_backtrace
-	pushl off_backtrace
-	call writevid_n
+	pushl $3	// LOG_ERR
+	call flog
 	addl $12, %esp
-	addl $10, off_backtrace
 	
 	movl (%esi), %esi
 	decl count_backtrace
@@ -350,6 +343,7 @@ backtrace:
 	popl %eax
 	popl %esi
 	ret
+
 	
 
 // inserimento del processo in esecuzione in testa alla coda dei pronti

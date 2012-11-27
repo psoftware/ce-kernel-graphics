@@ -2731,24 +2731,6 @@ unsigned char *VIDEO_MEM_BASE = (unsigned char *)0x000b8000;
 const int VIDEO_MEM_SIZE = 0x00000fa0;
 
 
-// copia in memoria video, a partire dall'offset "off" (in caratteri) i 
-// "quanti" caratteri puntati da "vett"
-extern "C" void writevid_n(natl off, cstr vett, natl quanti)
-{
-	natb* start = VIDEO_MEM_BASE + off * 2, *stop;
-	const natb* pvett = static_cast<const natb*>(vett);
-
-	if (start < VIDEO_MEM_BASE)
-		return;
-
-	stop = (start + quanti * 2 > VIDEO_MEM_BASE + VIDEO_MEM_SIZE) ? 
-			VIDEO_MEM_BASE + VIDEO_MEM_SIZE :
-			start + quanti * 2;
-
-	for (natb* ptr = start; ptr < stop; ptr += 2)
-		*ptr = *pvett++;
-}
-
 // la funzione backtrace stampa su video gli indirizzi di ritorno dei record di 
 // attivazione presenti sulla pila sistema
 extern "C" void backtrace(int off);
