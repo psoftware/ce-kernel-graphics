@@ -269,7 +269,7 @@ void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
 			pdes_pag->a.PCD = 0;
 			pdes_pag->a.RW |= s->scrivibile();
 			pdes_pag->a.US |= liv;
-			pdes_pag->a.P  |= (1 - liv);
+			pdes_pag->a.P  |= 1;
 			tabc.scrivi();
 			s->prossima_pagina();
 		}
