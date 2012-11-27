@@ -2727,8 +2727,6 @@ bool swap_init()
 // )
 
 // ( [P_PANIC]
-unsigned char *VIDEO_MEM_BASE = (unsigned char *)0x000b8000;
-const int VIDEO_MEM_SIZE = 0x00000fa0;
 
 
 // la funzione backtrace stampa su video gli indirizzi di ritorno dei record di 
@@ -2746,17 +2744,20 @@ extern "C" void c_panic(cstr     msg,
 {
 	des_proc* p = des_p(esecuzione->id);
 	flog(LOG_ERR, "PANIC");
-	flog(LOG_ERR, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
-		 p->contesto[I_EAX], p->contesto[I_EBX],
-		 p->contesto[I_ECX], p->contesto[I_EDX]);
-	flog(LOG_ERR,  "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
-		 p->contesto[I_ESI], p->contesto[I_EDI], p->contesto[I_EBP], p->contesto[I_ESP]);
-	flog(LOG_ERR, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
-		cs, p->contesto[I_DS], p->contesto[I_ES],
-		p->contesto[I_FS], p->contesto[I_GS], p->contesto[I_SS]);
-	flog(LOG_ERR, "EIP=%x  EFLAGS=%x", eip2, eflags);
-	flog(LOG_ERR, "BACKTRACE:");
-	backtrace(0);
+	flog(LOG_ERR, "%s", msg);
+	if (p) {
+		flog(LOG_ERR, "EAX=%x  EBX=%x  ECX=%x  EDX=%x",	
+			 p->contesto[I_EAX], p->contesto[I_EBX],
+			 p->contesto[I_ECX], p->contesto[I_EDX]);
+		flog(LOG_ERR,  "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
+			 p->contesto[I_ESI], p->contesto[I_EDI], p->contesto[I_EBP], p->contesto[I_ESP]);
+		flog(LOG_ERR, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
+			cs, p->contesto[I_DS], p->contesto[I_ES],
+			p->contesto[I_FS], p->contesto[I_GS], p->contesto[I_SS]);
+		flog(LOG_ERR, "EIP=%x  EFLAGS=%x", eip2, eflags);
+		flog(LOG_ERR, "BACKTRACE:");
+		backtrace(0);
+	}
 	end_program();
 }
 // )

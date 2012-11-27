@@ -327,8 +327,8 @@ backtrace:
 	je 2f
 	cmpl $0, %esi
 	je 2f
-	cmpl $0x8000000, %esi
-	jbe 2f
+	cmpl $0x80000000, %esi
+	jae 2f
 
 	pushl 4(%esi)
 	pushl $stringa_backtrace
