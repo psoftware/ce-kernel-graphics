@@ -1360,10 +1360,10 @@ static const char hex_map[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 
 // converte l in stringa (notazione esadecimale)
-static void htostr(str vbuf, natl l)
+static void htostr(str vbuf, natl l, natl cifre)
 {
 	char *buf = static_cast<char*>(vbuf);
-	for (int i = 7; i >= 0; --i) {
+	for (int i = cifre - 1; i >= 0; --i) {
 		buf[i] = hex_map[l % 16];
 		l /= 16;
 	}
@@ -1450,8 +1450,8 @@ int vsnprintf(str vstr, natl size, cstr vfmt, va_list ap)
 						tmp = va_arg(ap, int);
 						if(out > size - (cifre + 1))
 							goto end;
-						htostr(&str[out], tmp);
-						out += 8;
+						htostr(&str[out], tmp, cifre);
+						out += cifre;
 						break;
 					case 's':
 						aux = va_arg(ap, char *);
@@ -2768,7 +2768,7 @@ extern "C" void c_panic(cstr     msg,
 			 p->contesto[I_ECX], p->contesto[I_EDX]);
 		flog(LOG_ERR,  "ESI=%x  EDI=%x  EBP=%x  ESP=%x",	
 			 p->contesto[I_ESI], p->contesto[I_EDI], p->contesto[I_EBP], p->contesto[I_ESP]);
-		flog(LOG_ERR, "CS=%x DS=%x ES=%x FS=%x GS=%x SS=%x",
+		flog(LOG_ERR, "CS=%4x DS=%4x ES=%4x FS=%4x GS=%4x SS=%4x",
 			cs, p->contesto[I_DS], p->contesto[I_ES],
 			p->contesto[I_FS], p->contesto[I_GS], p->contesto[I_SS]);
 		flog(LOG_ERR, "EIP=%x  EFLAGS=%x", eip2, eflags);
