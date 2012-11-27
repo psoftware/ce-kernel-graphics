@@ -11,8 +11,10 @@ fi
 trap 'stty sane' exit
 
 
-"$QEMU" -kernel build/sistema \
+"$QEMU" $DEBUG		      \
+	-kernel build/sistema \
 	-hda .swap	      \
 	-serial stdio 	      \
-	-no-reboot 	      \
-	$DEBUG
+	-no-reboot 	      |
+util/show_log.pl
+	
