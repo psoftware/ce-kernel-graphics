@@ -71,6 +71,11 @@
 //         quanto copia_param verra' chiamata dopo
 //         il salvataggio dei registri in pila, e tale
 //         numero varia da primitiva a primitiva)
+.data
+.global possibili_pf
+possibili_pf:
+.text
+
 .macro copia_param n_long n_reg
 
         movl $\n_reg, %ecx
@@ -90,7 +95,10 @@
         movl $\n_long, %ecx
         cld
         rep
-	movsl				// copia dei parametri
+.data
+	.long 3f
+.text
+3:	movsl				// copia dei parametri
 
 .endm
 
@@ -1557,7 +1565,7 @@ a_activate_pe:
 a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
 	call salva_stato
 	// ( ricopiamento del parametro "controllore"
-	copia_param 1 0 
+	copia_param 1 0
 	// )
 	call inviaEOI
 	// ( ripulitura della pila
@@ -1667,7 +1675,8 @@ a_pci_write:
 // sezione dati: tabelle e stack				      //
 ////////////////////////////////////////////////////////////////
 .data
-par:		.long 0
+end_possibili_pf:
+		.long 0
 .global		ticks
 ticks:		.long 0
 .global		clocks_per_usec

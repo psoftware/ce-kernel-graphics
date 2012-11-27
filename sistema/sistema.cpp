@@ -511,7 +511,16 @@ natl pf_mutex;			// [6.4]
 extern "C" addr readCR2();	// [6.4]
 addr swap(natl processo, addr ind_virt);  // [6.4]
 // (* punti in cui possiamo accettare un page fault dal modulo sistema (vedi "sistema.S")
-extern "C" addr possibile_pf1, possibile_pf2, possibile_pf3;
+extern "C" addr* possibili_pf;
+bool possibile_pf(addr eip)
+{
+	for (addr *p = possibili_pf; *p; p++) {
+		flog(LOG_DEBUG, "check %x", *p);
+		if (*p == eip)
+			return true;
+	}
+	return false;
+}
 // *)
 extern "C" void c_routine_pf(	// [6.4]
 	// (* prevediamo dei parametri aggiuntivi:
@@ -523,10 +532,11 @@ extern "C" void c_routine_pf(	// [6.4]
 	addr risu;
 	addr ind_virt_non_tradotto = readCR2();
 
+	flog(LOG_DEBUG, "%x: pf at %x", eip, ind_virt_non_tradotto);
 	// (* il sistema non e' progettato per gestire page fault causati 
 	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
 	//   si tratta di un bug
-	if (eip < fine_codice_sistema || errore.res == 1) {
+	if ((eip < fine_codice_sistema && !possibile_pf(eip)) || errore.res == 1) {
 		flog(LOG_WARN, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
