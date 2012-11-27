@@ -55,7 +55,7 @@ extern "C" void end_program();	// [4.7]
 // corpo del processo dummy	// [4.7]
 void dd(int i)
 {
-	while (processi != 1)
+	while (processi != 2)
 		;
 	end_program();
 }
@@ -835,6 +835,13 @@ extern "C" void invalida_TLB(); // [6.6]
 extern "C" void delay(natl t);
 
 void routine_stat();		// [6.6]
+void stat_proc(int i)		// [6.6]
+{
+	for (;;) {
+		routine_stat();	// routine per le statistiche
+		delay(4);
+	}
+}
 
 void routine_stat()		// [6.6]
 {
@@ -1254,6 +1261,11 @@ void main_sistema(int n)
 	if (!crea_spazio_condiviso(dummy_proc, last_address))
 		goto error;
  	// )
+
+	if (activate_p(stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossibile creare il processo pf_stat_proc");
+		goto error;
+	}
 
 	// ( inizializzazione del modulo di io [7.1][10.4]
 	flog(LOG_INFO, "creazione del processo main I/O...");

@@ -1280,6 +1280,11 @@ sem_wait:
 activate_p:
 	int $tipo_a
 	ret
+
+	.global delay
+delay:
+	int $tipo_d
+	ret
 	
 	.global terminate_p
 terminate_p:
