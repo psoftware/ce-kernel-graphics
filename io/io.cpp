@@ -21,8 +21,7 @@ extern "C" void terminate_p();
 extern "C" void sem_wait(natl sem);
 extern "C" void sem_signal(natl sem);
 extern "C" natl sem_ini(int val);
-enum controllore { master=0, slave=1 };	// [9.1]
-extern "C" void nwfi(controllore c);	// [9.1]
+extern "C" void wfi();	// [9.1]
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 
@@ -82,7 +81,7 @@ void estern_com(int i) // [9.2]
 			input_com(p_des);
 		else if ((r&0x06) == 0x02)
 			output_com(p_des);
-		nwfi(master); // sia com1 che com2 sono sul master
+		wfi(); 
 	}
 }
 
@@ -500,7 +499,7 @@ void estern_kbd(int h) // [9.5]
 			sem_signal(p_des->sincr);
 		else
 			go_inputkbd(p_des->kbd.indreg);
-		nwfi(master);
+		wfi();
 	}
 }
 

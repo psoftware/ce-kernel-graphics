@@ -228,6 +228,10 @@ possibili_pf:
 // stati caricati gli eventuali moduli)
      .text
 
+#define STACK_SIZE                      0x4000
+#define MULTIBOOT_HEADER_FLAGS         0x00000003
+
+
      .globl  _start, start
 _start:				// entry point
 start:
@@ -241,13 +245,6 @@ multiboot_header:
      .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
      .long   MULTIBOOT_HEADER_FLAGS   				// flag
      .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
-#ifndef _ELF__
-     .long   multiboot_header
-     .long   start
-     .long   edata
-     .long   end
-     .long   multiboot_entry
-#endif 
 
 multiboot_entry:
      movl    %esp, save_esp
@@ -533,7 +530,7 @@ init_gdt:
 
 // Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
 .set tipo_ape, TIPO_APE
-.set tipo_nwfi, TIPO_NWFI
+.set tipo_wfi, TIPO_WFI
 .set tipo_va, TIPO_VA
 .set tipo_fg, TIPO_FG
 .set tipo_p, TIPO_P
@@ -580,22 +577,31 @@ init_idt:
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
 	// driver/handler
-	carica_gate	0x20		driver_td	LIV_SISTEMA
-	carica_gate	0x21		handler_1	LIV_SISTEMA
-	carica_gate	0x22		handler_2	LIV_SISTEMA
-	carica_gate	0x23		handler_3	LIV_SISTEMA
-	carica_gate	0x24		handler_4	LIV_SISTEMA
-	carica_gate	0x25		handler_5	LIV_SISTEMA
-	carica_gate	0x26		handler_6	LIV_SISTEMA
-	carica_gate	0x27		handler_7	LIV_SISTEMA
-	carica_gate	0x28		handler_8	LIV_SISTEMA
-	carica_gate	0x29		handler_9	LIV_SISTEMA
-	carica_gate	0x2A		handler_10	LIV_SISTEMA
-	carica_gate	0x2B		handler_11	LIV_SISTEMA
-	carica_gate	0x2C		handler_12	LIV_SISTEMA
-	carica_gate	0x2D		handler_13	LIV_SISTEMA
-	carica_gate	0x2E 		handler_14 	LIV_SISTEMA
-	carica_gate	0x2F 		handler_15 	LIV_SISTEMA
+	carica_gate	VETT_0 		driver_td	LIV_SISTEMA
+	carica_gate	VETT_1 		handler_1	LIV_SISTEMA
+	carica_gate	VETT_2 		driver_td	LIV_SISTEMA
+	carica_gate	VETT_3 		handler_3	LIV_SISTEMA
+	carica_gate	VETT_4 		handler_4	LIV_SISTEMA
+	carica_gate	VETT_5 		handler_5	LIV_SISTEMA
+	carica_gate	VETT_6 		handler_6	LIV_SISTEMA
+	carica_gate	VETT_7 		handler_7	LIV_SISTEMA
+	carica_gate	VETT_8 		handler_8	LIV_SISTEMA
+	carica_gate	VETT_9 		handler_9	LIV_SISTEMA
+	carica_gate	VETT_10		handler_10	LIV_SISTEMA
+	carica_gate	VETT_11		handler_11	LIV_SISTEMA
+	carica_gate	VETT_12		handler_12	LIV_SISTEMA
+	carica_gate	VETT_13		handler_13	LIV_SISTEMA
+	carica_gate	VETT_14 	handler_14 	LIV_SISTEMA
+	carica_gate	VETT_15 	handler_15 	LIV_SISTEMA
+	carica_gate	VETT_16		handler_16	LIV_SISTEMA
+	carica_gate	VETT_17		handler_17	LIV_SISTEMA
+	carica_gate	VETT_18		handler_18	LIV_SISTEMA
+	carica_gate	VETT_19		handler_19	LIV_SISTEMA
+	carica_gate	VETT_20		handler_20	LIV_SISTEMA
+	carica_gate	VETT_21		handler_21	LIV_SISTEMA
+	carica_gate	VETT_22		handler_22	LIV_SISTEMA
+	carica_gate	VETT_23		handler_23	LIV_SISTEMA
+	carica_gate	VETT_S		spurious	LIV_SISTEMA
 
 	// primitive utente
 	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
@@ -609,7 +615,7 @@ init_idt:
 
 	// primitive per il livello I/O
 	carica_gate	tipo_ape	a_activate_pe	LIV_SISTEMA
-	carica_gate	tipo_nwfi	a_nwfi		LIV_SISTEMA
+	carica_gate	tipo_wfi	a_wfi		LIV_SISTEMA
 	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
 	carica_gate	tipo_p		a_panic		LIV_SISTEMA
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
@@ -767,19 +773,26 @@ rilascia_tss:
 
 // dato l'identificatore di un processo,
 // ne restituisce il puntatore al descrittore
+// (0 se non allocato)
 	.global des_p
 des_p:	
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %ebx
+	pushl %ecx
 
 	movl $0, %ebx
-        movw 8(%ebp), %bx		// esecuzione->identifier in ebx
-	shrl $3, %ebx			// indice in %ebx
-        leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
+	movl $0, %ecx
+        movw 8(%ebp), %cx		// esecuzione->identifier in ebx
+	shrl $3, %ecx			// indice in %ebx
+        leal gdt(, %ecx, 8), %eax       // ind. entrata della gdt relativa in eax
+	testb $PRES, 5(%eax)
+	jz 1f
 	estrai_base			// ind. TSS -> %ebx
+1:
 	movl %ebx, %eax
 
+	popl %ecx
 	popl %ebx
 	leave
 	ret
@@ -1005,96 +1018,19 @@ outputbw:
 .set EOI, 0x20
 .set READ_ISR, 0x0b
 
-
-// inizializza il controllore delle interruzioni: la base del controllore va
-// cambiata rispetto a quella impostata dal BIOS. Infatti, in modo protetto,
-// esistono piu' tipi di eccezioni che in modo reale e la base impostata dal
-// BIOS va a collidere con alcune di queste.
-	.global init_8259
-init_8259:
-	pushl %ebp
-	movl %esp, %ebp
+	.global disable_8259
+disable_8259:
 	pushl %eax
-
-	// master
-	movb $0x11, %al		// cascata
-	outb %al, $ICW1M
-	movb $0x20, %al		// nuova base
-	outb %al, $ICW2M
-	movb $0x04, %al		// slave connesso a IR2
-	outb %al, $ICW3M
-	movb $0x01, %al		// modo annidato
-	outb %al, $ICW4M
-	inb  $OCW1M, %al	// leggiamo la maschera corrente
-	movb %al, save_pic_m	// e la salviamo per il ritorno al DOS
-	movb $0b11111011, %al	// maschera tutte le interruzioni, tranne quelle
-	outb %al, $OCW1M	//  provenienti dallo slave
-	movb $0x48, %al
-	outb %al, $OCW3M	// fully nested
-
-	// slave
-	movb $0x11, %al		// cascata
-	outb %al, $ICW1S
-	movb $0x28, %al		// nuova base
-	outb %al, $ICW2S
-	movb $0x02, %al		// id. dello slave
-	outb %al, $ICW3S
-	movb $0x01, %al		// modo annidato
-	outb %al, $ICW4S
-	inb  $OCW1S, %al	// leggiamo la maschera corrente
-	movb %al, save_pic_s	// e la salviamo per il ritorno al DOS
-	movb $0b11111111, %al	// maschera tutte le interruzioni
+	
+	movb $0xFF, %al
 	outb %al, $OCW1S
-	movb $0x48, %al		// fully nested
-	outb %al, $OCW3S
-
-	popl %eax
-	leave
-	ret
-
-	.global unmask_irq
-unmask_irq:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-	pushl %ecx
-
-	xorw %cx, %cx
-	movb 8(%ebp), %cl
-	inb $OCW1S, %al
-	movb %al, %ah
-	inb $OCW1M, %al
-	btrw %cx, %ax
+	
+	movb $0xFF, %al
 	outb %al, $OCW1M
-	movb %ah, %al
-	outb %al, $OCW1S
 
-	popl %ecx
 	popl %eax
-	leave
 	ret
 
-	.global mask_irq
-mask_irq:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-	pushl %ecx
-
-	xorw %cx, %cx
-	movb 8(%ebp), %cl
-	inb $OCW1S, %al
-	movb %al, %ah
-	inb $OCW1M, %al
-	btsw %cx, %ax
-	outb %al, $OCW1M
-	movb %ah, %al
-	outb %al, $OCW1S
-
-	popl %ecx
-	popl %eax
-	leave
-	ret
 
 // timer
 // registri dell'interfaccia di conteggio
@@ -1117,9 +1053,23 @@ attiva_timer:
 	movb %ah, %al
 	outb %al, $CTR_MSB
 
-	inb $OCW1M, %al
-	andb $0b11111110, %al
-	outb %al, $OCW1M
+	pushl $2
+	call ioapic_unmask
+	addl $4, %esp
+
+        popl %eax
+	leave
+	ret
+
+	.global disattiva_timer
+disattiva_timer:
+	pushl %ebp
+	movl %esp, %ebp
+        pushl %eax
+	
+	pushl $2
+	call ioapic_mask
+	addl $4, %esp
 
         popl %eax
 	leave
@@ -1291,10 +1241,6 @@ terminate_p:
 	int $tipo_t
 	ret
 
-	.global nwfi
-nwfi:
-	int $tipo_nwfi
-
 	.global panic
 panic:
 	int $tipo_p
@@ -1303,6 +1249,11 @@ panic:
 	.global abort_p
 abort_p:
 	int $tipo_ab
+	ret
+
+	.global wfi
+wfi:
+	int $tipo_wfi
 	ret
 
 	.global end_program
@@ -1321,7 +1272,6 @@ driver_td:
 	call salva_stato	// interruzioni disabilitate
 	call inspronti
 	call c_driver_td
-	pushl $0
 	call inviaEOI
 	call carica_stato
 	iret
@@ -1494,7 +1444,104 @@ handler_15:
 	call carica_stato
 	iret
 
-	
+handler_16:
+	call salva_stato
+	call inspronti
+
+	movl $16, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_17:
+	call salva_stato
+	call inspronti
+
+	movl $17, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_18:
+	call salva_stato
+	call inspronti
+
+	movl $18, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_19:
+	call salva_stato
+	call inspronti
+
+	movl $19, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_20:
+	call salva_stato
+	call inspronti
+
+	movl $20, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_21:
+	call salva_stato
+	call inspronti
+
+	movl $21, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_22:
+	call salva_stato
+	call inspronti
+
+	movl $22, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+handler_23:
+	call salva_stato
+	call inspronti
+
+	movl $23, %ecx
+	movl a_p(, %ecx, 4), %eax
+	movl %eax, esecuzione
+
+	call carica_stato
+	iret
+
+sp_msg:
+	.asciz "interrupt spurio"
+spurious:
+	salva_registri
+	pushl $sp_msg
+	pushl $0 // LOG_DEBUG
+	call flog
+	addl $4, %esp
+	carica_registri
+	iret
 
 ////////////////////////////////////////////////////////
 // a_primitive                                        //
@@ -1568,36 +1615,17 @@ a_activate_pe:
 	iret
 
 
-a_nwfi:		// routine int $tipo_nwfi [7.3][9.1]
+a_wfi:		// routine int $tipo_wfi [7.3][9.1]
 	call salva_stato
-	// ( ricopiamento del parametro "controllore"
-	copia_param 1 0
-	// )
 	call inviaEOI
-	// ( ripulitura della pila
-	addl $4, %esp
-	// )
 	call schedulatore
 	call carica_stato
 	iret
-inviaEOI:		// [9.1]
-	pushl %eax
-	cmpl $1, 8(%esp)
-	jne m_eoi
-
-	movb $EOI, %al		// ack al controllore slave
-	outb %al, $OCW2S
-
-	movb $READ_ISR, %al	// lettura di ISR dello slave
-	outb %al, $OCW3S
-	inb $OCW3S, %al
-	testb $0xff, %al
-	jnz m_noeoi		// ci sono ancora richieste dello slave attive
-m_eoi:
-	movb $EOI, %al
-	outb %al, $OCW2M
-m_noeoi:	
-	popl %eax
+inviaEOI:
+	pushl %ebx
+	movl pEOI, %ebx
+	movl $0, (%ebx)
+	popl %ebx
 	ret
 
 a_fill_gate:
@@ -1709,6 +1737,13 @@ idt_pointer:
 	.long idt			// base della IDT
 param_err:
 	.asciz "parametro errato %x"
+.global ioapic
+ioapic:
+	.long 0xFEC00000	//ioapic.IOREGSEL
+	.long 0xFEC00010	//ioapic.IOWIN
+pEOI:	.long 0xFEE000B0	//ioapic.EOI
+	.byte 0x10		//ioapic.RTO
+	.space 3, 0
 .bss
 .global		array_dess		// [4.11]
 array_dess:	.space BYTE_SEM

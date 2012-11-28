@@ -22,7 +22,7 @@
 // Devono coincidere con quelli usati in sistema.s
 //
 .set tipo_ape,  TIPO_APE
-.set tipo_nwfi, TIPO_NWFI
+.set tipo_wfi, TIPO_WFI
 .set tipo_va,   TIPO_VA
 .set tipo_p,    TIPO_P
 .set tipo_ab,   TIPO_AB
@@ -300,9 +300,9 @@ activate_pe:	// [7.1]
 	int $tipo_ape
 	ret
 
-	.global nwfi	// [9.1]
-nwfi:
-	int $tipo_nwfi
+	.global wfi	// [9.1]
+wfi:
+	int $tipo_wfi
 	ret
 
 	.global panic

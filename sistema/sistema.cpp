@@ -93,6 +93,9 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 
 	if (p_lista)
 		p_lista = p_lista->puntatore;
+
+	if (p_elem)
+		p_elem->puntatore = 0;
 // )
 }
 
@@ -1066,7 +1069,8 @@ extern addr mem_upper;
 extern proc_elem init;
 natl heap_mem = DEFAULT_HEAP_SIZE;
 int salta_a(addr indirizzo);
-extern "C" void init_8259();
+addr occupa(natl quanti);
+bool ioapic_init();
 bool crea_finestra_FM(addr direttorio, addr max_mem);
 bool crea_finestra_PCI(addr direttorio);
 natl crea_dummy();
@@ -1106,7 +1110,7 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 
 	// (* vediamo se il boot loader ci ha passato l'informazione su quanta
 	//    memoria fisica e' installata nel sistema
-	if (mbi->flags & 1) {
+	if (mbi->flags & MULTIBOOT_INFO_MEMORY) {
 		max_mem_lower = addr(mbi->mem_lower * 1024);
 		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
 	} else {
@@ -1171,7 +1175,7 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	// )
 
 	// (* inizializziamo il controllore delle interruzioni [vedi sistema.S]
-	init_8259();
+	ioapic_init();
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	// *)
 	
@@ -1949,6 +1953,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
         if (p == 0) goto errore3;
         p->id = identifier << 3U;
         p->precedenza = prio;
+	p->puntatore = 0;
 	// )
 
 	// ( creazione del direttorio del processo (vedi [10.3]
@@ -2377,13 +2382,241 @@ natb pci_getfun(natw l)
 }
 // )
 
+// ( [P_IOAPIC]
+
+// parte piu' significativa di una redirection table entry
+const natl IOAPIC_DEST_MSK = 0xFF000000; // destination field mask
+const natl IOAPIC_DEST_SHF = 24;	 // destination field shift
+// parte meno significativa di una redirection table entry
+const natl IOAPIC_MIRQ_BIT = (1U << 16); // mask irq bit
+const natl IOAPIC_TRGM_BIT = (1U << 15); // trigger mode (1=level, 0=edge)
+const natl IOAPIC_IPOL_BIT = (1U << 13); // interrupt polarity (0=high, 1=low)
+const natl IOAPIC_DSTM_BIT = (1U << 11); // destination mode (0=physical, 1=logical)
+const natl IOAPIC_DELM_MSK = 0x00000700; // delivery mode field mask (000=fixed)
+const natl IOAPIC_DELM_SHF = 8;		 // delivery mode field shift
+const natl IOAPIC_VECT_MSK = 0x000000FF; // vector field mask
+const natl IOAPIC_VECT_SHF = 0;		 // vector field shift
+
+struct ioapic_des {
+	natl* IOREGSEL;
+	natl* IOWIN;
+	natl* EOI;
+	natb  RTO;	// Redirection Table Offset
+};
+
+extern "C" ioapic_des ioapic;
+
+natl ioapic_in(natb off)
+{
+	*ioapic.IOREGSEL = off;
+	return *ioapic.IOWIN;
+}
+
+void ioapic_out(natb off, natl v)
+{
+	*ioapic.IOREGSEL = off;
+	*ioapic.IOWIN = v;
+}
+
+natl ioapic_read_rth(natb irq)
+{
+	return ioapic_in(ioapic.RTO + irq * 2 + 1);
+}
+
+void ioapic_write_rth(natb irq, natl w)
+{
+	ioapic_out(ioapic.RTO + irq * 2 + 1, w);
+}
+
+natl ioapic_read_rtl(natb irq)
+{
+	return ioapic_in(ioapic.RTO + irq * 2);
+}
+
+void ioapic_write_rtl(natb irq, natl w)
+{
+	ioapic_out(ioapic.RTO + irq * 2, w);
+}
+
+void ioapic_set_DEST(natl irq, natb dest)
+{
+	natl work = ioapic_read_rth(irq);
+	work = (work & ~IOAPIC_DEST_MSK) | (dest << IOAPIC_DEST_SHF);
+	ioapic_write_rth(irq, work);
+}
+
+void ioapic_set_VECT(natl irq, natb vec)
+{
+	natl work = ioapic_read_rtl(irq);
+	work = (work & ~IOAPIC_VECT_MSK) | (vec << IOAPIC_VECT_SHF);
+	ioapic_write_rtl(irq, work);
+}
+
+void ioapic_set_MIRQ(natl irq, bool v)
+{
+	natl work = ioapic_read_rtl(irq);
+	if (v)
+		work |= IOAPIC_MIRQ_BIT;
+	else
+		work &= ~IOAPIC_MIRQ_BIT;
+	ioapic_write_rtl(irq, work);
+}
+
+extern "C" void ioapic_mask(natl irq)
+{
+	ioapic_set_MIRQ(irq, true);
+}
+
+extern "C" void ioapic_unmask(natl irq)
+{
+	ioapic_set_MIRQ(irq, false);
+}
+
+void ioapic_set_TRGM(natl irq, bool v)
+{
+	natl work = ioapic_read_rtl(irq);
+	if (v)
+		work |= IOAPIC_TRGM_BIT;
+	else
+		work &= ~IOAPIC_TRGM_BIT;
+	ioapic_write_rtl(irq, work);
+}
+
+void ioapic_set_IPOL(natl irq, bool v)
+{
+	natl work = ioapic_read_rtl(irq);
+	if (v)
+		work |= IOAPIC_IPOL_BIT;
+	else
+		work &= ~IOAPIC_IPOL_BIT;
+	ioapic_write_rtl(irq, work);
+}
+
+
+void ioapic_dump_rt(natb start, natb end)
+{
+	const char* modes[] = { "Fixed",
+				"Lowest Priority",
+				"SMI",
+				"Reserved",
+				"NMI",
+				"INIT",
+				"Reserved",
+				"ExtINT" };
+	const int BUF_SIZE = 80;
+	char buf[BUF_SIZE + 1];
+	end = (end > MAX_IRQ)? MAX_IRQ : end;
+	for (natb i = start; i <= end; i++) {
+		int l = snprintf(buf, BUF_SIZE, "%d: ", i) - 1;
+		natl el = ioapic_read_rtl(i);
+		natl eh = ioapic_read_rth(i);
+		l += snprintf(buf + l, BUF_SIZE - l, " %2x",
+					(eh & IOAPIC_DEST_MSK) >> IOAPIC_DEST_SHF) - 1;
+		l += snprintf(buf + l, BUF_SIZE - l, " %c %c %c %c",
+				(el & IOAPIC_MIRQ_BIT)? 'M' : ' ',
+				(el & IOAPIC_TRGM_BIT)? '-' : '/',
+				(el & IOAPIC_IPOL_BIT)? '_' : '-',
+				(el & IOAPIC_DSTM_BIT)? 'L' : 'P') - 1;
+		int dmode = (el & IOAPIC_DELM_MSK) >> IOAPIC_DELM_SHF;
+		snprintf(buf + l, BUF_SIZE -l, " %2x %s", 
+				(el & IOAPIC_VECT_MSK) >> IOAPIC_VECT_SHF, modes[dmode]);
+		flog(LOG_DEBUG, buf);
+	}
+}
+
+const natw PIIX3_VENDOR_ID = 0x8086;
+const natw PIIX3_DEVICE_ID = 0x7000;
+const natb PIIX3_APICBASE = 0x80;
+const natb PIIX3_XBCS = 0x4e;
+const natl PIIX3_XBCS_ENABLE = (1U << 8);
+
+natl apicbase_getxy(natl apicbase)
+{
+	return (apicbase & 0x01F) << 10U;
+}
+
+extern "C" void disable_8259();
+bool ioapic_init()
+{
+	natw l = 0;
+	// trovare il PIIX3 e
+	if (!pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID)) {
+		flog(LOG_WARN, "PIIX3 non trovato");
+		return false;
+	}
+	flog(LOG_DEBUG, "PIIX3: trovato a %2x.%2x.%2x",
+			pci_getbus(l), pci_getdev(l), pci_getfun(l));
+	// 	inizializzare IOREGSEL e IOWIN
+	natb apicbase;
+	apicbase = pci_read_confb(l, PIIX3_APICBASE);
+	natl tmp_IOREGSEL = (natl)ioapic.IOREGSEL | apicbase_getxy(apicbase);
+	natl tmp_IOWIN    = (natl)ioapic.IOWIN    | apicbase_getxy(apicbase);
+	// 	trasformiamo gli indirizzi fisici in virtuali
+	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL - (natl)PCI_startmem + (natl)inizio_pci_condiviso);
+	ioapic.IOWIN    = (natl*)(tmp_IOWIN    - (natl)PCI_startmem + (natl)inizio_pci_condiviso);
+	ioapic.EOI	= (natl*)((natl)ioapic.EOI - (natl)PCI_startmem + (natl)inizio_pci_condiviso);
+	flog(LOG_DEBUG, "IOAPIC: ioregsel %8x, iowin %8x", ioapic.IOREGSEL, ioapic.IOWIN);
+	// 	abilitare il /CS per l'IOAPIC
+	natl xbcs;
+	xbcs = pci_read_confl(l, PIIX3_XBCS);
+	xbcs |= PIIX3_XBCS_ENABLE;
+	pci_write_confl(l, PIIX3_XBCS, xbcs);
+	disable_8259();
+	// riempire la redirection table
+	for (natb i = 0; i < MAX_IRQ; i++) {
+		ioapic_write_rth(i, 0);
+		ioapic_write_rtl(i, IOAPIC_MIRQ_BIT | IOAPIC_TRGM_BIT);
+	}
+	ioapic_set_VECT(0, VETT_0);	ioapic_set_TRGM(0, false);
+	ioapic_set_VECT(1, VETT_1);
+	ioapic_set_VECT(2, VETT_2);	ioapic_set_TRGM(2, false);
+	ioapic_set_VECT(3, VETT_3);
+	ioapic_set_VECT(4, VETT_4);
+	ioapic_set_VECT(5, VETT_5);
+	ioapic_set_VECT(6, VETT_6);
+	ioapic_set_VECT(7, VETT_7);
+	ioapic_set_VECT(8, VETT_8);
+	ioapic_set_VECT(9, VETT_9);
+	ioapic_set_VECT(10, VETT_10);
+	ioapic_set_VECT(11, VETT_11);
+	ioapic_set_VECT(12, VETT_12);
+	ioapic_set_VECT(13, VETT_13);
+	ioapic_set_VECT(14, VETT_14);
+	ioapic_set_VECT(15, VETT_15);
+	ioapic_set_VECT(16, VETT_16);
+	ioapic_set_VECT(17, VETT_17);
+	ioapic_set_VECT(18, VETT_18);
+	ioapic_set_VECT(19, VETT_19);
+	ioapic_set_VECT(20, VETT_20);
+	ioapic_set_VECT(21, VETT_21);
+	ioapic_set_VECT(22, VETT_22);
+	ioapic_set_VECT(23, VETT_23);
+	return true;
+}
+
+extern "C" void ioapic_reset()
+{
+	for (natb i = 0; i < MAX_IRQ; i++) {
+		ioapic_write_rth(i, 0);
+		ioapic_write_rtl(i, IOAPIC_MIRQ_BIT | IOAPIC_TRGM_BIT);
+	}
+	natw l = 0;
+	pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID);
+	natl xbcs;
+	xbcs = pci_read_confl(l, PIIX3_XBCS);
+	xbcs &= ~PIIX3_XBCS_ENABLE;
+	pci_write_confl(l, PIIX3_XBCS, xbcs);
+}
+
+// )
+
+
 // ( [P_EXTERN_PROC]
 // Registrazione processi esterni
 proc_elem* const ESTERN_BUSY = (proc_elem*)1;
 proc_elem *a_p_save[MAX_IRQ];
 // primitiva di nucleo usata dal nucleo stesso
-enum controllore { master=0, slave=1 };
-extern "C" void nwfi(controllore c);
+extern "C" void wfi();
 
 // inizialmente, tutti gli interrupt esterni sono associati ad una istanza di 
 // questo processo esterno generico, che si limita ad inviare un messaggio al 
@@ -2396,10 +2629,7 @@ void estern_generico(int h)
 	for (;;) {
 		flog(LOG_WARN, "Interrupt %d non gestito", h);
 
-		if (h < 8)
-			nwfi(master);
-		else
-			nwfi(slave);
+		wfi();
 	}
 }
 
@@ -2416,7 +2646,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
-	unmask_irq(irq);
+	ioapic_set_MIRQ(irq, false);
 	return true;
 
 }
@@ -2459,7 +2689,7 @@ bool init_pe()
 		}
 		a_p_save[i] = a_p[i] = p;
 	}
-	aggiungi_pe(ESTERN_BUSY, 0);
+	aggiungi_pe(ESTERN_BUSY, 2);
 	return true;
 }
 // )
