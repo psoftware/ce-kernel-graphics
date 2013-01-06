@@ -1178,7 +1178,7 @@ int_tipo_pf:
 	movl 32(%esp), %ebx // eip
 	pushl %ebx
 	pushl %eax
-	call c_routine_pf
+	call c_pre_routine_pf
 	addl $8, %esp
 	carica_registri
 	addl $4, %esp

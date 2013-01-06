@@ -353,11 +353,11 @@ bool extr_A(natl descrittore)			// [6.3]
 { // (
 	return (descrittore & BIT_A); // )
 }
-addr extr_IND_F(natl descrittore)		// [6.3]
+addr extr_IND_FISICO(natl descrittore)		// [6.3]
 { // (
 	return (addr)(descrittore & ADDR_MASK); // )
 }
-natl extr_IND_M(natl descrittore)		// [6.3]
+natl extr_IND_MASSA(natl descrittore)		// [6.3]
 { // (
 	return (descrittore & INDMASS_MASK) >> INDMASS_SHIFT; // )
 }
@@ -479,167 +479,78 @@ extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 // implementazione in [P_PANIC]
 // *)
 
-// (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
-//   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
-//   significativi specificano piu' precisamente il motivo per cui si e' 
-//   verificato un page fault. Il significato dei bit e' il seguente:
-//   - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
-//   di protezione: il processore si trovava a livello utente e la pagina (o la 
-//   tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
-//   tabella erano assenti (bit P = 0)
-//   - write: l'accesso che ha causato il page fault era in scrittura (non 
-//   implica che la pagina non fosse scrivibile)
-//   - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
-//   utente (non implica che la pagina fosse invece di livello sistema)
-//   - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
-//   avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
-//   tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
-struct pf_error {
-	natl prot  : 1;
-	natl write : 1;
-	natl user  : 1;
-	natl res   : 1;
-	natl pad   : 28; // bit non significativi
-};
-// *)
 
-// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-extern "C" addr fine_codice_sistema; 
-// *)
-
-natl pf_mutex;			// [6.4]
-extern "C" addr readCR2();	// [6.4]
-addr swap(natl processo, addr ind_virt);  // [6.4]
-// (* punti in cui possiamo accettare un page fault dal modulo sistema (vedi "sistema.S")
-extern "C" addr* possibili_pf;
-bool possibile_pf(addr eip)
+extern "C" addr readCR2();
+natl swap(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
+void c_routine_pf()	// [6.4][10.2]
 {
-	for (addr *p = possibili_pf; *p; p++) {
-		if (*p == eip)
-			return true;
-	}
-	return false;
-}
-// *)
-extern "C" void c_routine_pf(	// [6.4]
-	// (* prevediamo dei parametri aggiuntivi:
-		pf_error errore,	/* vedi sopra */
-		addr eip		/* ind. dell'istruzione che ha causato il fault */
-	// *)
-	)
-{
-	addr risu;
-	addr ind_virt_non_tradotto = readCR2();
-
-	// (* il sistema non e' progettato per gestire page fault causati 
-	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
-	//   si tratta di un bug
-	if ((eip < fine_codice_sistema && !possibile_pf(eip)) || errore.res == 1) {
-		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, ind_virt_non_tradotto,
-			errore.prot  ? "protezione"	: "pag/tab assente",
-			errore.write ? "scrittura"	: "lettura",
-			errore.user  ? "da utente"	: "da sistema",
-			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema");
-	}
-	// *)
-	
-	// (* l'errore di protezione non puo' essere risolto: il processo ha 
-	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
-	//    sistema)
-	if (errore.prot == 1) {
-		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, ind_virt_non_tradotto,
-			errore.write ? "scrittura"	: "lettura",
-			errore.user  ? "da utente"	: "da sistema");
-		abort_p();
-	}
-	// *)
-
-	risu = swap(esecuzione->id, ind_virt_non_tradotto);
-	if (risu == 0) 
-		// ( aborto del processo in esecuzione
-		abort_p();
-		// )
-}
-
-addr swap_ent(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
-addr swap(natl proc, addr ind_virt)	// [6.4][10.2]
-{
-	bool bitP;
-	natl dt, dp;
-	addr ind_fis_tab;
-
+	addr ind_virt = readCR2();
+	natl proc = esecuzione->id;
+	// carica sia la tabella delle pagine che la pagina, o solo la pagina
+	bool bitP; natl dt;
 	dt = get_destab(proc, ind_virt);
 	bitP = extr_P(dt);
 	if (!bitP)
-		ind_fis_tab = swap_ent(proc, TABELLA, ind_virt);
-	else
-		ind_fis_tab = extr_IND_F(dt);
-	if (ind_fis_tab == 0)
-		return 0;
-	dp = get_despag(proc, ind_virt);
-	bitP = extr_P(dp);
-	if (!bitP)
-		return swap_ent(proc, PAGINA, ind_virt);
-	else
-		return extr_IND_F(dp);
-
+		swap(proc, TABELLA, ind_virt);
+	swap(proc, PAGINA, ind_virt);
 }
 
+bool extr_D(natl descrittore);
+bool extr_A(natl descrittore);
+addr extr_IND_FISICO(natl descrittore);
+natl extr_IND_MASSA(natl descrittore);
+void set_P(natl& decrittore, bool bitP);
+void set_A(natl& decrittore, bool bitP);
+void set_D(natl& decrittore, bool bitP);
+void set_IND_FISICO(natl& descrittore, addr ind_fisico);
+void set_IND_MASSA(natl& descrittore, natl ind_massa);
 natl alloca_pagina_fisica_libera();	// [6.4]
-void collega(natl indice);		// [6.4]
+natl scegli_vittima(natl proc, cont_pf tipo, addr ind_virt);	// [6.4]
 bool scollega(natl indice);		// [6.4]
-void carica(natl indice);		// [6.4]
 void scarica(natl indice);		// [6.4]
-natl scegli_vittima(natl indice);	// [6.4]
-addr get_parent(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
+void carica(natl indice);		// [6.4]
+void collega(natl indice);		// [6.4]
 void aggiusta_parent(natl indice);	// [6.4]
 
 // [6.4]
-addr swap_ent(natl proc, cont_pf tipo, addr ind_virt)
+natl swap(natl proc, cont_pf tipo, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
 	// carica una tabella delle pagine o una pagina
-	des_pf *ppf;
 	natl nuovo_indice = alloca_pagina_fisica_libera();
 	if (nuovo_indice == 0xFFFFFFFF) {
-		// non puo' essere scelto come vittima l'indice del descrittore di pagina fisica
-		// il cui indirizzo virtuale e' stato restituito da get_parent()
-		addr escludi = get_parent(proc, tipo, ind_virt);
-		natl indice_vittima = scegli_vittima(indice_dpf(escludi));
-		if (indice_vittima == 0xFFFFFFFF)
-			return 0;
+		natl indice_vittima = scegli_vittima(proc, tipo, ind_virt);
 		bool occorre_salvare = scollega(indice_vittima);
 		if (occorre_salvare)
 			scarica(indice_vittima);
 		nuovo_indice = indice_vittima;
 	}
 	natl des = get_desent(proc, tipo, ind_virt);
-	ppf = &dpf[nuovo_indice];
+	natl IM = extr_IND_MASSA(des);
+	des_pf *ppf = &dpf[nuovo_indice];
 	ppf->contenuto = tipo;
 	ppf->pt.residente = false;
 	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virt;
-	ppf->pt.ind_massa = extr_IND_M(des);
+	ppf->pt.ind_massa = IM;
 	ppf->pt.contatore  = 0x80000000;
 	aggiusta_parent(nuovo_indice);
 	carica(nuovo_indice);
 	collega(nuovo_indice);
-	return indirizzo_pf(nuovo_indice);
-	// indice_vittima e nuovo_indice contengono lo stesso indice di descrittore di pagina fisica
+	return nuovo_indice;
 }
 
-addr get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
+natl get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 {
 // (
 	switch (tipo) {
 	case PAGINA:
-		return extr_IND_F(get_destab(proc, ind_virt));
+		return indice_dpf(extr_IND_FISICO(get_destab(proc, ind_virt)));
 	case TABELLA:
 	// (* per completezza consideriamo anche il caso DIRETTORIO
 	case DIRETTORIO:
 	// *)
-		return (addr)0xFFFFFFFF;
+		return 0xFFFFFFFF;
 	default:
 		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
 		abort_p();
@@ -654,7 +565,7 @@ void aggiusta_parent(natl indice)	// [6.4]
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
 		// contenente la tabella delle pagine coinvolta
 		natl dt = get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
-		addr ind_fis_tab = extr_IND_F(dt);
+		addr ind_fis_tab = extr_IND_FISICO(dt);
 		ppf = &dpf[indice_dpf(ind_fis_tab)];
 		ppf->pt.contatore |= 0x80000000;
 	}
@@ -797,10 +708,11 @@ void scarica(natl indice) // [6.4]
 	scrivi_blocco(ppf->pt.ind_massa, indirizzo_pf(indice));
 }
 
-natl scegli_vittima(natl indice_vietato) // [6.4]
+natl scegli_vittima(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 {
 	// "indice_vietato" non puo' essere scelto come indice del descrittore
 	// della pagina fisica vittma
+	natl indice_vietato = get_parent(proc, tipo, ind_virt);
 	natl i, indice_vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
@@ -858,7 +770,7 @@ void routine_stat()		// [6.6]
 			for (int j = 0; j < 1024; j++) {
 				natl& des = get_des(ff1, j);
 				if (extr_P(des)) {
-					ff2 = extr_IND_F(des);
+					ff2 = extr_IND_FISICO(des);
 					bitA = extr_A(des);
 					set_A(des, false);
 					ppf2 = &dpf[indice_dpf(ff2)];
@@ -1809,10 +1721,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	natl		identifier;		// indice del tss nella gdt 
 	des_proc	*pdes_proc;		// descrittore di processo
-	addr		pdirettorio;		// direttorio del processo
-	addr		pila_sistema,		// punt. di lavoro
-			tabella,
-			pila_utente;		// punt. di lavoro
+	natl		idirettorio;		// direttorio del processo
+	natl		itabella;
+	natl		ipila_sistema;
 	
 
 	// ( allocazione (e azzeramento preventivo) di un des_proc 
@@ -1838,27 +1749,29 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	// ( creazione del direttorio del processo (vedi [10.3]
 	//   e la funzione "carica()")
-	pdirettorio = swap_ent(p->id, DIRETTORIO, 0);
-	if (pdirettorio == 0) goto errore4;
-	dpf[indice_dpf(pdirettorio)].pt.residente = true;
-	pdes_proc->cr3 = pdirettorio;
+	idirettorio = swap(p->id, DIRETTORIO, 0);
+	if (idirettorio == 0xFFFFFFFF) goto errore4;
+	dpf[idirettorio].pt.residente = true;
+	pdes_proc->cr3 = indirizzo_pf(idirettorio);
 	// )
 
 	// ( creazione della pila sistema (vedi [10.3]).
 	//   La pila sistema e' grande 4MiB, ma allochiamo solo l'ultima
 	//   pagina. Non chiamiamo "swap", perche' vogliamo passare "true"
 	//   ad entrambe le "swap_ent".
-	tabella = swap_ent(p->id, TABELLA, fine_sistema_privato - DIM_PAGINA);
-	if (tabella == 0) goto errore5;
-	dpf[indice_dpf(tabella)].pt.residente = true;
-	pila_sistema = swap_ent(p->id, PAGINA, fine_sistema_privato - DIM_PAGINA);
-	if (pila_sistema == 0) goto errore6;
-	dpf[indice_dpf(pila_sistema)].pt.residente = true;
+	itabella = swap(p->id, TABELLA, fine_sistema_privato - DIM_PAGINA);
+	if (itabella == 0xFFFFFFFF) goto errore5;
+	dpf[itabella].pt.residente = true;
+	ipila_sistema = swap(p->id, PAGINA, fine_sistema_privato - DIM_PAGINA);
+	if (ipila_sistema == 0xFFFFFFFF) goto errore6;
+	dpf[ipila_sistema].pt.residente = true;
 	// )
 
 	if (liv == LIV_UTENTE) {
 		// ( inizializziamo la pila sistema.
+		addr pila_sistema = indirizzo_pf(ipila_sistema);
 		natl* pl = static_cast<natl*>(pila_sistema);
+		natl itab_utente, ipila_utente;
 
 		pl[1019] = (natl)f;		// EIP (codice utente)
 		pl[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
@@ -1871,12 +1784,15 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 
 		// ( creazione e inizializzazione della pila utente
-		pila_utente = swap(p->id, fine_utente_privato - DIM_PAGINA);
-		if (pila_utente == 0) goto errore6;
+		itab_utente = swap(p->id, TABELLA, fine_utente_privato - DIM_PAGINA);
+		if (itab_utente == 0xFFFFFFFF) goto errore6;
+		ipila_utente = swap(p->id, PAGINA, fine_utente_privato - DIM_PAGINA);
+		if (ipila_utente == 0xFFFFFFFF) goto errore6;
 
 		//   dobbiamo ora fare in modo che la pila utente si trovi nella
 		//   situazione in cui si troverebbe dopo una CALL alla funzione
 		//   f, con parametro a:
+		addr pila_utente = indirizzo_pf(ipila_utente);
 		pl = static_cast<natl*>(pila_utente);
 		pl[1022] = 0xffffffff;	// ind. di ritorno non significativo
 		pl[1023] = a;		// parametro del processo
@@ -1911,6 +1827,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 	} else {
 		// ( inizializzazione delle pila sistema
+		addr pila_sistema = indirizzo_pf(ipila_sistema);
 		natl* pl = static_cast<natl*>(pila_sistema);
 		pl[1019] = (natl)f;	  	// EIP (codice sistema)
 		pl[1020] = SEL_CODICE_SISTEMA;  // CS (codice sistema)
@@ -1938,8 +1855,8 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	return p;
 
-errore6:	rilascia_tutto(pdirettorio, i_sistema_privato, ntab_sistema_privato);
-errore5:	rilascia_pagina_fisica(indice_dpf(pdirettorio));
+errore6:	rilascia_tutto(indirizzo_pf(idirettorio), i_sistema_privato, ntab_sistema_privato);
+errore5:	rilascia_pagina_fisica(idirettorio);
 errore4:	dealloca(p);
 errore3:	rilascia_tss(identifier);
 errore2:	dealloca(pdes_proc);
@@ -2015,20 +1932,20 @@ void rilascia_tutto(addr direttorio, natl i, natl n)
 	{
 		natl dt = get_des(direttorio, j);
 		if (extr_P(dt)) {
-			addr tabella = extr_IND_F(dt);
+			addr tabella = extr_IND_FISICO(dt);
 			for (int k = 0; k < 1024; k++) {
 				natl dp = get_des(tabella, k);
 				if (extr_P(dp)) {
-					addr pagina = extr_IND_F(dp);
+					addr pagina = extr_IND_FISICO(dp);
 					rilascia_pagina_fisica(indice_dpf(pagina));
 				} else {
-					natl blocco = extr_IND_M(dp);
+					natl blocco = extr_IND_MASSA(dp);
 					dealloca_blocco(blocco);
 				}
 			}
 			rilascia_pagina_fisica(indice_dpf(tabella));
 		} else {
-			natl blocco = extr_IND_M(dt);
+			natl blocco = extr_IND_MASSA(dt);
 			dealloca_blocco(blocco);
 		}
 	}
@@ -2062,6 +1979,83 @@ extern "C" void c_abort_p()
 
 
 // ( [P_PAGING] 
+
+// (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
+//   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
+//   significativi specificano piu' precisamente il motivo per cui si e' 
+//   verificato un page fault. Il significato dei bit e' il seguente:
+//   - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
+//   di protezione: il processore si trovava a livello utente e la pagina (o la 
+//   tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
+//   tabella erano assenti (bit P = 0)
+//   - write: l'accesso che ha causato il page fault era in scrittura (non 
+//   implica che la pagina non fosse scrivibile)
+//   - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
+//   utente (non implica che la pagina fosse invece di livello sistema)
+//   - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
+//   avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
+//   tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
+struct pf_error {
+	natl prot  : 1;
+	natl write : 1;
+	natl user  : 1;
+	natl res   : 1;
+	natl pad   : 28; // bit non significativi
+};
+// *)
+
+// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
+extern "C" addr fine_codice_sistema; 
+// *)
+
+natl pf_mutex;			// [6.4]
+extern "C" addr readCR2();	// [6.4]
+natl swap(natl processo, addr ind_virt);  // [6.4]
+// (* punti in cui possiamo accettare un page fault dal modulo sistema (vedi "sistema.S")
+extern "C" addr* possibili_pf;
+bool possibile_pf(addr eip)
+{
+	for (addr *p = possibili_pf; *p; p++) {
+		if (*p == eip)
+			return true;
+	}
+	return false;
+}
+// *)
+extern "C" void c_pre_routine_pf(	// [6.4]
+	// (* prevediamo dei parametri aggiuntivi:
+		pf_error errore,	/* vedi sopra */
+		addr eip		/* ind. dell'istruzione che ha causato il fault */
+	// *)
+	)
+{
+	// (* il sistema non e' progettato per gestire page fault causati 
+	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
+	//   si tratta di un bug
+	if ((eip < fine_codice_sistema && !possibile_pf(eip)) || errore.res == 1) {
+		flog(LOG_ERR, "eip: %x, page fault a %x: %s, %s, %s, %s", eip, readCR2(),
+			errore.prot  ? "protezione"	: "pag/tab assente",
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema",
+			errore.res   ? "bit riservato"	: "");
+		panic("page fault dal modulo sistema");
+	}
+	// *)
+	
+	// (* l'errore di protezione non puo' essere risolto: il processo ha 
+	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
+	//    sistema)
+	if (errore.prot == 1) {
+		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", eip, readCR2(),
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema");
+		abort_p();
+	}
+	// *)
+	
+
+	c_routine_pf();
+}
 
 // funzione che restituisce i 10 bit piu' significativi di "ind_virt"
 // (indice nel direttorio)
@@ -2104,7 +2098,7 @@ natl& get_destab(natl processo, addr ind_virt) // [6.3]
 natl& get_despag(natl processo, addr ind_virt) // [6.3]
 {
 	natl dt = get_destab(processo, ind_virt);
-	return get_despag(extr_IND_F(dt), ind_virt);
+	return get_despag(extr_IND_FISICO(dt), ind_virt);
 }
 
 // restituisce l'indirizzo fisico del direttorio del processo proc
@@ -2117,7 +2111,7 @@ addr get_dir(natl proc)
 addr get_tab(natl proc, addr ind_virt)
 {
 	natl dt = get_destab(proc, ind_virt);
-	return extr_IND_F(dt);
+	return extr_IND_FISICO(dt);
 }
 
 // ( si veda "case DIRETTORIO:" sotto
@@ -2176,7 +2170,7 @@ void copy_des(addr src, addr dst, natl i, natl n)
 extern "C" addr c_trasforma(addr ind_virt)
 {
 	natl dp = get_despag(esecuzione->id, ind_virt);
-	natl ind_fis_pag = (natl)extr_IND_F(dp);
+	natl ind_fis_pag = (natl)extr_IND_FISICO(dp);
 	return (addr)(ind_fis_pag | ((natl)ind_virt & 0x00000FFF));
 
 }
@@ -2211,7 +2205,7 @@ bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag
 			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
 			set_destab(direttorio, indv, dt);
 		} else {
-			tabella = extr_IND_F(dt);
+			tabella = extr_IND_FISICO(dt);
 		}
 		natl dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
 		set_despag(tabella, indv, dp);
@@ -2910,22 +2904,22 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 		natl dt = get_des(dir, j);
 		if (extr_P(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
-			addr tabella = swap_ent(proc, TABELLA, ind);
-			if (!tabella) {
+			natl i_tabella = swap(proc, TABELLA, ind);
+			if (i_tabella == 0xFFFFFFFF) {
 				flog(LOG_ERR, "Impossibile allocare tabella residente");
 				return false;
 			}
-			dpf[indice_dpf(tabella)].pt.residente = true;
+			dpf[i_tabella].pt.residente = true;
 			for (int k = 0; k < 1024; k++) {
-				natl dp = get_des(tabella, k);
+				natl dp = get_des(indirizzo_pf(i_tabella), k);
 				if (extr_P(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
-					addr ind_fis = swap_ent(proc, PAGINA, ind_virt);
-					if (ind_fis == 0) {
+					natl i_pagina = swap(proc, PAGINA, ind_virt);
+					if (i_pagina == 0xFFFFFFFF) {
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
 						return false;
 					}
-					dpf[indice_dpf(ind_fis)].pt.residente = true;
+					dpf[i_pagina].pt.residente = true;
 				}
 			}
 		}
