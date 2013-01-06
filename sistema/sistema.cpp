@@ -272,9 +272,10 @@ extern "C" void c_driver_td(void)
 /////////////////////////////////////////////////////////////////////////////////
 
 
-enum cont_pf { LIBERA, DIRETTORIO, TABELLA, PAGINA, TABELLA_FM }; // [6.3]
+enum tt { LIBERA, DIRETTORIO, TABELLA_CONDIVISA, TABELLA_PRIVATA,
+	PAGINA_CONDIVISA, PAGINA_PRIVATA }; // [6.3]
 struct des_pf {			// [6.3]
-	cont_pf	contenuto;	// uno dei valori precedenti
+	tt contenuto;	// uno dei valori precedenti
 	union {
 		struct { 
 			bool	residente;	// pagina residente o meno
@@ -339,7 +340,7 @@ const natl INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di ma
 natl& get_destab(natl processo, addr ind_virt); // [6.3]
 natl& get_despag(natl processo, addr ind_virt); // [6.3]
 natl& get_des(addr iff, natl index);		// [6.3]
-natl& get_desent(natl processo, cont_pf tipo, addr ind_virt); // [6.3]
+natl& get_desent(natl processo, tt tipo, addr ind_virt); // [6.3]
 addr  get_INDTAB(natl indice);			// [6.3]
 bool  extr_P(natl descrittore)			// [6.3]
 { // (
@@ -481,7 +482,7 @@ extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 
 
 extern "C" addr readCR2();
-natl swap(natl proc, cont_pf tipo, addr ind_virt); // [6.4]
+natl swap(natl proc, tt tipo, addr ind_virt); // [6.4]
 void c_routine_pf()	// [6.4][10.2]
 {
 	addr ind_virt = readCR2();
@@ -491,8 +492,8 @@ void c_routine_pf()	// [6.4][10.2]
 	dt = get_destab(proc, ind_virt);
 	bitP = extr_P(dt);
 	if (!bitP)
-		swap(proc, TABELLA, ind_virt);
-	swap(proc, PAGINA, ind_virt);
+		swap(proc, TABELLA_PRIVATA, ind_virt);
+	swap(proc, PAGINA_PRIVATA, ind_virt);
 }
 
 bool extr_D(natl descrittore);
@@ -505,7 +506,7 @@ void set_D(natl& decrittore, bool bitP);
 void set_IND_FISICO(natl& descrittore, addr ind_fisico);
 void set_IND_MASSA(natl& descrittore, natl ind_massa);
 natl alloca_pagina_fisica_libera();	// [6.4]
-natl scegli_vittima(natl proc, cont_pf tipo, addr ind_virt);	// [6.4]
+natl scegli_vittima(natl proc, tt tipo, addr ind_virt);	// [6.4]
 bool scollega(natl indice);		// [6.4]
 void scarica(natl indice);		// [6.4]
 void carica(natl indice);		// [6.4]
@@ -513,7 +514,7 @@ void collega(natl indice);		// [6.4]
 void aggiusta_parent(natl indice);	// [6.4]
 
 // [6.4]
-natl swap(natl proc, cont_pf tipo, addr ind_virt)
+natl swap(natl proc, tt tipo, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
 	// carica una tabella delle pagine o una pagina
@@ -540,13 +541,13 @@ natl swap(natl proc, cont_pf tipo, addr ind_virt)
 	return nuovo_indice;
 }
 
-natl get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
+natl get_parent(natl proc, tt tipo, addr ind_virt) // [6.4]
 {
 // (
 	switch (tipo) {
-	case PAGINA:
+	case PAGINA_PRIVATA:
 		return indice_dpf(extr_IND_FISICO(get_destab(proc, ind_virt)));
-	case TABELLA:
+	case TABELLA_PRIVATA:
 	// (* per completezza consideriamo anche il caso DIRETTORIO
 	case DIRETTORIO:
 	// *)
@@ -561,7 +562,7 @@ natl get_parent(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 void aggiusta_parent(natl indice)	// [6.4]
 {
 	des_pf *ppf = &dpf[indice];
-	if (ppf->contenuto == PAGINA) {
+	if (ppf->contenuto == PAGINA_PRIVATA) {
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
 		// contenente la tabella delle pagine coinvolta
 		natl dt = get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
@@ -610,7 +611,7 @@ bool scollega(natl indice)	// [6.4][10.5]
 	des_pf *ppf =&dpf[indice];
 	natl &des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
-	bool occorre_salvare = bitD || ppf->contenuto == TABELLA;
+	bool occorre_salvare = bitD || ppf->contenuto == TABELLA_PRIVATA;
 	// (* 
 	if (occorre_salvare && ppf->pt.ind_massa == 0) {
 		ppf->pt.ind_massa = alloca_blocco();
@@ -647,7 +648,8 @@ void carica(natl indice) // [6.4][10.5]
 	addr dest = indirizzo_pf(indice);
 	des_pf *ppf = &dpf[indice];
 	switch (ppf->contenuto) {
-	case PAGINA:
+	case PAGINA_PRIVATA:
+	case PAGINA_CONDIVISA:
 		if (ppf->pt.ind_massa == 0) {
 			for (natl i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
@@ -655,7 +657,8 @@ void carica(natl indice) // [6.4][10.5]
 			leggi_blocco(ppf->pt.ind_massa, dest); /* vedi sopra */
 		}
 		break;
-	case TABELLA:
+	case TABELLA_PRIVATA:
+	case TABELLA_CONDIVISA:
 		// (* gestiamo l'allocazione dinamica anche per le tabelle.
 		//    Se ppf->pt.ind_massa e' zero allochiamo una nuova tabella.
 		//    Tutte le entrate della nuova tabella hanno P=0, ppf->pt.ind_massa=0
@@ -698,6 +701,7 @@ void carica(natl indice) // [6.4][10.5]
 		break;
 	// *)
 	default:
+		flog(LOG_ERR, "carica(%d) con contenuto=%d", indice, ppf->contenuto);
 		abort_p();
 	}
 }
@@ -708,7 +712,7 @@ void scarica(natl indice) // [6.4]
 	scrivi_blocco(ppf->pt.ind_massa, indirizzo_pf(indice));
 }
 
-natl scegli_vittima(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
+natl scegli_vittima(natl proc, tt tipo, addr ind_virt) // [6.4]
 {
 	// "indice_vietato" non puo' essere scelto come indice del descrittore
 	// della pagina fisica vittma
@@ -726,13 +730,13 @@ natl scegli_vittima(natl proc, cont_pf tipo, addr ind_virt) // [6.4]
 		if (ppf->pt.residente || i == indice_vietato)
 			continue;
 		switch (ppf->contenuto) {
-		case PAGINA:
+		case PAGINA_PRIVATA:
 			if (ppf->pt.contatore < pvittima->pt.contatore ||
 			    (ppf->pt.contatore == pvittima->pt.contatore &&
-			    		pvittima->contenuto == TABELLA))
+			    		pvittima->contenuto == TABELLA_PRIVATA))
 				indice_vittima = i;
 			break;
-		case TABELLA:
+		case TABELLA_PRIVATA:
 			if (ppf->pt.contatore < pvittima->pt.contatore) 
 				indice_vittima = i;
 			break;
@@ -765,7 +769,7 @@ void routine_stat()		// [6.6]
 		ppf1 = &dpf[i];
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
-		case TABELLA:
+		case TABELLA_PRIVATA:
 			ff1 = indirizzo_pf(i);
 			for (int j = 0; j < 1024; j++) {
 				natl& des = get_des(ff1, j);
@@ -774,9 +778,11 @@ void routine_stat()		// [6.6]
 					bitA = extr_A(des);
 					set_A(des, false);
 					ppf2 = &dpf[indice_dpf(ff2)];
-					ppf2->pt.contatore >>= 1;
-					if (bitA)
-						ppf2->pt.contatore |= 0x80000000;
+					if (!ppf2->pt.residente) {
+						ppf2->pt.contatore >>= 1;
+						if (bitA)
+							ppf2->pt.contatore |= 0x80000000;
+					}
 				}
 			}
 			break;
@@ -1759,10 +1765,10 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	//   La pila sistema e' grande 4MiB, ma allochiamo solo l'ultima
 	//   pagina. Non chiamiamo "swap", perche' vogliamo passare "true"
 	//   ad entrambe le "swap_ent".
-	itabella = swap(p->id, TABELLA, fine_sistema_privato - DIM_PAGINA);
+	itabella = swap(p->id, TABELLA_PRIVATA, fine_sistema_privato - DIM_PAGINA);
 	if (itabella == 0xFFFFFFFF) goto errore5;
 	dpf[itabella].pt.residente = true;
-	ipila_sistema = swap(p->id, PAGINA, fine_sistema_privato - DIM_PAGINA);
+	ipila_sistema = swap(p->id, PAGINA_PRIVATA, fine_sistema_privato - DIM_PAGINA);
 	if (ipila_sistema == 0xFFFFFFFF) goto errore6;
 	dpf[ipila_sistema].pt.residente = true;
 	// )
@@ -1784,9 +1790,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 
 		// ( creazione e inizializzazione della pila utente
-		itab_utente = swap(p->id, TABELLA, fine_utente_privato - DIM_PAGINA);
+		itab_utente = swap(p->id, TABELLA_PRIVATA, fine_utente_privato - DIM_PAGINA);
 		if (itab_utente == 0xFFFFFFFF) goto errore6;
-		ipila_utente = swap(p->id, PAGINA, fine_utente_privato - DIM_PAGINA);
+		ipila_utente = swap(p->id, PAGINA_PRIVATA, fine_utente_privato - DIM_PAGINA);
 		if (ipila_utente == 0xFFFFFFFF) goto errore6;
 
 		//   dobbiamo ora fare in modo che la pila utente si trovi nella
@@ -2117,12 +2123,14 @@ addr get_tab(natl proc, addr ind_virt)
 // ( si veda "case DIRETTORIO:" sotto
 natl dummy_des;
 // )
-natl& get_desent(natl processo, cont_pf tipo, addr ind_virt)
+natl& get_desent(natl processo, tt tipo, addr ind_virt)
 {
 	switch (tipo) {
-	case PAGINA:
+	case PAGINA_PRIVATA:
+	case PAGINA_CONDIVISA:
 		return get_despag(processo, ind_virt);
-	case TABELLA:
+	case TABELLA_PRIVATA:
+	case TABELLA_CONDIVISA:
 		return get_destab(processo, ind_virt);
 	// ( per poter usare swap anche per caricare direttori prevediamo
 	//   questo ulteriore caso (restituiamo un descrittore fasullo,
@@ -2198,7 +2206,7 @@ bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag
 				return false;
 			}
 			des_pf *ppf = &dpf[indice];
-			ppf->contenuto = TABELLA_FM;
+			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
 			tabella = indirizzo_pf(indice);
 
@@ -2904,7 +2912,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 		natl dt = get_des(dir, j);
 		if (extr_P(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
-			natl i_tabella = swap(proc, TABELLA, ind);
+			natl i_tabella = swap(proc, TABELLA_CONDIVISA, ind);
 			if (i_tabella == 0xFFFFFFFF) {
 				flog(LOG_ERR, "Impossibile allocare tabella residente");
 				return false;
@@ -2914,7 +2922,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 				natl dp = get_des(indirizzo_pf(i_tabella), k);
 				if (extr_P(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
-					natl i_pagina = swap(proc, PAGINA, ind_virt);
+					natl i_pagina = swap(proc, PAGINA_CONDIVISA, ind_virt);
 					if (i_pagina == 0xFFFFFFFF) {
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
 						return false;
