@@ -339,8 +339,8 @@ const natl INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di ma
 // per le implementazioni mancanti, vedi [P_PAGING] avanti
 natl& get_destab(natl processo, addr ind_virt); // [6.3]
 natl& get_despag(natl processo, addr ind_virt); // [6.3]
-natl& get_des(addr iff, natl index);		// [6.3]
-natl& get_desent(natl processo, tt tipo, addr ind_virt); // [6.3]
+natl& singolo_des(addr iff, natl index);		// [6.3]
+natl& get_des(natl processo, tt tipo, addr ind_virt); // [6.3]
 addr  get_INDTAB(natl indice);			// [6.3]
 bool  extr_P(natl descrittore)			// [6.3]
 { // (
@@ -526,7 +526,7 @@ natl swap(natl proc, tt tipo, addr ind_virt)
 			scarica(indice_vittima);
 		nuovo_indice = indice_vittima;
 	}
-	natl des = get_desent(proc, tipo, ind_virt);
+	natl des = get_des(proc, tipo, ind_virt);
 	natl IM = extr_IND_MASSA(des);
 	des_pf *ppf = &dpf[nuovo_indice];
 	ppf->contenuto = tipo;
@@ -596,7 +596,7 @@ void rilascia_pagina_fisica(natl i)
 void collega(natl indice)	// [6.4]
 {
 	des_pf* ppf = &dpf[indice];
-	natl& des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
+	natl& des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	set_IND_F(des, indirizzo_pf(indice));
 	set_P(des, true);
 	set_D(des, false);
@@ -609,7 +609,7 @@ bool scollega(natl indice)	// [6.4][10.5]
 {
 	bool bitD;
 	des_pf *ppf =&dpf[indice];
-	natl &des = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
+	natl &des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
 	bool occorre_salvare = bitD || ppf->contenuto == TABELLA_PRIVATA;
 	// (* 
@@ -668,7 +668,7 @@ void carica(natl indice) // [6.4][10.5]
 			 * della nuova tabella:
 			 *  - copiamo il descrittore nel direttorio (per avere
 			 *   una copia dei bit S/U, R/W, PWT e PCD */
-			natl ndes = get_desent(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
+			natl ndes = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 			/* - azzeriamo il bit P nella copia */
 			set_P(ndes, false);
 			/* - azzeriamo l'indirizzo in memoria di massa */
@@ -772,7 +772,7 @@ void routine_stat()		// [6.6]
 		case TABELLA_PRIVATA:
 			ff1 = indirizzo_pf(i);
 			for (int j = 0; j < 1024; j++) {
-				natl& des = get_des(ff1, j);
+				natl& des = singolo_des(ff1, j);
 				if (extr_P(des)) {
 					ff2 = extr_IND_FISICO(des);
 					bitA = extr_A(des);
@@ -1936,11 +1936,11 @@ void rilascia_tutto(addr direttorio, natl i, natl n)
 {
 	for (natl j = i; j < i + n && j < 1024; j++)
 	{
-		natl dt = get_des(direttorio, j);
+		natl dt = singolo_des(direttorio, j);
 		if (extr_P(dt)) {
 			addr tabella = extr_IND_FISICO(dt);
 			for (int k = 0; k < 1024; k++) {
-				natl dp = get_des(tabella, k);
+				natl dp = singolo_des(tabella, k);
 				if (extr_P(dp)) {
 					addr pagina = extr_IND_FISICO(dp);
 					rilascia_pagina_fisica(indice_dpf(pagina));
@@ -2077,7 +2077,7 @@ int i_tab(addr ind_virt)
 	return ((natl)ind_virt & 0x003FF000) >> 12;
 }
 
-natl& get_des(addr iff, natl index) // [6.3]
+natl& singolo_des(addr iff, natl index) // [6.3]
 {
 	natl *pd = static_cast<natl*>(iff);
 	return pd[index];
@@ -2085,12 +2085,12 @@ natl& get_des(addr iff, natl index) // [6.3]
 
 natl& get_destab(addr dir, addr ind_virt) // [6.3]
 {
-	return get_des(dir, i_dir(ind_virt));
+	return singolo_des(dir, i_dir(ind_virt));
 }
 
 natl& get_despag(addr tab, addr ind_virt) // [6.3]
 {
-	return get_des(tab, i_tab(ind_virt));
+	return singolo_des(tab, i_tab(ind_virt));
 }
 
 addr get_dir(natl proc);
@@ -2123,7 +2123,7 @@ addr get_tab(natl proc, addr ind_virt)
 // ( si veda "case DIRETTORIO:" sotto
 natl dummy_des;
 // )
-natl& get_desent(natl processo, tt tipo, addr ind_virt)
+natl& get_des(natl processo, tt tipo, addr ind_virt)
 {
 	switch (tipo) {
 	case PAGINA_PRIVATA:
@@ -2140,7 +2140,7 @@ natl& get_desent(natl processo, tt tipo, addr ind_virt)
 		return dummy_des;
 	// )
 	default:
-		flog(LOG_ERR, "get_desent(%d, %d, %x)", processo, tipo, ind_virt);
+		flog(LOG_ERR, "get_des(%d, %d, %x)", processo, tipo, ind_virt);
 		panic("Errore di sistema");  // ****
 	}
 }
@@ -2909,7 +2909,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 	for (natl j = i; j < i + n && j < 1024; j++)
 	{
 		addr ind = (addr)(j * DIM_MACROPAGINA);
-		natl dt = get_des(dir, j);
+		natl dt = singolo_des(dir, j);
 		if (extr_P(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
 			natl i_tabella = swap(proc, TABELLA_CONDIVISA, ind);
@@ -2919,7 +2919,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 			}
 			dpf[i_tabella].pt.residente = true;
 			for (int k = 0; k < 1024; k++) {
-				natl dp = get_des(indirizzo_pf(i_tabella), k);
+				natl dp = singolo_des(indirizzo_pf(i_tabella), k);
 				if (extr_P(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
 					natl i_pagina = swap(proc, PAGINA_CONDIVISA, ind_virt);
