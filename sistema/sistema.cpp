@@ -631,16 +631,8 @@ bool scollega(natl indice)	// [6.4][10.5]
 //    contengono le sue pagine private)
 void dealloca_blocco(natl blocco);
 // *)
-// (* non usiamo direttamente readhd_n/writehd_n, ma le seguenti funzioni,
-//    che tengono conto anche delle partizioni del disco rigido
-//    leggi_blocco: legge il blocco numero "blocco" dall'area di swap e lo copia
-//    	a partire dall'indirizzo "dest"
-void leggi_blocco(natl blocco, void* dest);
-//    scrivi_blocco: copia il blocco in memoria puntato da "dest" nel blocco numero
-//      "blocco" nell'area di swap
-void scrivi_blocco(natl blocco, void* dest);
-// (per le implementazioni si veda [P_SWAP] avanti)
-// *)
+void leggi_speciale(addr dest, natl primo);
+void scrivi_speciale(addr src, natl primo);
 
 void carica(natl indice) // [6.4][10.5]
 {
@@ -654,7 +646,7 @@ void carica(natl indice) // [6.4][10.5]
 			for (natl i = 0; i < DIM_PAGINA; i++)
 				static_cast<natb*>(dest)[i] = 0;
 		} else {
-			leggi_blocco(ppf->pt.ind_massa, dest); /* vedi sopra */
+			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
 		}
 		break;
 	case TABELLA_PRIVATA:
@@ -676,7 +668,7 @@ void carica(natl indice) // [6.4][10.5]
 			/* Copiamo il descrittore cosi' ottenuto in tutte le entrate */
 			mset_des(dest, 0,  1024, ndes);
 		} else {
-			leggi_blocco(ppf->pt.ind_massa, dest); /* vedi sopra */
+			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
 		}
 		// *)
 		break;
@@ -709,7 +701,7 @@ void carica(natl indice) // [6.4][10.5]
 void scarica(natl indice) // [6.4]
 {
 	des_pf *ppf =&dpf[indice];
-	scrivi_blocco(ppf->pt.ind_massa, indirizzo_pf(indice));
+	scrivi_speciale(indirizzo_pf(indice), ppf->pt.ind_massa);
 }
 
 natl scegli_vittima(natl proc, tt tipo, addr ind_virt) // [6.4]
@@ -2795,22 +2787,22 @@ void dealloca_blocco(natl blocco)
 
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-void leggi_blocco(natl blocco, void* dest)
+void leggi_speciale(addr dest, natl primo)
 {
-	natl sector = blocco * 8;
+	natl sector = primo * 8;
 
 	leggisett(sector, 8, static_cast<natw*>(dest));
 }
 
-void scrivi_blocco(natl blocco, void* dest)
+void scrivi_speciale(addr src, natl primo)
 {
-	natl sector = blocco * 8;
+	natl sector = primo * 8;
 
-	scrivisett(sector, 8, static_cast<natw*>(dest));
+	scrivisett(sector, 8, static_cast<natw*>(src));
 }
 
 // lettura dallo swap (da utilizzare nella fase di inizializzazione)
-bool leggi_swap(void* buf, natl first, natl bytes)
+bool leggi_swap(addr buf, natl first, natl bytes)
 {
 	natl nsect = ceild(bytes, 512);
 
