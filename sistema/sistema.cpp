@@ -284,30 +284,27 @@ struct des_pf {			// [6.3]
 			// indirizzo virtuale della pagina (ultimi 12 bit a 0)
 			// o della prima pagina indirizzata da una tabella (ultimi 22 bit uguali a 0)
 			natl	contatore;	// contatore per le statistiche
-		} pt; 	// rilevante se "contenuto" vale TABELLA o PAGINA
+		} pt; 	// rilevante se "contenuto" non vale LIBERA
 		struct  { // informazioni relative a una pagina libera
 			natl	prossima_libera;// indice del descrittore della prossima pagina libera
 		} avl;	// rilevante se "contenuto" vale LIBERA
 	};
 };
 
-des_pf* dpf;		// puntatore al vettore di descrittori di pagine fisiche [6.3]
-natl pagine_libere;	// indice del descrittore della prima pagina libera [6.3]
-addr prima_pf_utile;	// indirizzo fisico della prima pagina utile [6.3]
-// (
-natl NUM_DPF;		// numero di descrittori di pagine fisiche
-// )
+des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
+addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
+natl pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
 
-// [6.3]
-natl indice_dpf(addr ind_fisico)
+// [9.3]
+natl indice_dpf(addr indirizzo_pf)
 {
-	return ((natl)ind_fisico - (natl)prima_pf_utile) / DIM_PAGINA;
+	return ((natl)indirizzo_pf - (natl)prima_pf_utile) / DIM_PAGINA;
 }
 
-// [6.3]
-addr indirizzo_pf(natl indice)
+// [9.3]
+addr indirizzo_pf(natl indice_dpf)
 {
-	return (addr)((natl)prima_pf_utile + indice * DIM_PAGINA);
+	return (addr)((natl)prima_pf_utile + indice_dpf * DIM_PAGINA);
 }
 
 // ( inizializza i descrittori di pagina fisica (vedi [P_MEM_PHYS])
@@ -807,11 +804,11 @@ natl scegli_vittima(natl indice_vietato) // [6.4]
 	natl i, indice_vittima;
 	des_pf *ppf, *pvittima;
 	i = 0;
-	while ( (i < NUM_DPF && dpf[i].pt.residente) || i == indice_vietato)
+	while ( (i < N_DPF && dpf[i].pt.residente) || i == indice_vietato)
 		i++;
-	if (i >= NUM_DPF) return 0xFFFFFFFF;
+	if (i >= N_DPF) return 0xFFFFFFFF;
 	indice_vittima = i;
-	for (i++; i < NUM_DPF; i++) {
+	for (i++; i < N_DPF; i++) {
 		ppf = &dpf[i];
 		pvittima = &dpf[indice_vittima];
 		if (ppf->pt.residente || i == indice_vietato)
@@ -852,7 +849,7 @@ void routine_stat()		// [6.6]
 	addr ff1, ff2;
 	bool bitA;
 
-	for (natl i = 0; i < NUM_DPF; i++) {
+	for (natl i = 0; i < N_DPF; i++) {
 		ppf1 = &dpf[i];
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
@@ -1058,7 +1055,7 @@ extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
 const natl MAX_PRIORITY	= 0xfffffff;
 const natl MIN_PRIORITY	= 0x0000001;
 const natl DUMMY_PRIORITY = 0x0000000;
-const natl DEFAULT_HEAP_SIZE = 1024 * 1024;
+const natl HEAP_SIZE = 640*4096U - 4096U;
 const natl DELAY = 59659;
 
 extern "C" void *memset(void* dest, int c, natl n);
@@ -1067,11 +1064,10 @@ extern addr max_mem_lower;
 extern addr max_mem_upper;
 extern addr mem_upper;
 extern proc_elem init;
-natl heap_mem = DEFAULT_HEAP_SIZE;
 int salta_a(addr indirizzo);
 addr occupa(natl quanti);
 bool ioapic_init();
-bool crea_finestra_FM(addr direttorio, addr max_mem);
+bool crea_finestra_FM(addr direttorio);
 bool crea_finestra_PCI(addr direttorio);
 natl crea_dummy();
 bool init_pe();
@@ -1083,6 +1079,7 @@ extern natl ticks;
 extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
 void ini_COM1();
+void init_heap();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
 	int indice;
@@ -1108,36 +1105,14 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	}
 	// *)
 
-	// (* vediamo se il boot loader ci ha passato l'informazione su quanta
-	//    memoria fisica e' installata nel sistema
-	if (mbi->flags & MULTIBOOT_INFO_MEMORY) {
-		max_mem_lower = addr(mbi->mem_lower * 1024);
-		max_mem_upper = addr(mbi->mem_upper * 1024 + 0x100000);
-	} else {
-		flog(LOG_WARN, "Quantita' di memoria sconosciuta, assumo 32 MiB");
-		max_mem_lower = addr(639 * 1024);
-		max_mem_upper = addr(32 * 1024 * 1024);
-	}
-	flog(LOG_INFO, "Memoria fisica: %d byte (%d MiB)", max_mem_upper, (natl)max_mem_upper >> 20 );
-	// *)
-
-	// ( per come abbiamo organizzato il sistema non possiamo gestire piu' di
-	//   1GiB di memoria fisica (vedi [10.1])
-	if (max_mem_upper > fine_sistema_condiviso) {
-		max_mem_upper = fine_sistema_condiviso;
-		flog(LOG_WARN, "verranno gestiti solo %d byte di memoria fisica", max_mem_upper);
-	}
-	// )
-	
-	// (* Assegna allo heap di sistema heap_mem byte a partire dalla fine del modulo sistema
-	salta_a(static_cast<natb*>(mem_upper) + heap_mem);
-	flog(LOG_INFO, "Heap di sistema: %d B", heap_mem);
+	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
+	init_heap();
+	flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
 	// *)
 
 	// ( il resto della memoria e' per le pagine fisiche (parte M2, vedi [1.10])
-	if (!init_dpf())
-		goto error;
-	flog(LOG_INFO, "Pagine fisiche: %d", NUM_DPF);
+	init_dpf();
+	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
 
 	// ( creiamo il direttorio "D" (vedi [10.4])
@@ -1154,7 +1129,7 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	// )
 
 	// ( memoria fisica in memoria virtuale (vedi [1.8] e [10.4])
-	if (!crea_finestra_FM(direttorio, max_mem_upper))
+	if (!crea_finestra_FM(direttorio))
 		goto error;
 	flog(LOG_INFO, "Mappata memoria fisica in memoria virtuale");
 	// )
@@ -1789,77 +1764,14 @@ void free_interna(addr indirizzo, natl quanti)
 			memlibera = nuovo;
 	}
 }
+
+void init_heap()
+{
+	free_interna((addr)4096U, HEAP_SIZE);
+}
 // )
 
 // ( [P_MEM_PHYS]
-// La memoria fisica viene gestita in due fasi: durante l'inizializzazione, si
-// tiene traccia dell'indirizzo dell'ultimo byte non "occupato", tramite il
-// puntatore mem_upper. Tale puntatore viene fatto avanzare mano a mano che si
-// decide come utilizzare la memoria fisica a disposizione:
-// 1. all'inizio, poiche' il sistema e' stato caricato in memoria fisica dal
-// bootstrap loader, il primo byte non occupato e' quello successivo all'ultimo
-// indirizzo occupato dal sistema stesso (e' il linker, tramite il simbolo
-// predefinito "_end", che ci permette di conoscere, staticamente, questo
-// indirizzo [vedi sistema.S])
-// 2. di seguito al modulo sistema, viene allocato l'array di descrittori di 
-// pagine fisiche [vedi avanti], la cui dimensione e' calcolata dinamicamente, 
-// in base al numero di pagine fisiche rimanenti.
-// 3. tutta la memoria fisica restante, a partire dal primo indirizzo multiplo
-// di 4096, viene usata per le pagine fisiche, destinate a contenere
-// descrittori, tabelle e pagine virtuali.
-//
-// Durante queste operazioni, si vengono a scoprire regioni di memoria fisica
-// non utilizzate (per esempio, il modulo sistema viene caricato in memoria a 
-// partire dall'indirizzo 0x100000, corrispondente a 1 MiB, quindi il primo 
-// mega byte, esclusa la zona dedicata alla memoria video, risulta 
-// inutilizzato) Queste regioni, man mano che vengono scoperte, vengono 
-// aggiunte allo heap di sistema. Nella seconda fase, il sistema usa lo heap 
-// cosi' ottenuto per allocare la memoria richiesta dalla funzione "alloca".
-
-// indirizzo fisico del primo byte non riferibile in memoria inferiore e
-// superiore (rappresentano la memoria fisica installata sul sistema)
-// Nota: la "memoria inferiore" e' quella corrispondente al primo mega byte di 
-// memoria fisica installata. Per motivi storici, non tutto il mega byte e' 
-// disponibile (ad esempio, verso la fine, troviamo la memoria video).
-// La "memoria superiore" e' quella successiva al primo megabyte
-addr max_mem_lower;
-addr max_mem_upper;
-
-// indirizzo fisico del primo byte non occupato
-extern addr mem_upper;
-
-// allocazione sequenziale, da usare durante la fase di inizializzazione.  Si
-// mantiene un puntatore (mem_upper) all'ultimo byte non occupato.  Tale
-// puntatore puo' solo avanzare, tramite le funzioni 'occupa' e 'salta_a', e
-// non puo' superare la massima memoria fisica contenuta nel sistema
-// (max_mem_upper). Se il puntatore viene fatto avanzare tramite la funzione
-// 'salta_a', i byte "saltati" vengono dati all'allocatore a lista
-// tramite la funzione "free_interna"
-addr occupa(natl quanti)
-{
-	addr p = 0;
-	addr appoggio = static_cast<natb*>(mem_upper) + quanti;
-	if (appoggio <= max_mem_upper) {
-		p = mem_upper;
-		mem_upper = appoggio;
-	}
-	return p; // se e' zero, non e' stato possibile spostare mem_upper di
-		  // "quanti" byte in avanti
-}
-
-int salta_a(addr indirizzo)
-{
-	int saltati = -1;
-	if (indirizzo >= mem_upper && indirizzo < max_mem_upper) {
-		saltati = static_cast<natb*>(indirizzo) - static_cast<natb*>(mem_upper);
-		free_interna(mem_upper, saltati);
-		mem_upper = indirizzo;
-	}
-	return saltati; // se e' negativo, "indirizzo" era minore di mem_upper
-			// (ovvero, "indirizzo" era gia' occupato), oppure era
-			// maggiore della memoria disponibile
-}
-
 // init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
 // memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
 // si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
@@ -1867,46 +1779,14 @@ int salta_a(addr indirizzo)
 bool init_dpf()
 {
 
-	// allineamo mem_upper alla linea, per motivi di efficienza
-	salta_a(allineav(mem_upper, sizeof(int)));
+	prima_pf_utile = (addr)DIM_M1;
 
-	// calcoliamo quanta memoria principale rimane
-	int dimensione = static_cast<natb*>(max_mem_upper) - static_cast<natb*>(mem_upper);
-
-	if (dimensione <= 0) {
-		flog(LOG_ERR, "Non ci sono pagine libere");
-		return false;
-	}
-
-	// calcoliamo quante pagine fisiche possiamo definire (tenendo conto
-	// del fatto che ogni pagina fisica avra' bisogno di un descrittore)
-	natl quante = dimensione / (DIM_PAGINA + sizeof(des_pf));
-
-	// allochiamo i corrispondenti descrittori di pagina fisica
-	dpf = reinterpret_cast<des_pf*>(occupa(sizeof(des_pf) * quante));
-
-	// riallineamo mem_upper a un multiplo di pagina
-	salta_a(allineav(mem_upper, DIM_PAGINA));
-
-	// ricalcoliamo quante col nuovo mem_upper, per sicurezza
-	// (sara' minore o uguale al precedente)
-	quante = (static_cast<natb*>(max_mem_upper) - static_cast<natb*>(mem_upper)) / DIM_PAGINA;
-
-	// occupiamo il resto della memoria principale con le pagine fisiche;
-	// ricordiamo l'indirizzo della prima pagina fisica e il loro numero
-	prima_pf_utile = occupa(quante * DIM_PAGINA);
-	NUM_DPF = quante;
-
-	// se resta qualcosa (improbabile), lo diamo all'allocatore a lista
-	salta_a(max_mem_upper);
-
-	// costruiamo la lista delle pagine fisiche libere
 	pagine_libere = 0;
-	for (natl i = 0; i < quante - 1; i++) {
+	for (natl i = 0; i < N_DPF - 1; i++) {
 		dpf[i].contenuto = LIBERA;
 		dpf[i].avl.prossima_libera = i + 1;
 	}
-	dpf[quante - 1].avl.prossima_libera = 0xFFFFFFFF;
+	dpf[N_DPF - 1].avl.prossima_libera = 0xFFFFFFFF;
 
 	return true;
 }
@@ -2349,9 +2229,9 @@ bool identity_map(addr direttorio, addr start, addr end, natl flags)
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
 // memoria virtuale gestita dal direttorio pdir
 // (la funzione viene usata in fase di inizializzazione)
-bool crea_finestra_FM(addr direttorio, addr max_mem)
+bool crea_finestra_FM(addr direttorio)
 {
-	return identity_map(direttorio, (addr)DIM_PAGINA, max_mem, BIT_RW);
+	return identity_map(direttorio, (addr)DIM_PAGINA, (addr)MEM_TOT, BIT_RW);
 }
 
 // ( [P_PCI]

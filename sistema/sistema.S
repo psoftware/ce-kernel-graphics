@@ -1716,8 +1716,6 @@ ticks:		.long 0
 .global		clocks_per_usec
 clocks_per_usec:
 		.long 1
-.global		mem_upper
-mem_upper:	 .long end
 .global		fine_codice_sistema
 fine_codice_sistema:
 		.long etext

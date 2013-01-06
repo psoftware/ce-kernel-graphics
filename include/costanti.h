@@ -10,6 +10,10 @@
 // )
 
 // ( varie dimensioni
+#define MiB			(1024*1024U)
+#define MEM_TOT			(16*MiB)
+#define DIM_M1			(2*MiB)
+#define DIM_M2			(MEM_TOT - DIM_M1)
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096U
 #define DIM_MACROPAGINA		(DIM_PAGINA * 1024U)
@@ -17,6 +21,7 @@
 #define DIM_DESS		8	// descrittore di semaforo
 #define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define MAX_PRD			16
+#define N_DPF			(DIM_M2 / DIM_PAGINA)
 // )
 
 // ( tipi interruzioni esterne
