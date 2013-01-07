@@ -99,6 +99,13 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 // )
 }
 
+extern "C" void inspronti()
+{
+// (
+	inserimento_lista(pronti, esecuzione);
+// )
+}
+
 // [4.8]
 extern "C" void schedulatore(void)
 {
@@ -172,12 +179,9 @@ extern "C" void c_sem_signal(natl sem)
 
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
-		if ( (lavoro->precedenza) <= (esecuzione->precedenza) )
-			inserimento_lista(pronti, lavoro);
-		else { // preemption
-			inserimento_lista(pronti, esecuzione);
-			esecuzione = lavoro;
-		}
+		inserimento_lista(pronti, lavoro);
+		inspronti();	// preemption
+		schedulatore();	// preemption
 	}
 }
 
@@ -263,6 +267,7 @@ extern "C" void c_driver_td(void)
 		dealloca(p);
 	}
 
+	inspronti();
 	schedulatore();
 }
 

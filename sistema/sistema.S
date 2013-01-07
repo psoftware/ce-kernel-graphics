@@ -352,16 +352,6 @@ backtrace:
 
 	
 
-// inserimento del processo in esecuzione in testa alla coda dei pronti
-//  (non salva i registri, viene chiamata dopo salva_stato)
-//
-inspronti:
-        movl esecuzione, %eax
-        movl pronti, %ebx
-        movl %ebx, 8(%eax)
-        movl %eax, pronti
-	ret
-
 // offset, all'interno della struttura des_proc, dei campi
 // destinati a contere i registri del processore
 .set EAX, 40
@@ -1270,7 +1260,6 @@ end_program:
 	.extern c_driver_td
 driver_td:
 	call salva_stato	// interruzioni disabilitate
-	call inspronti
 	call c_driver_td
 	call inviaEOI
 	call carica_stato
