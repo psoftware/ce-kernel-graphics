@@ -641,66 +641,8 @@ void scrivi_speciale(addr src, natl primo);
 
 void carica(natl indice) // [6.4][10.5]
 {
-	/* natb ERR non serve, perche' non usiamo direttamente readhd_n */
-	addr dest = indirizzo_pf(indice);
 	des_pf *ppf = &dpf[indice];
-	switch (ppf->contenuto) {
-	case PAGINA_PRIVATA:
-	case PAGINA_CONDIVISA:
-		if (ppf->pt.ind_massa == 0) {
-			for (natl i = 0; i < DIM_PAGINA; i++)
-				static_cast<natb*>(dest)[i] = 0;
-		} else {
-			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
-		}
-		break;
-	case TABELLA_PRIVATA:
-	case TABELLA_CONDIVISA:
-		// (* gestiamo l'allocazione dinamica anche per le tabelle.
-		//    Se ppf->pt.ind_massa e' zero allochiamo una nuova tabella.
-		//    Tutte le entrate della nuova tabella hanno P=0, ppf->pt.ind_massa=0
-		//    e i bit S/U, R/W, PCD e PWT copiati dall'entrata del direttorio.
-		if (ppf->pt.ind_massa == 0) {
-			/* costruiamo il descrittore che andra' copiato in tutte le entrate
-			 * della nuova tabella:
-			 *  - copiamo il descrittore nel direttorio (per avere
-			 *   una copia dei bit S/U, R/W, PWT e PCD */
-			natl ndes = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
-			/* - azzeriamo il bit P nella copia */
-			set_P(ndes, false);
-			/* - azzeriamo l'indirizzo in memoria di massa */
-			clear_IND_M(ndes);
-			/* Copiamo il descrittore cosi' ottenuto in tutte le entrate */
-			mset_des(dest, 0,  1024, ndes);
-		} else {
-			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
-		}
-		// *)
-		break;
-	// (* gestiamo anche il caso del direttorio. Un nuovo direttorio
-	//    viene creato quando si crea un nuovo processo. In questo
-	//    caso (si veda [10.3]), le parti condivise vengono copiate dalle corrispondenti
-	//    parti del processo padre (il cui direttorio e' puntato da CR3),
-	//    mentre le parti private vengono inizializzate nel seguente modo
-	//    - parte sistema_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
-	//      S/U=0 (sistema), R/W=1, PWT=PCD=0
-	//    - parte utente_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
-	//      S/U=1 (utente), R/W=1, PWT=PCD=0
-	case DIRETTORIO:
-		{ addr pdir = readCR3();
-		  copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
-		  mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
-		  copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
-		  copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);
-		  copy_des(pdir, dest, i_utente_condiviso,  ntab_utente_condiviso);
-		  mset_des(	 dest, i_utente_privato,    ntab_utente_privato, BIT_RW|BIT_US);
-		}
-		break;
-	// *)
-	default:
-		flog(LOG_ERR, "carica(%d) con contenuto=%d", indice, ppf->contenuto);
-		abort_p();
-	}
+	leggi_speciale(indirizzo_pf(indice), ppf->pt.ind_massa);
 }
 
 void scarica(natl indice) // [6.4]
@@ -995,6 +937,25 @@ extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
 void ini_COM1();
 void init_heap();
+// super blocco (vedi [10.5] e [P_SWAP] avanti)
+struct superblock_t {
+	char	magic[4];
+	natl	bm_start;
+	natl	blocks;
+	natl	directory;
+	void	(*user_entry)(int);
+	addr	user_end;
+	void	(*io_entry)(int);
+	addr	io_end;
+	int	checksum;
+};
+
+// descrittore di swap (vedi [P_SWAP] avanti)
+struct des_swap {
+	natl *free;		// bitmap dei blocchi liberi
+	superblock_t sb;	// contenuto del superblocco 
+} swap_dev; 	// c'e' un unico oggetto swap
+bool swap_init();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
 	int indice;
@@ -1068,6 +1029,18 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	ioapic_init();
 	flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
 	// *)
+	//
+	// ( inizializzazione dello swap, che comprende la lettura
+	//   degli entry point di start_io e start_utente (vedi [10.4])
+	if (!swap_init())
+			goto error;
+	flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
+			swap_dev.sb.blocks,
+			swap_dev.sb.user_entry,
+			swap_dev.sb.user_end,
+			swap_dev.sb.io_entry,
+			swap_dev.sb.io_end);
+	// )
 	
 	// ( creazione del processo dummy [10.4]
 	dummy_proc = crea_dummy();
@@ -1102,26 +1075,7 @@ error:
 
 bool aggiungi_pe(proc_elem *p, natb irq);
 bool crea_spazio_condiviso(natl dummy_proc, addr& last_address);
-bool swap_init();
 
-// super blocco (vedi [10.5] e [P_SWAP] avanti)
-struct superblock_t {
-	char	magic[4];
-	natl	bm_start;
-	natl	blocks;
-	natl	directory;
-	void	(*user_entry)(int);
-	addr	user_end;
-	void	(*io_entry)(int);
-	addr	io_end;
-	int	checksum;
-};
-
-// descrittore di swap (vedi [P_SWAP] avanti)
-struct des_swap {
-	natl *free;		// bitmap dei blocchi liberi
-	superblock_t sb;	// contenuto del superblocco 
-} swap_dev; 	// c'e' un unico oggetto swap
 
 extern "C" des_proc* des_p(natl id);
 //
@@ -1137,17 +1091,6 @@ void main_sistema(int n)
 	natl sync_io;
 	natl dummy_proc = (natl)n; 
 
-	// ( inizializzazione dello swap, che comprende la lettura
-	//   degli entry point di start_io e start_utente (vedi [10.4])
-	if (!swap_init())
-			goto error;
-	flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 
-			swap_dev.sb.blocks,
-			swap_dev.sb.user_entry,
-			swap_dev.sb.user_end,
-			swap_dev.sb.io_entry,
-			swap_dev.sb.io_end);
-	// )
 
 	// ( caricamento delle tabelle e pagine residenti degli spazi condivisi ([10.4])
 	flog(LOG_INFO, "creazione o lettura delle tabelle e pagine residenti condivise...");
@@ -1718,6 +1661,40 @@ extern "C" void rilascia_tss(int indice);
 proc_elem init;
 des_proc des_main;
 
+addr crea(natl proc, addr ind_virt, tt tipo, natl liv)
+{
+	natl& dt = get_des(proc, tipo, ind_virt);
+	bool bitP = extr_P(dt);
+	if (!bitP) {
+		natl blocco = extr_IND_MASSA(dt);
+		if (!blocco) {
+			blocco = alloca_blocco();
+			set_IND_M(dt, blocco);
+			dt = dt | BIT_RW;
+			if (liv == LIV_UTENTE) dt = dt | BIT_US;
+		}
+		natl indice = swap(proc, tipo, ind_virt);
+		dpf[indice].pt.residente = (liv == LIV_SISTEMA);
+	}
+	return extr_IND_FISICO(dt);
+}
+
+addr crea_pagina(natl proc, addr ind_virt, natl liv)
+{
+	crea(proc, ind_virt, TABELLA_PRIVATA, liv);
+	return crea(proc, ind_virt, PAGINA_PRIVATA, liv);
+}
+
+addr crea_pila(natl proc, natb *bottom, natl size, natl liv)
+{
+	size = (size + (DIM_PAGINA - 1)) & ~(DIM_PAGINA - 1);
+
+	addr ind_fisico;
+	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
+		ind_fisico = crea_pagina(proc, (addr)ind, liv);
+	return ind_fisico;
+}
+
 const natl BIT_IF = 1L << 9;
 proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 {
@@ -1725,8 +1702,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	natl		identifier;		// indice del tss nella gdt 
 	des_proc	*pdes_proc;		// descrittore di processo
 	natl		idirettorio;		// direttorio del processo
-	natl		itabella;
-	natl		ipila_sistema;
+	addr		pila_sistema;
 	
 
 	// ( allocazione (e azzeramento preventivo) di un des_proc 
@@ -1759,22 +1735,12 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	// )
 
 	// ( creazione della pila sistema (vedi [10.3]).
-	//   La pila sistema e' grande 4MiB, ma allochiamo solo l'ultima
-	//   pagina. Non chiamiamo "swap", perche' vogliamo passare "true"
-	//   ad entrambe le "swap_ent".
-	itabella = swap(p->id, TABELLA_PRIVATA, fine_sistema_privato - DIM_PAGINA);
-	if (itabella == 0xFFFFFFFF) goto errore5;
-	dpf[itabella].pt.residente = true;
-	ipila_sistema = swap(p->id, PAGINA_PRIVATA, fine_sistema_privato - DIM_PAGINA);
-	if (ipila_sistema == 0xFFFFFFFF) goto errore6;
-	dpf[ipila_sistema].pt.residente = true;
+	pila_sistema = crea_pila(p->id, fine_sistema_privato, DIM_SYS_STACK, LIV_SISTEMA);
 	// )
 
 	if (liv == LIV_UTENTE) {
 		// ( inizializziamo la pila sistema.
-		addr pila_sistema = indirizzo_pf(ipila_sistema);
 		natl* pl = static_cast<natl*>(pila_sistema);
-		natl itab_utente, ipila_utente;
 
 		pl[1019] = (natl)f;		// EIP (codice utente)
 		pl[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
@@ -1787,15 +1753,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 
 		// ( creazione e inizializzazione della pila utente
-		itab_utente = swap(p->id, TABELLA_PRIVATA, fine_utente_privato - DIM_PAGINA);
-		if (itab_utente == 0xFFFFFFFF) goto errore6;
-		ipila_utente = swap(p->id, PAGINA_PRIVATA, fine_utente_privato - DIM_PAGINA);
-		if (ipila_utente == 0xFFFFFFFF) goto errore6;
+		addr pila_utente = crea_pila(p->id, fine_utente_privato, DIM_USR_STACK, LIV_UTENTE);
 
 		//   dobbiamo ora fare in modo che la pila utente si trovi nella
 		//   situazione in cui si troverebbe dopo una CALL alla funzione
 		//   f, con parametro a:
-		addr pila_utente = indirizzo_pf(ipila_utente);
 		pl = static_cast<natl*>(pila_utente);
 		pl[1022] = 0xffffffff;	// ind. di ritorno non significativo
 		pl[1023] = a;		// parametro del processo
@@ -1830,7 +1792,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 	} else {
 		// ( inizializzazione delle pila sistema
-		addr pila_sistema = indirizzo_pf(ipila_sistema);
 		natl* pl = static_cast<natl*>(pila_sistema);
 		pl[1019] = (natl)f;	  	// EIP (codice sistema)
 		pl[1020] = SEL_CODICE_SISTEMA;  // CS (codice sistema)
@@ -2994,3 +2955,62 @@ bool crea_main_sistema(natl dummy_proc)
 	return true;
 }
 // )
+#if 0
+	switch (ppf->contenuto) {
+	case PAGINA_PRIVATA:
+	case PAGINA_CONDIVISA:
+		if (ppf->pt.ind_massa == 0) {
+			for (natl i = 0; i < DIM_PAGINA; i++)
+				static_cast<natb*>(dest)[i] = 0;
+		} else {
+			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
+		}
+		break;
+	case TABELLA_PRIVATA:
+	case TABELLA_CONDIVISA:
+		// (* gestiamo l'allocazione dinamica anche per le tabelle.
+		//    Se ppf->pt.ind_massa e' zero allochiamo una nuova tabella.
+		//    Tutte le entrate della nuova tabella hanno P=0, ppf->pt.ind_massa=0
+		//    e i bit S/U, R/W, PCD e PWT copiati dall'entrata del direttorio.
+		if (ppf->pt.ind_massa == 0) {
+			/* costruiamo il descrittore che andra' copiato in tutte le entrate
+			 * della nuova tabella:
+			 *  - copiamo il descrittore nel direttorio (per avere
+			 *   una copia dei bit S/U, R/W, PWT e PCD */
+			natl ndes = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
+			/* - azzeriamo il bit P nella copia */
+			set_P(ndes, false);
+			/* - azzeriamo l'indirizzo in memoria di massa */
+			clear_IND_M(ndes);
+			/* Copiamo il descrittore cosi' ottenuto in tutte le entrate */
+			mset_des(dest, 0,  1024, ndes);
+		} else {
+			leggi_speciale(dest, ppf->pt.ind_massa); /* vedi sopra */
+		}
+		// *)
+		break;
+	// (* gestiamo anche il caso del direttorio. Un nuovo direttorio
+	//    viene creato quando si crea un nuovo processo. In questo
+	//    caso (si veda [10.3]), le parti condivise vengono copiate dalle corrispondenti
+	//    parti del processo padre (il cui direttorio e' puntato da CR3),
+	//    mentre le parti private vengono inizializzate nel seguente modo
+	//    - parte sistema_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
+	//      S/U=0 (sistema), R/W=1, PWT=PCD=0
+	//    - parte utente_privata: tutti i descrittori hanno P=0, ppf->pt.ind_massa=0,
+	//      S/U=1 (utente), R/W=1, PWT=PCD=0
+	case DIRETTORIO:
+		{ addr pdir = readCR3();
+		  copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
+		  mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
+		  copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
+		  copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);
+		  copy_des(pdir, dest, i_utente_condiviso,  ntab_utente_condiviso);
+		  mset_des(	 dest, i_utente_privato,    ntab_utente_privato, BIT_RW|BIT_US);
+		}
+		break;
+	// *)
+	default:
+		flog(LOG_ERR, "carica(%d) con contenuto=%d", indice, ppf->contenuto);
+		abort_p();
+	}
+#endif

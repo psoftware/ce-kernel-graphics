@@ -10,7 +10,8 @@
 // )
 
 // ( varie dimensioni
-#define MiB			(1024*1024U)
+#define KiB			1024U
+#define MiB			(1024*KiB)
 #define MEM_TOT			(16*MiB)
 #define DIM_M1			(2*MiB)
 #define DIM_M2			(MEM_TOT - DIM_M1)
@@ -22,6 +23,9 @@
 #define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define MAX_PRD			16
 #define N_DPF			(DIM_M2 / DIM_PAGINA)
+#define DIM_USR_HEAP		(256*KiB)
+#define DIM_USR_STACK		(64*KiB)
+#define DIM_SYS_STACK		(4*KiB)
 // )
 
 // ( tipi interruzioni esterne
