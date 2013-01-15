@@ -1695,6 +1695,18 @@ addr crea_pila(natl proc, natb *bottom, natl size, natl liv)
 	return ind_fisico;
 }
 
+void crea_direttorio(addr dest)
+{
+	addr pdir = readCR3();
+
+	copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
+	mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
+	copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
+	copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);
+	copy_des(pdir, dest, i_utente_condiviso,  ntab_utente_condiviso);
+	mset_des(      dest, i_utente_privato,    ntab_utente_privato, BIT_RW|BIT_US);
+}
+
 const natl BIT_IF = 1L << 9;
 proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 {
@@ -1732,6 +1744,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	if (idirettorio == 0xFFFFFFFF) goto errore4;
 	dpf[idirettorio].pt.residente = true;
 	pdes_proc->cr3 = indirizzo_pf(idirettorio);
+	crea_direttorio(pdes_proc->cr3);
 	// )
 
 	// ( creazione della pila sistema (vedi [10.3]).
@@ -2868,7 +2881,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 	{
 		addr ind = (addr)(j * DIM_MACROPAGINA);
 		natl dt = singolo_des(dir, j);
-		if (extr_P(dt)) {	  
+		if (extr_IND_MASSA(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
 			natl i_tabella = swap(proc, TABELLA_CONDIVISA, ind);
 			if (i_tabella == 0xFFFFFFFF) {
@@ -2878,7 +2891,7 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 			dpf[i_tabella].pt.residente = true;
 			for (int k = 0; k < 1024; k++) {
 				natl dp = singolo_des(indirizzo_pf(i_tabella), k);
-				if (extr_P(dp)) {
+				if (extr_IND_MASSA(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
 					natl i_pagina = swap(proc, PAGINA_CONDIVISA, ind_virt);
 					if (i_pagina == 0xFFFFFFFF) {
@@ -3000,7 +3013,7 @@ bool crea_main_sistema(natl dummy_proc)
 	//      S/U=1 (utente), R/W=1, PWT=PCD=0
 	case DIRETTORIO:
 		{ addr pdir = readCR3();
-		  copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
+		  copy_des(pdir, dest, , ntab_sistema_condiviso);
 		  mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
 		  copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
 		  copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);

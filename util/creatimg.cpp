@@ -246,7 +246,7 @@ void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
 				pdes_tab->a.PCD   = 0;
 				pdes_tab->a.RW	  = 1;
 				pdes_tab->a.US	  = liv;
-				pdes_tab->a.P	  = 1;
+				pdes_tab->a.P	  = 0;
 			} else {
 				tabc.leggi(pdes_tab->a.block);
 			}
@@ -269,7 +269,6 @@ void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
 			pdes_pag->a.PCD = 0;
 			pdes_pag->a.RW |= s->scrivibile();
 			pdes_pag->a.US |= liv;
-			pdes_pag->a.P  |= 1;
 			tabc.scrivi();
 			s->prossima_pagina();
 		}
@@ -354,7 +353,7 @@ int main(int argc, char* argv[])
 		pdes_tab->a.PCD   = 0;
 		pdes_tab->a.US	  = 1;
 		pdes_tab->a.RW	  = 1;
-		pdes_tab->a.P     = 1;
+		pdes_tab->a.P     = 0;
 	}
 		
 	superblock.magic[0] = 'C';
