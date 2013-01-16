@@ -6,9 +6,9 @@ BEGIN {
 	sub toLine($) {
 		my $h = shift;
 
-		if    ($h =~ /^8/) { $exe = 'build/utente';  }
-		elsif ($h =~ /^4/) { $exe = 'build/io';      }
-		else               { $exe = "build/sistema"; }
+		if    ($h ge '80000000') { $exe = 'build/utente';  }
+		elsif ($h ge '40000000') { $exe = 'build/io';      }
+		else                     { $exe = "build/sistema"; }
 
 		my $out = `addr2line -Cfe $exe $h`;
 		if ($?) {
