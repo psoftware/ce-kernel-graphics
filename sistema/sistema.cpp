@@ -292,25 +292,27 @@ struct des_pf {			// [6.3]
 			natl	contatore;	// contatore per le statistiche
 		} pt; 	// rilevante se "contenuto" non vale LIBERA
 		struct  { // informazioni relative a una pagina libera
-			natl	prossima_libera;// indice del descrittore della prossima pagina libera
+			des_pf*	prossima_libera;// indice del descrittore della prossima pagina libera
 		} avl;	// rilevante se "contenuto" vale LIBERA
 	};
 };
 
 des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
-natl pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
+des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
 
 // [9.3]
-natl indice_dpf(addr indirizzo_pf)
+des_pf* descrittore_pf(addr indirizzo_pf)
 {
-	return ((natl)indirizzo_pf - (natl)prima_pf_utile) / DIM_PAGINA;
+	natl indice = ((natl)indirizzo_pf - (natl)prima_pf_utile) / DIM_PAGINA;
+	return &dpf[indice];
 }
 
 // [9.3]
-addr indirizzo_pf(natl indice_dpf)
+addr indirizzo_pf(des_pf* ppf)
 {
-	return (addr)((natl)prima_pf_utile + indice_dpf * DIM_PAGINA);
+	natl indice = ppf - &dpf[0];
+	return (addr)((natl)prima_pf_utile + indice * DIM_PAGINA);
 }
 
 // ( inizializza i descrittori di pagina fisica (vedi [P_MEM_PHYS])
@@ -487,18 +489,17 @@ extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 
 
 extern "C" addr readCR2();
-natl swap(natl proc, tt tipo, addr ind_virt); // [6.4]
+void swap(tt tipo, addr ind_virt); // [6.4]
 void c_routine_pf()	// [6.4][10.2]
 {
 	addr ind_virt = readCR2();
-	natl proc = esecuzione->id;
 	// carica sia la tabella delle pagine che la pagina, o solo la pagina
 	bool bitP; natl dt;
-	dt = get_destab(proc, ind_virt);
+	dt = get_des(esecuzione->id, TABELLA_PRIVATA, ind_virt);
 	bitP = extr_P(dt);
 	if (!bitP)
-		swap(proc, TABELLA_PRIVATA, ind_virt);
-	swap(proc, PAGINA_PRIVATA, ind_virt);
+		swap(TABELLA_PRIVATA, ind_virt);
+	swap(PAGINA_PRIVATA, ind_virt);
 }
 
 bool extr_D(natl descrittore);
@@ -510,53 +511,51 @@ void set_A(natl& decrittore, bool bitP);
 void set_D(natl& decrittore, bool bitP);
 void set_IND_FISICO(natl& descrittore, addr ind_fisico);
 void set_IND_MASSA(natl& descrittore, natl ind_massa);
-natl alloca_pagina_fisica_libera();	// [6.4]
-natl scegli_vittima(natl proc, tt tipo, addr ind_virt);	// [6.4]
-bool scollega(natl indice);		// [6.4]
-void scarica(natl indice);		// [6.4]
-void carica(natl indice);		// [6.4]
-void collega(natl indice);		// [6.4]
-void aggiusta_parent(natl indice);	// [6.4]
+des_pf* alloca_pagina_fisica_libera();	// [6.4]
+des_pf* scegli_vittima(tt tipo, addr ind_virt);	// [6.4]
+bool scollega(des_pf* ppf);		// [6.4]
+void scarica(des_pf* ppf);		// [6.4]
+void carica(des_pf* ppf);		// [6.4]
+void collega(des_pf* ppf);		// [6.4]
+void aggiusta_parent(des_pf* ppf);	// [6.4]
 
 // [6.4]
-natl swap(natl proc, tt tipo, addr ind_virt)
+void swap(tt tipo, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
 	// carica una tabella delle pagine o una pagina
-	natl nuovo_indice = alloca_pagina_fisica_libera();
-	if (nuovo_indice == 0xFFFFFFFF) {
-		natl indice_vittima = scegli_vittima(proc, tipo, ind_virt);
-		bool occorre_salvare = scollega(indice_vittima);
+	des_pf* nuovo_dpf = alloca_pagina_fisica_libera();
+	if (nuovo_dpf == 0) {
+		des_pf* dpf_vittima = scegli_vittima(tipo, ind_virt);
+		bool occorre_salvare = scollega(dpf_vittima);
 		if (occorre_salvare)
-			scarica(indice_vittima);
-		nuovo_indice = indice_vittima;
+			scarica(dpf_vittima);
+		nuovo_dpf = dpf_vittima;
 	}
-	natl des = get_des(proc, tipo, ind_virt);
+	natl des = get_des(esecuzione->id, tipo, ind_virt);
 	natl IM = extr_IND_MASSA(des);
-	des_pf *ppf = &dpf[nuovo_indice];
-	ppf->contenuto = tipo;
-	ppf->pt.residente = false;
-	ppf->pt.processo = proc;
-	ppf->pt.ind_virtuale = ind_virt;
-	ppf->pt.ind_massa = IM;
-	ppf->pt.contatore  = 0x80000000;
-	aggiusta_parent(nuovo_indice);
-	carica(nuovo_indice);
-	collega(nuovo_indice);
-	return nuovo_indice;
+	nuovo_dpf->contenuto = tipo;
+	nuovo_dpf->pt.residente = false;
+	nuovo_dpf->pt.processo = esecuzione->id;
+	nuovo_dpf->pt.ind_virtuale = ind_virt;
+	nuovo_dpf->pt.ind_massa = IM;
+	nuovo_dpf->pt.contatore  = 0x80000000;
+	aggiusta_parent(nuovo_dpf);
+	carica(nuovo_dpf);
+	collega(nuovo_dpf);
 }
 
-natl get_parent(natl proc, tt tipo, addr ind_virt) // [6.4]
+des_pf* get_parent(natl proc, tt tipo, addr ind_virt) // [6.4]
 {
 // (
 	switch (tipo) {
 	case PAGINA_PRIVATA:
-		return indice_dpf(extr_IND_FISICO(get_destab(proc, ind_virt)));
+		return descrittore_pf(extr_IND_FISICO(get_destab(proc, ind_virt)));
 	case TABELLA_PRIVATA:
 	// (* per completezza consideriamo anche il caso DIRETTORIO
 	case DIRETTORIO:
 	// *)
-		return 0xFFFFFFFF;
+		return 0;
 	default:
 		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
 		abort_p();
@@ -564,45 +563,42 @@ natl get_parent(natl proc, tt tipo, addr ind_virt) // [6.4]
 // )
 }
 
-void aggiusta_parent(natl indice)	// [6.4]
+void aggiusta_parent(des_pf* ppf)	// [6.4]
 {
-	des_pf *ppf = &dpf[indice];
 	if (ppf->contenuto == PAGINA_PRIVATA) {
 		// aggiornamento del contatore anche nel descrittore di pagina fisica
 		// contenente la tabella delle pagine coinvolta
 		natl dt = get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
 		addr ind_fis_tab = extr_IND_FISICO(dt);
-		ppf = &dpf[indice_dpf(ind_fis_tab)];
+		ppf = descrittore_pf(ind_fis_tab);
 		ppf->pt.contatore |= 0x80000000;
 	}
 }
 
 
-natl alloca_pagina_fisica_libera()	// [6.4]
+des_pf* alloca_pagina_fisica_libera()	// [6.4]
 {
-	natl p = pagine_libere;
-	if (pagine_libere != 0xFFFFFFFF)
-		pagine_libere = dpf[pagine_libere].avl.prossima_libera;
+	des_pf* p = pagine_libere;
+	if (pagine_libere != 0)
+		pagine_libere = pagine_libere->avl.prossima_libera;
 	return p;
 }
 
 // (* rende di nuovo libera la pagina fisica il cui descrittore di pagina fisica
 //    ha per indice "i"
-void rilascia_pagina_fisica(natl i)
+void rilascia_pagina_fisica(des_pf* ppf)
 {
-	des_pf* p = &dpf[i];
-	p->contenuto = LIBERA;
-	p->avl.prossima_libera = pagine_libere;
-	pagine_libere = i;
+	ppf->contenuto = LIBERA;
+	ppf->avl.prossima_libera = pagine_libere;
+	pagine_libere = ppf;
 }
 // *)
 
 
-void collega(natl indice)	// [6.4]
+void collega(des_pf *ppf)	// [6.4]
 {
-	des_pf* ppf = &dpf[indice];
 	natl& des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
-	set_IND_F(des, indirizzo_pf(indice));
+	set_IND_F(des, indirizzo_pf(ppf));
 	set_P(des, true);
 	set_D(des, false);
 	set_A(des, false);
@@ -610,21 +606,12 @@ void collega(natl indice)	// [6.4]
 
 extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
 natl alloca_blocco();	// [10.5]
-bool scollega(natl indice)	// [6.4][10.5]
+bool scollega(des_pf* ppf)	// [6.4][10.5]
 {
 	bool bitD;
-	des_pf *ppf =&dpf[indice];
 	natl &des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
 	bool occorre_salvare = bitD || ppf->contenuto == TABELLA_PRIVATA;
-	// (* 
-	if (occorre_salvare && ppf->pt.ind_massa == 0) {
-		ppf->pt.ind_massa = alloca_blocco();
-		if (ppf->pt.ind_massa == 0) {
-			panic("spazio nello swap insufficiente");
-		}
-	}
-	// *)
 	set_IND_M(des, ppf->pt.ind_massa);
 	set_P(des, false);
 	invalida_entrata_TLB(ppf->pt.ind_virtuale);
@@ -639,51 +626,58 @@ void dealloca_blocco(natl blocco);
 void leggi_speciale(addr dest, natl primo);
 void scrivi_speciale(addr src, natl primo);
 
-void carica(natl indice) // [6.4][10.5]
+void carica(des_pf* ppf) // [6.4][10.5]
 {
-	des_pf *ppf = &dpf[indice];
-	leggi_speciale(indirizzo_pf(indice), ppf->pt.ind_massa);
+	leggi_speciale(indirizzo_pf(ppf), ppf->pt.ind_massa);
 }
 
-void scarica(natl indice) // [6.4]
+void scarica(des_pf* ppf) // [6.4]
 {
-	des_pf *ppf =&dpf[indice];
-	scrivi_speciale(indirizzo_pf(indice), ppf->pt.ind_massa);
+	scrivi_speciale(indirizzo_pf(ppf), ppf->pt.ind_massa);
 }
 
-natl scegli_vittima(natl proc, tt tipo, addr ind_virt) // [6.4]
+bool vietato(des_pf* ppf, natl proc, tt tipo, addr ind_virt)
 {
-	// "indice_vietato" non puo' essere scelto come indice del descrittore
-	// della pagina fisica vittma
-	natl indice_vietato = get_parent(proc, tipo, ind_virt);
-	natl i, indice_vittima;
-	des_pf *ppf, *pvittima;
-	i = 0;
-	while ( (i < N_DPF && dpf[i].pt.residente) || i == indice_vietato)
-		i++;
-	if (i >= N_DPF) return 0xFFFFFFFF;
-	indice_vittima = i;
-	for (i++; i < N_DPF; i++) {
-		ppf = &dpf[i];
-		pvittima = &dpf[indice_vittima];
-		if (ppf->pt.residente || i == indice_vietato)
+	if (tipo == PAGINA_PRIVATA && ppf->contenuto == TABELLA_PRIVATA &&
+	    ppf->pt.processo == proc &&
+	    ((natl)ppf->pt.ind_virtuale & 0xffc00000) == ((natl)ind_virt & 0xffc00000))
+		return true;
+	return false;
+}
+
+des_pf* scegli_vittima2(natl proc, tt tipo, addr ind_virtuale) // [6.4]
+{
+	des_pf *ppf, *dpf_vittima;
+	ppf = &dpf[0];
+	while ( (ppf < &dpf[N_DPF] && ppf->pt.residente) ||
+			vietato(ppf, proc, tipo, ind_virtuale))
+		ppf++;
+	if (ppf == &dpf[N_DPF]) return 0;
+	dpf_vittima = ppf;
+	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
+		if (ppf->pt.residente || vietato(ppf, proc, tipo, ind_virtuale))
 			continue;
 		switch (ppf->contenuto) {
 		case PAGINA_PRIVATA:
-			if (ppf->pt.contatore < pvittima->pt.contatore ||
-			    (ppf->pt.contatore == pvittima->pt.contatore &&
-			    		pvittima->contenuto == TABELLA_PRIVATA))
-				indice_vittima = i;
+			if (ppf->pt.contatore < dpf_vittima->pt.contatore ||
+			    (ppf->pt.contatore == dpf_vittima->pt.contatore &&
+			    		dpf_vittima->contenuto == TABELLA_PRIVATA))
+				dpf_vittima = ppf;
 			break;
 		case TABELLA_PRIVATA:
-			if (ppf->pt.contatore < pvittima->pt.contatore) 
-				indice_vittima = i;
+			if (ppf->pt.contatore < dpf_vittima->pt.contatore) 
+				dpf_vittima = ppf;
 			break;
 		default:
 			break;
 		}
 	}
-	return indice_vittima;
+	return dpf_vittima;
+}
+
+des_pf* scegli_vittima(tt tipo, addr ind_virtuale)
+{
+	return scegli_vittima2(esecuzione->id, tipo, ind_virtuale);
 }
 
 extern "C" void invalida_TLB(); // [6.6]
@@ -704,19 +698,18 @@ void routine_stat()		// [6.6]
 	addr ff1, ff2;
 	bool bitA;
 
-	for (natl i = 0; i < N_DPF; i++) {
-		ppf1 = &dpf[i];
+	for (ppf1 = &dpf[0]; ppf1 < &dpf[N_DPF]; ppf1++) {
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
 		case TABELLA_PRIVATA:
-			ff1 = indirizzo_pf(i);
+			ff1 = indirizzo_pf(ppf1);
 			for (int j = 0; j < 1024; j++) {
 				natl& des = singolo_des(ff1, j);
 				if (extr_P(des)) {
 					ff2 = extr_IND_FISICO(des);
 					bitA = extr_A(des);
 					set_A(des, false);
-					ppf2 = &dpf[indice_dpf(ff2)];
+					ppf2 = descrittore_pf(ff2);
 					if (!ppf2->pt.residente) {
 						ppf2->pt.contatore >>= 1;
 						if (bitA)
@@ -958,7 +951,7 @@ struct des_swap {
 bool swap_init();
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
-	int indice;
+	des_pf* ppf;
 	addr direttorio;
 	natl dummy_proc;
 	
@@ -992,14 +985,14 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	// )
 
 	// ( creiamo il direttorio "D" (vedi [10.4])
-	indice = alloca_pagina_fisica_libera();
-	if (indice == -1) {
+	ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
 		flog(LOG_ERR, "Impossibile allocare il direttorio principale");
 		goto error;
 	}
-	direttorio = indirizzo_pf(indice);
-	dpf[indice].contenuto = DIRETTORIO;
-	dpf[indice].pt.residente = true;
+	direttorio = indirizzo_pf(ppf);
+	ppf->contenuto = DIRETTORIO;
+	ppf->pt.residente = true;
 	// azzeriamo il direttorio appena creato
 	memset(direttorio, 0, DIM_PAGINA);
 	// )
@@ -1639,12 +1632,12 @@ bool init_dpf()
 
 	prima_pf_utile = (addr)DIM_M1;
 
-	pagine_libere = 0;
+	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
 		dpf[i].contenuto = LIBERA;
-		dpf[i].avl.prossima_libera = i + 1;
+		dpf[i].avl.prossima_libera = &dpf[i + 1];
 	}
-	dpf[N_DPF - 1].avl.prossima_libera = 0xFFFFFFFF;
+	dpf[N_DPF - 1].avl.prossima_libera = 0;
 
 	return true;
 }
@@ -1661,6 +1654,9 @@ extern "C" void rilascia_tss(int indice);
 proc_elem init;
 des_proc des_main;
 
+natl& get_des2(natl proc, tt tipo, addr ind_virt);
+des_pf *swap2(natl proc, tt tipo, addr ind_virt, bool residente);
+
 addr crea(natl proc, addr ind_virt, tt tipo, natl liv)
 {
 	natl& dt = get_des(proc, tipo, ind_virt);
@@ -1673,8 +1669,7 @@ addr crea(natl proc, addr ind_virt, tt tipo, natl liv)
 			dt = dt | BIT_RW;
 			if (liv == LIV_UTENTE) dt = dt | BIT_US;
 		}
-		natl indice = swap(proc, tipo, ind_virt);
-		dpf[indice].pt.residente = (liv == LIV_SISTEMA);
+		swap2(proc, tipo, ind_virt, (liv == LIV_SISTEMA));
 	}
 	return extr_IND_FISICO(dt);
 }
@@ -1699,12 +1694,41 @@ void crea_direttorio(addr dest)
 {
 	addr pdir = readCR3();
 
+	memset(dest, 0, DIM_PAGINA);
+
 	copy_des(pdir, dest, i_sistema_condiviso, ntab_sistema_condiviso);
-	mset_des(      dest, i_sistema_privato,   ntab_sistema_privato, BIT_RW);
 	copy_des(pdir, dest, i_io_condiviso,      ntab_io_condiviso);
 	copy_des(pdir, dest, i_pci_condiviso,     ntab_pci_condiviso);
 	copy_des(pdir, dest, i_utente_condiviso,  ntab_utente_condiviso);
-	mset_des(      dest, i_utente_privato,    ntab_utente_privato, BIT_RW|BIT_US);
+}
+
+des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
+{
+	des_pf *ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		if ( (ppf = scegli_vittima2(proc, tipo, ind_virt)) && scollega(ppf) )
+			scarica(ppf);
+	}
+	return ppf;
+}
+
+des_pf* swap2(natl proc, tt tipo, addr ind_virt, bool residente)
+{
+	des_pf* ppf = alloca_pagina_fisica(proc, tipo, ind_virt);
+	if (!ppf)
+		return 0;
+	natl des = get_des(proc, tipo, ind_virt);
+	natl IM = extr_IND_MASSA(des);
+	ppf->contenuto = tipo;
+	ppf->pt.residente = residente;
+	ppf->pt.processo = proc;
+	ppf->pt.ind_virtuale = ind_virt;
+	ppf->pt.ind_massa = IM;
+	ppf->pt.contatore  = 0x80000000;
+	aggiusta_parent(ppf);
+	carica(ppf);
+	collega(ppf);
+	return ppf;
 }
 
 const natl BIT_IF = 1L << 9;
@@ -1713,7 +1737,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	natl		identifier;		// indice del tss nella gdt 
 	des_proc	*pdes_proc;		// descrittore di processo
-	natl		idirettorio;		// direttorio del processo
+	des_pf*		dpf_direttorio;		// direttorio del processo
 	addr		pila_sistema;
 	
 
@@ -1740,10 +1764,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	// ( creazione del direttorio del processo (vedi [10.3]
 	//   e la funzione "carica()")
-	idirettorio = swap(p->id, DIRETTORIO, 0);
-	if (idirettorio == 0xFFFFFFFF) goto errore4;
-	dpf[idirettorio].pt.residente = true;
-	pdes_proc->cr3 = indirizzo_pf(idirettorio);
+	dpf_direttorio = alloca_pagina_fisica(p->id, DIRETTORIO, 0);
+	if (dpf_direttorio == 0) goto errore4;
+	dpf_direttorio->contenuto = DIRETTORIO;
+	dpf_direttorio->pt.residente = true;
+	pdes_proc->cr3 = indirizzo_pf(dpf_direttorio);
 	crea_direttorio(pdes_proc->cr3);
 	// )
 
@@ -1832,8 +1857,10 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	return p;
 
-errore6:	rilascia_tutto(indirizzo_pf(idirettorio), i_sistema_privato, ntab_sistema_privato);
-errore5:	rilascia_pagina_fisica(idirettorio);
+#if 0
+errore6:	rilascia_tutto(indirizzo_pf(dpf_direttorio), i_sistema_privato, ntab_sistema_privato);
+errore5:	rilascia_pagina_fisica(dpf_direttorio);
+#endif
 errore4:	dealloca(p);
 errore3:	rilascia_tss(identifier);
 errore2:	dealloca(pdes_proc);
@@ -1896,7 +1923,7 @@ void distruggi_processo(proc_elem* p)
 	addr direttorio = pdes_proc->cr3;
 	rilascia_tutto(direttorio, i_sistema_privato, ntab_sistema_privato);
 	rilascia_tutto(direttorio, i_utente_privato,  ntab_utente_privato);
-	rilascia_pagina_fisica(indice_dpf(direttorio));
+	rilascia_pagina_fisica(descrittore_pf(direttorio));
 	rilascia_tss(p->id >> 3);
 	dealloca(pdes_proc);
 }
@@ -1914,13 +1941,13 @@ void rilascia_tutto(addr direttorio, natl i, natl n)
 				natl dp = singolo_des(tabella, k);
 				if (extr_P(dp)) {
 					addr pagina = extr_IND_FISICO(dp);
-					rilascia_pagina_fisica(indice_dpf(pagina));
+					rilascia_pagina_fisica(descrittore_pf(pagina));
 				} else {
 					natl blocco = extr_IND_MASSA(dp);
 					dealloca_blocco(blocco);
 				}
 			}
-			rilascia_pagina_fisica(indice_dpf(tabella));
+			rilascia_pagina_fisica(descrittore_pf(tabella));
 		} else {
 			natl blocco = extr_IND_MASSA(dt);
 			dealloca_blocco(blocco);
@@ -2116,6 +2143,7 @@ natl& get_des(natl processo, tt tipo, addr ind_virt)
 	}
 }
 
+
 void set_des(addr dirtab, int index, natl des)
 {
 	natl *pd = static_cast<natl*>(dirtab);
@@ -2171,15 +2199,14 @@ bool sequential_map(addr direttorio, addr phys_start, addr virt_start, natl npag
 		natl dt = get_destab(direttorio, indv);
 		addr tabella;
 		if (! extr_P(dt)) {
-			natl indice = alloca_pagina_fisica_libera();
-			if (indice == 0xFFFFFFFF) {
+			des_pf* ppf = alloca_pagina_fisica_libera();
+			if (ppf == 0) {
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
 				return false;
 			}
-			des_pf *ppf = &dpf[indice];
 			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
-			tabella = indirizzo_pf(indice);
+			tabella = indirizzo_pf(ppf);
 
 			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
 			set_destab(direttorio, indv, dt);
@@ -2883,22 +2910,19 @@ bool carica_tutto(natl proc, natl i, natl n, addr& last_addr)
 		natl dt = singolo_des(dir, j);
 		if (extr_IND_MASSA(dt)) {	  
 			last_addr = (addr)((j + 1) * DIM_MACROPAGINA);
-			natl i_tabella = swap(proc, TABELLA_CONDIVISA, ind);
-			if (i_tabella == 0xFFFFFFFF) {
+			des_pf* dpf_tabella = swap2(proc, TABELLA_CONDIVISA, ind, true);
+			if (dpf_tabella == 0) {
 				flog(LOG_ERR, "Impossibile allocare tabella residente");
 				return false;
 			}
-			dpf[i_tabella].pt.residente = true;
 			for (int k = 0; k < 1024; k++) {
-				natl dp = singolo_des(indirizzo_pf(i_tabella), k);
+				natl dp = singolo_des(indirizzo_pf(dpf_tabella), k);
 				if (extr_IND_MASSA(dp)) {
 					addr ind_virt = static_cast<natb*>(ind) + k * DIM_PAGINA;
-					natl i_pagina = swap(proc, PAGINA_CONDIVISA, ind_virt);
-					if (i_pagina == 0xFFFFFFFF) {
+					if (!swap2(proc, PAGINA_CONDIVISA, ind_virt, true)) {
 						flog(LOG_ERR, "Impossibile allocare pagina residente");
 						return false;
 					}
-					dpf[i_pagina].pt.residente = true;
 				}
 			}
 		}
