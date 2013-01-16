@@ -545,24 +545,6 @@ void swap(tt tipo, addr ind_virt)
 	collega(nuovo_dpf);
 }
 
-des_pf* get_parent(natl proc, tt tipo, addr ind_virt) // [6.4]
-{
-// (
-	switch (tipo) {
-	case PAGINA_PRIVATA:
-		return descrittore_pf(extr_IND_FISICO(get_destab(proc, ind_virt)));
-	case TABELLA_PRIVATA:
-	// (* per completezza consideriamo anche il caso DIRETTORIO
-	case DIRETTORIO:
-	// *)
-		return 0;
-	default:
-		flog(LOG_WARN, "chiamata get_parent(%d, %d, %x)", proc, tipo, ind_virt);
-		abort_p();
-	}
-// )
-}
-
 void aggiusta_parent(des_pf* ppf)	// [6.4]
 {
 	if (ppf->contenuto == PAGINA_PRIVATA) {
