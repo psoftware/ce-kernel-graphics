@@ -38,6 +38,6 @@ BEGIN {
 chomp;
 my ($level, $id, $msg) = split /\t/;
 if ($level ne "USR") { 
-	my $s = &decodeAddr($msg);
-	print "$level\t$id\t$s\n";
+	$msg = &decodeAddr($msg);
 }
+print "$level\t$id\t$msg\n";

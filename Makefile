@@ -21,6 +21,10 @@ NCFLAGS=\
 	-m32			\
 	-g
 
+ifdef AUTOCORR
+	NCFLAGS+=-DAUTOCORR
+endif
+
 all: build/sistema \
      build/parse   \
      build/creatimg

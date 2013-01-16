@@ -10,11 +10,16 @@ fi
 	
 trap 'stty sane' exit
 
+output="-serial stdio"
+if [ "$AUTOCORR" == 1 ]; then
+	output=-nographic
+fi
+
 
 "$QEMU" $DEBUG		      \
 	-kernel build/sistema \
 	-hda .swap	      \
-	-serial stdio 	      \
+	$output 	      \
 	-no-reboot 	      |
 util/show_log.pl
 	
