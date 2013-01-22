@@ -1631,7 +1631,9 @@ addr crea(natl proc, addr ind_virt, tt tipo, natl liv)
 	if (!bitP) {
 		natl blocco = extr_IND_MASSA(dt);
 		if (!blocco) {
-			blocco = alloca_blocco();
+			if (! (blocco = alloca_blocco()) ) {
+				panic("spazio nello swap esaurito");
+			}
 			set_IND_M(dt, blocco);
 			dt = dt | BIT_RW;
 			if (liv == LIV_UTENTE) dt = dt | BIT_US;
