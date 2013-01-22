@@ -517,7 +517,6 @@ bool scollega(des_pf* ppf);		// [6.4]
 void scarica(des_pf* ppf);		// [6.4]
 void carica(des_pf* ppf);		// [6.4]
 void collega(des_pf* ppf);		// [6.4]
-void aggiusta_parent(des_pf* ppf);	// [6.4]
 
 // [6.4]
 void swap(tt tipo, addr ind_virt)
@@ -539,24 +538,10 @@ void swap(tt tipo, addr ind_virt)
 	nuovo_dpf->pt.processo = esecuzione->id;
 	nuovo_dpf->pt.ind_virtuale = ind_virt;
 	nuovo_dpf->pt.ind_massa = IM;
-	nuovo_dpf->pt.contatore  = 0x80000000;
-	aggiusta_parent(nuovo_dpf);
+	nuovo_dpf->pt.contatore  = 0;
 	carica(nuovo_dpf);
 	collega(nuovo_dpf);
 }
-
-void aggiusta_parent(des_pf* ppf)	// [6.4]
-{
-	if (ppf->contenuto == PAGINA_PRIVATA) {
-		// aggiornamento del contatore anche nel descrittore di pagina fisica
-		// contenente la tabella delle pagine coinvolta
-		natl dt = get_destab(ppf->pt.processo, ppf->pt.ind_virtuale);
-		addr ind_fis_tab = extr_IND_FISICO(dt);
-		ppf = descrittore_pf(ind_fis_tab);
-		ppf->pt.contatore |= 0x80000000;
-	}
-}
-
 
 des_pf* alloca_pagina_fisica_libera()	// [6.4]
 {
@@ -1706,8 +1691,7 @@ des_pf* swap2(natl proc, tt tipo, addr ind_virt, bool residente)
 	ppf->pt.processo = proc;
 	ppf->pt.ind_virtuale = ind_virt;
 	ppf->pt.ind_massa = IM;
-	ppf->pt.contatore  = 0x80000000;
-	aggiusta_parent(ppf);
+	ppf->pt.contatore = 0;
 	carica(ppf);
 	collega(ppf);
 	return ppf;
