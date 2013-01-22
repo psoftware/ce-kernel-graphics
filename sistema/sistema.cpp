@@ -2561,6 +2561,10 @@ void leggisett(natl lba, natb quanti, natw vetti[])
 		lba_1 = lba >> 8,
 		lba_2 = lba >> 16,
 		lba_3 = lba >> 24;
+	natb s;
+	do 
+		inputb(iSTS, s);
+	while (s & 0x80);
 
 	outputb(lba_0, iSNR); 			// indirizzo del settore e selezione drive
 	outputb(lba_1, iCNL);
@@ -2572,8 +2576,7 @@ void leggisett(natl lba, natb quanti, natw vetti[])
 	outputb(0x20, iCMD);			// comando di lettura
 
 	for (int i = 0; i < quanti; i++) {
-		natb s;
-		do
+		do 
 			inputb(iSTS, s);
 		while ((s & 0x88) != 0x08);
 		for (int j = 0; j < 512/2; j++)
@@ -2587,6 +2590,10 @@ void scrivisett(natl lba, natb quanti, natw vetto[])
 		lba_1 = lba >> 8,
 		lba_2 = lba >> 16,
 		lba_3 = lba >> 24;
+	natb s;
+	do 
+		inputb(iSTS, s);
+	while (s & 0x80);
 	outputb(lba_0, iSNR);					// indirizzo del settore e selezione drive
 	outputb(lba_1, iCNL);
 	outputb(lba_2, iCNH);
@@ -2596,7 +2603,6 @@ void scrivisett(natl lba, natb quanti, natw vetto[])
 	outputb(0x0A, iDCR);					// disabilitazione richieste di interruzione
 	outputb(0x30, iCMD);					// comando di scrittura
 	for (int i = 0; i < quanti; i++) {
-		natb s; 
 		do
 			inputb(iSTS, s);
 		while ((s & 0x88) != 0x08);
@@ -2740,6 +2746,7 @@ natl alloca_blocco()
 	natl i = 0;
 	natl risu = 0;
 	natl vecsize = ceild(swap_dev.sb.blocks, sizeof(natl) * 8);
+	static natb pagina_di_zeri[DIM_PAGINA] = { 0 };
 
 	// saltiamo le parole lunghe che contengono solo zeri (blocchi tutti occupati)
 	while (i < vecsize && swap_dev.free[i] == 0) i++;
@@ -2748,6 +2755,9 @@ natl alloca_blocco()
 		swap_dev.free[i] &= ~(1UL << pos);
 		risu = pos + sizeof(natl) * 8 * i;
 	} 
+	if (risu) {
+		scrivi_speciale(pagina_di_zeri, risu);
+	}
 	return risu;
 }
 
@@ -2759,18 +2769,19 @@ void dealloca_blocco(natl blocco)
 }
 
 
+
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-void leggi_speciale(addr dest, natl primo)
+void leggi_speciale(addr dest, natl blocco)
 {
-	natl sector = primo * 8;
+	natl sector = blocco * 8;
 
 	leggisett(sector, 8, static_cast<natw*>(dest));
 }
 
-void scrivi_speciale(addr src, natl primo)
+void scrivi_speciale(addr src, natl blocco)
 {
-	natl sector = primo * 8;
+	natl sector = blocco * 8;
 
 	scrivisett(sector, 8, static_cast<natw*>(src));
 }
