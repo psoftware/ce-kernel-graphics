@@ -348,7 +348,6 @@ natl& get_destab(natl processo, addr ind_virt); // [6.3]
 natl& get_despag(natl processo, addr ind_virt); // [6.3]
 natl& singolo_des(addr iff, natl index);		// [6.3]
 natl& get_des(natl processo, tt tipo, addr ind_virt); // [6.3]
-addr  get_INDTAB(natl indice);			// [6.3]
 bool  extr_P(natl descrittore)			// [6.3]
 { // (
 	return (descrittore & BIT_P); // )
@@ -385,19 +384,19 @@ void set_A(natl& descrittore, bool bitA)	// [6.3]
 }
 // (* definiamo anche la seguente funzione:
 //    clear_IND_M: azzera il campo M (indirizzo in memoria di massa)
-void clear_IND_M(natl& descrittore)
+void clear_IND_MASSA(natl& descrittore)
 {
 	descrittore &= ~INDMASS_MASK;
 }
 // *)
-void  set_IND_F(natl& descrittore, addr ind_fisico) // [6.3]
+void  set_IND_FISICO(natl& descrittore, addr ind_fisico) // [6.3]
 { // (
-	clear_IND_M(descrittore);
+	clear_IND_MASSA(descrittore);
 	descrittore |= ((natl)(ind_fisico) & ADDR_MASK); // )
 }
-void set_IND_M(natl& descrittore, natl ind_massa) // [6.3]
+void set_IND_MASSA(natl& descrittore, natl ind_massa) // [6.3]
 { // (
-	clear_IND_M(descrittore);
+	clear_IND_MASSA(descrittore);
 	descrittore |= (ind_massa << INDMASS_SHIFT); // )
 }
 
@@ -565,7 +564,7 @@ void rilascia_pagina_fisica(des_pf* ppf)
 void collega(des_pf *ppf)	// [6.4]
 {
 	natl& des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
-	set_IND_F(des, indirizzo_pf(ppf));
+	set_IND_FISICO(des, indirizzo_pf(ppf));
 	set_P(des, true);
 	set_D(des, false);
 	set_A(des, false);
@@ -579,7 +578,7 @@ bool scollega(des_pf* ppf)	// [6.4][10.5]
 	natl &des = get_des(ppf->pt.processo, ppf->contenuto, ppf->pt.ind_virtuale);
 	bitD = extr_D(des);
 	bool occorre_salvare = bitD || ppf->contenuto == TABELLA_PRIVATA;
-	set_IND_M(des, ppf->pt.ind_massa);
+	set_IND_MASSA(des, ppf->pt.ind_massa);
 	set_P(des, false);
 	invalida_entrata_TLB(ppf->pt.ind_virtuale);
 	return occorre_salvare;	// [10.5]
@@ -1634,7 +1633,7 @@ addr crea(natl proc, addr ind_virt, tt tipo, natl liv)
 			if (! (blocco = alloca_blocco()) ) {
 				panic("spazio nello swap esaurito");
 			}
-			set_IND_M(dt, blocco);
+			set_IND_MASSA(dt, blocco);
 			dt = dt | BIT_RW;
 			if (liv == LIV_UTENTE) dt = dt | BIT_US;
 		}
