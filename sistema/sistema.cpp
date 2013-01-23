@@ -55,7 +55,7 @@ extern "C" void end_program();	// [4.7]
 // corpo del processo dummy	// [4.7]
 void dd(int i)
 {
-	while (processi != 2)
+	while (processi != 1)
 		;
 	end_program();
 }
@@ -518,6 +518,7 @@ void carica(des_pf* ppf);		// [6.4]
 void collega(des_pf* ppf);		// [6.4]
 
 // [6.4]
+void rilascia_pagina_fisica(des_pf* ppf);
 void swap(tt tipo, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
@@ -532,6 +533,14 @@ void swap(tt tipo, addr ind_virt)
 	}
 	natl des = get_des(esecuzione->id, tipo, ind_virt);
 	natl IM = extr_IND_MASSA(des);
+	// (* non tutto lo spazio virtuale e' disponibile
+	if (!IM) {
+		flog(LOG_WARN, "indirizzo %x fuori dallo spazio virtuale allocato",
+				ind_virt);
+		rilascia_pagina_fisica(nuovo_dpf);
+		abort_p();
+	}
+	// *)
 	nuovo_dpf->contenuto = tipo;
 	nuovo_dpf->pt.residente = false;
 	nuovo_dpf->pt.processo = esecuzione->id;
@@ -611,6 +620,7 @@ bool vietato(des_pf* ppf, natl proc, tt tipo, addr ind_virt)
 	return false;
 }
 
+void routine_stat();		// [6.6]
 des_pf* scegli_vittima2(natl proc, tt tipo, addr ind_virtuale) // [6.4]
 {
 	des_pf *ppf, *dpf_vittima;
@@ -620,6 +630,7 @@ des_pf* scegli_vittima2(natl proc, tt tipo, addr ind_virtuale) // [6.4]
 		ppf++;
 	if (ppf == &dpf[N_DPF]) return 0;
 	dpf_vittima = ppf;
+	routine_stat();
 	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
 		if (ppf->pt.residente || vietato(ppf, proc, tipo, ind_virtuale))
 			continue;
@@ -649,16 +660,7 @@ des_pf* scegli_vittima(tt tipo, addr ind_virtuale)
 extern "C" void invalida_TLB(); // [6.6]
 extern "C" void delay(natl t);
 
-void routine_stat();		// [6.6]
-void stat_proc(int i)		// [6.6]
-{
-	for (;;) {
-		routine_stat();	// routine per le statistiche
-		delay(4);
-	}
-}
-
-void routine_stat()		// [6.6]
+void routine_stat()
 {
 	des_pf *ppf1, *ppf2;
 	addr ff1, ff2;
@@ -1057,11 +1059,6 @@ void main_sistema(int n)
 	if (!crea_spazio_condiviso(dummy_proc, last_address))
 		goto error;
  	// )
-
-	if (activate_p(stat_proc, 0, MAX_PRIORITY, LIV_SISTEMA) == 0xFFFFFFFF) {
-		flog(LOG_ERR, "impossibile creare il processo pf_stat_proc");
-		goto error;
-	}
 
 	// ( inizializzazione del modulo di io [7.1][10.4]
 	flog(LOG_INFO, "creazione del processo main I/O...");
