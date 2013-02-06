@@ -2,19 +2,6 @@
 #define _LIB_H_
 #include <sys.h>
 
-typedef char *va_list;
-
-// Macro per funzioni variadiche: versione semplificata che funziona
-//  solo se in pila ci sono oggetti di dimensione multipla di 4.
-// Basta per interi e puntatori, tutto quello di cui c' e' bisogno in
-//  questo sistema; se ci fosse bisogno di usare tipi di lunghezza diversa
-//  e' necessario sostituire i sizeof con una macro o una funzione che
-//  resitituisca la dimensione in pila del tipo specificato.
-//
-#define va_start(ap, last_req) (ap = (char *)&(last_req) + sizeof(last_req))
-#define va_arg(ap, type) ((ap) += sizeof(type), *(type *)((ap) - sizeof(type)))
-#define va_end(ap)
-
 char* copy(const char* src, char* dst);
 char* convint(int n, char* out);
 natl strlen(const char *s);
@@ -22,7 +9,6 @@ char *strncpy(char *dest, const char *src, size_t l);
 void *mem_alloc(natl quanti);
 void mem_free(void *ptr);
 
-int vsnprintf(char *str, natl size, const char *fmt, va_list ap);
 int snprintf(char *buf, natl n, const char *fmt, ...);
 int printf(const char *fmt, ...);
 void pause();
