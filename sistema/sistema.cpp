@@ -620,7 +620,7 @@ bool vietato(des_pf* ppf, natl proc, tt tipo, addr ind_virt)
 	return false;
 }
 
-void routine_stat();		// [6.6]
+void stat();		// [6.6]
 des_pf* scegli_vittima2(natl proc, tt tipo, addr ind_virtuale) // [6.4]
 {
 	des_pf *ppf, *dpf_vittima;
@@ -630,7 +630,7 @@ des_pf* scegli_vittima2(natl proc, tt tipo, addr ind_virtuale) // [6.4]
 		ppf++;
 	if (ppf == &dpf[N_DPF]) return 0;
 	dpf_vittima = ppf;
-	routine_stat();
+	stat();
 	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
 		if (ppf->pt.residente || vietato(ppf, proc, tipo, ind_virtuale))
 			continue;
@@ -660,13 +660,14 @@ des_pf* scegli_vittima(tt tipo, addr ind_virtuale)
 extern "C" void invalida_TLB(); // [6.6]
 extern "C" void delay(natl t);
 
-void routine_stat()
+void stat()
 {
 	des_pf *ppf1, *ppf2;
 	addr ff1, ff2;
 	bool bitA;
 
-	for (ppf1 = &dpf[0]; ppf1 < &dpf[N_DPF]; ppf1++) {
+	for (natl i = 0; i < N_DPF; +++) {
+		ppf1 = &dpf[i];
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
 		case TABELLA_PRIVATA:
@@ -674,9 +675,9 @@ void routine_stat()
 			for (int j = 0; j < 1024; j++) {
 				natl& des = singolo_des(ff1, j);
 				if (extr_P(des)) {
-					ff2 = extr_IND_FISICO(des);
 					bitA = extr_A(des);
 					set_A(des, false);
+					ff2 = extr_IND_FISICO(des);
 					ppf2 = descrittore_pf(ff2);
 					if (!ppf2->pt.residente) {
 						ppf2->pt.contatore >>= 1;
