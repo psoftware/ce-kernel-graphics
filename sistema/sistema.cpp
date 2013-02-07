@@ -666,7 +666,7 @@ void stat()
 	addr ff1, ff2;
 	bool bitA;
 
-	for (natl i = 0; i < N_DPF; +++) {
+	for (natl i = 0; i < N_DPF; i++) {
 		ppf1 = &dpf[i];
 		switch (ppf1->contenuto) {
 		case DIRETTORIO:
@@ -2491,7 +2491,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
-	ioapic_set_MIRQ(irq, false);
+	ioapic_unmask(irq);
 	return true;
 
 }

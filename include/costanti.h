@@ -26,6 +26,7 @@
 #define DIM_USR_HEAP		(256*KiB)
 #define DIM_USR_STACK		(64*KiB)
 #define DIM_SYS_STACK		(4*KiB)
+#define DIM_BLOCK		512
 // )
 
 // ( tipi interruzioni esterne
@@ -74,6 +75,8 @@
 
 #define IO_TIPO_HDR		0x62	// readhd_n
 #define IO_TIPO_HDW		0x63	// writehd_n
+#define IO_TIPO_DMAR		0x64	// dmareadhd_n
+#define IO_TIPO_DMAW		0x65	// dmawritehd_n
 #define IO_TIPO_RSEN		0x72	// readse_n
 #define IO_TIPO_RSELN		0x73	// readse_ln
 #define IO_TIPO_WSEN		0x74	// writese_n

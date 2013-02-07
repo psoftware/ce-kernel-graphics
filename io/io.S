@@ -33,13 +33,17 @@
 // Tipi delle interruzioni usate dalle primitive di IO
 // Devono coincidere con quelli usati in utente.s
 //
-.set io_tipo_rsen,  IO_TIPO_RSEN
-.set io_tipo_rseln, IO_TIPO_RSELN
-.set io_tipo_wsen,  IO_TIPO_WSEN
-.set io_tipo_wse0,  IO_TIPO_WSE0
-.set io_tipo_rcon,  IO_TIPO_RCON		
-.set io_tipo_wcon,  IO_TIPO_WCON		
-.set io_tipo_inic,  IO_TIPO_INIC
+.set io_tipo_rsen,   IO_TIPO_RSEN
+.set io_tipo_rseln,  IO_TIPO_RSELN
+.set io_tipo_wsen,   IO_TIPO_WSEN
+.set io_tipo_wse0,   IO_TIPO_WSE0
+.set io_tipo_rcon,   IO_TIPO_RCON		
+.set io_tipo_wcon,   IO_TIPO_WCON		
+.set io_tipo_inic,   IO_TIPO_INIC
+.set io_tipo_hdr,    IO_TIPO_HDR
+.set io_tipo_hdw,    IO_TIPO_HDW
+.set io_tipo_dmahdr, IO_TIPO_DMAR
+.set io_tipo_dmahdw, IO_TIPO_DMAW
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -260,6 +264,32 @@ console:
 	.word   0x4B00		// vid.attr
 	.word	0		// allineamento
 
+	.global hd
+hd:
+	.word	0x0170		//hd.indreg.iBR
+	.word	0x0174		//hd.indreg.iCNL
+	.word	0x0175		//hd.indreg.iCNH
+	.word	0x0173		//hd.indreg.iSNR
+	.word	0x0176		//hd.indreg.iHND
+	.word 	0x0172		//hd.indreg.iSCR
+	.word	0x0171		//hd.indreg.iERR
+	.word	0x0177		//hd.indreg.iCMD
+	.word	0x0177		//hd.indreg.iSTS
+	.word	0x0376		//hd.indreg.iDCR
+	.word	0x0376		//hd.indreg.iASR
+	.word	0		//hd.bus_master.iCMD
+	.word	0		//hd.bus_master.iSTATUS
+	.word	0		//hd.bus_master.iDPTR
+	.space  8*2, 0		//hd.prd
+	.long	0		//hd.comando
+	.byte	0		//hd.errore
+	.space  3, 0		//padding
+	.long	0		//hd.mutex
+	.long	0		//hd.sincr
+	.byte	0		//hd.cont
+	.space	3, 0		//padding
+	.long	0		//hd.punt
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //                          CHIAMATE DI SISTEMA                               //
@@ -289,6 +319,11 @@ sem_wait:
 	.global sem_signal	// [7.1]
 sem_signal:
 	int $tipo_s
+	ret
+
+	.global trasforma
+trasforma:
+	int $tipo_t
 	ret
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -389,9 +424,34 @@ outputw:
 	popl %eax
 	ret
 
+// Ingresso di una parola lunga da una porta di IO
+	.global inputl
+inputl:
+	pushl %eax
+	pushl %edx
+	movl 12(%esp), %edx
+	inl %dx, %eax
+	movl 16(%esp), %edx
+	movl %eax, (%edx)
+	popl %edx
+	popl %eax
+	ret
+
+// Uscita di una word su una porta di IO
+	.global outputl
+outputl:
+	pushl %eax
+	pushl %edx
+	movl 12(%esp), %eax
+	movl 16(%esp), %edx
+	outl %eax, %dx
+	popl %edx
+	popl %eax
+	ret
+
 // Ingresso di un buffer continuo da un buffer di IO di word
-	.global inputbuffw
-inputbuffw:
+	.global inputbw
+inputbw:
 	pushl %eax
 	pushl %edx
 	pushl %edi
@@ -411,16 +471,16 @@ inputbuffw:
 	ret
 
 // Uscita di un buffer continuo su una buffer di IO di word
-	.global outputbuffw
-outputbuffw:
+	.global outputbw
+outputbw:
 	pushl %eax
 	pushl %edx
 	pushl %esi
 	pushl %ecx
 	
-	movl 24(%esp), %edx
+	movl 28(%esp), %edx
 	movl 20(%esp), %esi
-	movl 28(%esp),%ecx
+	movl 24(%esp),%ecx
 	cld
 	rep
 	outsw
@@ -667,6 +727,10 @@ fill_io_gates:
 	fill_io_gate	io_tipo_rcon	a_readconsole
 	fill_io_gate	io_tipo_wcon	a_writeconsole
 	fill_io_gate	io_tipo_inic	a_iniconsole
+	fill_io_gate	io_tipo_hdr	a_readhd_n
+	fill_io_gate	io_tipo_hdw	a_writehd_n
+	fill_io_gate	io_tipo_dmahdr	a_dmareadhd_n
+	fill_io_gate	io_tipo_dmahdw	a_dmawritehd_n
 	leave
 	ret
 
@@ -752,3 +816,163 @@ a_iniconsole:
 	addl $4, %esp
 	carica_registri
 	iret
+
+
+# interface ATA
+
+.global			hd_write_address
+hd_write_address:	
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %edx
+	pushl %edi
+	
+	movl 12(%ebp),%eax
+	movl 8(%ebp),%edi	// accede al descrittore per comodita`
+	movw 6(%edi),%dx
+	outb %al,%dx		// caricato SNR
+	movw 2(%edi),%dx
+	movb %ah,%al
+	outb %al,%dx		// caricato CNL
+	shrl $16,%eax
+	movw 4(%edi),%dx
+	outb %al,%dx		// caricato CNH
+	movw 8(%edi),%dx
+	inb %dx,%al		// HND in %al
+	andb $0xf0,%al		// maschera per l'indirizzo in HND
+	andb $0x0f,%ah		// maschera per i 4 bit +sign di primo
+	orb  $0xe0,%ah		// seleziona LBA
+	orb %ah,%al
+	outb %al,%dx		// caricato HND
+	
+	popl %edi
+	popl %edx
+	popl %eax
+	leave
+	ret
+
+.global			hd_write_command
+hd_write_command: 
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %edx
+	pushl %eax
+
+	movb 8(%ebp), %al
+	movw 12(%ebp), %dx
+	outb %al, %dx
+
+	popl %eax
+	popl %edx
+	leave
+	ret
+
+
+.global		hd_go_inout
+hd_go_inout:		#...
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
+	movb $0x08,%al
+	outb %al, %dx			// abilitazione dell' interfaccia a
+					// generare interruzioni
+	popl %edx
+	popl %eax
+	ret
+.global			hd_halt_inout
+hd_halt_inout:	
+	pushl %eax
+	pushl %edx
+
+	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
+	movb $0x0A,%al
+	outb %al, %dx			// disabilitazione della generazione
+					// di interruzioni
+	popl %edx
+	popl %eax
+	ret
+
+// Seleziona uno dei due drive di un canale ATA
+	.global hd_select_device
+hd_select_device:
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %eax
+	pushl %edx
+
+	movl 8(%ebp),%eax
+	cmpl $0,%eax
+	je shd_ms
+shd_sl:	movb $0xf0,%al
+	jmp ms_out
+shd_ms:	movb $0xe0,%al
+ms_out:	movl 12(%ebp),%edx
+	outb %al,%dx
+
+	popl %edx
+	popl %eax
+	leave
+	ret
+
+.global		readhd_n
+readhd_n:	int		$io_tipo_hdr
+		ret
+.global		writehd_n
+writehd_n:	int		$io_tipo_hdw
+		ret
+.global		dmareadhd_n
+dmareadhd_n:	int		$io_tipo_dmahdr
+		ret
+.global		dmawritehd_n
+dmawritehd_n:	int		$io_tipo_dmahdw
+		ret
+.extern		c_readhd_n
+a_readhd_n:	# routine INT $io_tipo_hdr
+		salva_registri
+		copia_param 4 7
+		cavallo_di_troia 0
+		cavallo_di_troia2 0 2
+		cavallo_di_troia 3
+		call	c_readhd_n
+		addl $16, %esp
+		carica_registri
+		iret
+
+.EXTERN		c_writehd_n
+a_writehd_n:	# routine INT $io_tipo_hdw
+		salva_registri
+		copia_param 4 7
+		cavallo_di_troia 0
+		cavallo_di_troia2 0 2
+		cavallo_di_troia 3
+		call	c_writehd_n
+		addl $16, %esp
+		carica_registri
+		iret
+
+.EXTERN		c_dmareadhd_n
+a_dmareadhd_n: 	# routine INT $dma_tipob_r
+		salva_registri
+		copia_param 4 7
+		cavallo_di_troia 0
+		cavallo_di_troia2 0 2
+		cavallo_di_troia 3
+		call	c_dmareadhd_n
+		addl $16, %esp
+		carica_registri
+		iret
+
+.EXTERN		c_dmawritehd_n
+a_dmawritehd_n:	# routine INT $dma_tipob_w
+		salva_registri
+		copia_param 4 7
+		cavallo_di_troia 0
+		cavallo_di_troia2 0 2
+		cavallo_di_troia 3
+		call	c_dmawritehd_n
+		addl $16, %esp
+		carica_registri
+		iret
+

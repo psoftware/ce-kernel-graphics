@@ -24,6 +24,7 @@ extern "C" natl sem_ini(int val);
 extern "C" void wfi();	// [9.1]
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
+extern "C" addr trasforma(addr ff);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
@@ -555,6 +556,259 @@ bool console_init() {
 
 // *)
 
+// inerfacce ATA
+
+enum hd_cmd { WRITE_SECT = 0x30, READ_SECT = 0x20, WRITE_DMA = 0xCA, READ_DMA = 0xC8 };
+struct interfata_reg 
+{	ioaddr iBR;
+	ioaddr iCNL, iCNH, iSNR, iHND, iSCR, iERR,
+	       iCMD, iSTS, iDCR, iASR;
+}; 
+struct pci_ata
+{	ioaddr iBMCMD, iBMSTR, iBMDTPR;
+};
+struct des_ata
+{	interfata_reg indreg;
+	pci_ata bus_master;
+	natl prd[2];
+	hd_cmd comando;
+	natb errore;
+	natl mutex;
+	natl sincr;
+	natb cont;
+	addr punt;
+};
+extern "C" des_ata hd;
+
+const natb HD_IRQ = 15;
+
+extern "C" void hd_write_address(des_ata* p_des, natl primo);
+// scrive primo nei registri di indirizzo CNL, CNH, SNR e HND
+extern "C" void hd_write_command(hd_cmd cmd, ioaddr iCMD);
+// scrive cmd nel registro iCMD e aspetta che BSY torni a 0
+
+extern "C" bool hd_wait_data(ioaddr iSTS) // [9.3.1]
+{
+	natb stato;
+
+	do {
+		inputb(iSTS, stato);
+	} while (stato & 0x80);
+
+	return ( (stato & 0x08) && !(stato & 0x01) );
+}
+// attende che BSY passi a zero e DRQ a 1. Restituisce false se ERR vale 1
+extern "C" void hd_go_inout(ioaddr iSTS);
+// abilita l'interfaccia a generare interruzioni
+extern "C" void hd_halt_inout(ioaddr iSTS);
+// disabilita l'interfaccia a generare interruzioni
+extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg);
+// { for (int i = 0; i < quanti; i++) *reg = vetto[i]; }
+extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti);
+// { for (int i = 0; i < quanti; i++) vetti[i] = *reg; }
+extern "C" void inputb(ioaddr reg, natb& a) ;
+// { 	a = *reg	;   }
+extern "C" void outputb(natb a, ioaddr reg) ;
+// {	*reg = a;    }
+extern "C" void outputl(natl a, ioaddr reg) ;
+// {	*reg = a;    }
+
+void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
+{	p_dmades->prd[0] = reinterpret_cast<natl>(iff);
+	p_dmades->prd[1] = 0x80000000 | quanti;					// EOT posto a 1
+}
+extern "C" void hd_select_device(short ms, ioaddr iHND);
+void hd_sel_drv(des_ata* p_des) // [9.3]
+{
+	natb stato;
+
+	hd_select_device(0, p_des->indreg.iHND);
+
+	do {
+		inputb(p_des->indreg.iSTS, stato);
+	} while ( (stato & 0x80) || (stato & 0x08) );
+}
+void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
+extern "C" void c_readhd_n(natw vetti[], natl primo, 
+		natb quanti, natb &errore)
+{	des_ata *p_des;
+	p_des = &hd;
+	sem_wait(p_des->mutex);
+	starthd_in(p_des, vetti, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
+extern "C" void c_writehd_n(natw vetto[], natl primo,
+		natb quanti, natb &errore)
+{	des_ata *p_des;
+	p_des = &hd;
+	sem_wait(p_des->mutex);
+	starthd_out(p_des, vetto, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
+{	p_des->cont = quanti;
+	p_des->punt = vetti;
+	p_des->comando = READ_SECT;
+	hd_sel_drv(p_des);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);
+	hd_write_command(READ_SECT, p_des->indreg.iCMD); 
+}
+void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
+{	p_des->cont = quanti;
+	p_des->punt = vetto + DIM_BLOCK / 2;
+	p_des->comando = WRITE_SECT;
+	hd_sel_drv(p_des);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);
+	hd_write_command(WRITE_SECT, p_des->indreg.iCMD);
+	hd_wait_data(p_des->indreg.iSTS);
+	outputbw(vetto, DIM_BLOCK/2, p_des->indreg.iBR);
+}
+void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
+extern "C" void c_dmareadhd_n(natw vetti[], natl primo, natb quanti,
+		natb &errore)
+{	des_ata *p_des;
+	p_des = &hd;
+	sem_wait(p_des->mutex);
+	dmastarthd_in(p_des, vetti, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
+extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti, 
+		natb& errore)
+{	des_ata *p_des;
+	p_des = &hd;
+	sem_wait(p_des->mutex);
+	dmastarthd_out(p_des, vetto, primo, quanti);
+	sem_wait(p_des->sincr);
+	errore = p_des->errore;
+	sem_signal(p_des->mutex);
+}
+void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
+{	// la scrittura ini iBMDTPR di &prd[0] avviene in fase di inizializzazione
+	natb work; addr iff;
+	p_des->comando = READ_DMA;
+	p_des->cont = 1;					// informazione per il driver
+	iff = trasforma(vetti);
+	hd_componi_prd(p_des, iff, quanti * DIM_BLOCK);
+	inputb(p_des->bus_master.iBMCMD, work);
+	work |= 0x08;							// lettura da PCI
+	outputb(work, p_des->bus_master.iBMCMD);
+	inputb(p_des->bus_master.iBMSTR, work);
+	work &= 0xF9;						// bit interruzione ed errore a 0
+	outputb(work, p_des->bus_master.iBMSTR);
+	hd_sel_drv(p_des);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);
+	hd_write_command(READ_DMA, p_des->indreg.iCMD);
+	inputb(p_des->bus_master.iBMCMD, work);
+	work |= 0x01; 							// avvio dell’operazione
+	outputb(work, p_des->bus_master.iBMCMD); 
+}
+void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
+{	// la scrittura in iBMDTPR di &prd[0] avviene in fase di inizializzazione
+	natb work; addr iff;
+	p_des->comando = WRITE_DMA;
+	p_des->cont = 1; 				// informazione per il driver
+	iff = trasforma(vetto);
+	hd_componi_prd(p_des, iff, quanti * DIM_BLOCK);
+	inputb(p_des->bus_master.iBMCMD, work);
+	work &= 0xF7; 					// scrittura verso PCI
+	outputb(work, p_des->bus_master.iBMCMD);
+	inputb(p_des->bus_master.iBMSTR, work);
+	work &= 0xF9;					// bit interruzione ed errore a 0
+	outputb(work, p_des->bus_master.iBMSTR);
+	hd_sel_drv(p_des);
+	hd_write_address(p_des, primo);
+	outputb(quanti, p_des->indreg.iSCR);
+	hd_go_inout(p_des->indreg.iDCR);
+	hd_write_command(WRITE_DMA, p_des->indreg.iCMD);
+	inputb(p_des->bus_master.iBMCMD, work);
+	work |= 1;								// avvio dell’operazione
+	outputb(work, p_des->bus_master.iBMCMD); 
+}
+
+void esternAta(int h)			// codice commune ai 2 processi esterni ATA
+{
+	des_ata* p_des = &hd;
+	natb stato, work;
+	for(;;)
+	{	p_des->cont--;
+		if (p_des->cont == 0) 
+		{	hd_halt_inout(p_des->indreg.iDCR);
+			sem_signal(p_des->sincr);
+		}
+		p_des->errore = 0;
+		inputb(p_des->indreg.iSTS, stato); 				// ack dell'interrupt
+		switch (p_des->comando) 
+		{	case READ_SECT:
+			if (!hd_wait_data(p_des->indreg.iSTS))
+				inputb(p_des->indreg.iERR, p_des->errore);
+			else
+				inputbw(p_des->indreg.iBR, static_cast<natw*>(p_des->punt),
+						DIM_BLOCK / 2);
+			p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
+			break;
+			case WRITE_SECT:
+			if (p_des->cont != 0)
+			{	if (!hd_wait_data(p_des->indreg.iSTS))
+				inputb(p_des->indreg.iERR, p_des->errore);
+				else
+					outputbw(static_cast<natw*>(p_des->punt),
+							DIM_BLOCK / 2, p_des->indreg.iBR);
+				p_des->punt = static_cast<natw*>(p_des->punt) + 
+					DIM_BLOCK / 2;
+			}
+			break;
+			case READ_DMA:
+			case WRITE_DMA:
+			inputb(p_des->bus_master.iBMCMD, work);
+			work &= 0xFE;				// azzeramento del bit n. 0 (start/stop)
+			outputb(work, p_des->bus_master.iBMCMD);
+			inputb(p_des->bus_master.iBMSTR, stato);	// ack  interrupt in DMA
+			if ((stato & 0x05) == 0)
+				inputb(p_des->indreg.iERR, p_des->errore);
+		}
+		if (p_des->cont == 0) sem_signal(p_des->sincr);
+		wfi();
+	}
+}
+
+bool hd_init()
+{
+	natl id;
+	des_ata* p_des;
+
+	p_des = &hd;
+
+	if ( (p_des->mutex = sem_ini(1)) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "hd: impossibile creare mutex");
+		return false;
+	}
+	if ( (p_des->sincr = sem_ini(0)) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "hd: impossibile creare sincr");
+		return false;
+	}
+
+	id = activate_pe(esternAta, 0, PRIO, LIV, HD_IRQ);
+	if (id == 0xFFFFFFFF) {
+		flog(LOG_ERR, "com: impossibile creare proc. esterno");
+		return false;
+	}
+	return true;
+}
+
 /////////////////////////////////////////////////////////////////////////////////
 //                  FUNZIONI DI LIBRERIA                                       //
 /////////////////////////////////////////////////////////////////////////////////
@@ -750,6 +1004,8 @@ extern "C" void cmain(int sem_io)
 	if (!console_init())
 		abort_p();
 	if (!com_init())
+		abort_p();
+	if (!hd_init())
 		abort_p();
 	sem_signal(sem_io);
 	terminate_p();

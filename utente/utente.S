@@ -24,6 +24,10 @@
 .set io_tipo_rcon, IO_TIPO_RCON
 .set io_tipo_inic, IO_TIPO_INIC
 .set io_tipo_wcon, IO_TIPO_WCON
+.set io_tipo_hdr, IO_TIPO_HDR
+.set io_tipo_hdw, IO_TIPO_HDW
+.set io_tipo_dmahdr, IO_TIPO_DMAHDR
+.set io_tipo_dmahdw, IO_TIPO_DMAHDW
 
 	.text
 	.global activate_p
@@ -95,6 +99,26 @@ writeconsole:
 	.global iniconsole
 iniconsole:
 	int $io_tipo_inic
+	ret
+
+	.global readhd_n
+readhd_n:
+	int $io_tipo_hdr
+	ret
+
+	.global writehd_n
+writehd_n:
+	int $io_tipo_hdw
+	ret
+
+	.global dmareadhd_n
+dmareadhd_n:
+	int $io_tipo_dmahdw
+	ret
+
+	.global dmawritehd_n
+dmawritehd_n:
+	int $io_tipo_dmahdw
 	ret
 
 

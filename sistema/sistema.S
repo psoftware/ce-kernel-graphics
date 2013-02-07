@@ -527,12 +527,6 @@ init_gdt:
 .set tipo_ab, TIPO_AB
 .set tipo_l,  TIPO_L
 
-// interruzioni usate dal nucleo stesso (dalle routine della memoria virtuale)
-.set io_tipo_hdr, IO_TIPO_HDR
-.set io_tipo_hdw, IO_TIPO_HDW
-.set io_tipo_dmahdr, IO_TIPO_DMAHDR
-.set io_tipo_dmahdw, IO_TIPO_DMAHDW
-
 // funzioni PCI
 .set io_tipo_pcif, IO_TIPO_PCIF
 .set io_tipo_pcir, IO_TIPO_PCIR

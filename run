@@ -1,6 +1,7 @@
 #!/bin/bash
 
-QEMU=${QEMU:-qemu}
+QEMU=${QEMU:-$HOME/CE/bin/qemu-system-i386}
+CEHDPATH=${CEHDPATH:-$HOME/.CE/hd.img}
 
 DEBUG=
 if [ "$1" == -g ]; then
@@ -19,6 +20,7 @@ fi
 "$QEMU" $DEBUG		      \
 	-kernel build/sistema \
 	-hda .swap	      \
+	-hdc "$CEHDPATH"      \
 	$output 	      \
 	-no-reboot 	      |
 util/show_log.pl
