@@ -137,6 +137,7 @@ superblock_t superblock;
 direttorio main_dir;
 bm_t blocks;
 pagina pag;
+pagina zero_pag;
 tabella_pagine tab;
 Swap* swap = NULL;
 
@@ -252,19 +253,21 @@ void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
 			}
 
 			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			if (!s->pagina_di_zeri()) {
-				if (pdes_pag->a.block == 0) {
-					if (! bm_alloc(&blocks, b) ) {
-						fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
-						exit(EXIT_FAILURE);
-					}
-					pdes_pag->a.block = b;
-				} else {
-					CHECKSW(leggi_blocco, pdes_pag->a.block, &pag);
+			if (pdes_pag->a.block == 0) {
+				if (! bm_alloc(&blocks, b) ) {
+					fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
+					exit(EXIT_FAILURE);
 				}
+				pdes_pag->a.block = b;
+			} else {
+				CHECKSW(leggi_blocco, pdes_pag->a.block, &pag);
+			}
+			if (s->pagina_di_zeri()) {
+				CHECKSW(scrivi_blocco, pdes_pag->a.block, &zero_pag);
+			} else {
 				s->copia_pagina(&pag);
 				CHECKSW(scrivi_blocco, pdes_pag->a.block, &pag);
-			} 
+			}
 			pdes_pag->a.PWT = 0;
 			pdes_pag->a.PCD = 0;
 			pdes_pag->a.RW |= s->scrivibile();
@@ -324,36 +327,36 @@ int main(int argc, char* argv[])
 	superblock.user_end = last_address;
 
 	// le tabelle condivise per lo heap:
-	// - prima, eventuali descrittori di pagina nell'ultima tabella 
-	// utilizzata:
-	descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(last_address)];
-	if (pdes_tab->a.P) {
-		tabella_pagine tab;
-		CHECKSW(leggi_blocco, pdes_tab->a.block, &tab);
-		int primo_indice = indice_tabella(last_address) + (last_address % DIM_PAGINA ? 1 : 0);
-		for (int i = primo_indice; i < 1024; i++) {
-			descrittore_pagina *pdes_pag = &tab.entrate[i];
-			pdes_pag->a.block = 0;
-			pdes_pag->a.PWT   = 0;
-			pdes_pag->a.PCD   = 0;
-			pdes_pag->a.US	  = 1;
-			pdes_pag->a.RW	  = 1;
-			pdes_pag->a.P	  = 0;
+	TabCache tabc;
+	for (uint32_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
+		descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(addr)];
+		block_t b;
+		if (pdes_tab->a.block == 0) {
+			b = tabc.nuova();
+			pdes_tab->a.block = b;
+			pdes_tab->a.PWT   = 0;
+			pdes_tab->a.PCD   = 0;
+			pdes_tab->a.RW	  = 1;
+			pdes_tab->a.US	  = 1;
+			pdes_tab->a.P	  = 1;
+		} else {
+			tabc.leggi(pdes_tab->a.block);
 		}
-		CHECKSW(scrivi_blocco, pdes_tab->a.block, &tab);
-	}
-	// - quindi, i rimanenti descrittori di tabella:
-	for (int i = indice_direttorio(last_address) + 1;
-		 i < indice_direttorio(fine_utente_condiviso);
-		 i++)
-	{
-		descrittore_tabella* pdes_tab = &main_dir.entrate[i];
-		pdes_tab->a.block = 0;
-		pdes_tab->a.PWT   = 0;
-		pdes_tab->a.PCD   = 0;
-		pdes_tab->a.US	  = 1;
-		pdes_tab->a.RW	  = 1;
-		pdes_tab->a.P     = 0;
+
+		descrittore_pagina* pdes_pag = &tab.entrate[indice_tabella(addr)];
+		if (pdes_pag->a.block == 0) {
+			if (! bm_alloc(&blocks, b) ) {
+				fprintf(stderr, "user heap: spazio insufficiente nello swap\n");
+				exit(EXIT_FAILURE);
+			}
+			pdes_pag->a.block = b;
+			CHECKSW(scrivi_blocco, pdes_pag->a.block, &zero_pag);
+		} 
+		pdes_pag->a.PWT = 0;
+		pdes_pag->a.PCD = 0;
+		pdes_pag->a.RW |= 1;
+		pdes_pag->a.US |= 1;
+		tabc.scrivi();
 	}
 		
 	superblock.magic[0] = 'C';
