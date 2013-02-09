@@ -10,7 +10,6 @@
 
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 extern "C" void terminate_p();
-extern "C" void end_program();
 extern "C" natl sem_ini(int val);
 extern "C" void sem_wait(natl sem);
 extern "C" void sem_signal(natl sem);
