@@ -12,12 +12,12 @@ void mem_free(void *ptr);
 int snprintf(char *buf, natl n, const char *fmt, ...);
 int printf(const char *fmt, ...);
 void pause();
-//
+
 // copia n byte da src a dst
 extern "C" void *memcpy(void *dest, const void *src, unsigned int n);
 // copia c nei primi n byte della zona di memoria puntata da dest
 extern "C" void *memset(void *dest, int c, unsigned int n);
 
-extern void flog(log_sev sev, const char* fmt, ...);
+void flog(log_sev sev, const char* fmt, ...);
 
 #endif

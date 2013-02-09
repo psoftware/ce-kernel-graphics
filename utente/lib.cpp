@@ -225,6 +225,7 @@ void *memset(void *dest, int c, unsigned int n)
 void flog(log_sev sev, const char *fmt, ...)
 {
         va_list ap;
+	const natl LOG_MSG_SIZE = 128;
         char buf[LOG_MSG_SIZE];
 
         va_start(ap, fmt);

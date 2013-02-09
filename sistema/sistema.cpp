@@ -2674,8 +2674,6 @@ void do_log(log_sev sev, const natb* buf, natl quanti)
 	while (*l)
 		serial_o(*l++);
 	serial_o((natb)'\t');
-	if (quanti > LOG_MSG_SIZE)
-		quanti = LOG_MSG_SIZE;
 
 	for (natl i = 0; i < quanti; i++)
 		serial_o(buf[i]);
@@ -2690,6 +2688,7 @@ extern "C" void c_log(log_sev sev, const natb* buf, natl quanti)
 extern "C" void flog(log_sev sev, cstr fmt, ...)
 {
 	va_list ap;
+	const natl LOG_MSG_SIZE = 128;
 	natb buf[LOG_MSG_SIZE];
 
 	va_start(ap, fmt);
