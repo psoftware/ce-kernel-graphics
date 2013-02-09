@@ -72,11 +72,14 @@
 #define TIPO_AB			0x56	// *abort_p
 #define TIPO_L			0x57	// *log
 #define TIPO_TRA		0x58	// trasforma
+#define TIPO_PCIF		0x59	// pci_find
+#define TIPO_PCIR		0x5a	// pci_read
+#define TIPO_PCIW		0x5b	// pci_write
 
 #define IO_TIPO_HDR		0x62	// readhd_n
 #define IO_TIPO_HDW		0x63	// writehd_n
-#define IO_TIPO_DMAR		0x64	// dmareadhd_n
-#define IO_TIPO_DMAW		0x65	// dmawritehd_n
+#define IO_TIPO_DMAHDR		0x64	// dmareadhd_n
+#define IO_TIPO_DMAHDW		0x65	// dmawritehd_n
 #define IO_TIPO_RSEN		0x72	// readse_n
 #define IO_TIPO_RSELN		0x73	// readse_ln
 #define IO_TIPO_WSEN		0x74	// writese_n
@@ -87,11 +90,6 @@
 // * in piu' rispetto al libro
 // )
 
-#define IO_TIPO_PCIF		0x64	// pci_find
-#define IO_TIPO_PCIR		0x65	// pci_read
-#define IO_TIPO_PCIW		0x66	// pci_write
-#define IO_TIPO_DMAHDR		0x67	// dmareadhd_n
-#define IO_TIPO_DMAHDW		0x68	// dmawritehd_n
 // ( suddivisione della memoria virtuale
 //   NTAB = Numero di Tabelle delle pagine
 //   SIS  = SIStema

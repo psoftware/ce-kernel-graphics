@@ -528,9 +528,9 @@ init_gdt:
 .set tipo_l,  TIPO_L
 
 // funzioni PCI
-.set io_tipo_pcif, IO_TIPO_PCIF
-.set io_tipo_pcir, IO_TIPO_PCIR
-.set io_tipo_pciw, IO_TIPO_PCIW
+.set tipo_pcif, TIPO_PCIF
+.set tipo_pcir, TIPO_PCIR
+.set tipo_pciw, TIPO_PCIW
 
 // carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
@@ -606,9 +606,9 @@ init_idt:
 	carica_gate	tipo_tra	a_trasforma	LIV_SISTEMA
 
 	// PCI
-	carica_gate	io_tipo_pcif	a_pci_find	LIV_SISTEMA
-	carica_gate	io_tipo_pcir	a_pci_read	LIV_UTENTE
-	carica_gate	io_tipo_pciw	a_pci_write	LIV_SISTEMA
+	carica_gate	tipo_pcif	a_pci_find	LIV_SISTEMA
+	carica_gate	tipo_pcir	a_pci_read	LIV_UTENTE
+	carica_gate	tipo_pciw	a_pci_write	LIV_SISTEMA
 
 	leave
 	ret
@@ -1689,7 +1689,7 @@ a_pci_write:
 
 
 ////////////////////////////////////////////////////////////////
-// sezione dati: tabelle e stack				      //
+// sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
 end_possibili_pf:

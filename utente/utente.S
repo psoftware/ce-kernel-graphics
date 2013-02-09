@@ -113,7 +113,7 @@ writehd_n:
 
 	.global dmareadhd_n
 dmareadhd_n:
-	int $io_tipo_dmahdw
+	int $io_tipo_dmahdr
 	ret
 
 	.global dmawritehd_n

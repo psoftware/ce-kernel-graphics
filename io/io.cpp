@@ -25,6 +25,9 @@ extern "C" void wfi();	// [9.1]
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
+extern "C" natl pci_find(natl code, natw i);
+extern "C" natl pci_read(natw l, natw regn, natl size);
+extern "C" natl pci_write(natw l, natw regn, natl res, natl size);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                      FUNZIONI GENERICHE DI SUPPORTO                        //
@@ -746,9 +749,7 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 	for(;;)
 	{	p_des->cont--;
 		if (p_des->cont == 0) 
-		{	hd_halt_inout(p_des->indreg.iDCR);
-			sem_signal(p_des->sincr);
-		}
+			hd_halt_inout(p_des->indreg.iDCR);
 		p_des->errore = 0;
 		inputb(p_des->indreg.iSTS, stato); 				// ack dell'interrupt
 		switch (p_des->comando) 
@@ -788,6 +789,7 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 bool hd_init()
 {
 	natl id;
+	natl bm;
 	des_ata* p_des;
 
 	p_des = &hd;
@@ -799,6 +801,22 @@ bool hd_init()
 	if ( (p_des->sincr = sem_ini(0)) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "hd: impossibile creare sincr");
 		return false;
+	}
+
+	if ( (bm = pci_find(0x000101FF, 0)) == 0xFFFFFFFF) {
+		flog(LOG_WARN, "hd: bus master non trovato");
+	} else {
+		natb prog_if = pci_read(bm, 0x9, 1);
+		if (prog_if & 0x80) {
+			natl base = pci_read(bm, 0x20, 4);
+			base &= ~0x1;
+			hd.bus_master.iBMCMD  = (ioaddr)(base + 0x08);
+			hd.bus_master.iBMSTR  = (ioaddr)(base + 0x0a);
+			hd.bus_master.iBMDTPR = (ioaddr)(base + 0x0c);
+			addr iff = trasforma(&hd.prd[0]);
+			outputl(reinterpret_cast<natl>(iff),
+					hd.bus_master.iBMDTPR);
+		}
 	}
 
 	id = activate_pe(esternAta, 0, PRIO, LIV, HD_IRQ);

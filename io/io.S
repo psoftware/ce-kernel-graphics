@@ -15,7 +15,7 @@
 .set tipo_s,  TIPO_S
 .set tipo_nd, TIPO_ND
 .set tipo_d,  TIPO_D
-.set tipo_l,	TIPO_L
+.set tipo_l,  TIPO_L
 
 // Tipi delle interruzioni usate per interfacciarsi al modulo
 //  sistema
@@ -28,6 +28,10 @@
 .set tipo_ab,   TIPO_AB
 .set tipo_fg,   TIPO_FG
 .set tipo_rl,   TIPO_RL
+.set tipo_tra,  TIPO_TRA
+.set tipo_pcif, TIPO_PCIF
+.set tipo_pcir, TIPO_PCIR
+.set tipo_pciw, TIPO_PCIW
 
 
 // Tipi delle interruzioni usate dalle primitive di IO
@@ -42,8 +46,8 @@
 .set io_tipo_inic,   IO_TIPO_INIC
 .set io_tipo_hdr,    IO_TIPO_HDR
 .set io_tipo_hdw,    IO_TIPO_HDW
-.set io_tipo_dmahdr, IO_TIPO_DMAR
-.set io_tipo_dmahdw, IO_TIPO_DMAW
+.set io_tipo_dmahdr, IO_TIPO_DMAHDR
+.set io_tipo_dmahdw, IO_TIPO_DMAHDW
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -323,7 +327,7 @@ sem_signal:
 
 	.global trasforma
 trasforma:
-	int $tipo_t
+	int $tipo_tra
 	ret
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -363,6 +367,21 @@ delay:
 	.global log
 log:
 	int $tipo_l
+	ret
+
+	.global pci_find
+pci_find:
+	int $tipo_pcif
+	ret
+
+	.global pci_read
+pci_read:
+	int $tipo_pcir
+	ret
+
+	.global pci_write
+pci_write:
+	int $tipo_pciw
 	ret
 
 	.global writevid
