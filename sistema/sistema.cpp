@@ -2283,13 +2283,6 @@ void ioapic_write_rtl(natb irq, natl w)
 	ioapic_out(ioapic.RTO + irq * 2, w);
 }
 
-void ioapic_set_DEST(natl irq, natb dest)
-{
-	natl work = ioapic_read_rth(irq);
-	work = (work & ~IOAPIC_DEST_MSK) | (dest << IOAPIC_DEST_SHF);
-	ioapic_write_rth(irq, work);
-}
-
 void ioapic_set_VECT(natl irq, natb vec)
 {
 	natl work = ioapic_read_rtl(irq);
@@ -2327,47 +2320,6 @@ void ioapic_set_TRGM(natl irq, bool v)
 	ioapic_write_rtl(irq, work);
 }
 
-void ioapic_set_IPOL(natl irq, bool v)
-{
-	natl work = ioapic_read_rtl(irq);
-	if (v)
-		work |= IOAPIC_IPOL_BIT;
-	else
-		work &= ~IOAPIC_IPOL_BIT;
-	ioapic_write_rtl(irq, work);
-}
-
-
-void ioapic_dump_rt(natb start, natb end)
-{
-	const char* modes[] = { "Fixed",
-				"Lowest Priority",
-				"SMI",
-				"Reserved",
-				"NMI",
-				"INIT",
-				"Reserved",
-				"ExtINT" };
-	const int BUF_SIZE = 80;
-	char buf[BUF_SIZE + 1];
-	end = (end > MAX_IRQ)? MAX_IRQ : end;
-	for (natb i = start; i <= end; i++) {
-		int l = snprintf(buf, BUF_SIZE, "%d: ", i) - 1;
-		natl el = ioapic_read_rtl(i);
-		natl eh = ioapic_read_rth(i);
-		l += snprintf(buf + l, BUF_SIZE - l, " %2x",
-					(eh & IOAPIC_DEST_MSK) >> IOAPIC_DEST_SHF) - 1;
-		l += snprintf(buf + l, BUF_SIZE - l, " %c %c %c %c",
-				(el & IOAPIC_MIRQ_BIT)? 'M' : ' ',
-				(el & IOAPIC_TRGM_BIT)? '-' : '/',
-				(el & IOAPIC_IPOL_BIT)? '_' : '-',
-				(el & IOAPIC_DSTM_BIT)? 'L' : 'P') - 1;
-		int dmode = (el & IOAPIC_DELM_MSK) >> IOAPIC_DELM_SHF;
-		snprintf(buf + l, BUF_SIZE -l, " %2x %s", 
-				(el & IOAPIC_VECT_MSK) >> IOAPIC_VECT_SHF, modes[dmode]);
-		flog(LOG_DEBUG, buf);
-	}
-}
 
 const natw PIIX3_VENDOR_ID = 0x8086;
 const natw PIIX3_DEVICE_ID = 0x7000;
