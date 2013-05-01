@@ -187,13 +187,13 @@ int printf(const char *fmt, ...)
 	return l;
 }
 
+char pause_buf[1];
 void pause()
 {
 #ifndef AUTOCORR
-	char buf[1];
 	natl len = 1;
 	writeconsole("Premere INVIO per continuare");
-	readconsole(buf, len);
+	readconsole(pause_buf, len);
 #endif
 }
 
