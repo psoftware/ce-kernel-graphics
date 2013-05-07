@@ -1,7 +1,7 @@
 #!/bin/bash
 
 QEMU=${QEMU:-$HOME/CE/bin/qemu-system-i386}
-CEHDPATH=${CEHDPATH:-$HOME/.CE/hd.img}
+CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 
 DEBUG=
 if [ "$1" == -g ]; then
