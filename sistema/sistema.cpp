@@ -933,7 +933,7 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	
 	ini_COM1();
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.0");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.01");
 
 	// (* controlliamo di essere stati caricati
 	//    da un bootloader che rispetti lo standard multiboot
