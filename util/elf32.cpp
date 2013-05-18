@@ -8,7 +8,7 @@ using namespace std;
 
 #include "costanti.h"
 #include "interp.h"
-#include "elf.h"
+#include "elf32.h"
 
 typedef unsigned int uint32_t;
 
