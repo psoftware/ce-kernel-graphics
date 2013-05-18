@@ -21,5 +21,6 @@ process_body hello_body(int a)
 	ptr = copy(nome, ptr);
 	ptr = copy(", piacere di conoscerti", ptr);
 	writeconsole(buf);	
+	pause();
 }
 

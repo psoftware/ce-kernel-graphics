@@ -188,12 +188,12 @@ int printf(const char *fmt, ...)
 }
 
 char pause_buf[1];
+natl pause_len = 1;
 void pause()
 {
 #ifndef AUTOCORR
-	natl len = 1;
 	writeconsole("Premere INVIO per continuare");
-	readconsole(pause_buf, len);
+	readconsole(pause_buf, pause_len);
 #endif
 }
 
