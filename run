@@ -16,11 +16,16 @@ if [ "$AUTOCORR" == 1 ]; then
 	output=-nographic
 fi
 
+hdc=
+if [ -f "$CDEPATH" ]; then
+	hdc="-hdc \"$CDEPATH\""
+fi
+
 
 "$QEMU" $DEBUG		      \
 	-kernel build/sistema \
 	-hda .swap	      \
-	-hdc "$CEHDPATH"      \
+	$hdc                  \
 	$output 	      \
 	-no-reboot 	      |
 util/show_log.pl
