@@ -1,0 +1,5 @@
+.swap
+swap.img
+*/*.o
+build/*
+utente/utente.cpp
