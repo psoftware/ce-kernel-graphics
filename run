@@ -1,8 +1,10 @@
 #!/bin/bash
 
-QEMU=qemu-system-i386
-CEQEMU=$HOME/CE/bin/qemu-system-i386
-[ -x "$CEQEMU" ] && QEMU=$CEQEMU
+[ -n "$QEMU" ] && {
+	QEMU=qemu-system-i386
+	CEQEMU=$HOME/CE/bin/qemu-system-i386
+	[ -x "$CEQEMU" ] && QEMU=$CEQEMU
+}
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 
 DEBUG=
