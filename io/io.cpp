@@ -46,8 +46,6 @@ extern "C" void inputw(ioaddr reg, natw &a);
 // uscita di una word su una porta di IO
 extern "C" void outputw(natw a, ioaddr reg);
 
-extern "C" void flog(log_sev sev, const char* fmt, ...);
-
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI [9.2]                 //
 ////////////////////////////////////////////////////////////////////////////////
@@ -826,19 +824,10 @@ bool hd_init()
 	return true;
 }
 
-// log formattato
-void flog(log_sev sev, const char *fmt, ...)
+
+extern "C" void do_log(log_sev sev, const char* buf, natl l)
 {
-	va_list ap;
-	const natl LOG_MSG_SIZE = 128;
-	char buf[LOG_MSG_SIZE];
-
-	va_start(ap, fmt);
-	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
-	va_end(ap);
-
-	if (l > 1)
-		log(sev, buf, l - 1);
+	log(sev, buf, l);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

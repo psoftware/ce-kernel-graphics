@@ -11,7 +11,4 @@ void mem_free(void *ptr);
 int printf(const char *fmt, ...);
 void pause();
 
-extern "C" void flog(log_sev sev, const char* fmt, ...);
-extern "C" void panic(const char *msg);
-
 #endif

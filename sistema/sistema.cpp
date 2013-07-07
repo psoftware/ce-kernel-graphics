@@ -131,9 +131,6 @@ extern des_sem array_dess[MAX_SEM];
 
 // - per sem_ini, si veda [P_SEM_ALLOC] avanti
 
-// ( per la gestione degli errori/debugging, useremo le seguenti funzioni:
-//   flog: invia un messaggio formatto al log (si veda [P_LOG] per l'implementazione)
-extern "C" void flog(log_sev, cstr fmt, ...);
 //   abort_p: termina forzatamente un processo (vedi [P_PROCESS] avanti)
 extern "C" void abort_p() __attribute__ (( noreturn ));
 //   sem_valido: restituisce true se sem e' un semaforo effettivamente allocato
@@ -2163,7 +2160,7 @@ void serial_o(natb c)
 }
 
 // invia un nuovo messaggio sul log
-void do_log(log_sev sev, const natb* buf, natl quanti)
+extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
 {
 	const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
 	if (sev > MAX_LOG) {
@@ -2185,24 +2182,9 @@ void do_log(log_sev sev, const natb* buf, natl quanti)
 		serial_o(buf[i]);
 	serial_o((natb)'\n');
 }
-extern "C" void c_log(log_sev sev, const natb* buf, natl quanti)
+extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
 {
 	do_log(sev, buf, quanti);
-}
-
-// log formattato
-extern "C" void flog(log_sev sev, cstr fmt, ...)
-{
-	va_list ap;
-	const natl LOG_MSG_SIZE = 128;
-	natb buf[LOG_MSG_SIZE];
-
-	va_start(ap, fmt);
-	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
-	va_end(ap);
-
-	if (l > 1)
-		do_log(sev, buf, l - 1);
 }
 
 // )

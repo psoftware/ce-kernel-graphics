@@ -2,7 +2,7 @@
 #include "shlib.h"
 
 
-extern "C" void flog(log_sev sev, cstr fmt, ...);
+extern "C" void do_log(log_sev sev, const char* buf, natl size);
 extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 
 // ( [P_LIB]
@@ -441,3 +441,17 @@ void free_interna(addr indirizzo, natl quanti)
 	}
 }
 // )
+// log formattato
+extern "C" void flog(log_sev sev, const char* fmt, ...)
+{
+	va_list ap;
+	const natl LOG_MSG_SIZE = 128;
+	char buf[LOG_MSG_SIZE];
+
+	va_start(ap, fmt);
+	int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
+	va_end(ap);
+
+	if (l > 1)
+		do_log(sev, buf, l - 1);
+}

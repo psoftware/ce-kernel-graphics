@@ -19,3 +19,4 @@ addr allineav(addr v, natl a);
 void* alloca(natl dim);
 void free_interna(addr indirizzo, natl quanti);
 void dealloca(void* p);
+extern "C" void flog(log_sev sev, const char* fmt, ...);

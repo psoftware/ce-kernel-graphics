@@ -59,20 +59,6 @@ void pause()
 }
 
 
-// log formattato
-extern "C" void flog(log_sev sev, const char *fmt, ...)
-{
-        va_list ap;
-	const natl LOG_MSG_SIZE = 128;
-        char buf[LOG_MSG_SIZE];
-
-        va_start(ap, fmt);
-        int l = vsnprintf(buf, LOG_MSG_SIZE, fmt, ap);
-        va_end(ap);
-
-        log(sev, buf, l);
-}
-
 extern "C" void panic(const char* msg)
 {
 	flog(LOG_WARN, "%s", msg);
@@ -99,6 +85,11 @@ void mem_free(void* p)
 	sem_wait(mem_mutex);
 	dealloca(p);
 	sem_signal(mem_mutex);
+}
+
+extern "C" void do_log(log_sev sev, const char* msg, natl size)
+{
+	log(sev, msg, size);
 }
 
 extern "C" natl end;
