@@ -29,6 +29,7 @@ extern "C" void writehd_n(const natw vetto[], natl primo, natb quanti, natb &err
 extern "C" void dmareadhd_n(natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void dmawritehd_n(const natw vetto[], natl primo, natb quanti, natb& errore);
 
+extern "C" void log(log_sev sev, const char* buf, natl quanti);
 
 #endif
 
