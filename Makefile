@@ -30,8 +30,8 @@ all: build/sistema \
      build/creatimg \
      utente/prog
      
-build/sistema: sistema/sist_s.o sistema/sist_cpp.o
-	$(NLD) -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o
+build/sistema: sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
+	$(NLD) -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
 
 build/io: io/io_s.o io/io_cpp.o
 	$(NLD) -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
@@ -43,7 +43,7 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h include/shlib.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
@@ -65,6 +65,9 @@ utente/uten_cpp.o: utente/utente.cpp
 
 utente/lib.o: utente/lib.cpp utente/include/lib.h
 	$(NCC) $(NCFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
+
+lib/shlib.o: lib/shlib.cpp include/mboot.h include/tipo.h include/shlib.h
+	$(NCC) $(NCFLAGS) -c lib/shlib.cpp -o lib/shlib.o
 
 # creazione di parse e createimg
 build/parse: util/parse.c util/src.h
