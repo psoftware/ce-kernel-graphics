@@ -5,7 +5,7 @@
 #ifndef SYS_H_
 #define SYS_H_
 
-#include <tipo.h>
+#include <libce.h>
 #include <costanti.h>
 
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);

@@ -97,5 +97,5 @@ extern "C" natl end;
 extern "C" void lib_init()
 {
 	mem_mutex = sem_ini(1);
-	free_interna(&end, DIM_USR_HEAP);
+	heap_init(&end, DIM_USR_HEAP);
 }

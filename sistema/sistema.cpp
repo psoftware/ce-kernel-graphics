@@ -6,8 +6,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 //                     PROCESSI [4]                                            //
 /////////////////////////////////////////////////////////////////////////////////
-#include "tipo.h"		// [4.4]
-#include "shlib.h"
+#include "libce.h"
 
 const int N_REG = 45;	// [4.6]
 
@@ -875,11 +874,6 @@ const natl DUMMY_PRIORITY = 0x0000000;
 const natl HEAP_SIZE = 640*4096U - 4096U;
 const natl DELAY = 59659;
 
-void init_heap()
-{
-	free_interna((addr)4096U, HEAP_SIZE);
-}
-
 // restituisce true se le due stringe first e second sono uguali
 extern addr max_mem_lower;
 extern addr max_mem_upper;
@@ -900,7 +894,6 @@ extern natl ticks;
 extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
 void ini_COM1();
-void init_heap();
 // super blocco (vedi [10.5] e [P_SWAP] avanti)
 struct superblock_t {
 	char	magic[4];
@@ -946,7 +939,7 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	// *)
 
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
-	init_heap();
+	heap_init((addr)4096, HEAP_SIZE);
 	flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
 	// *)
 
@@ -2172,7 +2165,7 @@ extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
 		serial_o(*l++);
 	serial_o((natb)'\t');
 	natb idbuf[10];
-	snprintf(idbuf, 10, "%d", esecuzione->id);
+	snprintf((char*)idbuf, 10, "%d", esecuzione->id);
 	l = idbuf;
 	while (*l)
 		serial_o(*l++);

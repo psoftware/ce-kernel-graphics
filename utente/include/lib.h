@@ -1,7 +1,6 @@
 #ifndef _LIB_H_
 #define _LIB_H_
 #include <sys.h>
-#include <shlib.h>
 
 char* copy(const char* src, char* dst);
 char* convint(int n, char* out);

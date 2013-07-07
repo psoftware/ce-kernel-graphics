@@ -1,8 +1,7 @@
 // io.cpp
 //
 #include "costanti.h"
-#include "tipo.h"
-#include "shlib.h"
+#include "libce.h"
 //#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
 //    COSTANTI                                                                //

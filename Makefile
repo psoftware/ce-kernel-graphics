@@ -4,6 +4,8 @@ START_UTENTE=	 0x80000000
 SWAP_SIZE=	 20M
 SWAP=		 swap.img
 
+LIBCE ?= $(HOME)/CE
+
 NCC ?= g++
 NLD ?= ld
 
@@ -18,8 +20,17 @@ NCFLAGS=\
 	-fcall-saved-edi 	\
 	-fcall-saved-ebx 	\
 	-Iinclude		\
+	-I$(LIBCE)/include/ce	\
 	-m32			\
 	-g
+
+NLDFLAGS=\
+       -melf_i386 \
+       -nostdlib \
+       -L$(LIBCE)/lib/ce
+
+NLDLIBS=\
+	-lce
 
 ifdef AUTOCORR
 	NCFLAGS+=-DAUTOCORR
@@ -30,20 +41,20 @@ all: build/sistema \
      build/creatimg \
      utente/prog
      
-build/sistema: sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
-	$(NLD) -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
+build/sistema: sistema/sist_s.o sistema/sist_cpp.o
+	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
-build/io: io/io_s.o io/io_cpp.o lib/shlib.o
-	$(NLD) -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o lib/shlib.o
+build/io: io/io_s.o io/io_cpp.o
+	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(NLDLIBS)
 
-build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o lib/shlib.o
-	$(NLD) -melf_i386 -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o lib/shlib.o
+build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
+	$(NLD) $(NLDFLAGS) -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o $(NLDLIBS)
 
 # compilazione di sistema.s e sistema.cpp
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h include/shlib.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
@@ -65,9 +76,6 @@ utente/uten_cpp.o: utente/utente.cpp
 
 utente/lib.o: utente/lib.cpp utente/include/lib.h
 	$(NCC) $(NCFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
-
-lib/shlib.o: lib/shlib.cpp include/mboot.h include/tipo.h include/shlib.h
-	$(NCC) $(NCFLAGS) -c lib/shlib.cpp -o lib/shlib.o
 
 # creazione di parse e createimg
 build/parse: util/parse.c util/src.h

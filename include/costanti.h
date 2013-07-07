@@ -104,3 +104,10 @@
 #define NTAB_USR_C		256	// 1GiB
 #define NTAB_USR_P		256	// 1GiB
 // )
+// (* log di sistema
+#ifndef AUTOCORR
+#define MAX_LOG			LOG_ERR
+#else /* AUTOCORR */
+#define MAX_LOG			LOG_USR
+#endif /* AUTOCORR */
+// *)
