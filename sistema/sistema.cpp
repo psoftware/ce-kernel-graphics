@@ -717,15 +717,6 @@ const ioaddr PCI_CAP = 0x0CF8;
 const ioaddr PCI_CDP = 0x0CFC;
 const addr PCI_startmem = reinterpret_cast<addr>(0x00000000 - dim_pci_condiviso);
 
-extern "C" void inputb(ioaddr reg, natb &a);	// [9.3.1]
-extern "C" void outputb(natb a, ioaddr reg);	// [9.3.1]
-// (*
-extern "C" void inputw(ioaddr reg, natw &a);	
-extern "C" void outputw(natw a, ioaddr reg);
-extern "C" void inputl(ioaddr reg, natl &a);	
-extern "C" void outputl(natl a, ioaddr reg);
-// *)
-
 natl make_CAP(natw w, natb off)
 {
 	return 0x80000000 | (w << 8) | (off & 0xFC);

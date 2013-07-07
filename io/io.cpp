@@ -30,22 +30,6 @@ extern "C" natl pci_read(natw l, natw regn, natl size);
 extern "C" natl pci_write(natw l, natw regn, natl res, natl size);
 
 ////////////////////////////////////////////////////////////////////////////////
-//                      FUNZIONI GENERICHE DI SUPPORTO                        //
-////////////////////////////////////////////////////////////////////////////////
-
-// ingresso di un byte da una porta di IO
-extern "C" void inputb(ioaddr reg, natb &a);
-
-// uscita di un byte su una porta di IO
-extern "C" void outputb(natb a, ioaddr reg);
-
-// ingresso di una word da una porta di IO
-extern "C" void inputw(ioaddr reg, natw &a);
-
-// uscita di una word su una porta di IO
-extern "C" void outputw(natw a, ioaddr reg);
-
-////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI [9.2]                 //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -601,16 +585,6 @@ extern "C" void hd_go_inout(ioaddr iSTS);
 // abilita l'interfaccia a generare interruzioni
 extern "C" void hd_halt_inout(ioaddr iSTS);
 // disabilita l'interfaccia a generare interruzioni
-extern "C" void outputbw(natw vetto[], int quanti, ioaddr reg);
-// { for (int i = 0; i < quanti; i++) *reg = vetto[i]; }
-extern "C" void inputbw(ioaddr reg, natw vetti[], int quanti);
-// { for (int i = 0; i < quanti; i++) vetti[i] = *reg; }
-extern "C" void inputb(ioaddr reg, natb& a) ;
-// { 	a = *reg	;   }
-extern "C" void outputb(natb a, ioaddr reg) ;
-// {	*reg = a;    }
-extern "C" void outputl(natl a, ioaddr reg) ;
-// {	*reg = a;    }
 
 void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
 {	p_dmades->prd[0] = reinterpret_cast<natl>(iff);
