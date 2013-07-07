@@ -33,8 +33,8 @@ all: build/sistema \
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
 	$(NLD) -melf_i386 -nostdlib -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o lib/shlib.o
 
-build/io: io/io_s.o io/io_cpp.o
-	$(NLD) -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o
+build/io: io/io_s.o io/io_cpp.o lib/shlib.o
+	$(NLD) -melf_i386 -nostdlib -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o lib/shlib.o
 
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	$(NLD) -melf_i386 -nostdlib -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o
