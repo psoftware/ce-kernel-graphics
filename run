@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ -n "$QEMU" ] && {
+[ -n "$QEMU" ] || {
 	QEMU=qemu-system-i386
 	CEQEMU=$HOME/CE/bin/qemu-system-i386
 	[ -x "$CEQEMU" ] && QEMU=$CEQEMU
