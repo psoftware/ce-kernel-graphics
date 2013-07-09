@@ -72,9 +72,6 @@
 #define TIPO_AB			0x56	// *abort_p
 #define TIPO_L			0x57	// *log
 #define TIPO_TRA		0x58	// trasforma
-#define TIPO_PCIF		0x59	// pci_find
-#define TIPO_PCIR		0x5a	// pci_read
-#define TIPO_PCIW		0x5b	// pci_write
 
 #define IO_TIPO_HDR		0x62	// readhd_n
 #define IO_TIPO_HDW		0x63	// writehd_n

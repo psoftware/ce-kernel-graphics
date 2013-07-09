@@ -759,7 +759,8 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 bool hd_init()
 {
 	natl id;
-	natl bm;
+	natb bus = 0, dev = 0, fun = 0;
+	natb code[] = { 0xff, 0x01, 0x01 };
 	des_ata* p_des;
 
 	p_des = &hd;
@@ -773,12 +774,12 @@ bool hd_init()
 		return false;
 	}
 
-	if ( (bm = pci_find(0x000101FF, 0)) == 0xFFFFFFFF) {
+	if (!pci_find_class(bus, dev, fun, code)) {
 		flog(LOG_WARN, "hd: bus master non trovato");
 	} else {
-		natb prog_if = pci_read(bm, 0x9, 1);
+		natb prog_if = pci_read_confb(bus, dev, fun, 0x9);
 		if (prog_if & 0x80) {
-			natl base = pci_read(bm, 0x20, 4);
+			natl base = pci_read_confl(bus, dev, fun, 0x20);
 			base &= ~0x1;
 			hd.bus_master.iBMCMD  = (ioaddr)(base + 0x08);
 			hd.bus_master.iBMSTR  = (ioaddr)(base + 0x0a);

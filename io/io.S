@@ -29,10 +29,6 @@
 .set tipo_fg,   TIPO_FG
 .set tipo_rl,   TIPO_RL
 .set tipo_tra,  TIPO_TRA
-.set tipo_pcif, TIPO_PCIF
-.set tipo_pcir, TIPO_PCIR
-.set tipo_pciw, TIPO_PCIW
-
 
 // Tipi delle interruzioni usate dalle primitive di IO
 // Devono coincidere con quelli usati in utente.s
@@ -367,21 +363,6 @@ delay:
 	.global log
 log:
 	int $tipo_l
-	ret
-
-	.global pci_find
-pci_find:
-	int $tipo_pcif
-	ret
-
-	.global pci_read
-pci_read:
-	int $tipo_pcir
-	ret
-
-	.global pci_write
-pci_write:
-	int $tipo_pciw
 	ret
 
 	.global writevid

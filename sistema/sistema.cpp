@@ -713,148 +713,8 @@ proc_elem *a_p[MAX_IRQ];  // [7.1]
 /////////////////////////////////////////////////////////////////////////////////
 //                    SUPPORTO PCI                                             //
 /////////////////////////////////////////////////////////////////////////////////
-const ioaddr PCI_CAP = 0x0CF8;
-const ioaddr PCI_CDP = 0x0CFC;
 const addr PCI_startmem = reinterpret_cast<addr>(0x00000000 - dim_pci_condiviso);
 
-natl make_CAP(natw w, natb off)
-{
-	return 0x80000000 | (w << 8) | (off & 0xFC);
-}
-
-natb pci_read_confb(natw w, natb off)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	natb ret;
-	inputb(PCI_CDP + (off & 0x03), ret);
-	return ret;
-}
-
-natw pci_read_confw(natw w, natb off)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	natw ret;
-	inputw(PCI_CDP + (off & 0x03), ret);
-	return ret;
-}
-
-natl pci_read_confl(natw w, natb off)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	natl ret;
-	inputl(PCI_CDP, ret);
-	return ret;
-}
-
-void pci_write_confb(natw w, natb off, natb data)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	outputb(data, PCI_CDP + (off & 0x03));
-}
-
-void pci_write_confw(natw w, natb off, natw data)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	outputw(data, PCI_CDP + (off & 0x03));
-}
-
-void pci_write_confl(natw w, natb off, natl data)
-{
-	natl l = make_CAP(w, off);
-	outputl(l, PCI_CAP);
-	outputl(data, PCI_CDP);
-}
-
-bool pci_find_dev(natw& w, natw devID, natw vendID)
-{
-	for( ; w != 0xFFFF; w++) {
-		natw work;
-
-		if ( (work = pci_read_confw(w, 0)) == 0xFFFF ) 
-			continue;
-		if ( work == vendID && pci_read_confw(w, 2) == devID) 
-			return true;
-	}
-	return false;
-}
-
-bool pci_find_class(natw& w, natb code[])
-{
-	for ( ; w != 0xFFFF; w++) {
-		if (pci_read_confw(w, 0) == 0xFFFF)
-			continue;
-		natb work[3];
-		natl i;
-		for (i = 0; i < 3; i++) {
-			work[i] = pci_read_confb(w, 2 * 4 + i + 1);
-			if (code[i] != 0xFF && code[i] != work[i])
-				break;
-		}
-		if (i == 3) {
-			for (i = 0; i < 3; i++)
-				code[i] = work[i];
-			return true;
-		}
-	} 
-	return false;
-}
-
-extern "C" natl c_pci_find(natl code, natw i)
-{
-	natb* pcode = (natb*)&code;
-	natw w, j = 0;
-	for(w = 0; w != 0xFFFF; w++) {
-		if (! pci_find_class(w, pcode)) 
-			return 0xFFFFFFFF;
-		if (j == i)
-			return w;
-		j++;
-	} 
-	return 0xFFFFFFFF;
-}
-
-extern "C" natl c_pci_read(natw l, natw regn, natl size)
-{
-	natl res;
-	switch (size) {
-	case 1:
-		res = pci_read_confb(l, regn);
-		break;
-	case 2:
-		res = pci_read_confw(l, regn);
-		break;
-	case 4:
-		res = pci_read_confl(l, regn);
-		break;
-	default:
-		flog(LOG_WARN, "pci_read(%x, %d, %d): parametro errato", l, regn, size);
-		abort_p();
-	}
-	return res;
-}
-
-extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
-{
-	switch (size) {
-	case 1:
-		pci_write_confb(l, regn, res);
-		break;
-	case 2:
-		pci_write_confw(l, regn, res);
-		break;
-	case 4:
-		pci_write_confl(l, regn, res);
-		break;
-	default:
-		flog(LOG_WARN, "pci_write(%x, %d, %d, %d): parametro errato", l, regn, res, size);
-		abort_p();
-	}
-}
 
 ///////////////////////////////////////////////////////////////////////////////////
 //                   INIZIALIZZAZIONE [10]                                       //
@@ -1746,20 +1606,6 @@ bool crea_finestra_PCI(addr direttorio)
 			BIT_RW | BIT_PCD);
 }
 
-natb pci_getbus(natw l)
-{
-	return l >> 8;
-}
-
-natb pci_getdev(natw l)
-{
-	return (l & 0x00FF) >> 3;
-}
-
-natb pci_getfun(natw l)
-{
-	return l & 0x0007;
-}
 // )
 
 // ( [P_IOAPIC]
@@ -1870,17 +1716,16 @@ natl apicbase_getxy(natl apicbase)
 extern "C" void disable_8259();
 bool ioapic_init()
 {
-	natw l = 0;
+	natb bus = 0, dev = 0, fun = 0;
 	// trovare il PIIX3 e
-	if (!pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID)) {
+	if (!pci_find_dev(bus, dev, fun, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID)) {
 		flog(LOG_WARN, "PIIX3 non trovato");
 		return false;
 	}
-	flog(LOG_DEBUG, "PIIX3: trovato a %2x.%2x.%2x",
-			pci_getbus(l), pci_getdev(l), pci_getfun(l));
+	flog(LOG_DEBUG, "PIIX3: trovato a %2x.%2x.%2x", bus, dev, fun);
 	// 	inizializzare IOREGSEL e IOWIN
 	natb apicbase;
-	apicbase = pci_read_confb(l, PIIX3_APICBASE);
+	apicbase = pci_read_confb(bus, dev, fun, PIIX3_APICBASE);
 	natl tmp_IOREGSEL = (natl)ioapic.IOREGSEL | apicbase_getxy(apicbase);
 	natl tmp_IOWIN    = (natl)ioapic.IOWIN    | apicbase_getxy(apicbase);
 	// 	trasformiamo gli indirizzi fisici in virtuali
@@ -1890,9 +1735,9 @@ bool ioapic_init()
 	flog(LOG_DEBUG, "IOAPIC: ioregsel %8x, iowin %8x", ioapic.IOREGSEL, ioapic.IOWIN);
 	// 	abilitare il /CS per l'IOAPIC
 	natl xbcs;
-	xbcs = pci_read_confl(l, PIIX3_XBCS);
+	xbcs = pci_read_confl(bus, dev, fun, PIIX3_XBCS);
 	xbcs |= PIIX3_XBCS_ENABLE;
-	pci_write_confl(l, PIIX3_XBCS, xbcs);
+	pci_write_confl(bus, dev, fun, PIIX3_XBCS, xbcs);
 	disable_8259();
 	// riempire la redirection table
 	for (natb i = 0; i < MAX_IRQ; i++) {
@@ -1932,12 +1777,12 @@ extern "C" void ioapic_reset()
 		ioapic_write_rth(i, 0);
 		ioapic_write_rtl(i, IOAPIC_MIRQ_BIT | IOAPIC_TRGM_BIT);
 	}
-	natw l = 0;
-	pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID);
+	natb bus = 0, dev = 0, fun = 0;
+	pci_find_dev(bus, dev, fun, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID);
 	natl xbcs;
-	xbcs = pci_read_confl(l, PIIX3_XBCS);
+	xbcs = pci_read_confl(bus, dev, fun, PIIX3_XBCS);
 	xbcs &= ~PIIX3_XBCS_ENABLE;
-	pci_write_confl(l, PIIX3_XBCS, xbcs);
+	pci_write_confl(bus, dev, fun, PIIX3_XBCS, xbcs);
 }
 
 // )

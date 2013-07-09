@@ -605,11 +605,6 @@ init_idt:
 	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
 	carica_gate	tipo_tra	a_trasforma	LIV_SISTEMA
 
-	// PCI
-	carica_gate	tipo_pcif	a_pci_find	LIV_SISTEMA
-	carica_gate	tipo_pcir	a_pci_read	LIV_UTENTE
-	carica_gate	tipo_pciw	a_pci_write	LIV_SISTEMA
-
 	leave
 	ret
 
@@ -1537,40 +1532,6 @@ a_log:
 	addl $12, %esp
 	call carica_stato
 	iret
-
-////////////////////////////////////////////////////////
-// PCI
-////////////////////////////////////////////////////////
-	.global a_pci_find
-	.extern c_pci_find
-a_pci_find:
-	salva_reg_rit
-	copia_param 2 6
-	call c_pci_find
-	addl $8, %esp
-	carica_reg_rit
-	iret
-
-	.global a_pci_read
-	.extern c_pci_read
-a_pci_read:
-	salva_reg_rit
-	copia_param 3 6
-	call c_pci_read
-	addl $12, %esp
-	carica_reg_rit
-	iret
-
-	.global a_pci_write
-	.extern c_pci_write
-a_pci_write:
-	salva_registri
-	copia_param 4 7
-	call c_pci_write
-	addl $24, %esp
-	carica_registri
-	iret
-
 
 ////////////////////////////////////////////////////////////////
 // sezione dati: tabelle e stack			      //
