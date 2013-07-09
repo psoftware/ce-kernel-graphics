@@ -859,42 +859,6 @@ trova_bit:
 //  PIC, timer, console, swap					 //
 //////////////////////////////////////////////////////////////////
 
-// PIC
-// registri del controllore delle interruzioni
-.set ICW1M, 0x20
-.set ICW2M, 0x21
-.set ICW3M, 0x21
-.set ICW4M, 0x21
-.set OCW1M, 0x21
-.set OCW3M, 0x20
-.set ICW1S, 0xa0
-.set ICW2S, 0xa1
-.set ICW3S, 0xa1
-.set ICW4S, 0xa1
-.set OCW1S, 0xa1
-.set OCW3S, 0xa0
-.set OCW2M, 0x20
-.set OCW3M, 0x20
-.set OCW2S, 0xa0
-.set OCW3S, 0xa0
-
-.set EOI, 0x20
-.set READ_ISR, 0x0b
-
-	.global disable_8259
-disable_8259:
-	pushl %eax
-	
-	movb $0xFF, %al
-	outb %al, $OCW1S
-	
-	movb $0xFF, %al
-	outb %al, $OCW1M
-
-	popl %eax
-	ret
-
-
 // timer
 // registri dell'interfaccia di conteggio
 .set CWR,     0x43
@@ -916,23 +880,10 @@ attiva_timer:
 	movb %ah, %al
 	outb %al, $CTR_MSB
 
+	pushl $0
 	pushl $2
-	call ioapic_unmask
-	addl $4, %esp
-
-        popl %eax
-	leave
-	ret
-
-	.global disattiva_timer
-disattiva_timer:
-	pushl %ebp
-	movl %esp, %ebp
-        pushl %eax
-	
-	pushl $2
-	call ioapic_mask
-	addl $4, %esp
+	call apic_set_MIRQ
+	addl $8, %esp
 
         popl %eax
 	leave
@@ -1134,7 +1085,7 @@ end_program:
 driver_td:
 	call salva_stato	// interruzioni disabilitate
 	call c_driver_td
-	call inviaEOI
+	call apic_send_EOI
 	call carica_stato
 	iret
 
@@ -1479,16 +1430,10 @@ a_activate_pe:
 
 a_wfi:		// routine int $tipo_wfi [7.3][9.1]
 	call salva_stato
-	call inviaEOI
+	call apic_send_EOI
 	call schedulatore
 	call carica_stato
 	iret
-inviaEOI:
-	pushl %ebx
-	movl pEOI, %ebx
-	movl $0, (%ebx)
-	popl %ebx
-	ret
 
 a_fill_gate:
 	salva_registri
@@ -1563,13 +1508,6 @@ idt_pointer:
 	.long idt			// base della IDT
 param_err:
 	.asciz "parametro errato %x"
-.global ioapic
-ioapic:
-	.long 0xFEC00000	//ioapic.IOREGSEL
-	.long 0xFEC00010	//ioapic.IOWIN
-pEOI:	.long 0xFEE000B0	//ioapic.EOI
-	.byte 0x10		//ioapic.RTO
-	.space 3, 0
 .bss
 .global		array_dess		// [4.11]
 array_dess:	.space BYTE_SEM
