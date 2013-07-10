@@ -25,9 +25,6 @@ extern "C" void wfi();	// [9.1]
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
-extern "C" natl pci_find(natl code, natw i);
-extern "C" natl pci_read(natw l, natw regn, natl size);
-extern "C" natl pci_write(natw l, natw regn, natl res, natl size);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI [9.2]                 //
