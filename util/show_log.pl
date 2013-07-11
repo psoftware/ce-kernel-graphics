@@ -30,7 +30,7 @@ BEGIN {
 
 	sub decodeAddr($) {
 		my $s = shift;
-		$s =~ s#(?<!$hex)($hex{8})(?!$hex)#&toLine($1)#meg;
+		$s =~ s#(?<!$hex)($hex{8}|$hex{16})(?!$hex)#&toLine($1)#meg;
 		return $s;
 	}
 }
