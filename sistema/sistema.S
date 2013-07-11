@@ -13,26 +13,26 @@
 // salvataggio dei registri in pila
 .macro salva_registri
 
-	pushl %eax
-	pushl %ecx
-	pushl %edx
-	pushl %ebx
-	pushl %esi
-	pushl %edi
-	pushl %ebp
+	pushq %rax
+	pushq %rcx
+	pushq %rdx
+	pushq %rbx
+	pushq %rsi
+	pushq %rdi
+	pushq %rbp
 
 .endm
 
 // caricamento dei registri dalla pila (duale rispetto a salva_registri)
 .macro carica_registri
 
-	popl %ebp
-	popl %edi
-	popl %esi
-	popl %ebx
-	popl %edx
-	popl %ecx
-	popl %eax
+	popq %rbp
+	popq %rdi
+	popq %rsi
+	popq %rbx
+	popq %rdx
+	popq %rcx
+	popq %rax
 
 .endm
 
@@ -40,12 +40,12 @@
 //  un valore in eax, che non viene salvato
 .macro salva_reg_rit
 
-	pushl %ecx
-	pushl %edx
-	pushl %ebx
-	pushl %esi
-	pushl %edi
-	pushl %ebp
+	pushq %rcx
+	pushq %rdx
+	pushq %rbx
+	pushq %rsi
+	pushq %rdi
+	pushq %rbp
 
 .endm
 
@@ -54,12 +54,12 @@
 //  salva_reg_rit)
 .macro carica_reg_rit
 
-	popl %ebp
-	popl %edi
-	popl %esi
-	popl %ebx
-	popl %edx
-	popl %ecx
+	popq %rbp
+	popq %rdi
+	popq %rsi
+	popq %rbx
+	popq %rdx
+	popq %rcx
 
 .endm
 
@@ -109,9 +109,9 @@ possibili_pf:
 	je 1f
 	testl $0x80000000, %eax
 	jnz 1f
-	pushl %eax
-	pushl $param_err
-	pushl $2
+	pushq %rax
+	pushq $param_err
+	pushq $2
 	call flog
 	addl $12, %esp
 	int $tipo_ab
@@ -143,9 +143,9 @@ possibili_pf:
 //       motivi puramente estetici
 .macro carica_gate num routine dpl
 
-	pushl $\dpl
-	pushl $\routine
-	pushl $\num
+	pushq $\dpl
+	pushq $\routine
+	pushq $\num
 	call init_gate
 	addl $12, %esp
 
@@ -173,13 +173,13 @@ possibili_pf:
 //       motivi puramente estetici
 .macro carica_descr num base limite pres dpl tipo gran
 
-	pushl $\gran
-	pushl $\tipo
-	pushl $\dpl
-	pushl $\pres
-	pushl $\limite
-	pushl $\base
-	pushl $\num
+	pushq $\gran
+	pushq $\tipo
+	pushq $\dpl
+	pushq $\pres
+	pushq $\limite
+	pushq $\base
+	pushq $\num
 	call  init_descrittore
 	addl $28, %esp
 
@@ -235,73 +235,73 @@ possibili_pf:
      .globl  _start, start
 _start:				// entry point
 start:
-     jmp     multiboot_entry	// scavalchiamo la struttra richiesta
-     				// dal bootstrap loader, che deve
-				// trovarsi verso l'inizio del file
-
-     .align  4
-     // le seguenti informazioni sono richieste dal bootstrap loader
-multiboot_header:
-     .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
-     .long   MULTIBOOT_HEADER_FLAGS   				// flag
-     .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
-
-multiboot_entry:
-     movl    %esp, save_esp
-     movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
-
-     pushf
-     pushal
-     pushl   %ds
-     pushl   %es
-     pushl   %fs
-     pushl   %gs
-     pushl   %ss
-
-     call    init_gdt
-     sgdt    save_gdt
-     lgdt    gdt_pointer		// carichiamo la nuova GDT
-
-     ljmp    $SEL_CODICE_SISTEMA, $qui	// ricarichiamo CS
-qui:
-     movw    $SEL_DATI_SISTEMA,   %cx   // e gli altri selettori
-     movw    %cx, %ss
-     movw    %cx, %ds
-     movw    %cx, %es
-     movw    $0,  %cx			// FS e GS non sono usati
-     movw    %cx, %fs
-     movw    %cx, %gs
-
-     movl    $0, %ebp			// azzeriamo il base pointer
-					// (utile per capire dove finisce la 
-					// lista dei frame di attivazione)
-
-     call    init_idt			// riempie i gate per le eccezioni
-     sidt    save_idt
-     lidt    idt_pointer		// carichiamo la nuova IDT
-	
-     pushl   $0				// resettiamo EFLAG
-     popf				// N.B.: interrupt disabilitati
-					// (perche', azzerando tutti i flag,
-					// abbiamo azzerato anche IF)
-     pushl   %ebx			// parametri passati dal loader
-     pushl   %eax			
-     call    cmain			// il resto dell'inizializzazione
-     					// e' scritto in C++
-     addl    $8, %esp     
-	
-     lidt   save_idt
-     lgdt   save_gdt
-     popl   %ss
-     popl   %gs
-     popl   %fs
-     popl   %es
-     popl   %ds
-     popal
-     popf
-
-     movl save_esp, %esp
-     ret
+#     jmp     multiboot_entry	// scavalchiamo la struttra richiesta
+#     				// dal bootstrap loader, che deve
+#				// trovarsi verso l'inizio del file
+#
+#     .align  4
+#     // le seguenti informazioni sono richieste dal bootstrap loader
+#multiboot_header:
+#     .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
+#     .long   MULTIBOOT_HEADER_FLAGS   				// flag
+#     .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
+#
+#multiboot_entry:
+#     movl    %esp, save_esp
+#     movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
+#
+#     pushf
+#     pushal
+#     pushl   %ds
+#     pushl   %es
+#     pushl   %fs
+#     pushl   %gs
+#     pushl   %ss
+#
+#     call    init_gdt
+#     sgdt    save_gdt
+#     lgdt    gdt_pointer		// carichiamo la nuova GDT
+#
+#     ljmp    $SEL_CODICE_SISTEMA, $qui	// ricarichiamo CS
+#qui:
+#     movw    $SEL_DATI_SISTEMA,   %cx   // e gli altri selettori
+#     movw    %cx, %ss
+#     movw    %cx, %ds
+#     movw    %cx, %es
+#     movw    $0,  %cx			// FS e GS non sono usati
+#     movw    %cx, %fs
+#     movw    %cx, %gs
+#
+#     movl    $0, %ebp			// azzeriamo il base pointer
+#					// (utile per capire dove finisce la 
+#					// lista dei frame di attivazione)
+#
+#     call    init_idt			// riempie i gate per le eccezioni
+#     sidt    save_idt
+#     lidt    idt_pointer		// carichiamo la nuova IDT
+#	
+#     pushl   $0				// resettiamo EFLAG
+#     popf				// N.B.: interrupt disabilitati
+#					// (perche', azzerando tutti i flag,
+#					// abbiamo azzerato anche IF)
+#     pushl   %ebx			// parametri passati dal loader
+#     pushl   %eax			
+     jmp    cmain			// il resto dell'inizializzazione
+#     					// e' scritto in C++
+#     addl    $8, %esp     
+#	
+#     lidt   save_idt
+#     lgdt   save_gdt
+#     popl   %ss
+#     popl   %gs
+#     popl   %fs
+#     popl   %es
+#     popl   %ds
+#     popal
+#     popf
+#
+#     movl save_esp, %esp
+#     ret
 
 
 //////////////////////////////////////////////////////////////////
@@ -320,8 +320,8 @@ off_backtrace:
 	.long 0
 	.global backtrace
 backtrace:
-	pushl %esi
-	pushl %eax
+	pushq %rsi
+	pushq %rax
 
 	movl 12(%esp), %eax
 	movl %eax, off_backtrace
@@ -336,9 +336,9 @@ backtrace:
 	cmpl $0x80000000, %esi
 	jae 2f
 
-	pushl 4(%esi)
-	pushl $stringa_backtrace
-	pushl $3	// LOG_ERR
+	pushq 4(%esi)
+	pushq $stringa_backtrace
+	pushq $3	// LOG_ERR
 	call flog
 	addl $12, %esp
 	
@@ -346,8 +346,8 @@ backtrace:
 	decl count_backtrace
 	jmp 3b
 2:
-	popl %eax
-	popl %esi
+	popq %rax
+	popq %rsi
 	ret
 
 	
@@ -374,8 +374,8 @@ backtrace:
 
 // salva lo stato del processo corrente nel suo descrittore [4.8]
 salva_stato:
-        pushl %ebx
-	pushl %eax
+        pushq %rbx
+	pushq %rax
 
 	movl esecuzione, %eax
 	movl $0, %ebx
@@ -384,12 +384,12 @@ salva_stato:
         leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
 	estrai_base			// ind. TSS -> %ebx
 
-        popl %eax
+        popq %rax
 
 	movl %eax, EAX(%ebx)		// salvataggio dei registri
 	movl %ecx, ECX(%ebx)
 	movl %edx, EDX(%ebx)
-	popl %eax			// vecchio valore di %ebx in %eax
+	popq %rax			// vecchio valore di %ebx in %eax
 	movl %eax, EBX(%ebx)
 	movl %esp, %eax
 	addl $4, %eax			// salviamo ind. rit. di salva_stato...
@@ -443,16 +443,16 @@ carica_stato:
 	movw ES(%ebx), %ax
 	movw %ax, %es
 
-	popl %ecx                       // toglie dalla pila l' ind. di ritorno
+	popq %rcx                       // toglie dalla pila l' ind. di ritorno
 
 	movl CR3(%ebx), %eax		// cambio di direttorio
-	movl %eax, %cr3			// NOTA: siamo sicuri della continuita'
+	movq %rax, %cr3			// NOTA: siamo sicuri della continuita'
 					// dell'indirizzamento, in quanto il sistema
 					// e' mappato agli stessi indirizzi in tutti
 					// gli spazi di memoria
 
 	movl ESP(%ebx), %esp            // nuovo punt. di pila...
-	pushl %ecx			// salvataggio ind. di ritorno nella nuova pila
+	pushq %rcx			// salvataggio ind. di ritorno nella nuova pila
 
 	movl ECX(%ebx), %ecx
 	movl EDI(%ebx), %edi
@@ -477,11 +477,11 @@ carica_stato:
 // Inizialmente, tutti i bit di presenza sono 0 e passeranno ad 1 quando 
 // verrano invocate le primitive activate_p e activate_pe
 init_gdt:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %edi
-	pushl %ecx
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rdi
+	pushq %rcx
+	pushq %rax
 
 	// azzeriamo la gdt
 	movl $gdt, %edi
@@ -498,9 +498,9 @@ init_gdt:
 	carica_descr	3	0	0xfffff	PRES	LIV_UTENTE	SEG_CODICE	G_PAGINA
 	carica_descr	4	0	0xfffff	PRES	LIV_UTENTE	SEG_DATI	G_PAGINA
 
-	popl %eax
-	popl %ecx
-	popl %edi
+	popq %rax
+	popq %rcx
+	popq %rdi
 	leave
 	ret
 
@@ -536,8 +536,8 @@ init_gdt:
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
 // alle possibili eccezioni. 
 init_idt:
-	pushl %ebp
-	movl %esp, %ebp
+	pushq %rbp
+	movq %rsp, %rbp
 	//		indice		routine			dpl
 	// gestori eccezioni:
 	carica_gate	0 		divide_error 	LIV_SISTEMA
@@ -612,12 +612,12 @@ init_idt:
 // parametri: (vedere la macro carica_gate)
 .global init_gate
 init_gate:
-	pushl %ebp
-	movl %esp, %ebp
+	pushq %rbp
+	movq %rsp, %rbp
 
-	pushl %ebx
-	pushl %ecx
-	pushl %eax
+	pushq %rbx
+	pushq %rcx
+	pushq %rax
 
 	movl $idt, %ebx
 	movl 8(%ebp), %ecx		// indice nella IDT
@@ -636,9 +636,9 @@ init_gate:
 	movl %eax, 4(%ebx, %ecx, 8)	// 16 bit piu' sign. dell'offset
 					// e byte di accesso
 
-	popl %eax
-	popl %ecx
-	popl %ebx
+	popq %rax
+	popq %rcx
+	popq %rbx
 	leave
 	ret
 
@@ -647,13 +647,13 @@ init_gate:
 // parametri: (vedere la macro carica_descr)
 .global init_descrittore
 init_descrittore:
-	pushl %ebp
-	movl %esp, %ebp
+	pushq %rbp
+	movq %rsp, %rbp
 
-	pushl %ebx
-	pushl %ecx
-	pushl %eax
-	pushl %edx
+	pushq %rbx
+	pushq %rcx
+	pushq %rax
+	pushq %rdx
 
 	movl $gdt, %ebx
 	movl 8(%ebp), %ecx		// indice GDT -> %ecx
@@ -673,10 +673,10 @@ init_descrittore:
 	orb  32(%ebp), %dl		// granularita'
 	movw %dx, 6(%ebx, %ecx, 8)	// -> 4a parola descr.
 	
-	popl %edx
-	popl %eax
-	popl %ecx
-	popl %ebx
+	popq %rdx
+	popq %rax
+	popq %rcx
+	popq %rbx
 
 	leave
 	ret
@@ -689,10 +689,10 @@ init_descrittore:
 
         .global alloca_tss
 alloca_tss:
-        pushl %ebp
-        movl %esp, %ebp
-        pushl %ebx
-        pushl %ecx
+        pushq %rbp
+        movq %rsp, %rbp
+        pushq %rbx
+        pushq %rcx
 
         movl $gdt, %ebx
         movl $0, %eax
@@ -708,21 +708,21 @@ alloca_tss:
         testb $PRES, 5(%ebx, %ecx, 8)
         jnz 1b
 
-        pushl $0                // gran. byte
-        pushl $SEG_TSS          // tipo
-        pushl $LIV_SISTEMA      // dpl
-        pushl $PRES             // bit presenza
-        pushl $(DIM_DESP - 1)   // limite
-        pushl 8(%ebp)           // base
-        pushl %ecx              // indice descr.
+        pushq $0                // gran. byte
+        pushq $SEG_TSS          // tipo
+        pushq $LIV_SISTEMA      // dpl
+        pushq $PRES             // bit presenza
+        pushq $(DIM_DESP - 1)   // limite
+        pushq 8(%ebp)           // base
+        pushq %rcx              // indice descr.
         call  init_descrittore
         addl $28, %esp
 
         movl %ecx, last_tss
         movl %ecx, %eax
 4:
-        popl %ecx
-        popl %ebx
+        popq %rcx
+        popq %rbx
         leave
         ret
 
@@ -732,11 +732,11 @@ alloca_tss:
 // parametri: indice in GDT del descrittore da rilasciare
 	.global rilascia_tss
 rilascia_tss:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %ebx
-	pushl %ecx
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rbx
+	pushq %rcx
+	pushq %rax
 
 	movl 8(%ebp), %ecx
 	movl $gdt, %ebx
@@ -744,9 +744,9 @@ rilascia_tss:
 	notb %al
 	andb %al, 5(%ebx, %ecx, 8)
 
-	popl %eax
-	popl %ecx
-	popl %ebx
+	popq %rax
+	popq %rcx
+	popq %rbx
 	leave
 	ret
 
@@ -755,10 +755,10 @@ rilascia_tss:
 // (0 se non allocato)
 	.global des_p
 des_p:	
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %ebx
-	pushl %ecx
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rbx
+	pushq %rcx
 
 	movl $0, %ebx
 	movl $0, %ecx
@@ -771,64 +771,64 @@ des_p:
 1:
 	movl %ebx, %eax
 
-	popl %ecx
-	popl %ebx
+	popq %rcx
+	popq %rbx
 	leave
 	ret
 
 	.global invalida_TLB  // [6.6]
 invalida_TLB:
-	pushl %eax
-	movl %cr3, %eax
-	movl %eax, %cr3
-	popl %eax
+	pushq %rax
+	movq %cr3, %rax
+	movq %rax, %cr3
+	popq %rax
 	ret
 
 // carica il registro cr3
 // parametri: indirizzo fisico del nuovo direttorio
 	.global loadCR3
 loadCR3:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
 
-	movl 8(%ebp), %eax
-	movl %eax, %cr3
+	movq 8(%rbp), %rax
+	movq %rax, %cr3
 	
-	popl %eax
+	popq %rax
 	leave
 	ret
 
 // restituisce in %eax il contenuto di cr3
 	.global readCR3
 readCR3:
-	movl %cr3, %eax
+	movq %cr3, %rax
 	ret
 
 // attiva la paginazione
 	.global attiva_paginazione
 attiva_paginazione:
-	pushl %eax
+	pushq %rax
 
-	movl $0, %eax
-	movl %eax, %cr4
-	movl %cr0, %eax
-	orl $0x80000000, %eax
-	movl %eax, %cr0
+	#movl $0, %eax
+	#movl %eax, %cr4
+	#movl %cr0, %eax
+	#orl $0x80000000, %eax
+	#movl %eax, %cr0
 
-	popl %eax
+	popq %rax
 	ret
 
 // disattiva la paginazione
 	.global disattiva_paginazione
 disattiva_paginazione:
-	pushl %eax
+	pushq %rax
 
-	movl %cr0, %eax
-	andl $0x7FFFFFFF, %eax
-	movl %eax, %cr0
+	#movl %cr0, %eax
+	#andl $0x7FFFFFFF, %eax
+	#movl %eax, %cr0
 
-	popl %eax
+	popq %rax
 	ret
 
 a_end_program:
@@ -869,9 +869,9 @@ trova_bit:
 // parametri: il valore da caricare nel registro CTR del timer
 	.global attiva_timer
 attiva_timer:
-	pushl %ebp
-	movl %esp, %ebp
-        pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+        pushq %rax
 	
 	movb $0x36, %al
 	outb %al, $CWR
@@ -880,12 +880,12 @@ attiva_timer:
 	movb %ah, %al
 	outb %al, $CTR_MSB
 
-	pushl $0
-	pushl $2
+	pushq $0
+	pushq $2
 	call apic_set_MIRQ
 	addl $8, %esp
 
-        popl %eax
+        popq %rax
 	leave
 	ret
 
@@ -912,68 +912,68 @@ salta_a_main:
 // mette in pila il numero corrispondente al suo tipo di eccezione
 // e salta al codice comune per tutti.
 divide_error:
-	pushl $0
-	pushl $0
+	pushq $0
+	pushq $0
 	jmp comm_exc
 
 debug:
-	pushl $0
-	pushl $1
+	pushq $0
+	pushq $1
 	jmp comm_exc
 
 nmi:
-	pushl $0
-	pushl $2
+	pushq $0
+	pushq $2
 	jmp comm_exc
 
 breakpoint:
-	pushl $0
-	pushl $3
+	pushq $0
+	pushq $3
 	jmp comm_exc
 
 overflow:
-	pushl $0
-	pushl $4
+	pushq $0
+	pushq $4
 	jmp comm_exc
 
 bound_re:
-	pushl $0
-	pushl $5
+	pushq $0
+	pushq $5
 	jmp comm_exc
 
 invalid_opcode:
-	pushl $0
-	pushl $6
+	pushq $0
+	pushq $6
 	jmp comm_exc
 
 dev_na:
-	pushl $0
-	pushl $7
+	pushq $0
+	pushq $7
 	jmp comm_exc
 
 double_fault:
-	pushl $8
+	pushq $8
 	jmp comm_exc
 
 coproc_so:
-	pushl $0
-	pushl $9
+	pushq $0
+	pushq $9
 	jmp comm_exc
 
 invalid_tss:
-	pushl $10
+	pushq $10
 	jmp comm_exc
 
 segm_fault:
-	pushl $11
+	pushq $11
 	jmp comm_exc
 
 stack_fault:
-	pushl $12
+	pushq $12
 	jmp comm_exc
 
 prot_fault:
-	pushl $13
+	pushq $13
 	jmp comm_exc
 
 // l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
@@ -990,8 +990,8 @@ int_tipo_pf:
 	salva_registri
 	movl 28(%esp), %eax // errore
 	movl 32(%esp), %ebx // eip
-	pushl %ebx
-	pushl %eax
+	pushq %rbx
+	pushq %rax
 	call c_pre_routine_pf
 	addl $8, %esp
 	carica_registri
@@ -999,26 +999,26 @@ int_tipo_pf:
 	iret
 .global readCR2
 readCR2:
-	movl %cr2, %eax
+	movq %cr2, %rax
 	ret
 
 fp_exc:
-	pushl $0
-	pushl $16
+	pushq $0
+	pushq $16
 	jmp comm_exc
 
 ac_exc:
-	pushl $17
+	pushq $17
 	jmp comm_exc
 
 mc_exc:
-	pushl $0
-	pushl $18
+	pushq $0
+	pushq $18
 	jmp comm_exc
 
 simd_exc:
-	pushl $0
-	pushl $19
+	pushq $0
+	pushq $19
 	jmp comm_exc
 
 
@@ -1349,8 +1349,8 @@ sp_msg:
 	.asciz "interrupt spurio"
 spurious:
 	salva_registri
-	pushl $sp_msg
-	pushl $0 // LOG_DEBUG
+	pushq $sp_msg
+	pushq $0 // LOG_DEBUG
 	call flog
 	addl $4, %esp
 	carica_registri

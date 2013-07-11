@@ -1,4 +1,5 @@
-START_SISTEMA=   0x00100000
+START_BOOT=	 0x00100000
+START_SISTEMA=   0x00400000
 START_IO=        0x40400000
 START_UTENTE=	 0x80000000
 SWAP_SIZE=	 20M
@@ -9,7 +10,7 @@ LIBCE ?= $(HOME)/CE
 NCC ?= g++
 NLD ?= ld
 
-NCFLAGS=\
+COMM_CFLAGS=\
 	-Wall 			\
 	-nostdlib		\
 	-fno-exceptions 	\
@@ -21,25 +22,43 @@ NCFLAGS=\
 	-fcall-saved-ebx 	\
 	-Iinclude		\
 	-I$(LIBCE)/include/ce	\
-	-m32			\
 	-g
 
-NLDFLAGS=\
-       -melf_i386 \
-       -nostdlib \
-       -L$(LIBCE)/lib/ce
+COMM_LDFLAGS=\
+       -nostdlib
 
-NLDLIBS=\
-	-lce
+COMM_LDLIBS=
+
+NCFLAGS=$(COMM_CFLAGS) -m64
+NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIBCE)/lib64/ce
+NLDLIBS=$(COMM_LDLIBS) -lce64
+
+BCC ?= $(NCC)
+BLD ?= $(NLD)
+BCFLAGS = $(COMM_CFLAGS) -m32
+BLDFLAGS = $(COMM_LDFLAGS) -melf_i386 -L$(LIBCE)/lib/ce
+BLDLIBS = $(COMM_LDLIBS) -lce
 
 ifdef AUTOCORR
 	NCFLAGS+=-DAUTOCORR
 endif
 
-all: build/sistema \
+all: \
+     build/boot \
+     build/sistema \
      build/parse   \
      build/creatimg \
      utente/prog
+
+build/boot: boot/boot_s.o boot/boot_cpp.o
+	$(BLD) $(BLDFLAGS) -o build/boot -Ttext $(START_BOOT) boot/boot_s.o boot/boot_cpp.o $(BLDLIBS)
+
+# compilazione di boot.s e boot.cpp
+boot/boot_s.o: boot/boot.S include/costanti.h
+	$(BCC) $(BCFLAGS) -c boot/boot.S -o boot/boot_s.o
+
+boot/boot_cpp.o: boot/boot.cpp include/mboot.h include/costanti.h
+	$(BCC) $(BCFLAGS) -c boot/boot.cpp -o boot/boot_cpp.o
      
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
@@ -84,7 +103,7 @@ build/parse: util/parse.c util/src.h
 util/coff.o: include/costanti.h util/interp.h util/coff.h util/dos.h util/coff.cpp
 	g++ -c -g -Iinclude -o util/coff.o util/coff.cpp
 
-util/elf.o:  include/costanti.h util/interp.h util/elf.h util/elf.cpp
+util/elf.o:  include/costanti.h util/interp.h include/elf.h util/elf.cpp
 	g++ -c -g -Iinclude -o util/elf.o util/elf.cpp
 
 util/interp.o: include/costanti.h util/interp.h util/interp.cpp
@@ -111,7 +130,7 @@ swap: build/creatimg build/io build/utente $(SWAP)
 	build/creatimg $(SWAP) build/io build/utente && ln -fs $(SWAP) .swap
 
 clean:
-	rm -f sistema/*.o io/*.o utente/*.o util/*.o
+	rm -f boot/*.o sistema/*.o io/*.o utente/*.o util/*.o
 
 reset: clean
 	rm -f build/* swap

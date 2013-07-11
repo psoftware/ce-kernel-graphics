@@ -25,6 +25,7 @@ typedef uint32_t   Elf32_Addr;
 #define EM_88K		5
 #define EM_860		7
 #define EM_MIPS		8
+#define EM_AMD64	62
 
 
 #define EI_MAG0		0
