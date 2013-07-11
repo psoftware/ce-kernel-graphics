@@ -81,36 +81,36 @@
 
 // Salvataggio dei registri in pila
 .macro salva_registri
-	pushl %eax
-	pushl %ecx
-	pushl %edx
-	pushl %ebx
-	pushl %esi
-	pushl %edi
-	pushl %ebp
+	pushq %rax
+	pushq %rcx
+	pushq %rdx
+	pushq %rbx
+	pushq %rsi
+	pushq %rdi
+	pushq %rbp
 .endm
 
 // Caricamento dei registri dalla pila (duale rispetto a salva_registri)
 .macro carica_registri
-	popl %ebp
-	popl %edi
-	popl %esi
-	popl %ebx
-	popl %edx
-	popl %ecx
-	popl %eax
+	popq %rbp
+	popq %rdi
+	popq %rsi
+	popq %rbx
+	popq %rdx
+	popq %rcx
+	popq %rax
 .endm
 
 // salvataggio dei registri in pila per chiamate di sistema che ritornano
 //  un valore in eax, che non viene salvato
 .macro salva_reg_rit
 
-	pushl %ecx
-	pushl %edx
-	pushl %ebx
-	pushl %esi
-	pushl %edi
-	pushl %ebp
+	pushq %rcx
+	pushq %rdx
+	pushq %rbx
+	pushq %rsi
+	pushq %rdi
+	pushq %rbp
 
 .endm
 
@@ -119,20 +119,20 @@
 //  salva_reg_rit)
 .macro carica_reg_rit
 
-	popl %ebp
-	popl %edi
-	popl %esi
-	popl %ebx
-	popl %edx
-	popl %ecx
+	popq %rbp
+	popq %rdi
+	popq %rsi
+	popq %rbx
+	popq %rdx
+	popq %rcx
 
 .endm
 
 // Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
-	pushl $LIV_UTENTE
-	pushl $\off
-	pushl $\gate
+	pushq $LIV_UTENTE
+	pushq $\off
+	pushq $\gate
 	call fill_gate
 	addl $12, %esp
 .endm
@@ -140,9 +140,9 @@
 .macro check_cavallo
 	testl $0x80000000, %eax
 	jnz 1f
-	pushl %eax
-	pushl $param_err
-	pushl $2
+	pushq %rax
+	pushq $param_err
+	pushq $2
 	call flog
 	addl $12, %esp
 	int $tipo_ab
@@ -377,8 +377,8 @@ writevid:
 // Inizio dell' ingresso da una interfaccia seriale
 	.global go_inputse
 go_inputse:
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
@@ -386,53 +386,53 @@ go_inputse:
 					//  generare interruzioni in ingresso
 	outb %al, %dx
 
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 
 // Fine dell' ingresso da un' interfaccia seriale
 	.global halt_inputse
 halt_inputse:
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfe, %al
 	outb %al, %dx			// disabilitazione della generazione
 					//  di interruzioni
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 
 // Inizio dell' uscita su interfaccia seriale
 	.global go_outputse
 go_outputse:
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	orb $0x02, %al
 	outb %al, %dx
 
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 
 // Fine dell' uscita su interfaccia seriale
 	.global halt_outputse
 halt_outputse:
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfd, %al
 	outb %al, %dx
 
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 
 // Indirizzi delle porte delle interfacce seriali
@@ -453,8 +453,8 @@ halt_outputse:
 // Inizializzazione delle interfacce seriali
 	.global com_setup
 com_setup:
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movb $0x80, %al
 	movw $LCR1, %dx
@@ -499,8 +499,8 @@ com_setup:
 
 	inb %dx, %al
 
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 
 	ret
 
@@ -515,9 +515,9 @@ com_setup:
 
 	.global go_inputkbd
 go_inputkbd:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
 
 	movw 12(%ebp), %dx
 	movb $KBD_WCB, %al
@@ -530,7 +530,7 @@ go_inputkbd:
 	testb $0x02, %al
 	jnz 1b
 
-	popl %eax
+	popq %rax
 	leave
 	ret
 	
@@ -539,9 +539,9 @@ go_inputkbd:
 
 	.global halt_inputkbd
 halt_inputkbd:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
 
 	movw 12(%ebp), %dx
 	movb $KBD_WCB, %al
@@ -554,7 +554,7 @@ halt_inputkbd:
 	testb $0x02, %al 
 	jnz 1b
 
-	popl %eax
+	popq %rax
 	leave
 	ret
 	ret
@@ -569,11 +569,11 @@ halt_inputkbd:
 // visualizza il cursore nella posizione passata come parametro
 	.global cursore
 cursore:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-	pushl %ebx
-	pushl %edx
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
+	pushq %rbx
+	pushq %rdx
 	movb  $80, %al
 	mulb  20(%ebp)
 	addb  16(%ebp), %al
@@ -591,17 +591,17 @@ cursore:
 	movw  12(%ebp), %dx
 	movb  %bl, %al
 	outb  %al, %dx
-	popl  %edx
-	popl  %ebx
-	popl  %eax
+	popq %rdx
+	popq %rbx
+	popq %rax
 	leave
 	ret
 
 // Inizializzazione dei gate per le primitive di IO
 	.global fill_io_gates
 fill_io_gates:
-	pushl %ebp
-	movl %esp, %ebp
+	pushq %rbp
+	movq %rsp, %rbp
 
 	fill_io_gate	io_tipo_rsen	a_readse_n
 	fill_io_gate	io_tipo_rseln	a_readse_ln
@@ -705,11 +705,11 @@ a_iniconsole:
 
 .global			hd_write_address
 hd_write_address:	
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-	pushl %edx
-	pushl %edi
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
+	pushq %rdx
+	pushq %rdi
 	
 	movl 12(%ebp),%eax
 	movl 8(%ebp),%edi	// accede al descrittore per comodita`
@@ -729,61 +729,61 @@ hd_write_address:
 	orb %ah,%al
 	outb %al,%dx		// caricato HND
 	
-	popl %edi
-	popl %edx
-	popl %eax
+	popq %rdi
+	popq %rdx
+	popq %rax
 	leave
 	ret
 
 .global			hd_write_command
 hd_write_command: 
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %edx
-	pushl %eax
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rdx
+	pushq %rax
 
 	movb 8(%ebp), %al
 	movw 12(%ebp), %dx
 	outb %al, %dx
 
-	popl %eax
-	popl %edx
+	popq %rax
+	popq %rdx
 	leave
 	ret
 
 
 .global		hd_go_inout
 hd_go_inout:		#...
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
 	movb $0x08,%al
 	outb %al, %dx			// abilitazione dell' interfaccia a
 					// generare interruzioni
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 .global			hd_halt_inout
 hd_halt_inout:	
-	pushl %eax
-	pushl %edx
+	pushq %rax
+	pushq %rdx
 
 	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
 	movb $0x0A,%al
 	outb %al, %dx			// disabilitazione della generazione
 					// di interruzioni
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	ret
 
 // Seleziona uno dei due drive di un canale ATA
 	.global hd_select_device
 hd_select_device:
-	pushl %ebp
-	movl %esp, %ebp
-	pushl %eax
-	pushl %edx
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %rax
+	pushq %rdx
 
 	movl 8(%ebp),%eax
 	cmpl $0,%eax
@@ -794,8 +794,8 @@ shd_ms:	movb $0xe0,%al
 ms_out:	movl 12(%ebp),%edx
 	outb %al,%dx
 
-	popl %edx
-	popl %eax
+	popq %rdx
+	popq %rax
 	leave
 	ret
 
