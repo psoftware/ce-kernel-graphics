@@ -1,7 +1,7 @@
 START_BOOT=	 0x00100000
-START_SISTEMA=   0x00400000
-START_IO=        0x40400000
-START_UTENTE=	 0x80000000
+START_SISTEMA=   0x00400100
+START_IO=        0x40400100
+START_UTENTE=	 0x80000100
 SWAP_SIZE=	 20M
 SWAP=		 swap.img
 
@@ -103,10 +103,10 @@ build/parse: util/parse.c util/src.h
 util/coff.o: include/costanti.h util/interp.h util/coff.h util/dos.h util/coff.cpp
 	g++ -c -g -Iinclude -o util/coff.o util/coff.cpp
 
-util/elf32.o:  include/costanti.h util/interp.h util/elf.h util/elf32.h util/elf32.cpp
+util/elf32.o:  include/costanti.h util/interp.h include/elf.h util/elf32.h util/elf32.cpp
 	g++ -c -g -Iinclude -o util/elf32.o util/elf32.cpp
 
-util/elf64.o:  include/costanti.h util/interp.h util/elf.h util/elf64.h util/elf64.cpp
+util/elf64.o:  include/costanti.h util/interp.h include/elf.h include/elf64.h util/elf64.cpp
 	g++ -c -g -Iinclude -o util/elf64.o util/elf64.cpp
 
 util/interp.o: include/costanti.h util/interp.h util/interp.cpp
