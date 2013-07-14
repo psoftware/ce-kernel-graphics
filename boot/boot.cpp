@@ -2,6 +2,7 @@
 //
 #include "mboot.h"		// *****
 #include "costanti.h"		// *****
+#include "elf64.h"
 
 /////////////////////////////////////////////////////////////////////////////////
 //                     PROCESSI [4]                                            //
@@ -422,7 +423,7 @@ extern "C" void loadCR3(addr dir);
 extern "C" addr readCR3();
 
 // attiva la paginazione [vedi sistema.S]
-extern "C" void attiva_paginazione();
+extern "C" void attiva_paginazione(natl entry);
 
 /////////////////////////////////////////////////////////////////////////////////
 //                    MEMORIA VIRTUALE [6][10]                                 //
@@ -763,12 +764,59 @@ struct des_swap {
 	natl *free;		// bitmap dei blocchi liberi
 	superblock_t sb;	// contenuto del superblocco 
 } swap_dev; 	// c'e' un unico oggetto swap
-bool swap_init();
-extern "C" void cmain ()
+
+
+
+natl carica_modulo(multiboot_module_t* mod) {
+	Elf64_Ehdr* elf_h = (Elf64_Ehdr*)mod->mod_start;
+
+	if (!(elf_h->e_ident[EI_MAG0] == ELFMAG0 &&
+	      elf_h->e_ident[EI_MAG1] == ELFMAG1 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
+	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
+	{
+		flog(LOG_ERR, "Formato del modulo '%s' non riconosciuto", mod->cmdline);
+		return 0;
+	}
+
+	if (!(elf_h->e_ident[EI_CLASS] == ELFCLASS64  &&
+	      elf_h->e_ident[EI_DATA]  == ELFDATA2LSB &&
+	      elf_h->e_type	       == ET_EXEC     &&
+	      elf_h->e_machine 	       == EM_AMD64))
+	{ 
+		flog(LOG_ERR, "Il modulo '%s' non contiene un esegubile per x86_64", 
+				mod->cmdline);
+		return 0;
+	}
+
+	Elf64_Phdr* elf_ph = (Elf64_Phdr*)(mod->mod_start + elf_h->e_phoff);
+	for (int i = 0; i < elf_h->e_phnum; i++) {
+		if (elf_ph->p_type != PT_LOAD)
+			continue;
+
+		memcpy((void*)elf_ph->p_vaddr,
+		       (void*)(mod->mod_start + elf_ph->p_offset),
+		       elf_ph->p_filesz);
+		flog(LOG_INFO, "Copiata sezione di %d byte all'indirizzo %p",
+				(long)elf_ph->p_filesz, (void*)elf_ph->p_vaddr);
+		memset((void*)(elf_ph->p_vaddr + elf_ph->p_filesz), 0,
+		       elf_ph->p_memsz - elf_ph->p_filesz);
+		flog(LOG_INFO, "azzerati ulteriori %d byte",
+				elf_ph->p_memsz - elf_ph->p_filesz);
+		elf_ph = (Elf64_Phdr*)((unsigned int)elf_ph + elf_h->e_phentsize);
+	}
+	flog(LOG_INFO, "entry point %p", elf_h->e_entry);
+	return (natl)elf_h->e_entry;
+	//free((void*)mod->mod_start, mod->mod_end - mod->mod_start);
+}
+
+extern "C" natl pml4;
+extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 {
-	des_pf* ppf;
-	addr direttorio;
-	natl dummy_proc;
+	natl entry;
+	//des_pf* ppf;
+	//addr direttorio;
+	//natl dummy_proc;
 	
 	// (* anche se il primo processo non e' completamente inizializzato,
 	//    gli diamo un identificatore, in modo che compaia nei log
@@ -779,27 +827,41 @@ extern "C" void cmain ()
 	
 	ini_COM1();
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
+	flog(LOG_INFO, "Boot loader Calcolatori Elettronici, v0.01");
 
 	// (* controlliamo di essere stati caricati
 	//    da un bootloader che rispetti lo standard multiboot
-	//if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-	//	flog(LOG_ERR, "Numero magico non valido: 0x%x", magic);
-	//	goto error;
-	//}
+	if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+		flog(LOG_ERR, "Numero magico non valido: 0x%x", magic);
+		goto error;
+	}
 	// *)
+
+	if (mbi->flags & MULTIBOOT_INFO_MODS) {
+
+		flog(LOG_INFO, "mods_count = %d, mods_addr = 0x%x",
+				mbi->mods_count, mbi->mods_addr);
+		multiboot_module_t* mod = (multiboot_module_t*) mbi->mods_addr;
+		for (unsigned int i = 0; i < mbi->mods_count; i++) {
+			flog(LOG_INFO, "mod[%d]:%s: start 0x%x end 0x%x",
+					i, mod->cmdline, mod->mod_start, mod->mod_end);
+			entry = carica_modulo(mod);
+		}
+	}
+	loadCR3(&pml4);
+	attiva_paginazione(entry);
 
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
-	heap_init((addr)4096, HEAP_SIZE);
-	flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
+	//heap_init((addr)4096, HEAP_SIZE);
+	//flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
 	// *)
 
-	// ( il resto della memoria e' per le pagine fisiche (parte M2, vedi [1.10])
-	init_dpf();
-	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
-	// )
+	//// ( il resto della memoria e' per le pagine fisiche (parte M2, vedi [1.10])
+	//init_dpf();
+	//flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
+	//// )
 
-	// ( creiamo il direttorio "D" (vedi [10.4])
+	//// ( creiamo il direttorio "D" (vedi [10.4])
 	//ppf = alloca_pagina_fisica_libera();
 	//if (ppf == 0) {
 	//	flog(LOG_ERR, "Impossibile allocare il direttorio principale");
@@ -827,19 +889,19 @@ extern "C" void cmain ()
 	//// ( attiviamo la paginazione ([10.4])
 	//attiva_paginazione();
 	//flog(LOG_INFO, "Paginazione attivata");
-	// )
+	//// )
 
-	// ( stampa informativa
-	flog(LOG_INFO, "Semafori: %d", MAX_SEM);
-	// )
+	//// ( stampa informativa
+	//flog(LOG_INFO, "Semafori: %d", MAX_SEM);
+	//// )
 
-	// (* inizializziamo il controllore delle interruzioni [vedi sistema.S]
+	//// (* inizializziamo il controllore delle interruzioni [vedi sistema.S]
 	//ioapic_init();
 	//flog(LOG_INFO, "Controllore delle interruzioni inizializzato");
-	// *)
-	//
-	// ( inizializzazione dello swap, che comprende la lettura
-	//   degli entry point di start_io e start_utente (vedi [10.4])
+	//// *)
+	////
+	//// ( inizializzazione dello swap, che comprende la lettura
+	////   degli entry point di start_io e start_utente (vedi [10.4])
 	//if (!swap_init())
 	//		goto error;
 	//flog(LOG_INFO, "sb: blocks=%d user=%x/%x io=%x/%x", 

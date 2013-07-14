@@ -17,9 +17,6 @@ COMM_CFLAGS=\
 	-fno-rtti 		\
 	-fno-stack-protector 	\
 	-fno-pic 		\
-	-fcall-saved-esi 	\
-	-fcall-saved-edi 	\
-	-fcall-saved-ebx 	\
 	-Iinclude		\
 	-I$(LIBCE)/include/ce	\
 	-g
@@ -29,7 +26,7 @@ COMM_LDFLAGS=\
 
 COMM_LDLIBS=
 
-NCFLAGS=$(COMM_CFLAGS) -m64 -mcmodel=large
+NCFLAGS=$(COMM_CFLAGS) -m64 #-mcmodel=large
 NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIBCE)/lib64/ce
 NLDLIBS=$(COMM_LDLIBS) -lce64
 
@@ -121,7 +118,7 @@ util/fswap.o: include/costanti.h util/swap.h util/fswap.cpp
 util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
 	g++ -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
 
-build/creatimg: build util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
+build/creatimg: util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 	g++ -g -o build/creatimg util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
