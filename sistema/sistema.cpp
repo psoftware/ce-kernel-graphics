@@ -722,7 +722,9 @@ const addr PCI_startmem = reinterpret_cast<addr>(0x00000000 - dim_pci_condiviso)
 const natl MAX_PRIORITY	= 0xfffffff;
 const natl MIN_PRIORITY	= 0x0000001;
 const natl DUMMY_PRIORITY = 0x0000000;
-const natl HEAP_SIZE = 640*4096U - 4096U;
+const natl HEAP_START = 1024 * 1024U;
+extern "C" natl start;
+const natl HEAP_SIZE = (natl)&start - HEAP_START;
 const natl DELAY = 59659;
 
 // restituisce true se le due stringe first e second sono uguali
