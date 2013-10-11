@@ -43,6 +43,7 @@ endif
 all: \
      build/boot \
      build/sistema \
+     build/sistema64 \
      build/parse   \
      build/creatimg \
      utente/prog
@@ -60,6 +61,9 @@ boot/boot_cpp.o: boot/boot.cpp include/mboot.h include/costanti.h
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
+build/sistema64: sistema/sist_s64.o sistema/sist_cpp64.o
+	$(NLD) $(NLDFLAGS) -o build/sistema64 -Ttext $(START_SISTEMA) sistema/sist_s64.o sistema/sist_cpp64.o $(NLDLIBS)
+
 build/io: io/io_s.o io/io_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(NLDLIBS)
 
@@ -67,6 +71,12 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o $(NLDLIBS)
 
 # compilazione di sistema.s e sistema.cpp
+sistema/sist_s64.o: sistema/sistema64.S include/costanti.h
+	$(NCC) $(NCFLAGS) -c sistema/sistema64.S -o sistema/sist_s64.o
+
+sistema/sist_cpp64.o: sistema/sistema64.cpp include/mboot.h include/costanti.h
+	$(NCC) $(NCFLAGS) -c sistema/sistema64.cpp -o sistema/sist_cpp64.o
+
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
@@ -84,7 +94,7 @@ io/io_cpp.o: io/io.cpp include/costanti.h
 utente/uten_s.o: utente/utente.S include/costanti.h
 	$(NCC) $(NCFLAGS) -c utente/utente.S -o utente/uten_s.o
 
-utente/utente.cpp: build/parse utente/prog/*.in utente/include/* utente/prog
+utente/utente.cpp: build/parse  utente/prog/*.in utente/include/* utente/prog
 	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp

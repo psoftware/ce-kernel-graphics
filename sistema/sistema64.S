@@ -1,0 +1,314 @@
+// sistema.s
+
+#define ASM 1
+#include "mboot.h"
+#include "costanti.h"
+
+////////////////////////////////////////////////////////////////
+// MACRO                                                      //
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////
+// AVVIO                                                                  //
+//////////////////////////////////////////////////////////////////////////
+
+#define STACK_SIZE                      0x4000
+
+.globl  _start, start
+_start:				// entry point
+start:
+	jmp    cmain			// il resto dell'inizializzazione
+					// e' scritto in C++
+					
+					
+					
+	
+	
+	
+// Carica un gate della IDT
+// num: indice (a partire da 0) in IDT del gate da caricare
+// routine: indirizzo della routine da associare al gate
+// dpl: dpl del gate (LIV_SISTEMA o LIV_UTENTE)
+// NOTA: la macro si limita a chiamare la routine init_gate
+//       con gli stessi parametri. Verra' utilizzata per
+//       motivi puramente estetici
+.macro carica_gate num routine dpl
+
+	pushq $\dpl
+	pushq $\routine
+	pushq $\num
+	call init_gate
+	addl $12, %esp
+
+.endm
+					
+/ carica la idt
+// le prime 20 entrate sono definite dall'Intel, e corrispondono
+// alle possibili eccezioni. 
+init_idt:
+	pushq %rbp
+	movq %rsp, %rbp
+	//		indice		routine			dpl
+	// gestori eccezioni:
+	carica_gate	0 		divide_error 	LIV_SISTEMA
+	carica_gate	1 		debug 		LIV_SISTEMA
+	carica_gate	2 		nmi 		LIV_SISTEMA
+	carica_gate	3 		breakpoint 	LIV_SISTEMA
+	carica_gate	4 		overflow 	LIV_SISTEMA
+	carica_gate	5 		bound_re 	LIV_SISTEMA
+	carica_gate	6 		invalid_opcode	LIV_SISTEMA
+	carica_gate	7 		dev_na 		LIV_SISTEMA
+	carica_gate	8 		double_fault 	LIV_SISTEMA
+	carica_gate	9 		coproc_so 	LIV_SISTEMA
+	carica_gate	10 		invalid_tss 	LIV_SISTEMA
+	carica_gate	11 		segm_fault 	LIV_SISTEMA
+	carica_gate	12 		stack_fault 	LIV_SISTEMA
+	carica_gate	13 		prot_fault 	LIV_SISTEMA
+	carica_gate	14 		int_tipo_pf 	LIV_SISTEMA
+	carica_gate	16 		fp_exc 		LIV_SISTEMA
+	carica_gate	17 		ac_exc 		LIV_SISTEMA
+	carica_gate	18 		mc_exc 		LIV_SISTEMA
+	carica_gate	19 		simd_exc 	LIV_SISTEMA
+
+
+	leave
+	ret
+
+// carica un gate nella IDT
+// parametri: (vedere la macro carica_gate)
+.global init_gate
+init_gate:
+	pushq %rbp
+	movq %rsp, %rbp
+
+	pushq %rbx
+	pushq %rcx
+	pushq %rax
+
+	movl $idt, %ebx
+	movl 8(%ebp), %ecx		// indice nella IDT
+	movl 12(%ebp), %eax		// offset della routine
+
+	movw %ax, (%ebx, %ecx, 8)  	// primi 16 bit dell'offset
+	movw $SEL_CODICE_SISTEMA, 2(%ebx, %ecx, 8)
+
+	movw $0, %ax
+	movb $0b10001110, %ah 	        // byte di accesso
+					// (presente, 32bit, tipo interrupt)
+	movb 16(%ebp), %al		// DPL
+	shlb $5, %al			// posizione del DPL nel byte di accesso
+	orb  %al, %ah			// byte di accesso con DPL in %ah
+	movb $0, %al			// la parte bassa deve essere 0
+	movl %eax, 4(%ebx, %ecx, 8)	// 16 bit piu' sign. dell'offset
+					// e byte di accesso
+
+	popq %rax
+	popq %rcx
+	popq %rbx
+	leave
+	ret
+
+
+// carica un descrittore di segmento in GDT
+// parametri: (vedere la macro carica_descr)
+.global init_descrittore
+init_descrittore:
+	pushq %rbp
+	movq %rsp, %rbp
+
+	pushq %rbx
+	pushq %rcx
+	pushq %rax
+	pushq %rdx
+
+	movl $gdt, %ebx
+	movl 8(%ebp), %ecx		// indice GDT -> %ecx
+	movl 16(%ebp), %edx		// limite -> %edx
+	movw %dx,  (%ebx, %ecx, 8)	// bit 15:00 limite -> 1a parola descr.
+	movw 12(%ebp), %ax		// bit 15:00 base -> %ax
+	movw %ax, 2(%ebx, %ecx, 8)	// -> 2a parola descr.
+	movb 14(%ebp), %al		// bit 23:16 base -> %al
+	orb  24(%ebp), %ah		// DPL
+	shlb $5, %ah			// posizione del DPL nel byte di accesso
+	orb  20(%ebp), %ah		// bit di presenza
+	orb  28(%ebp), %ah		// tipo
+	movw %ax, 4(%ebx, %ecx, 8)	// -> 3a parola descr.
+	movb 15(%ebp), %dh		// bit 31:24 base -> %dh
+	shrl $16, %edx			// bit 19:16 limite -> low nibble %dl
+	orb  $0b01000000, %dl		// operandi su 32 bit
+	orb  32(%ebp), %dl		// granularita'
+	movw %dx, 6(%ebx, %ecx, 8)	// -> 4a parola descr.
+	
+	popq %rdx
+	popq %rax
+	popq %rcx
+	popq %rbx
+
+	leave
+	ret
+	
+	
+	
+	
+	
+////////////////////////////////////////////////////////////////
+// gestori delle eccezioni				       //
+////////////////////////////////////////////////////////////////
+// alcune eccezioni lasciano in pila un ulteriore parola lunga
+// (il cui significato dipende dal tipo di eccezione)
+// Per uniforimita', facciamo eseguire una pushl $0 come
+// prima istruzione di tutte le eccezioni che non prevedono
+// questa ulteriore parola lunga.
+// Inoltre, il trattamento di tutte le eccezioni e' simile:
+// inviare un messaggio al log e interrompere il processo
+// che ha causato l'eccezione. Per questo motivo, ogni gestore
+// mette in pila il numero corrispondente al suo tipo di eccezione
+// e salta al codice comune per tutti.
+divide_error:
+	pushq $0
+	pushq $0
+	jmp comm_exc
+
+debug:
+	pushq $0
+	pushq $1
+	jmp comm_exc
+
+nmi:
+	pushq $0
+	pushq $2
+	jmp comm_exc
+
+breakpoint:
+	pushq $0
+	pushq $3
+	jmp comm_exc
+
+overflow:
+	pushq $0
+	pushq $4
+	jmp comm_exc
+
+bound_re:
+	pushq $0
+	pushq $5
+	jmp comm_exc
+
+invalid_opcode:
+	pushq $0
+	pushq $6
+	jmp comm_exc
+
+dev_na:
+	pushq $0
+	pushq $7
+	jmp comm_exc
+
+double_fault:
+	pushq $8
+	jmp comm_exc
+
+coproc_so:
+	pushq $0
+	pushq $9
+	jmp comm_exc
+
+invalid_tss:
+	pushq $10
+	jmp comm_exc
+
+segm_fault:
+	pushq $11
+	jmp comm_exc
+
+stack_fault:
+	pushq $12
+	jmp comm_exc
+
+prot_fault:
+	pushq $13
+	jmp comm_exc
+
+int_tipo_pf:
+	pushq $14
+	jmp comm_exc
+.global readCR2
+readCR2:
+	movq %cr2, %rax
+	ret
+
+fp_exc:
+	pushq $0
+	pushq $16
+	jmp comm_exc
+
+ac_exc:
+	pushq $17
+	jmp comm_exc
+
+mc_exc:
+	pushq $0
+	pushq $18
+	jmp comm_exc
+
+simd_exc:
+	pushq $0
+	pushq $19
+	jmp comm_exc
+
+
+comm_exc:
+	call gestore_eccezioni
+	addl $8, %esp
+	//jmp a_abort_p
+	hlt
+
+/
+
+////////////////////////////////////////////////////////////////
+// sezione dati: tabelle e stack			      //
+////////////////////////////////////////////////////////////////
+.data
+end_possibili_pf:
+		.long 0
+
+.global		fine_codice_sistema
+fine_codice_sistema:
+		.long etext
+	// puntatori alle tabelle GDT e IDT
+	// nel formato richiesto dalle istruzioni LGDT e LIDT
+gdt_pointer:
+	.word 0xffff		 	// limite della GDT
+	.long gdt			// base della GDT
+idt_pointer:
+	.word 0x7FF			// limite della IDT (256 entrate)
+	.long idt			// base della IDT
+param_err:
+	.asciz "parametro errato %x"
+.bss
+.balign 8
+gdt:
+	// spazio per 5 descrittori piu' i descrittori di TSS 
+	// i descrittori verrano costruiti a tempo di esecuzione
+	.space 8 * 8192, 0
+
+.balign 8
+idt:
+	// spazio per 256 gate
+	// verra' riempita a tempo di esecuzione
+	.space 8 * 256, 0
+
+	.global stack
+stack:
+	.space STACK_SIZE, 0
+terminate_stack:
+	.space STACK_SIZE, 0
+terminate_stack_end:
+save_gdt:
+	.word 0
+	.long 0
+save_idt:
+	.word 0
+	.long 0
+save_esp:
+	.long 0

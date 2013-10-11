@@ -173,7 +173,7 @@ possibili_pf:
 //       motivi puramente estetici
 .macro carica_descr num base limite pres dpl tipo gran
 
-	pushq $\gran
+/*	pushq $\gran
 	pushq $\tipo
 	pushq $\dpl
 	pushq $\pres
@@ -181,7 +181,17 @@ possibili_pf:
 	pushq $\base
 	pushq $\num
 	call  init_descrittore
-	addl $28, %esp
+	addq $56, %rsp*/
+	
+	movq $\num, %rdi
+	movq $\base, %rsi
+	movq $\limite, %rdx
+	movq $\pres, %rcx
+	movq $\dpl, %r8
+	movq $\tipo, %r9
+	pushq $\gran
+	call init_descrittore
+	
 
 .endm
 
