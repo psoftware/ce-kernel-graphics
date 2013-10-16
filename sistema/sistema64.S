@@ -1,5 +1,6 @@
 // sistema.s
 
+
 #define ASM 1
 #include "mboot.h"
 #include "costanti.h"
@@ -14,9 +15,14 @@
 
 #define STACK_SIZE                      0x4000
 
+
+
+
 .globl  _start, start
 _start:				// entry point
 start:
+	//sti
+	call init_idt
 	jmp    cmain			// il resto dell'inizializzazione
 					// e' scritto in C++
 					
@@ -34,20 +40,17 @@ start:
 //       motivi puramente estetici
 .macro carica_gate num routine dpl
 
-	pushq $\dpl
-	pushq $\routine
-	pushq $\num
+	movq $\num, %rdi
+	movq $\routine, %rsi
+	movq $\dpl, %rdx
 	call init_gate
-	addl $12, %esp
-
 .endm
 					
 / carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
 // alle possibili eccezioni. 
+.global init_idt
 init_idt:
-	pushq %rbp
-	movq %rsp, %rbp
 	//		indice		routine			dpl
 	// gestori eccezioni:
 	carica_gate	0 		divide_error 	LIV_SISTEMA
@@ -70,42 +73,32 @@ init_idt:
 	carica_gate	18 		mc_exc 		LIV_SISTEMA
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
-
-	leave
 	ret
 
 // carica un gate nella IDT
 // parametri: (vedere la macro carica_gate)
 .global init_gate
-init_gate:
-	pushq %rbp
-	movq %rsp, %rbp
+init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl 
+	movq $idt, %r11
+	movq %rsi, %rax		// offset della routine
 
-	pushq %rbx
-	pushq %rcx
-	pushq %rax
-
-	movl $idt, %ebx
-	movl 8(%ebp), %ecx		// indice nella IDT
-	movl 12(%ebp), %eax		// offset della routine
-
-	movw %ax, (%ebx, %ecx, 8)  	// primi 16 bit dell'offset
-	movw $SEL_CODICE_SISTEMA, 2(%ebx, %ecx, 8)
+	shrq $4, %rdi	//indice moltiplicato la grandezza del gate (16)
+	movw %ax, (%r11, %rdi)  	// primi 16 bit dell'offset
+	movw $SEL_CODICE_SISTEMA, 2(%r11, %rdi)
 
 	movw $0, %ax
 	movb $0b10001110, %ah 	        // byte di accesso
 					// (presente, 32bit, tipo interrupt)
-	movb 16(%ebp), %al		// DPL
+	movb %dl, %al		// DPL
 	shlb $5, %al			// posizione del DPL nel byte di accesso
 	orb  %al, %ah			// byte di accesso con DPL in %ah
 	movb $0, %al			// la parte bassa deve essere 0
-	movl %eax, 4(%ebx, %ecx, 8)	// 16 bit piu' sign. dell'offset
+	movl %eax, 4(%r11, %rdi)	// 16 bit piu' sign. dell'offset
 					// e byte di accesso
+	shrq $32, %rax			//estensione a 64 bit dell'offset
+	movl %eax, 8(%r11,%rdi)
+	movl $0, 12(%r11,%rdi) 	//riservato
 
-	popq %rax
-	popq %rcx
-	popq %rbx
-	leave
 	ret
 
 
@@ -258,8 +251,15 @@ simd_exc:
 
 
 comm_exc:
+	popq %rdi
+	popq %rsi
+	popq %rdx
+	popq %rcx
+	popq %r8
+	pushq %r8
+	pushq %rcx
+	pushq %rdx
 	call gestore_eccezioni
-	addl $8, %esp
 	//jmp a_abort_p
 	hlt
 

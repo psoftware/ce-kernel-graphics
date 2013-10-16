@@ -10,7 +10,7 @@ LIBCE ?= $(HOME)/CE
 NCC ?= g++
 NLD ?= ld
 
-COMM_CFLAGS=\
+COMM_CFLAGS=$(CFLAGS) \
 	-Wall 			\
 	-nostdlib		\
 	-fno-exceptions 	\

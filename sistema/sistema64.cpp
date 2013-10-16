@@ -5,6 +5,8 @@
 
 #include "libce.h"
 
+extern "C" void init_idt();
+
 const ioaddr iRBR = 0x03F8;		// DLAB deve essere 0
 const ioaddr iTHR = 0x03F8;		// DLAB deve essere 0
 const ioaddr iLSR = 0x03FD;
@@ -71,7 +73,9 @@ extern "C" void cmain ()
 	
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
 	flog(LOG_INFO,"%d",2);
-	
+	int div0 = 0;
+	div0 = 4/div0;
+	flog(LOG_INFO, "Uscita!");
 	return;
 
 }
@@ -86,12 +90,12 @@ extern "C" addr fine_codice_sistema;
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
-				  addr eip, unsigned cs, short eflag)
+				  addr rip, unsigned cs, unsigned rflag)
 {
-	if (eip < fine_codice_sistema) {
-		flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, eip, errore);
+	if (rip < fine_codice_sistema) {
+		flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, rip, errore);
 		//panic("eccezione dal modulo sistema");
 	}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
-	flog(LOG_WARN, "eflag = %x, eip = %x, cs = %x", eflag, eip, cs);
+	flog(LOG_WARN, "rflag = %x, eip = %x, cs = %x", rflag, rip, cs);
 }

@@ -1,5 +1,7 @@
 #!/usr/bin/perl -n
 
+my $ADDR2LINE="/mnt/sdcard/toolchain/bin/x86_64-elf-addr2line";
+
 BEGIN {
 	my $hex = qr/[a-fA-F0-9]/;
 
@@ -10,7 +12,7 @@ BEGIN {
 		elsif ($h ge '40000000') { $exe = 'build/io';      }
 		else                     { $exe = "build/sistema"; }
 
-		my $out = `addr2line -Cfe $exe $h`;
+		my $out = `$ADDR2LINE -Cfe $exe $h`;
 		if ($?) {
 			return $h;
 		}
