@@ -72,9 +72,6 @@ extern "C" void cmain ()
 {
 	
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
-	flog(LOG_INFO,"%d",2);
-	int div0 = 0;
-	div0 = 4/div0;
 	flog(LOG_INFO, "Uscita!");
 	return;
 
@@ -92,10 +89,10 @@ extern "C" addr fine_codice_sistema;
 extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 				  addr rip, unsigned cs, unsigned rflag)
 {
-	if (rip < fine_codice_sistema) {
-		flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, rip, errore);
+	//if (rip < fine_codice_sistema) {
+	//	flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, rip, errore);
 		//panic("eccezione dal modulo sistema");
-	}
+	//}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "rflag = %x, eip = %x, cs = %x", rflag, rip, cs);
 }

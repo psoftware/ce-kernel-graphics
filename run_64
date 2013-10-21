@@ -32,6 +32,7 @@ fi
 	-drive file=.swap,cache=unsafe  \
 	$hdc                  		\
 	$output 	      		\
+	$CUSTOM				\
 	-no-reboot 	      		|
 util/show_log.pl
 	

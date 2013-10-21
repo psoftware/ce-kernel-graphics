@@ -21,10 +21,14 @@
 .globl  _start, start
 _start:				// entry point
 start:
-	//sti
 	call init_idt
-	jmp    cmain			// il resto dell'inizializzazione
-					// e' scritto in C++
+	//movb $0xfd, %al
+	//outb %al, $0x21
+	//movb $0xff, %al
+	//outb %al, $0xa1
+	//sti
+	call    cmain			// il resto dell'inizializzazione
+	hlt				// e' scritto in C++
 					
 					
 					
@@ -73,6 +77,7 @@ init_idt:
 	carica_gate	18 		mc_exc 		LIV_SISTEMA
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
+	lidt idt_pointer
 	ret
 
 // carica un gate nella IDT
@@ -82,7 +87,7 @@ init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl
 	movq $idt, %r11
 	movq %rsi, %rax		// offset della routine
 
-	shrq $4, %rdi	//indice moltiplicato la grandezza del gate (16)
+	shlq $4, %rdi	//indice moltiplicato la grandezza del gate (16)
 	movw %ax, (%r11, %rdi)  	// primi 16 bit dell'offset
 	movw $SEL_CODICE_SISTEMA, 2(%r11, %rdi)
 
@@ -281,8 +286,8 @@ gdt_pointer:
 	.word 0xffff		 	// limite della GDT
 	.long gdt			// base della GDT
 idt_pointer:
-	.word 0x7FF			// limite della IDT (256 entrate)
-	.long idt			// base della IDT
+	.word 0xFFF			// limite della IDT (256 entrate)
+	.quad idt			// base della IDT
 param_err:
 	.asciz "parametro errato %x"
 .bss
@@ -292,11 +297,11 @@ gdt:
 	// i descrittori verrano costruiti a tempo di esecuzione
 	.space 8 * 8192, 0
 
-.balign 8
+.balign 16
 idt:
 	// spazio per 256 gate
 	// verra' riempita a tempo di esecuzione
-	.space 8 * 256, 0
+	.space 16 * 256, 0
 
 	.global stack
 stack:
