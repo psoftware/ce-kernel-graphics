@@ -8,6 +8,45 @@
 ////////////////////////////////////////////////////////////////
 // MACRO                                                      //
 ////////////////////////////////////////////////////////////////
+.macro salva_registri
+	
+	pushq %rax
+	pushq %rcx
+	pushq %rdx
+	pushq %rbx
+	pushq %rsi
+	pushq %rdi
+	pushq %rbp
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+
+.endm
+
+.macro carica_registri
+	
+	popq %rax
+	popq %rcx
+	popq %rdx
+	popq %rbx
+	popq %rsi
+	popq %rdi
+	popq %rbp
+	popq %r8
+	popq %r9
+	popq %r10
+	popq %r11
+	popq %r12
+	popq %r13
+	popq %r14
+	popq %r15
+
+.endm
 
 //////////////////////////////////////////////////////////////////////////
 // AVVIO                                                                  //
@@ -227,13 +266,28 @@ prot_fault:
 	pushq $13
 	jmp comm_exc
 
+// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
+// per realizzare la memoria virtuale. Per far cio', invochiamo la routine 
+// c_page_fault passandole tre parametri:
+// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale 
+// coppia ci permette di individuare l'istruzione che aveva causato il fault e 
+// di sapere se il fault si e' verificato mentre il processore era in stato 
+// utente o in stato sistema (se era in stato sistema, si tratta probabilmente 
+// di un bug nel nucleo, nel qual caso vogliamo fermare tutto)
+// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale 
+// non tradotto che ha generato il fault
 int_tipo_pf:
-	pushq $14
-	jmp comm_exc
+	salva_registri
+	movq 120(%rsp), %rsi // errore
+	movq 128(%rsp), %rdi // eip
+	call c_pre_routine_pf
+	carica_registri
+	addq $8, %rsp
+	iretq
 .global readCR2
 readCR2:
 	movq %cr2, %rax
-	ret
+	retq
 
 fp_exc:
 	pushq $0
@@ -256,11 +310,11 @@ simd_exc:
 
 
 comm_exc:
-	popq %rdi
-	popq %rsi
-	popq %rdx
-	popq %rcx
-	popq %r8
+	popq %rdi //tipo
+	popq %rsi //errore
+	popq %rdx //rip
+	popq %rcx //cs
+	popq %r8  //rflag
 	pushq %r8
 	pushq %rcx
 	pushq %rdx
@@ -269,6 +323,9 @@ comm_exc:
 	hlt
 
 /
+.global panic
+panic:
+	hlt
 
 ////////////////////////////////////////////////////////////////
 // sezione dati: tabelle e stack			      //
