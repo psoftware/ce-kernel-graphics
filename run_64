@@ -28,8 +28,7 @@ fi
 
 "$QEMU" $DEBUG 		    		\
 	-kernel build/boot 		\
-	-initrd build/sistema64		\
-	-drive file=.swap,cache=unsafe  \
+	-initrd build/sistema64	\
 	$hdc                  		\
 	$output 	      		\
 	$CUSTOM				\

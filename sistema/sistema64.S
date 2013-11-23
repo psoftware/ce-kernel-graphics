@@ -280,7 +280,7 @@ int_tipo_pf:
 	salva_registri
 	movq 120(%rsp), %rsi // errore
 	movq 128(%rsp), %rdi // eip
-	call c_pre_routine_pf
+	//TODO call c_pre_routine_pf
 	carica_registri
 	addq $8, %rsp
 	iretq

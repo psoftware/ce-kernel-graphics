@@ -3,3 +3,5 @@ swap.img
 */*.o
 build/*
 utente/utente.cpp
+*.swp
+

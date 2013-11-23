@@ -42,7 +42,6 @@ endif
 
 all: \
      build/boot \
-     build/sistema \
      build/sistema64 \
      build/parse   \
      build/creatimg \

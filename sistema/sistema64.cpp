@@ -341,33 +341,33 @@ natq& get_PTE(addr PT, addr ind_virt) // [6.3]
 // mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli 
 // indirizzi fisici
 // che partono da phys_start, in sequenza.
-bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl flags)
-{
-	natb *indv = static_cast<natb*>(virt_start),
-	     *indf = static_cast<natb*>(phys_start);
-	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA) {
-		natl dt = get_destab(direttorio, indv);
-		addr tabella;
-		if (! extr_P(dt)) {
-			des_pf* ppf = alloca_pagina_fisica_libera();
-			if (ppf == 0) {
-				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
-				return false;
-			}
-			ppf->contenuto = TABELLA_CONDIVISA;
-			ppf->pt.residente = true;
-			tabella = indirizzo_pf(ppf);
-
-			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
-			set_destab(direttorio, indv, dt);
-		} else {
-			tabella = extr_IND_FISICO(dt);
-		}
-		natl dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
-		set_despag(tabella, indv, dp);
-	}
-	return true;
-}
+//bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl flags)
+//{
+//	natb *indv = static_cast<natb*>(virt_start),
+//	     *indf = static_cast<natb*>(phys_start);
+//	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA) {
+//		natl dt = get_destab(direttorio, indv);
+//		addr tabella;
+//		if (! extr_P(dt)) {
+//			des_pf* ppf = alloca_pagina_fisica_libera();
+//			if (ppf == 0) {
+//				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
+//				return false;
+//			}
+//			ppf->contenuto = TABELLA_CONDIVISA;
+//			ppf->pt.residente = true;
+//			tabella = indirizzo_pf(ppf);
+//
+//			dt = ((natl)tabella & ADDR_MASK) | flags | BIT_P;
+//			set_destab(direttorio, indv, dt);
+//		} else {
+//			tabella = extr_IND_FISICO(dt);
+//		}
+//		natl dp = ((natl)indf & ADDR_MASK) | flags | BIT_P;
+//		set_despag(tabella, indv, dp);
+//	}
+//	return true;
+//}
 
 
 
