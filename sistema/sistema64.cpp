@@ -327,7 +327,7 @@ void set_entry(addr tab, natl index, natq entry)
 //mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli 
 //indirizzi fisici
 //che partono da phys_start, in sequenza.
-bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl flags)
+bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq flags)
 {
 	natb *indv = static_cast<natb*>(virt_start),
 	     *indf = static_cast<natb*>(phys_start);
@@ -407,6 +407,31 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 }
 
 
+// mappa tutti gli indirizzi a partire da start (incluso) fino ad end (escluso)
+// in modo che l'indirizzo virtuale coincida con l'indirizzo fisico.
+// start e end devono essere allineati alla pagina.
+bool identity_map(addr pml4, addr start, addr end, natq flags)
+{
+	natl npag = (static_cast<natb*>(end) - static_cast<natb*>(start)) / DIM_PAGINA;
+	return sequential_map(pml4, start, start, npag, flags);
+}
+// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
+// memoria virtuale gestita dal direttorio pdir
+// (la funzione viene usata in fase di inizializzazione)
+bool crea_finestra_FM(addr pml4)
+{
+	return identity_map(pml4, (addr)DIM_PAGINA, (addr)MEM_TOT, BIT_RW);
+}
+
+
+// carica un nuovo valore in cr3 [vedi sistema.S]
+extern "C" void loadCR3(addr dir);
+
+// restituisce il valore corrente di cr3 [vedi sistema.S]
+extern "C" addr readCR3();
+
+//invalida il TLB
+extern "C" void invalida_TLB();
 
 //// ( [P_IOAPIC]
 //#include "apic.h"
@@ -455,7 +480,6 @@ extern "C" void cmain ()
 	
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
 
-	
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
 	heap_init((addr)4096, HEAP_SIZE);
 	flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
@@ -465,6 +489,20 @@ extern "C" void cmain ()
 	init_dpf();
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
+
+	des_pf* ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		flog(LOG_ERR, "Impossibile allocare testpml4");
+		panic("?");
+	}
+	ppf->contenuto = PML4;
+	ppf->pt.residente = true;
+	addr testpml4 = indirizzo_pf(ppf);
+	crea_finestra_FM(testpml4);
+	loadCR3(testpml4);
+	invalida_TLB();
+
+	flog(LOG_INFO, "Caricata finestra FM!");
 
 	flog(LOG_INFO, "Uscita!");
 	return;

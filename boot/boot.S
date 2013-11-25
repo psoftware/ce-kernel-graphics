@@ -145,8 +145,6 @@ jmp_off_rel:
 // sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
-	// puntatori alle tabelle GDT e IDT
-	// nel formato richiesto dalle istruzioni LGDT e LIDT
 .global pml4
 .balign 4096
 pml4:

@@ -322,6 +322,26 @@ comm_exc:
 	//jmp a_abort_p
 	hlt
 
+
+
+	.global invalida_TLB  // [6.6]
+invalida_TLB:
+	movq %cr3, %rax
+	movq %rax, %cr3
+	retq
+
+// carica il registro cr3
+// parametri: indirizzo fisico del nuovo direttorio
+	.global loadCR3
+loadCR3:
+	movq %rdi, %cr3
+	retq
+
+// restituisce in %eax il contenuto di cr3
+	.global readCR3
+readCR3:
+	movq %cr3, %rax
+	retq
 /
 .global panic
 panic:
