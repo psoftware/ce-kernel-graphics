@@ -310,30 +310,16 @@ int i_PT(addr ind_virt)
 	return ((natq)ind_virt & 0x00000000001ff000) >> 12;
 }
 
-natq& singolo_des(addr iff, natl index) // [6.3]
+natq& get_entry(addr tab, natl index) // [6.3]
 {
-	natq *pd = static_cast<natq*>(iff);
+	natq *pd = static_cast<natq*>(tab);
 	return pd[index];
 }
 
-natq& get_PML4E(addr PML4, addr ind_virt) // [6.3]
+void set_entry(addr tab, natl index, natq entry)
 {
-	return singolo_des(PML4, i_PML4(ind_virt));
-}
-
-natq& get_PDPE(addr PDP, addr ind_virt) // [6.3]
-{
-	return singolo_des(PDP, i_PDP(ind_virt));
-}
-
-natq& get_PDE(addr PD, addr ind_virt) // [6.3]
-{
-	return singolo_des(PD, i_PD(ind_virt));
-}
-
-natq& get_PTE(addr PT, addr ind_virt) // [6.3]
-{
-	return singolo_des(PT, i_PT(ind_virt));
+	natq *pd = static_cast<natq*>(tab);
+	pd[index] = entry;
 }
 
 // ( [P_MEM_VIRT]
@@ -348,7 +334,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA) 
 	{
 	//----PML4-------------------------------------------------
-		natq pml4e = get_PML4E(pml4, indv);
+		natq pml4e = get_entry(pml4, i_PML4(indv));
 		addr pdp;
 		if (! extr_P(pml4e)) 
 		{
@@ -362,7 +348,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 			pdp = indirizzo_pf(ppf);
 
 			pml4e = ((natq)pdp & ADDR_MASK) | flags | BIT_P;
-			//TODO set_PML4E(pml4, indv, pml4e);
+			set_entry(pml4, i_PML4(indv), pml4e);
 		} 
 		else 
 		{
@@ -370,7 +356,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 		}
 	//-----------------------------------------------------
 	//----PDP-------------------------------------------------
-		natq pdpe = get_PDPE(pdp,indv);
+		natq pdpe = get_entry(pdp,i_PDP(indv));
 		addr pd;
 		if (! extr_P(pdpe)) 
 		{
@@ -384,7 +370,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 			pd = indirizzo_pf(ppf);
 
 			pdpe = ((natq)pd & ADDR_MASK) | flags | BIT_P;
-			//TODO set_PDPE(pdp, indv, pdpe);
+			set_entry(pdp, i_PDP(indv), pdpe);
 		} 
 		else 
 		{
@@ -392,7 +378,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 		}
 	//-----------------------------------------------------
 	//----PD-------------------------------------------------
-		natq pde = get_PDE(pd,indv);
+		natq pde = get_entry(pd,i_PD(indv));
 		addr pt;
 		if (! extr_P(pde)) 
 		{
@@ -406,7 +392,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 			pt = indirizzo_pf(ppf);
 
 			pde = ((natq)pt & ADDR_MASK) | flags | BIT_P;
-			//TODO set_PDE(pd, indv, pde);
+			set_entry(pd, i_PD(indv), pde);
 		} 
 		else 
 		{
@@ -415,7 +401,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natl 
 	//-----------------------------------------------------
 	//----PT-------------------------------------------------
 		natq pte = ((natq)indf & ADDR_MASK) | flags | BIT_P;
-		//TODO set_PTE(pt, indv, pte);
+		set_entry(pt, i_PT(indv), pte);
 	}
 	return true;
 }
