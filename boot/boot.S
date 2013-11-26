@@ -161,6 +161,7 @@ pd:
 	.long 0x00800083, 0
 	.long 0x00a00083, 0
 	.long 0x00c00083, 0
+	.long 0x00e00083, 0
 .balign 4096
 gdt64:
 	.quad 0

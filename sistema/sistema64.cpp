@@ -153,7 +153,7 @@ addr indirizzo_pf(des_pf* ppf)
 bool init_dpf()
 {
 
-	prima_pf_utile = (addr)DIM_M1;
+	prima_pf_utile = (addr)(DIM_M1);
 
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
@@ -313,7 +313,7 @@ int i_PT(addr ind_virt)
 natq& get_entry(addr tab, natl index) // [6.3]
 {
 	natq *pd = static_cast<natq*>(tab);
-	return pd[index];
+	return  pd[index];
 }
 
 void set_entry(addr tab, natl index, natq entry)
@@ -498,6 +498,7 @@ extern "C" void cmain ()
 	ppf->contenuto = PML4;
 	ppf->pt.residente = true;
 	addr testpml4 = indirizzo_pf(ppf);
+	flog(LOG_INFO, "testpml4 = %p",testpml4);
 	crea_finestra_FM(testpml4);
 	loadCR3(testpml4);
 	invalida_TLB();

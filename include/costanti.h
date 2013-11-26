@@ -13,7 +13,7 @@
 #define KiB			1024U
 #define MiB			(1024*KiB)
 #define MEM_TOT			(16*MiB)
-#define DIM_M1			(2*MiB)
+#define DIM_M1			(3*MiB) //TODO aumentato perche' ora a 2MiB c'e il sistema, decidere se 3 Mib e' appropriato
 #define DIM_M2			(MEM_TOT - DIM_M1)
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096U
