@@ -346,6 +346,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
 			pdp = indirizzo_pf(ppf);
+			memset(pdp, 0, DIM_PAGINA);
 
 			pml4e = ((natq)pdp & ADDR_MASK) | flags | BIT_P;
 			set_entry(pml4, i_PML4(indv), pml4e);
@@ -368,6 +369,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
 			pd = indirizzo_pf(ppf);
+			memset(pd, 0, DIM_PAGINA);
 
 			pdpe = ((natq)pd & ADDR_MASK) | flags | BIT_P;
 			set_entry(pdp, i_PDP(indv), pdpe);
@@ -390,6 +392,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
 			pt = indirizzo_pf(ppf);
+			memset(pt, 0, DIM_PAGINA);
 
 			pde = ((natq)pt & ADDR_MASK) | flags | BIT_P;
 			set_entry(pd, i_PD(indv), pde);
@@ -498,12 +501,19 @@ extern "C" void cmain ()
 	ppf->contenuto = PML4;
 	ppf->pt.residente = true;
 	addr testpml4 = indirizzo_pf(ppf);
+	memset(testpml4, 0, DIM_PAGINA);
 	flog(LOG_INFO, "testpml4 = %p",testpml4);
 	crea_finestra_FM(testpml4);
 	loadCR3(testpml4);
 	invalida_TLB();
 
 	flog(LOG_INFO, "Caricata finestra FM!");
+
+	int* newmap = reinterpret_cast<int*>(0xFFFFF00000000000);
+	int* oldmap = reinterpret_cast<int*>(6*MiB);
+	sequential_map(testpml4,oldmap,newmap,1,BIT_RW);
+	*oldmap = 12;
+	flog(LOG_INFO, "%d <---> %d", *oldmap,*newmap);
 
 	flog(LOG_INFO, "Uscita!");
 	return;
