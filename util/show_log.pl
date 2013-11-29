@@ -1,6 +1,6 @@
 #!/usr/bin/perl -n
 
-my $ADDR2LINE="/mnt/sdcard/toolchain/bin/x86_64-elf-addr2line";
+my $ADDR2LINE="addr2line";
 
 BEGIN {
 	my $hex = qr/[a-fA-F0-9]/;

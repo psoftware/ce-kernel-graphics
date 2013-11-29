@@ -97,7 +97,7 @@ extern "C" void gestore_eccezioni(int tipo, unsigned errore,
 		//panic("eccezione dal modulo sistema");
 	//}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
-	flog(LOG_WARN, "rflag = %x, eip = %x, cs = %x", rflag, rip, cs);
+	flog(LOG_WARN, "rflag = %x, rip = %x, cs = %x", rflag, rip, cs);
 }
 
 
@@ -436,47 +436,89 @@ extern "C" addr readCR3();
 //invalida il TLB
 extern "C" void invalida_TLB();
 
+
+// )
+/////////////////////////////////////////////////////////////////////////////////
+//                    SUPPORTO PCI                                             //
+/////////////////////////////////////////////////////////////////////////////////
+natl dim_pci_condiviso = 20*MiB;
+const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
+natb* const inizio_pci_condiviso = reinterpret_cast<natb*>(0x00000000fec00000);
+
+// ( [P_PCI]
+
+// mappa in memoria virtuale la porzione di spazio fisico dedicata all'I/O (PCI e altro)
+bool crea_finestra_PCI(addr pml4)
+{
+	return sequential_map(pml4,
+			PCI_startmem,
+			inizio_pci_condiviso,
+			dim_pci_condiviso/DIM_PAGINA,
+			BIT_RW | BIT_PCD);
+}
+
 //// ( [P_IOAPIC]
-//#include "apic.h"
-//
-//bool ioapic_init()
-//{
-//        if (!apic_init())
-//                return false;
-//        natl offset = inizio_pci_condiviso - (natb*)PCI_startmem;
-//        IOREGSEL = (natl*)((natb*)IOREGSEL + offset);
-//        IOWIN = (natl*)((natb*)IOWIN + offset);
-//        IOAPIC_EOIR = (natl*)((natb*)IOAPIC_EOIR + offset);
-//        apic_reset();
-//        apic_set_VECT(0, VETT_0);
-//        apic_set_VECT(1, VETT_1);
-//        apic_set_VECT(2, VETT_2);
-//        apic_set_VECT(3, VETT_3);
-//        apic_set_VECT(4, VETT_4);
-//        apic_set_VECT(5, VETT_5);
-//        apic_set_VECT(6, VETT_6);
-//        apic_set_VECT(7, VETT_7);
-//        apic_set_VECT(8, VETT_8);
-//        apic_set_VECT(9, VETT_9);
-//        apic_set_VECT(10, VETT_10);
-//        apic_set_VECT(11, VETT_11);
-//        apic_set_VECT(12, VETT_12);
-//        apic_set_VECT(13, VETT_13);
-//        apic_set_VECT(14, VETT_14);
-//        apic_set_VECT(15, VETT_15);
-//        apic_set_VECT(16, VETT_16);
-//        apic_set_VECT(17, VETT_17);
-//        apic_set_VECT(18, VETT_18);
-//        apic_set_VECT(19, VETT_19);
-//        apic_set_VECT(20, VETT_20);
-//        apic_set_VECT(21, VETT_21);
-//        apic_set_VECT(22, VETT_22);
-//        apic_set_VECT(23, VETT_23);
-//        return true;
-//}
+#include "apic.h"
+
+bool ioapic_init()
+{
+	if (!apic_init())
+			return false;
+	natq offset = inizio_pci_condiviso - (natb*)PCI_startmem;
+	IOREGSEL = (natl*)((natb*)IOREGSEL + offset);
+	IOWIN = (natl*)((natb*)IOWIN + offset);
+	IOAPIC_EOIR = (natl*)((natb*)IOAPIC_EOIR + offset);
+	apic_reset();
+	apic_set_VECT(0, VETT_0);
+	apic_set_VECT(1, VETT_1);
+	apic_set_VECT(2, VETT_2);
+	apic_set_VECT(3, VETT_3);
+	apic_set_VECT(4, VETT_4);
+	apic_set_VECT(5, VETT_5);
+	apic_set_VECT(6, VETT_6);
+	apic_set_VECT(7, VETT_7);
+	apic_set_VECT(8, VETT_8);
+	apic_set_VECT(9, VETT_9);
+	apic_set_VECT(10, VETT_10);
+	apic_set_VECT(11, VETT_11);
+	apic_set_VECT(12, VETT_12);
+	apic_set_VECT(13, VETT_13);
+	apic_set_VECT(14, VETT_14);
+	apic_set_VECT(15, VETT_15);
+	apic_set_VECT(16, VETT_16);
+	apic_set_VECT(17, VETT_17);
+	apic_set_VECT(18, VETT_18);
+	apic_set_VECT(19, VETT_19);
+	apic_set_VECT(20, VETT_20);
+	apic_set_VECT(21, VETT_21);
+	apic_set_VECT(22, VETT_22);
+	apic_set_VECT(23, VETT_23);
+	return true;
+}
 //
 //// )
 
+
+///////////////////////////////////////////////////////////////////////////////
+//                          TESTS                                            //
+///////////////////////////////////////////////////////////////////////////////
+void test_int()
+{
+	asm(
+		"int $0xf0 \n"
+		"int $0xd1 \n"
+	   );
+	
+	flog(LOG_DEBUG, "test_int --->  1");
+}
+void test_mapping(addr testpml4)
+{
+	int* newmap = reinterpret_cast<int*>(0xFFFFF00000000000);
+	int* oldmap = reinterpret_cast<int*>(6*MiB);
+	sequential_map(testpml4,oldmap,newmap,1,BIT_RW);
+	*oldmap = 12;
+	flog(LOG_DEBUG, "test_mapping --->  %d", *oldmap == *newmap);
+}
 
 extern "C" void cmain ()
 {
@@ -502,21 +544,28 @@ extern "C" void cmain ()
 	ppf->pt.residente = true;
 	addr testpml4 = indirizzo_pf(ppf);
 	memset(testpml4, 0, DIM_PAGINA);
-	flog(LOG_INFO, "testpml4 = %p",testpml4);
-	crea_finestra_FM(testpml4);
+	if(!crea_finestra_FM(testpml4))
+			goto error;
+	flog(LOG_INFO, "Creata finestra FM!");
+	if(!crea_finestra_PCI(testpml4))
+			goto error;
+	flog(LOG_INFO, "Creata finestra PCI!");
 	loadCR3(testpml4);
-	invalida_TLB();
+	flog(LOG_INFO, "Caricato CR3!");
 
-	flog(LOG_INFO, "Caricata finestra FM!");
+	ioapic_init();
+	asm("sti");
+	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
+	while(true);
 
-	int* newmap = reinterpret_cast<int*>(0xFFFFF00000000000);
-	int* oldmap = reinterpret_cast<int*>(6*MiB);
-	sequential_map(testpml4,oldmap,newmap,1,BIT_RW);
-	*oldmap = 12;
-	flog(LOG_INFO, "%d <---> %d", *oldmap,*newmap);
-
+	test_mapping(testpml4);
+	test_int();
 	flog(LOG_INFO, "Uscita!");
 	return;
+
+error:
+	flog(LOG_ERR,"Error!");
+	panic("Error!");
 
 }
 

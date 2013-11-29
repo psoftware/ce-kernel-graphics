@@ -89,6 +89,7 @@ start:
 	call init_gate
 .endm
 					
+
 / carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
 // alle possibili eccezioni. 
@@ -115,6 +116,33 @@ init_idt:
 	carica_gate	17 		ac_exc 		LIV_SISTEMA
 	carica_gate	18 		mc_exc 		LIV_SISTEMA
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
+
+	// driver/handler
+	carica_gate	VETT_0 		handler_0	LIV_SISTEMA
+	carica_gate	VETT_1 		handler_1	LIV_SISTEMA
+	carica_gate	VETT_2 		handler_2	LIV_SISTEMA
+	carica_gate	VETT_3 		handler_3	LIV_SISTEMA
+	carica_gate	VETT_4 		handler_4	LIV_SISTEMA
+	carica_gate	VETT_5 		handler_5	LIV_SISTEMA
+	carica_gate	VETT_6 		handler_6	LIV_SISTEMA
+	carica_gate	VETT_7 		handler_7	LIV_SISTEMA
+	carica_gate	VETT_8 		handler_8	LIV_SISTEMA
+	carica_gate	VETT_9 		handler_9	LIV_SISTEMA
+	carica_gate	VETT_10		handler_10	LIV_SISTEMA
+	carica_gate	VETT_11		handler_11	LIV_SISTEMA
+	carica_gate	VETT_12		handler_12	LIV_SISTEMA
+	carica_gate	VETT_13		handler_13	LIV_SISTEMA
+	carica_gate	VETT_14 	handler_14 	LIV_SISTEMA
+	carica_gate	VETT_15 	handler_15 	LIV_SISTEMA
+	carica_gate	VETT_16		handler_16	LIV_SISTEMA
+	carica_gate	VETT_17		handler_17	LIV_SISTEMA
+	carica_gate	VETT_18		handler_18	LIV_SISTEMA
+	carica_gate	VETT_19		handler_19	LIV_SISTEMA
+	carica_gate	VETT_20		handler_20	LIV_SISTEMA
+	carica_gate	VETT_21		handler_21	LIV_SISTEMA
+	carica_gate	VETT_22		handler_22	LIV_SISTEMA
+	carica_gate	VETT_23		handler_23	LIV_SISTEMA
+	carica_gate	VETT_S		handler_24	LIV_SISTEMA
 
 	lidt idt_pointer
 	ret
@@ -321,6 +349,135 @@ comm_exc:
 	call gestore_eccezioni
 	//jmp a_abort_p
 	hlt
+
+
+handler_msg:
+	.asciz "handler %d"
+handler_0:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_1:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_2:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_3:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_4:
+	salva_registri
+	carica_registri
+	iretq
+	
+handler_5:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_6:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_7:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_8:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_9:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_10:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_11:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_12:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_13:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_14:
+	salva_registri
+	carica_registri
+	iretq
+	
+handler_15:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_16:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_17:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_18:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_19:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_20:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_21:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_22:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_23:
+	salva_registri
+	carica_registri
+	iretq
+
+handler_24:
+	salva_registri
+	call gestore_eccezioni
+	carica_registri
+	iretq
 
 
 
