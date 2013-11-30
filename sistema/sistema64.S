@@ -118,9 +118,9 @@ init_idt:
 	carica_gate	19 		simd_exc 	LIV_SISTEMA
 
 	// driver/handler
-	carica_gate	VETT_0 		handler_0	LIV_SISTEMA
+	carica_gate	VETT_0 		driver_td	LIV_SISTEMA
 	carica_gate	VETT_1 		handler_1	LIV_SISTEMA
-	carica_gate	VETT_2 		handler_2	LIV_SISTEMA
+	carica_gate	VETT_2 		driver_td	LIV_SISTEMA
 	carica_gate	VETT_3 		handler_3	LIV_SISTEMA
 	carica_gate	VETT_4 		handler_4	LIV_SISTEMA
 	carica_gate	VETT_5 		handler_5	LIV_SISTEMA
@@ -351,10 +351,18 @@ comm_exc:
 	hlt
 
 
+////////////////////////////////////////////////////////
+// handler/driver                                     //
+////////////////////////////////////////////////////////
+//
+// driver del timer	[4.16]
+	.extern c_driver_td
 handler_msg:
 	.asciz "handler %d"
-handler_0:
+driver_td:
 	salva_registri
+	call c_driver_td
+	call apic_send_EOI
 	carica_registri
 	iretq
 
@@ -475,7 +483,6 @@ handler_23:
 
 handler_24:
 	salva_registri
-	call gestore_eccezioni
 	carica_registri
 	iretq
 
@@ -500,6 +507,29 @@ readCR3:
 	movq %cr3, %rax
 	retq
 /
+
+//TIMER
+.set CWR,     0x43
+.set CTR_LSB, 0x40
+.set CTR_MSB, 0x40
+
+// attiva il timer di sistema
+// parametri: il valore da caricare nel registro CTR del timer
+.extern ioapic_set_MIRQ
+	.global attiva_timer
+attiva_timer:
+	movb $0x36, %al
+	outb %al, $CWR
+	movl %edi, %eax
+	outb %al, $CTR_LSB
+	movb %ah, %al
+	outb %al, $CTR_MSB
+
+	movq $2, %rdi
+	call ioapic_unmask
+
+	retq
+
 .global panic
 panic:
 	hlt
@@ -508,12 +538,23 @@ panic:
 // sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
-end_possibili_pf:
-		.long 0
-
 .global		fine_codice_sistema
 fine_codice_sistema:
 		.long etext
+end_possibili_pf:
+		.long 0
+.global		ticks
+ticks:		.long 0
+.global		clocks_per_usec
+clocks_per_usec:
+		.long 1
+.global ioapic
+ioapic:
+	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
+	.quad 0x00000000FEC00010	//ioapic.IOWIN
+pEOI:	.quad 0x00000000FEE000B0	//ioapic.EOI
+	.byte 0x10		//ioapic.RTO
+	.space 3, 0
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
 gdt_pointer:
