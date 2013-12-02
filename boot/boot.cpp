@@ -61,49 +61,6 @@ natl carica_modulo(multiboot_module_t* mod) {
 	//free((void*)mod->mod_start, mod->mod_end - mod->mod_start);
 }
 
-//// ( [P_IOAPIC]
-#include "apic.h"
-natl dim_pci_condiviso = 20*MiB;
-const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
-natb* const inizio_pci_condiviso = (natb*)PCI_startmem;
-
-bool ioapic_init()
-{
-	if (!apic_init())
-			return false;
-	natq offset = inizio_pci_condiviso - (natb*)PCI_startmem;
-	IOREGSEL = (natl*)((natb*)IOREGSEL + offset);
-	IOWIN = (natl*)((natb*)IOWIN + offset);
-	IOAPIC_EOIR = (natl*)((natb*)IOAPIC_EOIR + offset);
-	apic_reset();
-	apic_set_VECT(0, VETT_0);
-	apic_set_VECT(1, VETT_1);
-	apic_set_VECT(2, VETT_2);
-	apic_set_VECT(3, VETT_3);
-	apic_set_VECT(4, VETT_4);
-	apic_set_VECT(5, VETT_5);
-	apic_set_VECT(6, VETT_6);
-	apic_set_VECT(7, VETT_7);
-	apic_set_VECT(8, VETT_8);
-	apic_set_VECT(9, VETT_9);
-	apic_set_VECT(10, VETT_10);
-	apic_set_VECT(11, VETT_11);
-	apic_set_VECT(12, VETT_12);
-	apic_set_VECT(13, VETT_13);
-	apic_set_VECT(14, VETT_14);
-	apic_set_VECT(15, VETT_15);
-	apic_set_VECT(16, VETT_16);
-	apic_set_VECT(17, VETT_17);
-	apic_set_VECT(18, VETT_18);
-	apic_set_VECT(19, VETT_19);
-	apic_set_VECT(20, VETT_20);
-	apic_set_VECT(21, VETT_21);
-	apic_set_VECT(22, VETT_22);
-	apic_set_VECT(23, VETT_23);
-	return true;
-}
-//
-//// )
 
 extern "C" natl pml4;
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)

@@ -50,6 +50,8 @@ multiboot_header:
 multiboot_entry:
 
      cli
+	 movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
+
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			
      call    cmain			// il resto dell'inizializzazione
@@ -176,7 +178,4 @@ gdt64_ptr:
 	.global stack
 stack:
 	.space STACK_SIZE, 0
-terminate_stack:
-	.space STACK_SIZE, 0
-terminate_stack_end:
 

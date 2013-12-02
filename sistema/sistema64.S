@@ -52,7 +52,7 @@
 // AVVIO                                                                  //
 //////////////////////////////////////////////////////////////////////////
 
-#define STACK_SIZE                      0x4000
+#define STACK_SIZE                      0x8000
 
 
 
@@ -60,12 +60,8 @@
 .globl  _start, start
 _start:				// entry point
 start:
+	movq    $(stack + STACK_SIZE), %rsp
 	call init_idt
-	//movb $0xfd, %al
-	//outb %al, $0x21
-	//movb $0xff, %al
-	//outb %al, $0xa1
-	//sti
 	call    cmain			// il resto dell'inizializzazione
 	hlt				// e' scritto in C++
 					
@@ -563,8 +559,6 @@ gdt_pointer:
 idt_pointer:
 	.word 0xFFF			// limite della IDT (256 entrate)
 	.quad idt			// base della IDT
-param_err:
-	.asciz "parametro errato %x"
 .bss
 .balign 8
 gdt:
@@ -581,14 +575,3 @@ idt:
 	.global stack
 stack:
 	.space STACK_SIZE, 0
-terminate_stack:
-	.space STACK_SIZE, 0
-terminate_stack_end:
-save_gdt:
-	.word 0
-	.long 0
-save_idt:
-	.word 0
-	.long 0
-save_esp:
-	.long 0
