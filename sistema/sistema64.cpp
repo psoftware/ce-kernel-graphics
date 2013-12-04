@@ -821,6 +821,13 @@ extern "C" void c_driver_td()
 
 }
 
+//////////////////////////////////////////////////////////////////////////////
+//							GDT												//
+/////////////////////////////////////////////////////////////////////////////
+extern "C" void init_gdt(); 
+extern "C" void set_tss_stack(addr stack);
+extern "C" void set_tss_dpl(bool utente);
+
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
 ///////////////////////////////////////////////////////////////////////////////
@@ -841,9 +848,53 @@ void test_mapping(addr testpml4)
 	flog(LOG_DEBUG, "test_mapping --->  %d", *oldmap == *newmap);
 }
 
+extern "C" addr pag_utente_virt;
+extern "C" addr pag_utente;
+extern "C" void iretq_to_user(addr pila_sistema);
+void test_userspace(addr testpml4)
+{
+	des_pf* ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		flog(LOG_ERR, "Impossibile allocare pila_utente");
+		panic("?");
+	}
+	ppf->contenuto = PAGINA_CONDIVISA;
+	ppf->pt.residente = true;
+	natq* pila_utente = static_cast<natq*>(indirizzo_pf(ppf));
+
+	ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		flog(LOG_ERR, "Impossibile allocare pila_utente");
+		panic("?");
+	}
+	ppf->contenuto = PAGINA_CONDIVISA;
+	ppf->pt.residente = true;
+	natq* pila_sistema = static_cast<natq*>(indirizzo_pf(ppf));
+
+	pag_utente_virt = reinterpret_cast<addr>(0xffffffffff000000);
+	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
+	sequential_map(testpml4,pila_utente,(natb*)pag_utente_virt+DIM_PAGINA,1,BIT_RW | BIT_US);
+
+	pila_sistema[511] = 0;
+	pila_sistema[510] = reinterpret_cast<natq>(pila_utente)+DIM_PAGINA;
+	pila_sistema[509] = 0;
+	pila_sistema[508] = 16;
+	pila_sistema[510] = reinterpret_cast<natq>(pag_utente_virt);
+
+	set_tss_stack(&pila_sistema[511]);
+	set_tss_dpl(true);
+
+	iretq_to_user(&pila_sistema[511]);
+
+	
+
+}
+
 extern "C" void cmain ()
 {
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
+	init_gdt();
+	flog(LOG_INFO, "gdt inizializzata!");
 
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
 	heap_init((addr)4096, HEAP_SIZE);
@@ -877,16 +928,14 @@ extern "C" void cmain ()
 	asm("sti");
 	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
 
+	test_mapping(testpml4);
+	test_int();
+
 	attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");
 	
-	while(true)
-	{
-	
-	}
+	test_userspace(testpml4);
 
-	test_mapping(testpml4);
-	test_int();
 	flog(LOG_INFO, "Uscita!");
 	return;
 

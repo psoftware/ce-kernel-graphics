@@ -209,9 +209,71 @@ init_descrittore:
 	ret
 	
 	
+.set tss_limit, tss_end - tss 
+.set p_dpl_type, 0b10001001
+.set dpl_mask, 0b01100000
+	.global init_gdt
+init_gdt:
+	lgdt gdt_pointer
+	movq $des_tss, %rdi
+	movw $tss_limit, (%rdi) //[15:0] = limit[15:0]
+	movq $tss, %rax	
+	movw %ax, 2(%rdi)	//[31:16] = base[15:0]
+	sarq $16,%rax
+	movb %al, 4(%rdi)	//[39:32] = base[24:16]
+	movb $p_dpl_type, 5(%rdi)	//[47:40] = p_dpl_type
+	movb $0, 6(%rdi)	//[55:48] = 0
+	movb %ah, 7(%rdi)	//[63:56] = base[31:24]
+	sarq $16, %rax
+	movl %eax, 8(%rdi) //[95:64] = base[63:32]
+	movl $0, 12(%rdi)	//[127:96] = 0
+	movq $(des_tss - gdt), %rax
+	ltr %ax
+
+//	popq %rsi
+//	movq %rsp, %rdi	//carico il nuovo cs
+//	movw %ss,%ax
+//	pushq %ax
+//	pushq %rdi
+//	pushfq
+//	xorq %rax,%rax
+//	movw $8,%ax
+//	pushq %ax
+//	pushq %rsi
+//	iretq
+	retq
+
+	.global set_tss_stack
+set_tss_stack:
+	movq %rdi,tss+4
+	retq
+
+	.global set_tss_dpl
+set_tss_dpl:
+	movb $dpl_mask, %al
+	movq $des_tss, %rsi
+	cmpl $0,%edi
+	je sistema
+	orb %al, 5(%rsi)
+	jmp end	
+sistema:
+	notb %al
+	andb %al, 5(%rsi)
+end:
+	retq
 	
-	
-	
+	.global iretq_to_user
+iretq_to_user:
+	movq $(des_tss - gdt), %rax
+	ltr %ax
+	movq %rdi, %rsp
+	iretq
+
+.balign 4096
+	.global pag_utente
+pag_utente:
+	jmp pag_utente_virt
+.balign 4096
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
 ////////////////////////////////////////////////////////////////
@@ -551,27 +613,39 @@ ioapic:
 pEOI:	.quad 0x00000000FEE000B0	//ioapic.EOI
 	.byte 0x10		//ioapic.RTO
 	.space 3, 0
+
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
 gdt_pointer:
-	.word 0xffff		 	// limite della GDT
-	.long gdt			// base della GDT
+	.word end_gdt-gdt		 	// limite della GDT
+	.quad gdt			// base della GDT
 idt_pointer:
 	.word 0xFFF			// limite della IDT (256 entrate)
 	.quad idt			// base della IDT
-.bss
+
 .balign 8
 gdt:
-	// spazio per 5 descrittori piu' i descrittori di TSS 
-	// i descrittori verrano costruiti a tempo di esecuzione
-	.space 8 * 8192, 0
+	.quad 0		//segmento nullo
+	.quad 0x209c0000000000 //segmento codice sistema
+	.quad 0x20fc0000000000 //segmento codice utente
+des_tss:
+	.space 16*4,0	//segmento tss, riempito a runtime
+end_gdt:
+	
+tss:
+	.space 108, 0
+tss_end:
 
 .balign 16
 idt:
 	// spazio per 256 gate
 	// verra' riempita a tempo di esecuzione
 	.space 16 * 256, 0
+end_idt:
 
+	.global pag_utente_virt
+pag_utente_virt:
+	.quad pag_utente
 	.global stack
 stack:
 	.space STACK_SIZE, 0

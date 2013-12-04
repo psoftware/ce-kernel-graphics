@@ -112,7 +112,7 @@ attiva_paginazione:
 long_mode:
 	pushq $0
 	popfq
-	movw $16, %ax
+	movw $0, %ax
 	movw %ax, %ds
 	movw %ax, %es
 	movw %ax, %fs
@@ -166,9 +166,8 @@ pd:
 	.long 0x00e00083, 0
 .balign 4096
 gdt64:
-	.quad 0
-	.quad 0x00209a0000000000
-	.quad 0x0040920000000000
+	.quad 0		//segmento nullo
+	.quad 0x209c0000000000 //segmento codice sistema
 gdt64_end:
 gdt64_ptr:
 	.word gdt64_end - gdt64
