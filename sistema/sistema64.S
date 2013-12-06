@@ -139,6 +139,8 @@ init_idt:
 	carica_gate	VETT_22		handler_22	LIV_SISTEMA
 	carica_gate	VETT_23		handler_23	LIV_SISTEMA
 	carica_gate	VETT_S		handler_24	LIV_SISTEMA
+	
+	carica_gate	TIPO_L		primitiva_flog	LIV_UTENTE
 
 	lidt idt_pointer
 	ret
@@ -264,8 +266,8 @@ end:
 
 	.global iretq_to_user
 iretq_to_user:
-	movq $des_tss, %rdi
-	movb $p_dpl_type, 5(%rdi)	//[47:40] = p_dpl_type
+	movq $des_tss, %rax
+	movb $p_dpl_type, 5(%rax)	//[47:40] = p_dpl_type
 	movq $(des_tss - gdt), %rax
 	ltr %ax
 
@@ -283,18 +285,19 @@ iretq_to_user:
 	iretq
 
 .balign 4096
-	.global pag_utente
-pag_utente:
-	cli
-	hlt
-	//jmp pag_utente_virt
+	.global code_utente
+code_utente:
+	int $TIPO_L
+loop:
+	jmp loop
+
 .balign 4096
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
 ////////////////////////////////////////////////////////////////
-// alcune eccezioni lasciano in pila un ulteriore parola lunga
+// alcune eccezioni lasciano in pila un ulteriore quad
 // (il cui significato dipende dal tipo di eccezione)
-// Per uniforimita', facciamo eseguire una pushl $0 come
+// Per uniforimita', facciamo eseguire una pushq $0 come
 // prima istruzione di tutte le eccezioni che non prevedono
 // questa ulteriore parola lunga.
 // Inoltre, il trattamento di tutte le eccezioni e' simile:
@@ -562,6 +565,10 @@ handler_24:
 	carica_registri
 	iretq
 
+	.global c_primitiva_flog
+primitiva_flog:
+	call c_primitiva_flog
+	iretq
 
 
 	.global invalida_TLB  // [6.6]
@@ -679,9 +686,13 @@ idt:
 	.space 16 * 256, 0
 end_idt:
 
-	.global utente_jmp_addr
-utente_jmp_addr:
-	.quad pag_utente
+	.global pag_utente_virt
+pag_utente_virt:
+	.quad 0xffffff0000a00000
+	.global pag_utente
+pag_utente:
+	.quad code_utente
+
 	.global stack
 stack:
 	.space STACK_SIZE, 0

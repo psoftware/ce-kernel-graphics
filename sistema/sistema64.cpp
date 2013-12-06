@@ -90,6 +90,13 @@ extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
 extern "C" addr fine_codice_sistema;
 
 extern "C" addr readCR2();
+extern "C" addr readCR3();
+int i_PML4(addr);
+int i_PDP(addr);
+int i_PD(addr);
+int i_PT(addr);
+natq& get_entry(addr,natl);
+addr extr_IND_FISICO(natq);
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, natq errore,
@@ -103,7 +110,24 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
 	if(tipo==14)
 	{
-		flog(LOG_WARN, "CR2 = %p",readCR2());
+		addr CR2 = readCR2();
+		flog(LOG_WARN, "CR2=   %p",CR2);
+		addr CR3 = readCR3();
+		flog(LOG_WARN, "CR3=   %p",CR3);
+		natq pml4e = get_entry(CR3,i_PML4(CR2));
+		flog(LOG_WARN, "pml4e= %p",pml4e);
+		addr pdp = extr_IND_FISICO(pml4e);
+		
+		natq pdpe = get_entry(pdp,i_PDP(CR2));
+		flog(LOG_WARN, "pdpe=  %p",pdpe);
+		addr pd = extr_IND_FISICO(pdpe);
+		
+		natq pde = get_entry(pd,i_PD(CR2));
+		flog(LOG_WARN, "pde=   %p",pde);
+		addr pt = extr_IND_FISICO(pde);
+
+		natq pte = get_entry(pt,i_PT(CR2));
+		flog(LOG_WARN, "pte=   %p",pte);
 	}
 	
 }
@@ -372,7 +396,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			des_pf* ppf = alloca_pagina_fisica_libera();
 			if (ppf == 0) {
 				flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
-				return false;
+					return false;
 			}
 			ppf->contenuto = TABELLA_CONDIVISA;
 			ppf->pt.residente = true;
@@ -414,6 +438,25 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 		natq pte = ((natq)indf & ADDR_MASK) | flags | BIT_P;
 		set_entry(pt, i_PT(indv), pte);
 	}
+
+//	flog(LOG_WARN, "phys_start=  %p",phys_start);
+//	flog(LOG_WARN, "virt_start=  %p",virt_start);
+//	flog(LOG_WARN, "pml4=        %p",pml4);
+//	natq pml4e = get_entry(pml4,i_PML4(virt_start));
+//	flog(LOG_WARN, "pml4e=       %p",pml4e);
+//	addr pdp = extr_IND_FISICO(pml4e);
+//	
+//	natq pdpe = get_entry(pdp,i_PDP(virt_start));
+//	flog(LOG_WARN, "pdpe=        %p",pdpe);
+//	addr pd = extr_IND_FISICO(pdpe);
+//	
+//	natq pde = get_entry(pd,i_PD(virt_start));
+//	flog(LOG_WARN, "pde=         %p",pde);
+//	addr pt = extr_IND_FISICO(pde);
+//
+//	natq pte = get_entry(pt,i_PT(virt_start));
+//	flog(LOG_WARN, "pte=         %p",pte);
+	
 	return true;
 }
 
@@ -855,45 +898,51 @@ void test_mapping(addr testpml4)
 	flog(LOG_DEBUG, "test_mapping --->  %d", *oldmap == *newmap);
 }
 
-extern "C" addr* utente_jmp_addr;
+extern "C" addr pag_utente_virt;
 extern "C" addr pag_utente;
 extern "C" void iretq_to_user(addr rip, addr rsp);
 void test_userspace(addr testpml4)
 {
+//	des_pf* ppf = alloca_pagina_fisica_libera();
+//	if (ppf == 0) {
+//		flog(LOG_ERR, "Impossibile allocare pila_utente");
+//		panic("?");
+//	}
+//	ppf->contenuto = PAGINA_CONDIVISA;
+//	ppf->pt.residente = true;
+//	natq* pila_utente = static_cast<natq*>(indirizzo_pf(ppf));
+//
 	des_pf* ppf = alloca_pagina_fisica_libera();
 	if (ppf == 0) {
-		flog(LOG_ERR, "Impossibile allocare pila_utente");
-		panic("?");
-	}
-	ppf->contenuto = PAGINA_CONDIVISA;
-	ppf->pt.residente = true;
-	natq* pila_utente = static_cast<natq*>(indirizzo_pf(ppf));
-
-	ppf = alloca_pagina_fisica_libera();
-	if (ppf == 0) {
-		flog(LOG_ERR, "Impossibile allocare pila_utente");
+		flog(LOG_ERR, "Impossibile allocare pila_sistema");
 		panic("?");
 	}
 	ppf->contenuto = PAGINA_CONDIVISA;
 	ppf->pt.residente = true;
 	natq* pila_sistema = static_cast<natq*>(indirizzo_pf(ppf));
 
-	addr pag_utente_virt = reinterpret_cast<addr>(0xfffffffffff00000);
-	*utente_jmp_addr = pag_utente_virt;
-	addr pila_utente_virt = reinterpret_cast<addr>((natq)pag_utente_virt+DIM_PAGINA);
-	addr end_pila_utente_virt = reinterpret_cast<addr>((natq)pila_utente_virt+DIM_PAGINA-8);
+	//pag_utente_virt = reinterpret_cast<addr>(0xffffff0000a00000);
+//	*utente_jmp_addr = pag_utente_virt;
+//	addr pila_utente_virt = reinterpret_cast<addr>((natq)pag_utente_virt+DIM_PAGINA);
+//	addr end_pila_utente_virt = reinterpret_cast<addr>((natq)pila_utente_virt+DIM_PAGINA-8);
 	addr end_pila_sistema = reinterpret_cast<addr>((natq)pila_sistema+DIM_PAGINA-8);
 
 	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
-	sequential_map(testpml4,pila_utente,pila_utente_virt,1,BIT_RW | BIT_US);
+	//sequential_map(testpml4,pila_utente,pila_utente_virt,1,BIT_RW | BIT_US);
 
 	set_tss_stack(end_pila_sistema);
 
-	iretq_to_user(pag_utente_virt, end_pila_utente_virt);
+	iretq_to_user(pag_utente_virt, addr(0xdeadbeef));//end_pila_utente_virt);
 
 
 
 }
+
+extern "C" void c_primitiva_flog()
+{
+	flog(LOG_INFO,"flog utente");
+}
+
 
 extern "C" void cmain ()
 {
@@ -930,13 +979,13 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
-	//asm("sti");
+	asm("sti");
 	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
 
 	test_mapping(testpml4);
 	test_int();
 
-	//attiva_timer(DELAY);
+	attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");
 
 	test_userspace(testpml4);
