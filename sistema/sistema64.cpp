@@ -31,7 +31,7 @@ const ioaddr iIIR = 0x03FA;
 
 
 void ini_COM1()
-{	
+{
 	natw CBITR = 0x000C;		// 9600 bit/sec.
 	natb dummy;
 	outputb(0x80, iLCR);		// DLAB 1
@@ -45,8 +45,10 @@ void ini_COM1()
 void serial_o(natb c)
 {
 	natb s;
-	do 
-	{	inputb(iLSR, s);    }
+	do
+	{
+		inputb(iLSR, s);
+	}
 	while (! (s & 0x20));
 	outputb(c, iTHR);
 }
@@ -70,7 +72,7 @@ extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
 	while (*l)
 		serial_o(*l++);
 	serial_o((natb)'\t');
-	
+
 	for (natl i = 0; i < quanti; i++)
 		serial_o(buf[i]);
 	serial_o((natb)'\n');
@@ -85,19 +87,25 @@ extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
 
 
 // (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-extern "C" addr fine_codice_sistema; 
+extern "C" addr fine_codice_sistema;
 
-// gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in 
+extern "C" addr readCR2();
+// gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
 // sistema.S, tranne il gestore di page fault)
-extern "C" void gestore_eccezioni(int tipo, unsigned errore,
-				  addr rip, unsigned cs, unsigned rflag)
+extern "C" void gestore_eccezioni(int tipo, natq errore,
+				  addr rip, natq cs, natq rflag)
 {
 	//if (rip < fine_codice_sistema) {
 	//	flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, rip, errore);
 		//panic("eccezione dal modulo sistema");
 	//}
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
-	flog(LOG_WARN, "rflag = %x, rip = %x, cs = %x", rflag, rip, cs);
+	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
+	if(tipo==14)
+	{
+		flog(LOG_WARN, "CR2 = %p",readCR2());
+	}
+	
 }
 
 
@@ -112,7 +120,7 @@ enum tt { LIBERA, PML4, TABELLA_CONDIVISA, TABELLA_PRIVATA,
 struct des_pf {			// [6.3]
 	tt contenuto;	// uno dei valori precedenti
 	union {
-		struct { 
+		struct {
 			bool	residente;	// pagina residente o meno
 			natl	processo;	// identificatore di processo
 			natl	ind_massa;	// indirizzo della pagina in memoria di massa
@@ -224,7 +232,7 @@ const natq INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di ma
 bool  extr_P(natq descrittore)			// [6.3]
 { // (
 	return (descrittore & BIT_P); // )
-} 
+}
 bool extr_D(natq descrittore)			// [6.3]
 { // (
 	return (descrittore & BIT_D); // )
@@ -324,19 +332,19 @@ void set_entry(addr tab, natl index, natq entry)
 
 // ( [P_MEM_VIRT]
 
-//mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli 
+//mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli
 //indirizzi fisici
 //che partono da phys_start, in sequenza.
 bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq flags)
 {
 	natb *indv = static_cast<natb*>(virt_start),
-	     *indf = static_cast<natb*>(phys_start);
-	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA) 
+		 *indf = static_cast<natb*>(phys_start);
+	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA)
 	{
 	//----PML4-------------------------------------------------
 		natq pml4e = get_entry(pml4, i_PML4(indv));
 		addr pdp;
-		if (! extr_P(pml4e)) 
+		if (! extr_P(pml4e))
 		{
 			des_pf* ppf = alloca_pagina_fisica_libera();
 			if (ppf == 0) {
@@ -350,8 +358,8 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 
 			pml4e = ((natq)pdp & ADDR_MASK) | flags | BIT_P;
 			set_entry(pml4, i_PML4(indv), pml4e);
-		} 
-		else 
+		}
+		else
 		{
 			pdp = extr_IND_FISICO(pml4e);
 		}
@@ -359,7 +367,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 	//----PDP-------------------------------------------------
 		natq pdpe = get_entry(pdp,i_PDP(indv));
 		addr pd;
-		if (! extr_P(pdpe)) 
+		if (! extr_P(pdpe))
 		{
 			des_pf* ppf = alloca_pagina_fisica_libera();
 			if (ppf == 0) {
@@ -373,8 +381,8 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 
 			pdpe = ((natq)pd & ADDR_MASK) | flags | BIT_P;
 			set_entry(pdp, i_PDP(indv), pdpe);
-		} 
-		else 
+		}
+		else
 		{
 			pd = extr_IND_FISICO(pdpe);
 		}
@@ -382,7 +390,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 	//----PD-------------------------------------------------
 		natq pde = get_entry(pd,i_PD(indv));
 		addr pt;
-		if (! extr_P(pde)) 
+		if (! extr_P(pde))
 		{
 			des_pf* ppf = alloca_pagina_fisica_libera();
 			if (ppf == 0) {
@@ -396,8 +404,8 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 
 			pde = ((natq)pt & ADDR_MASK) | flags | BIT_P;
 			set_entry(pd, i_PD(indv), pde);
-		} 
-		else 
+		}
+		else
 		{
 			pt = extr_IND_FISICO(pde);
 		}
@@ -418,7 +426,7 @@ bool identity_map(addr pml4, addr start, addr end, natq flags)
 	natl npag = (static_cast<natb*>(end) - static_cast<natb*>(start)) / DIM_PAGINA;
 	return sequential_map(pml4, start, start, npag, flags);
 }
-// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella 
+// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella
 // memoria virtuale gestita dal direttorio pdir
 // (la funzione viene usata in fase di inizializzazione)
 bool crea_finestra_FM(addr pml4)
@@ -451,9 +459,9 @@ const ioaddr PCI_CDP = 0x0CFC;
 extern "C" void inputb(ioaddr reg, natb &a);	// [9.3.1]
 extern "C" void outputb(natb a, ioaddr reg);	// [9.3.1]
 // (*
-extern "C" void inputw(ioaddr reg, natw &a);	
+extern "C" void inputw(ioaddr reg, natw &a);
 extern "C" void outputw(natw a, ioaddr reg);
-extern "C" void inputl(ioaddr reg, natl &a);	
+extern "C" void inputl(ioaddr reg, natl &a);
 extern "C" void outputl(natl a, ioaddr reg);
 // *)
 
@@ -515,9 +523,9 @@ bool pci_find_dev(natw& w, natw devID, natw vendID)
 	for( ; w != 0xFFFF; w++) {
 		natw work;
 
-		if ( (work = pci_read_confw(w, 0)) == 0xFFFF ) 
+		if ( (work = pci_read_confw(w, 0)) == 0xFFFF )
 			continue;
-		if ( work == vendID && pci_read_confw(w, 2) == devID) 
+		if ( work == vendID && pci_read_confw(w, 2) == devID)
 			return true;
 	}
 	return false;
@@ -540,7 +548,7 @@ bool pci_find_class(natw& w, natb code[])
 				code[i] = work[i];
 			return true;
 		}
-	} 
+	}
 	return false;
 }
 
@@ -549,12 +557,12 @@ extern "C" natl c_pci_find(natl code, natw i)
 	natb* pcode = (natb*)&code;
 	natw w, j = 0;
 	for(w = 0; w != 0xFFFF; w++) {
-		if (! pci_find_class(w, pcode)) 
+		if (! pci_find_class(w, pcode))
 			return 0xFFFFFFFF;
 		if (j == i)
 			return w;
 		j++;
-	} 
+	}
 	return 0xFFFFFFFF;
 }
 
@@ -824,9 +832,8 @@ extern "C" void c_driver_td()
 //////////////////////////////////////////////////////////////////////////////
 //							GDT												//
 /////////////////////////////////////////////////////////////////////////////
-extern "C" void init_gdt(); 
+extern "C" void init_gdt();
 extern "C" void set_tss_stack(addr stack);
-extern "C" void set_tss_dpl(bool utente);
 
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
@@ -836,7 +843,7 @@ void test_int()
 	asm(
 		"int $0xf0 \n"
 	   );
-	
+
 	flog(LOG_DEBUG, "test_int --->  1");
 }
 void test_mapping(addr testpml4)
@@ -848,9 +855,9 @@ void test_mapping(addr testpml4)
 	flog(LOG_DEBUG, "test_mapping --->  %d", *oldmap == *newmap);
 }
 
-extern "C" addr pag_utente_virt;
+extern "C" addr* utente_jmp_addr;
 extern "C" addr pag_utente;
-extern "C" void iretq_to_user(addr pila_sistema);
+extern "C" void iretq_to_user(addr rip, addr rsp);
 void test_userspace(addr testpml4)
 {
 	des_pf* ppf = alloca_pagina_fisica_libera();
@@ -871,22 +878,20 @@ void test_userspace(addr testpml4)
 	ppf->pt.residente = true;
 	natq* pila_sistema = static_cast<natq*>(indirizzo_pf(ppf));
 
-	pag_utente_virt = reinterpret_cast<addr>(0xffffffffff000000);
+	addr pag_utente_virt = reinterpret_cast<addr>(0xfffffffffff00000);
+	*utente_jmp_addr = pag_utente_virt;
+	addr pila_utente_virt = reinterpret_cast<addr>((natq)pag_utente_virt+DIM_PAGINA);
+	addr end_pila_utente_virt = reinterpret_cast<addr>((natq)pila_utente_virt+DIM_PAGINA-8);
+	addr end_pila_sistema = reinterpret_cast<addr>((natq)pila_sistema+DIM_PAGINA-8);
+
 	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
-	sequential_map(testpml4,pila_utente,(natb*)pag_utente_virt+DIM_PAGINA,1,BIT_RW | BIT_US);
+	sequential_map(testpml4,pila_utente,pila_utente_virt,1,BIT_RW | BIT_US);
 
-	pila_sistema[511] = 0;
-	pila_sistema[510] = reinterpret_cast<natq>(pila_utente)+DIM_PAGINA;
-	pila_sistema[509] = 0;
-	pila_sistema[508] = 16;
-	pila_sistema[510] = reinterpret_cast<natq>(pag_utente_virt);
+	set_tss_stack(end_pila_sistema);
 
-	set_tss_stack(&pila_sistema[511]);
-	set_tss_dpl(true);
+	iretq_to_user(pag_utente_virt, end_pila_utente_virt);
 
-	iretq_to_user(&pila_sistema[511]);
 
-	
 
 }
 
@@ -925,15 +930,15 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
-	asm("sti");
+	//asm("sti");
 	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
 
 	test_mapping(testpml4);
 	test_int();
 
-	attiva_timer(DELAY);
+	//attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");
-	
+
 	test_userspace(testpml4);
 
 	flog(LOG_INFO, "Uscita!");

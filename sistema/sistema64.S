@@ -9,7 +9,7 @@
 // MACRO                                                      //
 ////////////////////////////////////////////////////////////////
 .macro salva_registri
-	
+
 	pushq %rax
 	pushq %rcx
 	pushq %rdx
@@ -29,7 +29,7 @@
 .endm
 
 .macro carica_registri
-	
+
 	popq %rax
 	popq %rcx
 	popq %rdx
@@ -64,12 +64,12 @@ start:
 	call init_idt
 	call    cmain			// il resto dell'inizializzazione
 	hlt				// e' scritto in C++
-					
-					
-					
-	
-	
-	
+
+
+
+
+
+
 // Carica un gate della IDT
 // num: indice (a partire da 0) in IDT del gate da caricare
 // routine: indirizzo della routine da associare al gate
@@ -84,11 +84,11 @@ start:
 	movq $\dpl, %rdx
 	call init_gate
 .endm
-					
+
 
 / carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
-// alle possibili eccezioni. 
+// alle possibili eccezioni.
 .global init_idt
 init_idt:
 	//		indice		routine			dpl
@@ -146,7 +146,7 @@ init_idt:
 // carica un gate nella IDT
 // parametri: (vedere la macro carica_gate)
 .global init_gate
-init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl 
+init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl
 	movq $idt, %r11
 	movq %rsi, %rax		// offset della routine
 
@@ -199,7 +199,7 @@ init_descrittore:
 	orb  $0b01000000, %dl		// operandi su 32 bit
 	orb  32(%ebp), %dl		// granularita'
 	movw %dx, 6(%ebx, %ecx, 8)	// -> 4a parola descr.
-	
+
 	popq %rdx
 	popq %rax
 	popq %rcx
@@ -207,9 +207,9 @@ init_descrittore:
 
 	leave
 	ret
-	
-	
-.set tss_limit, tss_end - tss 
+
+
+.set tss_limit, tss_end - tss
 .set p_dpl_type, 0b10001001
 .set dpl_mask, 0b01100000
 	.global init_gdt
@@ -217,7 +217,7 @@ init_gdt:
 	lgdt gdt_pointer
 	movq $des_tss, %rdi
 	movw $tss_limit, (%rdi) //[15:0] = limit[15:0]
-	movq $tss, %rax	
+	movq $tss, %rax
 	movw %ax, 2(%rdi)	//[31:16] = base[15:0]
 	sarq $16,%rax
 	movb %al, 4(%rdi)	//[39:32] = base[24:16]
@@ -226,7 +226,7 @@ init_gdt:
 	movb %ah, 7(%rdi)	//[63:56] = base[31:24]
 	sarq $16, %rax
 	movl %eax, 8(%rdi) //[95:64] = base[63:32]
-	movl $0, 12(%rdi)	//[127:96] = 0
+	movq $0, 12(%rdi)	//[127:96] = 0
 	movq $(des_tss - gdt), %rax
 	ltr %ax
 
@@ -255,24 +255,39 @@ set_tss_dpl:
 	cmpl $0,%edi
 	je sistema
 	orb %al, 5(%rsi)
-	jmp end	
+	jmp end
 sistema:
 	notb %al
 	andb %al, 5(%rsi)
 end:
 	retq
-	
+
 	.global iretq_to_user
 iretq_to_user:
+	movq $des_tss, %rdi
+	movb $p_dpl_type, 5(%rdi)	//[47:40] = p_dpl_type
 	movq $(des_tss - gdt), %rax
 	ltr %ax
-	movq %rdi, %rsp
+
+	xorq %rax,%rax
+	movw $(data_usr_seg-gdt),%ax    
+	xorw $0b11, %ax
+	pushq %ax       //ss
+	pushq %rsi      //rsp, second argument  
+	pushfq          //rflags
+	xorq %rax,%rax
+	movw $(code_usr_seg-gdt),%ax
+	xorw $0b11, %ax
+	pushq %ax       //cs
+	pushq %rdi      //rip, first argument
 	iretq
 
 .balign 4096
 	.global pag_utente
 pag_utente:
-	jmp pag_utente_virt
+	cli
+	hlt
+	//jmp pag_utente_virt
 .balign 4096
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
@@ -352,24 +367,27 @@ prot_fault:
 	pushq $13
 	jmp comm_exc
 
-// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
-// per realizzare la memoria virtuale. Per far cio', invochiamo la routine 
+// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla
+// per realizzare la memoria virtuale. Per far cio', invochiamo la routine
 // c_page_fault passandole tre parametri:
-// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale 
-// coppia ci permette di individuare l'istruzione che aveva causato il fault e 
-// di sapere se il fault si e' verificato mentre il processore era in stato 
-// utente o in stato sistema (se era in stato sistema, si tratta probabilmente 
+// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale
+// coppia ci permette di individuare l'istruzione che aveva causato il fault e
+// di sapere se il fault si e' verificato mentre il processore era in stato
+// utente o in stato sistema (se era in stato sistema, si tratta probabilmente
 // di un bug nel nucleo, nel qual caso vogliamo fermare tutto)
-// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale 
+// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale
 // non tradotto che ha generato il fault
 int_tipo_pf:
-	salva_registri
-	movq 120(%rsp), %rsi // errore
-	movq 128(%rsp), %rdi // eip
+	//salva_registri
+	//movq 120(%rsp), %rsi // errore
+	//movq 128(%rsp), %rdi // eip
 	//TODO call c_pre_routine_pf
-	carica_registri
-	addq $8, %rsp
-	iretq
+	//carica_registri
+	//addq $8, %rsp
+	//iretq
+	pushq $14
+	jmp comm_exc
+
 .global readCR2
 readCR2:
 	movq %cr2, %rax
@@ -443,7 +461,7 @@ handler_4:
 	salva_registri
 	carica_registri
 	iretq
-	
+
 handler_5:
 	salva_registri
 	carica_registri
@@ -493,7 +511,7 @@ handler_14:
 	salva_registri
 	carica_registri
 	iretq
-	
+
 handler_15:
 	salva_registri
 	carica_registri
@@ -599,8 +617,7 @@ panic:
 .global		fine_codice_sistema
 fine_codice_sistema:
 		.long etext
-end_possibili_pf:
-		.long 0
+
 .global		ticks
 ticks:		.long 0
 .global		clocks_per_usec
@@ -626,12 +643,31 @@ idt_pointer:
 .balign 8
 gdt:
 	.quad 0		//segmento nullo
-	.quad 0x209c0000000000 //segmento codice sistema
-	.quad 0x20fc0000000000 //segmento codice utente
+code_sys_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b10011010    //P|DPL|1|1|C|R|A|  DPL=00=sistema
+	.byte 0b00100000    //G|D|L|-|-------|  L=1 long mode
+	.byte 0b0           //base[31:24]   not used
+code_usr_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b11111010    //P|DPL|1|1|C|R|A|  DPL=11=utente
+	.byte 0b00100000    //G|D|L|-|-------|  L=1 long mode
+	.byte 0b0           //base[31:24]   not used
+data_usr_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b11110010    //P|DPL|1|0|E|W|A|  DPL=11=utente
+	.byte 0b00000000    //G|D|-|-|-------|  
+	.byte 0b0           //base[31:24]   not used
 des_tss:
 	.space 16*4,0	//segmento tss, riempito a runtime
 end_gdt:
-	
+
 tss:
 	.space 108, 0
 tss_end:
@@ -643,8 +679,8 @@ idt:
 	.space 16 * 256, 0
 end_idt:
 
-	.global pag_utente_virt
-pag_utente_virt:
+	.global utente_jmp_addr
+utente_jmp_addr:
 	.quad pag_utente
 	.global stack
 stack:
