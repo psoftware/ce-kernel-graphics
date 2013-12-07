@@ -67,7 +67,149 @@ start:
 
 
 
+.set CR3,108
+.set RAX,CR3+8
+.set RCX,CR3+16
+.set RDX,CR3+24
+.set RBX,CR3+32
+.set RSP,CR3+40
+.set RBP,CR3+48
+.set RSI,CR3+56
+.set RDI,CR3+64
+.set R8, CR3+80
+.set R9, CR3+88
+.set R10,CR3+96
+.set R11,CR3+104
+.set R12,CR3+112
+.set R13,CR3+120
+.set R14,CR3+128
+.set R15,CR3+136
 
+.macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e 
+					//lascia il risultato in %rbx
+	movl 8(%eax), %ebx
+	shlq $32, %rax      //bit 63:32 nella parte alta di %rax
+    movb 7(%eax), %bh	// bit 31:24 della base in %bh
+    movb 4(%eax), %bl	// bit 23:16 della base in %bl
+    shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
+	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
+	
+.endm
+
+salva_stato:
+	pushq %rbx
+	pushq %rax
+
+	movq esecuzione,%rax
+	movq $0, %rbx
+	movw (%rax),%bx
+	shrl $3,%ebx
+	leaq gdt(,%ebx,8), %rax
+	estrai_base
+
+	popq %rax
+
+	movq %rax, RAX(%rbx)
+	movq %rcx, RDX(%rbx)
+	movq %rdx, RDX(%rbx)
+	popq %rax
+	movq %rax, RBX(%rbx)
+	movq %rsp, %rax
+	addq $8, %rax   //non includo l'indirizzo di ritorno
+	movq %rax, RSP(%rbx)
+	movq %rbp, RBP(%rbx)
+	movq %rsi, RSI(%rbx)
+	movq %rdi, RDI(%rbx)
+	movq %r8,  R8 (%rbx)
+	movq %r9,  R9 (%rbx)
+	movq %r10, R10(%rbx)
+	movq %r11, R11(%rbx)
+	movq %r12, R12(%rbx)
+	movq %r13, R13(%rbx)
+	movq %r14, R14(%rbx)
+	movq %r15, R15(%rbx)
+	
+	ret
+
+
+carica_stato:
+	movq esecuzione, %rdx
+	movq $0, %rbx
+	movw (%rdx), %bx
+	movq %rbx, %rcx
+	shrl $3, %ebx
+	leaq gdt(, %ebx, 8), %rax
+	estrai_base
+	andb $0b11111101, 5(%rax)
+	ltr %cx
+
+	popq %rcx   //ind di ritorno, va messo nella nuova pila
+
+	movq CR3(%rbx), %rax
+	movq %rax, %cr3
+
+	movq RSP(%rbx), %rsp    //cambio pila
+	pushq %rcx              //rimetto l'indirizzo di ritorno
+
+	movq RCX(%rbx), %rcx
+	movq RDI(%rbx), %rdi
+	movq RSI(%rbx), %rsi
+	movq RBP(%rbx), %rbp
+	movq RDX(%rbx), %rdx
+	movq RAX(%rbx), %rax
+	movq R8(%rbx), %r8
+	movq R9(%rbx), %r9
+	movq R10(%rbx), %r10
+	movq R11(%rbx), %r11
+	movq R13(%rbx), %r12
+	movq R13(%rbx), %r13
+	movq R14(%rbx), %r14
+	movq R15(%rbx), %r15
+	movq RBX(%rbx), %rbx
+
+	retq
+
+
+.set p_dpl_type, 0b10001001 //p=1,dpl=00,type=1001=tss ready
+.set pres_bit, 15+32
+	.global alloca_tss
+alloca_tss:
+	movq $0, %rsi
+	movq $(NUM_TSS*16),%rax
+iter_tss:
+	testq $pres_bit,des_tss(%rsi)
+	jz set_entry_tss
+	addq $16, %rsi
+	cmpq %rsi,%rax
+	jne iter_tss
+	movq $0,%rax
+	jmp end_tss
+set_entry_tss:
+	leaq des_tss(%rsi), %rdx
+	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
+	movq %rdi, %rax
+	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
+	shrq $16,%rax
+	movb %al, 4(%rdx)	//[39:32] = base[24:16]
+	movb $p_dpl_type, 5(%rdx)	//[47:40] = p_dpl_type
+	movb $0, 6(%rdx)	//[55:48] = 0
+	movb %ah, 7(%rdx)	//[63:56] = base[31:24]
+	shrq $16, %rax
+	movl %eax, 8(%rdx) //[95:64] = base[63:32]
+	movq $0, 12(%rdx)	//[127:96] = 0
+
+	movq %rsi,%rax
+	addq $(des_tss-gdt),%rax 
+end_tss:
+	retq
+
+	
+	.global rilascia_tss
+rilascia_tss:
+	movq $0,gdt(%rdi)
+	addq $8,%rdi
+	movq $0,gdt(%rdi)
+	retq
 
 
 // Carica un gate della IDT
@@ -140,7 +282,9 @@ init_idt:
 	carica_gate	VETT_23		handler_23	LIV_SISTEMA
 	carica_gate	VETT_S		handler_24	LIV_SISTEMA
 	
-	carica_gate	TIPO_L		primitiva_flog	LIV_UTENTE
+	//primitive
+	carica_gate	TIPO_D		a_delay		LIV_UTENTE
+	carica_gate	TIPO_L		a_flog	    LIV_UTENTE
 
 	lidt idt_pointer
 	ret
@@ -172,124 +316,54 @@ init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl
 	ret
 
 
-// carica un descrittore di segmento in GDT
-// parametri: (vedere la macro carica_descr)
-.global init_descrittore
-init_descrittore:
-	pushq %rbp
-	movq %rsp, %rbp
 
-	pushq %rbx
-	pushq %rcx
-	pushq %rax
-	pushq %rdx
-
-	movl $gdt, %ebx
-	movl 8(%ebp), %ecx		// indice GDT -> %ecx
-	movl 16(%ebp), %edx		// limite -> %edx
-	movw %dx,  (%ebx, %ecx, 8)	// bit 15:00 limite -> 1a parola descr.
-	movw 12(%ebp), %ax		// bit 15:00 base -> %ax
-	movw %ax, 2(%ebx, %ecx, 8)	// -> 2a parola descr.
-	movb 14(%ebp), %al		// bit 23:16 base -> %al
-	orb  24(%ebp), %ah		// DPL
-	shlb $5, %ah			// posizione del DPL nel byte di accesso
-	orb  20(%ebp), %ah		// bit di presenza
-	orb  28(%ebp), %ah		// tipo
-	movw %ax, 4(%ebx, %ecx, 8)	// -> 3a parola descr.
-	movb 15(%ebp), %dh		// bit 31:24 base -> %dh
-	shrl $16, %edx			// bit 19:16 limite -> low nibble %dl
-	orb  $0b01000000, %dl		// operandi su 32 bit
-	orb  32(%ebp), %dl		// granularita'
-	movw %dx, 6(%ebx, %ecx, 8)	// -> 4a parola descr.
-
-	popq %rdx
-	popq %rax
-	popq %rcx
-	popq %rbx
-
-	leave
-	ret
-
-
-.set tss_limit, tss_end - tss
-.set p_dpl_type, 0b10001001
-.set dpl_mask, 0b01100000
 	.global init_gdt
 init_gdt:
 	lgdt gdt_pointer
-	movq $des_tss, %rdi
-	movw $tss_limit, (%rdi) //[15:0] = limit[15:0]
-	movq $tss, %rax
-	movw %ax, 2(%rdi)	//[31:16] = base[15:0]
-	sarq $16,%rax
-	movb %al, 4(%rdi)	//[39:32] = base[24:16]
-	movb $p_dpl_type, 5(%rdi)	//[47:40] = p_dpl_type
-	movb $0, 6(%rdi)	//[55:48] = 0
-	movb %ah, 7(%rdi)	//[63:56] = base[31:24]
-	sarq $16, %rax
-	movl %eax, 8(%rdi) //[95:64] = base[63:32]
-	movq $0, 12(%rdi)	//[127:96] = 0
-	movq $(des_tss - gdt), %rax
-	ltr %ax
 
-//	popq %rsi
-//	movq %rsp, %rdi	//carico il nuovo cs
-//	movw %ss,%ax
-//	pushq %ax
-//	pushq %rdi
-//	pushfq
-//	xorq %rax,%rax
-//	movw $8,%ax
-//	pushq %ax
-//	pushq %rsi
-//	iretq
 	retq
 
-	.global set_tss_stack
-set_tss_stack:
-	movq %rdi,tss+4
-	retq
-
-	.global set_tss_dpl
-set_tss_dpl:
-	movb $dpl_mask, %al
-	movq $des_tss, %rsi
-	cmpl $0,%edi
-	je sistema
-	orb %al, 5(%rsi)
-	jmp end
-sistema:
-	notb %al
-	andb %al, 5(%rsi)
-end:
-	retq
-
-	.global iretq_to_user
-iretq_to_user:
-	movq $des_tss, %rax
-	movb $p_dpl_type, 5(%rax)	//[47:40] = p_dpl_type
-	movq $(des_tss - gdt), %rax
+	.global goto_user_proc
+goto_user_proc:
+	movq esecuzione, %rax
+	movl (%rax),%eax
+	leaq gdt(%rax), %rcx
+	
+	andb $0b11111101, 5(%rcx) //not busy
 	ltr %ax
 
 	xorq %rax,%rax
-	movw $(data_usr_seg-gdt),%ax    
-	xorw $0b11, %ax
+	movw $SEL_DATI_UTENTE,%ax    
 	pushq %ax       //ss
 	pushq %rsi      //rsp, second argument  
 	pushfq          //rflags
 	xorq %rax,%rax
-	movw $(code_usr_seg-gdt),%ax
-	xorw $0b11, %ax
+	movw $SEL_CODICE_UTENTE,%ax
 	pushq %ax       //cs
 	pushq %rdi      //rip, first argument
 	iretq
 
 .balign 4096
+.macro user_flog msg
+	movl $1,%edi
+	movq \msg, %rsi
+	movl $0, %eax
+	int $TIPO_L
+.endm
 	.global code_utente
 code_utente:
-	int $TIPO_L
-loop:
-	jmp loop
+dd:
+	//user_flog $msg_dd
+loop_dd:
+	jmp loop_dd
+msg_dd: .string "raggiunto codice utente"
+
+proc0:
+	movl %edi,%edx
+	user_flog $enter_proc0
+loop_proc0:
+	jmp loop_proc0
+enter_proc0: .string "inizio proc0 param=%d"
 
 .balign 4096
 ////////////////////////////////////////////////////////////////
@@ -436,138 +510,70 @@ comm_exc:
 //
 // driver del timer	[4.16]
 	.extern c_driver_td
-handler_msg:
-	.asciz "handler %d"
 driver_td:
-	salva_registri
+	call salva_stato
 	call c_driver_td
 	call apic_send_EOI
-	carica_registri
+	call carica_stato
 	iretq
 
-handler_1:
+handler_msg:
+	.string "handler %x"
+
+.macro handler n
+handler_\n: 
 	salva_registri
+	call apic_send_EOI
+	movq $(\n+VETT_0),%rdx
+    movq $handler_msg, %rsi
+    movl $1, %edi
+   	movl $0, %eax
+	call flog
 	carica_registri
 	iretq
+.endm
 
-handler_2:
+handler 1
+handler 2
+handler 3
+handler 4
+handler 5
+handler 6
+handler 7
+handler 8
+handler 9
+handler 10
+handler 11
+handler 12
+handler 13
+handler 14
+handler 15
+handler 16
+handler 17
+handler 18
+handler 19
+handler 20
+handler 21
+handler 22
+handler 23
+handler 24
+
+a_flog:
+	//pushq %rdi
 	salva_registri
+	//movq (%rsp),%rdi
+    call flog
 	carica_registri
+	//addq $8,%rsp
 	iretq
-
-handler_3:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_4:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_5:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_6:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_7:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_8:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_9:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_10:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_11:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_12:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_13:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_14:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_15:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_16:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_17:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_18:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_19:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_20:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_21:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_22:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_23:
-	salva_registri
-	carica_registri
-	iretq
-
-handler_24:
-	salva_registri
-	carica_registri
-	iretq
-
-	.global c_primitiva_flog
-primitiva_flog:
-	call c_primitiva_flog
+	
+a_delay:	// routine int $tipo_d [4.16][6.5]
+	pushq %rdi
+	call salva_stato
+	movq (%rsp),%rdi
+    call c_delay
+	call carica_stato
+	addq $8,%rsp
 	iretq
 
 
@@ -615,6 +621,10 @@ attiva_timer:
 
 .global panic
 panic:
+	movl %edi, %esi
+	movl $0,%edi
+	movl $0, %eax
+	call flog
 	hlt
 
 ////////////////////////////////////////////////////////////////
@@ -625,12 +635,20 @@ panic:
 fine_codice_sistema:
 		.long etext
 
-.global		ticks
-ticks:		.long 0
-.global		clocks_per_usec
+	.global esecuzione
+esecuzione: 
+	.quad 0
+	.global pronti
+pronti: 
+	.quad 0
+
+	.global		ticks
+ticks:		
+	.long 0
+	.global		clocks_per_usec
 clocks_per_usec:
 		.long 1
-.global ioapic
+	.global ioapic
 ioapic:
 	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
 	.quad 0x00000000FEC00010	//ioapic.IOWIN
@@ -672,12 +690,9 @@ data_usr_seg:
 	.byte 0b00000000    //G|D|-|-|-------|  
 	.byte 0b0           //base[31:24]   not used
 des_tss:
-	.space 16*4,0	//segmento tss, riempito a runtime
+	.space 16*NUM_TSS,0	//segmento tss, riempito a runtime
 end_gdt:
 
-tss:
-	.space 108, 0
-tss_end:
 
 .balign 16
 idt:

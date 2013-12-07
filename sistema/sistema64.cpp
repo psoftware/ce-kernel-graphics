@@ -13,6 +13,167 @@ extern "C" natq start;
 const natq HEAP_SIZE = (natq)&start - HEAP_START;
 
 
+/////////////////////////////////////////////////////////////////////////////////
+//                     PROCESSI [4]                                            //
+/////////////////////////////////////////////////////////////////////////////////
+const int N_REG = 16;	// [4.6]
+
+// descrittore di processo [4.6]
+struct des_proc {	
+	natl riservato1;	
+	addr punt_nucleo;
+	// due quad  a disposizione (puntatori alle pile ring 1 e 2)
+	natq disp1[2];		
+	natq riservato2;
+	//entry della IST, non usata
+	natq disp2[7];
+	natq riservato3;
+	//finiti i campi obbligatori
+	addr cr3;
+	natq contesto[N_REG];
+};
+
+//indici nell'array contesto
+enum { I_RAX, I_RCX, I_RDX, I_RBX,
+       I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
+       I_R11, I_R12, I_R13, I_R14, I_R15 };
+// )
+
+// elemento di una coda di processi [4.6]
+struct proc_elem {
+	natl id;
+	natl precedenza;
+	proc_elem *puntatore;
+};
+extern proc_elem *esecuzione;	// [4.6]
+extern proc_elem *pronti;	// [4.6]
+
+void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
+{
+// ( inserimento in una lista semplice ordinata
+//   (tecnica dei due puntatori)
+	proc_elem *pp, *prevp;
+
+	pp = p_lista;
+	prevp = 0;
+	while (pp != 0 && pp->precedenza >= p_elem->precedenza) {
+		prevp = pp;
+		pp = pp->puntatore;
+	}
+
+	if (prevp == 0)
+		p_lista = p_elem;
+	else
+		prevp->puntatore = p_elem;
+
+	p_elem->puntatore = pp;
+// )
+}
+
+// [4.8]
+void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
+{
+// ( estrazione dalla testa
+	p_elem = p_lista;  	// 0 se la lista e' vuota
+
+	if (p_lista)
+		p_lista = p_lista->puntatore;
+
+	if (p_elem)
+		p_elem->puntatore = 0;
+// )
+}
+
+extern "C" void inspronti()
+{
+// (
+	inserimento_lista(pronti, esecuzione);
+// )
+}
+
+// [4.8]
+extern "C" void schedulatore(void)
+{
+// ( poiche' la lista e' gia' ordinata in base alla priorita',
+//   e' sufficiente estrarre l'elemento in testa
+	rimozione_lista(pronti, esecuzione);
+// )
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+//                         TIMER [4][9]                                        //
+/////////////////////////////////////////////////////////////////////////////////
+
+// richiesta al timer [4.16]
+struct richiesta {
+	natl d_attesa;
+	richiesta *p_rich;
+	proc_elem *pp;
+};
+
+richiesta *p_sospesi; // [4.16]
+
+void inserimento_lista_attesa(richiesta *p); // [4.16]
+// parte "C++" della primitiva delay [4.16]
+extern "C" void c_delay(natl n)
+{
+	richiesta *p;
+
+	p = static_cast<richiesta*>(alloca(sizeof(richiesta)));
+	p->d_attesa = n;	
+	p->pp = esecuzione;
+
+	inserimento_lista_attesa(p);
+	schedulatore();
+}
+
+// inserisce P nella coda delle richieste al timer [4.16]
+void inserimento_lista_attesa(richiesta *p)
+{
+	richiesta *r, *precedente;
+	bool ins;
+
+	r = p_sospesi;
+	precedente = 0;
+	ins = false;
+
+	while (r != 0 && !ins)
+		if (p->d_attesa > r->d_attesa) {
+			p->d_attesa -= r->d_attesa;
+			precedente = r;
+			r = r->p_rich;
+		} else
+			ins = true;
+
+	p->p_rich = r;
+	if (precedente != 0)
+		precedente->p_rich = p;
+	else
+		p_sospesi = p;
+
+	if (r != 0)
+		r->d_attesa -= p->d_attesa;
+}
+
+// driver del timer [4.16][9.6]
+extern "C" void c_driver_td(void)
+{
+	richiesta *p;
+
+	if(p_sospesi != 0)
+		p_sospesi->d_attesa--;
+
+	while(p_sospesi != 0 && p_sospesi->d_attesa == 0) {
+		inserimento_lista(pronti, p_sospesi->pp);
+		p = p_sospesi;
+		p_sospesi = p_sospesi->p_rich;
+		dealloca(p);
+	}
+
+	inspronti();
+	schedulatore();
+}
+
 // (* in caso di errori fatali, useremo la segunte funzione, che blocca il sistema:
 extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 // implementazione in [P_PANIC]
@@ -866,11 +1027,6 @@ extern natl ticks;
 extern natl clocks_per_usec;
 extern "C" void attiva_timer(natl count);
 const natl DELAY = 59659;
-extern "C" void c_driver_td()
-{
-	flog(LOG_INFO,"timer");
-
-}
 
 //////////////////////////////////////////////////////////////////////////////
 //							GDT												//
@@ -878,71 +1034,77 @@ extern "C" void c_driver_td()
 extern "C" void init_gdt();
 extern "C" void set_tss_stack(addr stack);
 
+
+addr crea_pila(addr pml4,int dim, bool utente) //per ora una sola pagina
+{
+	natq flags = BIT_RW;
+	addr pila_virt = reinterpret_cast<addr>(0xfffffa0000000000);    //per ora è hardcodato
+	if(utente == true)
+	{
+		flags |= BIT_US;
+		pila_virt = reinterpret_cast<addr>(0xfffffb0000000000);    //per ora è hardcodato
+	}
+
+	for(int i = 0; i<dim;i+=DIM_PAGINA)
+	{
+		des_pf* ppf = alloca_pagina_fisica_libera();
+		if (ppf == 0) {
+			panic("impossibile allocare pila");
+		}
+		ppf->contenuto = PAGINA_PRIVATA;
+		ppf->pt.residente = true;   //per ora no swap
+		natq *pila_phys = static_cast<natq*>(indirizzo_pf(ppf));
+		
+		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
+		sequential_map(pml4,pila_phys,pag_pila,1,flags);
+	}
+
+	return reinterpret_cast<addr>((natq)pila_virt + dim - 8);
+	
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
 ///////////////////////////////////////////////////////////////////////////////
-void test_int()
-{
-	asm(
-		"int $0xf0 \n"
-	   );
-
-	flog(LOG_DEBUG, "test_int --->  1");
-}
-void test_mapping(addr testpml4)
-{
-	int* newmap = reinterpret_cast<int*>(0xFFFFF00000000000);
-	int* oldmap = reinterpret_cast<int*>(6*MiB);
-	sequential_map(testpml4,oldmap,newmap,1,BIT_RW);
-	*oldmap = 12;
-	flog(LOG_DEBUG, "test_mapping --->  %d", *oldmap == *newmap);
-}
-
 extern "C" addr pag_utente_virt;
 extern "C" addr pag_utente;
-extern "C" void iretq_to_user(addr rip, addr rsp);
+extern "C" void goto_user_proc(addr rip, addr rsp);
+extern "C" natl alloca_tss(des_proc*);
 void test_userspace(addr testpml4)
 {
-//	des_pf* ppf = alloca_pagina_fisica_libera();
-//	if (ppf == 0) {
-//		flog(LOG_ERR, "Impossibile allocare pila_utente");
-//		panic("?");
-//	}
-//	ppf->contenuto = PAGINA_CONDIVISA;
-//	ppf->pt.residente = true;
-//	natq* pila_utente = static_cast<natq*>(indirizzo_pf(ppf));
-//
-	des_pf* ppf = alloca_pagina_fisica_libera();
-	if (ppf == 0) {
-		flog(LOG_ERR, "Impossibile allocare pila_sistema");
-		panic("?");
-	}
-	ppf->contenuto = PAGINA_CONDIVISA;
-	ppf->pt.residente = true;
-	natq* pila_sistema = static_cast<natq*>(indirizzo_pf(ppf));
-
-	//pag_utente_virt = reinterpret_cast<addr>(0xffffff0000a00000);
-//	*utente_jmp_addr = pag_utente_virt;
-//	addr pila_utente_virt = reinterpret_cast<addr>((natq)pag_utente_virt+DIM_PAGINA);
-//	addr end_pila_utente_virt = reinterpret_cast<addr>((natq)pila_utente_virt+DIM_PAGINA-8);
-	addr end_pila_sistema = reinterpret_cast<addr>((natq)pila_sistema+DIM_PAGINA-8);
+	proc_elem* pe;
+	des_proc* des_dd;
+	natl id;
+	
+	natq* pila_sistema = static_cast<natq*>(crea_pila(testpml4,16*KiB,false));
+	natq* pila_utente  = static_cast<natq*>(crea_pila(testpml4,16*KiB,true ));
 
 	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
-	//sequential_map(testpml4,pila_utente,pila_utente_virt,1,BIT_RW | BIT_US);
 
-	set_tss_stack(end_pila_sistema);
+	des_dd = static_cast<des_proc*>(alloca(sizeof(des_proc)));
+	if (des_dd == 0) goto errore;
+	memset(des_dd, 0, sizeof(des_proc));
+	des_dd->cr3 = testpml4;
+	des_dd->punt_nucleo = pila_sistema;
 
-	iretq_to_user(pag_utente_virt, addr(0xdeadbeef));//end_pila_utente_virt);
+	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
+	if (pe == 0) goto errore;
 
+	id = alloca_tss(des_dd);
+	flog(LOG_DEBUG,"id=%d",id);
+	if (id == 0) goto errore;
+	
+    pe->id = id;
+    pe->precedenza = 1;
+	pe->puntatore = 0;
 
+	esecuzione = pe;
+	goto_user_proc(pag_utente_virt,pila_utente);
+
+errore:
+	panic("errore test_userspace");
 
 }
-
-extern "C" void c_primitiva_flog()
-{
-	flog(LOG_INFO,"flog utente");
-}
-
 
 extern "C" void cmain ()
 {
@@ -979,11 +1141,8 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
-	asm("sti");
+	//asm("sti");
 	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
-
-	test_mapping(testpml4);
-	test_int();
 
 	attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");

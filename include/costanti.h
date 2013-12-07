@@ -1,12 +1,12 @@
 // ( costanti usate in sistema.cpp e sistema.S
 //   SEL = selettori (segmentazione con modello flat)
 //   LIV = livelli di privilegio
-#define SEL_CODICE_SISTEMA	8
-#define SEL_DATI_SISTEMA 	16
-#define SEL_CODICE_UTENTE	27
-#define SEL_DATI_UTENTE 	35
+#define SEL_CODICE_SISTEMA	0x8
+#define SEL_CODICE_UTENTE	0x13
+#define SEL_DATI_UTENTE 	0x1b
 #define LIV_UTENTE		3
 #define LIV_SISTEMA		0
+#define NUM_TSS 1024
 // )
 
 // ( varie dimensioni
@@ -18,7 +18,7 @@
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096U
 #define DIM_MACROPAGINA		(DIM_PAGINA * 1024U)
-#define DIM_DESP		216 	// descrittore di processo
+#define DIM_DESP		236 	// descrittore di processo
 #define DIM_DESS		8	// descrittore di semaforo
 #define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define MAX_PRD			16
