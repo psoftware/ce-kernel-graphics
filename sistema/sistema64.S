@@ -67,7 +67,7 @@ start:
 
 
 
-.set CR3,108
+.set CR3,100
 .set RAX,CR3+8
 .set RCX,CR3+16
 .set RDX,CR3+24
@@ -88,7 +88,7 @@ start:
 .macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e 
 					//lascia il risultato in %rbx
 	movl 8(%eax), %ebx
-	shlq $32, %rax      //bit 63:32 nella parte alta di %rax
+	shlq $32, %rbx      //bit 63:32 nella parte alta di %rbx
     movb 7(%eax), %bh	// bit 31:24 della base in %bh
     movb 4(%eax), %bl	// bit 23:16 della base in %bl
     shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
@@ -103,8 +103,7 @@ salva_stato:
 	movq esecuzione,%rax
 	movq $0, %rbx
 	movw (%rax),%bx
-	shrl $3,%ebx
-	leaq gdt(,%ebx,8), %rax
+	leaq gdt(%ebx), %rax
 	estrai_base
 
 	popq %rax
@@ -137,8 +136,7 @@ carica_stato:
 	movq $0, %rbx
 	movw (%rdx), %bx
 	movq %rbx, %rcx
-	shrl $3, %ebx
-	leaq gdt(, %ebx, 8), %rax
+	leaq gdt(%ebx), %rax
 	estrai_base
 	andb $0b11111101, 5(%rax)
 	ltr %cx
@@ -351,8 +349,9 @@ goto_user_proc:
 	int $TIPO_L
 .endm
 	.global code_utente
+	.global dummy_proc
 code_utente:
-dd:
+dummy_proc:
 	user_flog $msg_dd
 loop_dd:
 	jmp loop_dd
@@ -361,7 +360,10 @@ msg_dd: .string "raggiunto codice utente"
 proc0:
 	movl %edi,%edx
 	user_flog $enter_proc0
+	movl $1000,%edi
 loop_proc0:
+	int $TIPO_D
+	user_flog $enter_proc0
 	jmp loop_proc0
 enter_proc0: .string "inizio proc0 param=%d"
 
@@ -700,13 +702,6 @@ idt:
 	// verra' riempita a tempo di esecuzione
 	.space 16 * 256, 0
 end_idt:
-
-	.global pag_utente_virt
-pag_utente_virt:
-	.quad 0xffffff0000a00000
-	.global pag_utente
-pag_utente:
-	.quad code_utente
 
 	.global stack
 stack:

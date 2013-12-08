@@ -1065,34 +1065,40 @@ addr crea_pila(addr pml4,int dim, bool utente)
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" addr pag_utente_virt;
-extern "C" addr pag_utente;
+extern "C" natb code_utente;
+extern "C" natb dummy_proc;
+extern "C" natb proc0;
+addr pag_utente = &code_utente;
+addr pag_utente_virt = reinterpret_cast<addr>(0xffffff0000a00000);
 extern "C" void goto_user_proc(addr rip, addr rsp);
 extern "C" natl alloca_tss(des_proc*,addr);
 void test_userspace(addr testpml4)
 {
 	proc_elem* pe;
-	des_proc* des_dd;
+	des_proc* des_dummy;
 	natl id;
 	
+	addr entry_dummy_virt = reinterpret_cast<addr>((natq)&dummy_proc - 
+	                                               (natq)pag_utente+
+	                                               (natq)pag_utente_virt);
 	addr pila_sistema = crea_pila(testpml4,16*KiB,false);
 	addr pila_utente  = crea_pila(testpml4,16*KiB,true );
 
 	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
 
-	des_dd = static_cast<des_proc*>(alloca(sizeof(des_proc)));
-	if (des_dd == 0) goto errore;
-	memset(des_dd, 0, sizeof(des_proc));
-	des_dd->cr3 = testpml4;
-	des_dd->punt_nucleo = pila_sistema;
+	des_dummy = static_cast<des_proc*>(alloca(sizeof(des_proc)));
+	if (des_dummy == 0) goto errore;
+	memset(des_dummy, 0, sizeof(des_proc));
+	des_dummy->cr3 = testpml4;
+	des_dummy->punt_nucleo = pila_sistema;
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
 	if (pe == 0) goto errore;
 	
 
-	id = alloca_tss(des_dd,pila_sistema);
-	flog(LOG_DEBUG,"id=%d, des_dd=%p, sizeof(des_proc)=%d,pila_sistema=%p,pila_utente=%p",
-	     id,des_dd,sizeof(des_proc),pila_sistema,pila_utente);
+	id = alloca_tss(des_dummy,pila_sistema);
+	flog(LOG_DEBUG,"sizeof(des_proc)=%d,entry_dummy_virt=%p,pila_sistema=%p,pila_utente=%p",
+	     sizeof(des_proc),entry_dummy_virt,pila_sistema,pila_utente);
 	if (id == 0) goto errore;
 	
     pe->id = id;
@@ -1100,7 +1106,7 @@ void test_userspace(addr testpml4)
 	pe->puntatore = 0;
 
 	esecuzione = pe;
-	goto_user_proc(pag_utente_virt,pila_utente);
+	goto_user_proc(entry_dummy_virt,pila_utente);
 
 errore:
 	panic("errore test_userspace");
@@ -1142,7 +1148,7 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
-	//asm("sti");
+	asm("sti");
 	flog(LOG_INFO, "APIC inizializzato e interruzioni abilitate!");
 
 	attiva_timer(DELAY);

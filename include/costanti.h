@@ -18,7 +18,7 @@
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096U
 #define DIM_MACROPAGINA		(DIM_PAGINA * 1024U)
-#define DIM_DESP		240 	// descrittore di processo
+#define DIM_DESP		236 	// descrittore di processo
 #define DIM_DESS		8	// descrittore di semaforo
 #define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define MAX_PRD			16
