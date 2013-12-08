@@ -321,41 +321,27 @@ init_gdt:
 
 	retq
 
-	.global goto_user_proc
-goto_user_proc:
-	movq esecuzione, %rax
-	movl (%rax),%eax
-	leaq gdt(%rax), %rcx
-	
-	andb $0b11111101, 5(%rcx) //not busy
-	ltr %ax
-
-	xorq %rax,%rax
-	movw $SEL_DATI_UTENTE,%ax    
-	pushq %ax       //ss
-	pushq %rsi      //rsp, second argument  
-	pushfq          //rflags
-	xorq %rax,%rax
-	movw $SEL_CODICE_UTENTE,%ax
-	pushq %ax       //cs
-	pushq %rdi      //rip, first argument
+	.global goto_user
+goto_user:
+	call carica_stato
 	iretq
 
-.balign 4096
 .macro user_flog msg
 	movl $1,%edi
 	movq \msg, %rsi
 	movl $0, %eax
 	int $TIPO_L
 .endm
-	.global code_utente
+	
+.balign 4096
 	.global dummy_proc
-code_utente:
 dummy_proc:
 	user_flog $msg_dd
 loop_dd:
 	jmp loop_dd
 msg_dd: .string "raggiunto codice utente"
+
+.balign 4096
 
 proc0:
 	movl %edi,%edx
@@ -366,8 +352,8 @@ loop_proc0:
 	user_flog $enter_proc0
 	jmp loop_proc0
 enter_proc0: .string "inizio proc0 param=%d"
-
 .balign 4096
+
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
 ////////////////////////////////////////////////////////////////

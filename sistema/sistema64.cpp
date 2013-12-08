@@ -393,6 +393,30 @@ des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
 //                         PAGINAZIONE [6]                                     //
 /////////////////////////////////////////////////////////////////////////////////
 
+//per semplicita permettiamo di avere sono interi pdp condivisi e assegnamo ad 
+//ogni zona logicamente distinta di memoria un intera entry nel pml4 (tanto ce
+//ne sono ben 512 grandi 512Gb ciascuna per un totale di 256Tb indirizzabili)
+//per aiutare nel debug cercheremo di distanziare le zone tra loro
+//NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
+//in poi si trovano nella meta alta dello spazio di indirizzamento
+
+#define I_finestra_FM  0            //per ora coincide con sistema_condiviso
+#define I_sistema_privato  102
+#define I_PCI_condiviso  204
+#define I_utente_condiviso  308     //higher half
+#define I_utente_privato  410       //higher half
+
+#define ADDRESS(index) reinterpret_cast<addr>((index<256)?\
+                       ((natq)index << 39):\
+                       (((natq)(index) << 39) | (0xffffL<<48)))
+
+
+const addr inizio_finestra_FM = ADDRESS(I_finestra_FM); 
+const addr inizio_sistema_privato = ADDRESS(I_sistema_privato);
+const addr inizio_pci_condiviso = ADDRESS(I_PCI_condiviso);
+const addr inizio_utente_condiviso = ADDRESS(I_utente_condiviso);
+const addr inizio_utente_privato = ADDRESS(I_utente_privato);
+
 //   ( definiamo alcune costanti utili per la manipolazione dei descrittori
 //     di pagina e di tabella. Assegneremo a tali descrittori il tipo "natl"
 //     e li manipoleremo tramite maschere e operazioni sui bit.
@@ -812,7 +836,6 @@ extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
 /////////////////////////////////////////////////////////////////////////////////
 natl dim_pci_condiviso = 20*MiB;
 const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
-natb* const inizio_pci_condiviso = reinterpret_cast<natb*>(0x00000000fec00000);
 
 // ( [P_PCI]
 
@@ -1037,13 +1060,14 @@ addr crea_pila(addr pml4,int dim, bool utente)
 {
 	natq flags = BIT_RW;
 	
-	addr pila_virt = reinterpret_cast<addr>(0xfffffa0000000000);    //per ora  hardcodato
+	addr pila_virt = inizio_sistema_privato;
 	if(utente == true)
 	{
 		flags |= BIT_US;
-		pila_virt = reinterpret_cast<addr>(0xfffffb0000000000);    //per ora  hardcodato
+		pila_virt = inizio_utente_privato;    //per ora  hardcodato
 	}
 
+	addr pila_phys = 0;
 	for(int i = 0; i<dim;i+=DIM_PAGINA)
 	{
 		des_pf* ppf = alloca_pagina_fisica_libera();
@@ -1052,65 +1076,117 @@ addr crea_pila(addr pml4,int dim, bool utente)
 		}
 		ppf->contenuto = PAGINA_PRIVATA;
 		ppf->pt.residente = true;   //per ora no swap
-		addr pila_phys = indirizzo_pf(ppf);
+		pila_phys = indirizzo_pf(ppf);
 		
 		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
 		sequential_map(pml4,pila_phys,pag_pila,1,flags);
 	}
 
-	return reinterpret_cast<addr>((natq)pila_virt + dim - 8);
+	return reinterpret_cast<addr>((natq)pila_phys - 8);
 	
 }
+
+addr crea_pml4()
+{
+	des_pf* ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		flog(LOG_ERR, "Impossibile allocare pml4");
+		panic("errore");
+	}
+	ppf->contenuto = PML4;
+	ppf->pt.residente = true;
+	addr pml4 = indirizzo_pf(ppf);
+	memset(pml4, 0, DIM_PAGINA);
+
+	return pml4;
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" natb code_utente;
-extern "C" natb dummy_proc;
-extern "C" natb proc0;
-addr pag_utente = &code_utente;
-addr pag_utente_virt = reinterpret_cast<addr>(0xffffff0000a00000);
-extern "C" void goto_user_proc(addr rip, addr rsp);
+void copia_pagine_condivise(addr srcpml4, addr destpml4)
+{
+	natq finestra_FM = get_entry(srcpml4,I_finestra_FM);
+	set_entry(destpml4,I_finestra_FM,finestra_FM);
+	
+	natq sistema_privato = get_entry(srcpml4,I_finestra_FM);
+	set_entry(destpml4,I_sistema_privato,sistema_privato);
+	
+	natq PCI_condiviso = get_entry(srcpml4,I_finestra_FM);
+	set_entry(destpml4,I_PCI_condiviso,PCI_condiviso);
+	
+	natq utente_privato = get_entry(srcpml4,I_utente_privato);
+	set_entry(destpml4,I_utente_privato,utente_privato);
+	
+	natq utente_condiviso = get_entry(srcpml4,I_utente_condiviso);
+	set_entry(destpml4,I_utente_condiviso,utente_condiviso);
+}
+
+
+
+extern "C" void goto_user();
 extern "C" natl alloca_tss(des_proc*,addr);
-void test_userspace(addr testpml4)
+const natl BIT_IF = 1L << 9;
+proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 {
 	proc_elem* pe;
-	des_proc* des_dummy;
-	natl id;
+	des_proc* dp;
+	natl id;	
+	natq* pila_sistema_iretq;
+
+	addr pml4 = crea_pml4();
+
+	addr pml4_padre = readCR3();
+
+	copia_pagine_condivise(pml4_padre,pml4);
 	
-	addr entry_dummy_virt = reinterpret_cast<addr>((natq)&dummy_proc - 
-	                                               (natq)pag_utente+
-	                                               (natq)pag_utente_virt);
-	addr pila_sistema = crea_pila(testpml4,16*KiB,false);
-	addr pila_utente  = crea_pila(testpml4,16*KiB,true );
+	addr pila_sistema = crea_pila(pml4,DIM_SYS_STACK,false);
+	crea_pila(pml4,DIM_USR_STACK, true ); //pila_tuente
 
-	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
+	sequential_map(pml4,phys_start,inizio_utente_condiviso,1,BIT_RW | BIT_US);
 
-	des_dummy = static_cast<des_proc*>(alloca(sizeof(des_proc)));
-	if (des_dummy == 0) goto errore;
-	memset(des_dummy, 0, sizeof(des_proc));
-	des_dummy->cr3 = testpml4;
-	des_dummy->punt_nucleo = pila_sistema;
+	dp = static_cast<des_proc*>(alloca(sizeof(des_proc)));
+	if (dp == 0) goto errore;
+	memset(dp, 0, sizeof(des_proc));
+	dp->cr3 = pml4;
+	dp->punt_nucleo = pila_sistema;
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
 	if (pe == 0) goto errore;
 	
-
-	id = alloca_tss(des_dummy,pila_sistema);
-	flog(LOG_DEBUG,"sizeof(des_proc)=%d,entry_dummy_virt=%p,pila_sistema=%p,pila_utente=%p",
-	     sizeof(des_proc),entry_dummy_virt,pila_sistema,pila_utente);
+	id = alloca_tss(dp,pila_sistema);
 	if (id == 0) goto errore;
 	
     pe->id = id;
-    pe->precedenza = 1;
+    pe->precedenza = precedenza;
 	pe->puntatore = 0;
 
-	esecuzione = pe;
-	goto_user_proc(entry_dummy_virt,pila_utente);
+	pila_sistema_iretq = static_cast<natq*>(pila_sistema);
+
+	pila_sistema_iretq[0 ] = SEL_DATI_UTENTE;
+	pila_sistema_iretq[-1] = (natq)inizio_utente_privato + DIM_USR_STACK - 8;
+	pila_sistema_iretq[-2] = BIT_IF; //flags
+	pila_sistema_iretq[-3] = SEL_CODICE_UTENTE;
+	pila_sistema_iretq[-4] = (natq)inizio_utente_condiviso;
+
+	dp->contesto[I_RSP] = (natq)inizio_sistema_privato + DIM_SYS_STACK - 8; 
+	dp->contesto[I_RDI] = param;
+
+	return pe;
 
 errore:
-	panic("errore test_userspace");
+	return 0;
+}
 
+extern "C" natb proc0;
+extern "C" natb dummy_proc;
+void test_userspace()
+{
+	flog(LOG_INFO, "Creo il processo dummy");
+	esecuzione = crea_processo(&dummy_proc,1,13);
+	flog(LOG_INFO, "Salto a spazio utente");
+	goto_user();
 }
 
 extern "C" void cmain ()
@@ -1129,22 +1205,15 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
 
-	des_pf* ppf = alloca_pagina_fisica_libera();
-	if (ppf == 0) {
-		flog(LOG_ERR, "Impossibile allocare testpml4");
-		panic("?");
-	}
-	ppf->contenuto = PML4;
-	ppf->pt.residente = true;
-	addr testpml4 = indirizzo_pf(ppf);
-	memset(testpml4, 0, DIM_PAGINA);
-	if(!crea_finestra_FM(testpml4))
+	addr initpml4 = crea_pml4();
+
+	if(!crea_finestra_FM(initpml4))
 			goto error;
 	flog(LOG_INFO, "Creata finestra FM!");
-	if(!crea_finestra_PCI(testpml4))
+	if(!crea_finestra_PCI(initpml4))
 			goto error;
 	flog(LOG_INFO, "Creata finestra PCI!");
-	loadCR3(testpml4);
+	loadCR3(initpml4);
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
@@ -1154,7 +1223,7 @@ extern "C" void cmain ()
 	attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");
 
-	test_userspace(testpml4);
+	test_userspace();
 
 	flog(LOG_INFO, "Uscita!");
 	return;
