@@ -31,7 +31,7 @@ struct des_proc {
 	//finiti i campi obbligatori
 	addr cr3;
 	natq contesto[N_REG];
-};
+}__attribute__((packed));
 
 //indici nell'array contesto
 enum { I_RAX, I_RCX, I_RDX, I_RBX,
@@ -1068,7 +1068,7 @@ addr crea_pila(addr pml4,int dim, bool utente)
 extern "C" addr pag_utente_virt;
 extern "C" addr pag_utente;
 extern "C" void goto_user_proc(addr rip, addr rsp);
-extern "C" natl alloca_tss(des_proc*);
+extern "C" natl alloca_tss(des_proc*,addr);
 void test_userspace(addr testpml4)
 {
 	proc_elem* pe;
@@ -1090,7 +1090,7 @@ void test_userspace(addr testpml4)
 	if (pe == 0) goto errore;
 	
 
-	id = alloca_tss(des_dd);
+	id = alloca_tss(des_dd,pila_sistema);
 	flog(LOG_DEBUG,"id=%d, des_dd=%p, sizeof(des_proc)=%d,pila_sistema=%p,pila_utente=%p",
 	     id,des_dd,sizeof(des_proc),pila_sistema,pila_utente);
 	if (id == 0) goto errore;

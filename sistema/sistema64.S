@@ -174,18 +174,18 @@ carica_stato:
 .set pres_bit, 15+32
 	.global alloca_tss
 alloca_tss:
-	movq $0, %rsi
+	movq $0, %r11
 	movq $(NUM_TSS*16),%rax
 iter_tss:
-	testq $pres_bit,des_tss(%rsi)
+	testq $pres_bit,des_tss(%r11)
 	jz set_entry_tss
-	addq $16, %rsi
-	cmpq %rsi,%rax
+	addq $16, %r11
+	cmpq %r11,%rax
 	jne iter_tss
 	movq $0,%rax
 	jmp end_tss
 set_entry_tss:
-	leaq des_tss(%rsi), %rdx
+	leaq des_tss(%r11), %rdx
 	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
 	movq %rdi, %rax
 	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
@@ -198,10 +198,9 @@ set_entry_tss:
 	movl %eax, 8(%rdx) //[95:64] = base[63:32]
 	movq $0, 12(%rdx)	//[127:96] = 0
 
-	movq %rsi,%rax
+	movq %r11,%rax
 	addq $(des_tss-gdt),%rax 
 end_tss:
-	movq %rsp,4(%rdi) //TODO temp
 	retq
 
 	
