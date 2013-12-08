@@ -1032,17 +1032,16 @@ const natl DELAY = 59659;
 //							GDT												//
 /////////////////////////////////////////////////////////////////////////////
 extern "C" void init_gdt();
-extern "C" void set_tss_stack(addr stack);
 
-
-addr crea_pila(addr pml4,int dim, bool utente) //per ora una sola pagina
+addr crea_pila(addr pml4,int dim, bool utente) 
 {
 	natq flags = BIT_RW;
-	addr pila_virt = reinterpret_cast<addr>(0xfffffa0000000000);    //per ora è hardcodato
+	
+	addr pila_virt = reinterpret_cast<addr>(0xfffffa0000000000);    //per ora  hardcodato
 	if(utente == true)
 	{
 		flags |= BIT_US;
-		pila_virt = reinterpret_cast<addr>(0xfffffb0000000000);    //per ora è hardcodato
+		pila_virt = reinterpret_cast<addr>(0xfffffb0000000000);    //per ora  hardcodato
 	}
 
 	for(int i = 0; i<dim;i+=DIM_PAGINA)
@@ -1053,7 +1052,7 @@ addr crea_pila(addr pml4,int dim, bool utente) //per ora una sola pagina
 		}
 		ppf->contenuto = PAGINA_PRIVATA;
 		ppf->pt.residente = true;   //per ora no swap
-		natq *pila_phys = static_cast<natq*>(indirizzo_pf(ppf));
+		addr pila_phys = indirizzo_pf(ppf);
 		
 		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
 		sequential_map(pml4,pila_phys,pag_pila,1,flags);
@@ -1076,8 +1075,8 @@ void test_userspace(addr testpml4)
 	des_proc* des_dd;
 	natl id;
 	
-	natq* pila_sistema = static_cast<natq*>(crea_pila(testpml4,16*KiB,false));
-	natq* pila_utente  = static_cast<natq*>(crea_pila(testpml4,16*KiB,true ));
+	addr pila_sistema = crea_pila(testpml4,16*KiB,false);
+	addr pila_utente  = crea_pila(testpml4,16*KiB,true );
 
 	sequential_map(testpml4,pag_utente,pag_utente_virt,1,BIT_RW | BIT_US);
 
@@ -1089,9 +1088,11 @@ void test_userspace(addr testpml4)
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
 	if (pe == 0) goto errore;
+	
 
 	id = alloca_tss(des_dd);
-	flog(LOG_DEBUG,"id=%d",id);
+	flog(LOG_DEBUG,"id=%d, des_dd=%p, sizeof(des_proc)=%d,pila_sistema=%p,pila_utente=%p",
+	     id,des_dd,sizeof(des_proc),pila_sistema,pila_utente);
 	if (id == 0) goto errore;
 	
     pe->id = id;

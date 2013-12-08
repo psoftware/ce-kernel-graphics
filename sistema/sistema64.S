@@ -201,6 +201,7 @@ set_entry_tss:
 	movq %rsi,%rax
 	addq $(des_tss-gdt),%rax 
 end_tss:
+	movq %rsp,4(%rdi) //TODO temp
 	retq
 
 	
@@ -353,7 +354,7 @@ goto_user_proc:
 	.global code_utente
 code_utente:
 dd:
-	//user_flog $msg_dd
+	user_flog $msg_dd
 loop_dd:
 	jmp loop_dd
 msg_dd: .string "raggiunto codice utente"
