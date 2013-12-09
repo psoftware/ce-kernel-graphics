@@ -336,7 +336,7 @@ goto_user:
 .balign 4096
 	.global dummy_proc
 dummy_proc:
-	user_flog $msg_dd
+	//user_flog $msg_dd
 loop_dd:
 	jmp loop_dd
 msg_dd: .string "raggiunto codice utente"
@@ -501,7 +501,7 @@ comm_exc:
 driver_td:
 	call salva_stato
 	call c_driver_td
-	call apic_send_EOI
+	call ioapic_send_EOI
 	call carica_stato
 	iretq
 
@@ -511,7 +511,7 @@ handler_msg:
 .macro handler n
 handler_\n: 
 	salva_registri
-	call apic_send_EOI
+	call ioapic_send_EOI
 	movq $(\n+VETT_0),%rdx
     movq $handler_msg, %rsi
     movl $1, %edi

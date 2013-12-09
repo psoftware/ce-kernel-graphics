@@ -1,6 +1,5 @@
 #!/usr/bin/perl -n
 
-my $ADDR2LINE="addr2line";
 
 BEGIN {
 	my $hex = qr/[a-fA-F0-9]/;
@@ -13,7 +12,7 @@ BEGIN {
 		elsif ($h ge '0010f000') { $exe = "build/sistema64"; }
 		else                     { $exe = "build/boot"; }
 
-		my $out = `$ADDR2LINE -Cfe $exe $h`;
+		my $out = `addr2line-Cfe $exe $h`;
 		if ($?) {
 			return $h;
 		}
