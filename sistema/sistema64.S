@@ -336,13 +336,13 @@ goto_user:
 .balign 4096
 	.global dummy_proc
 dummy_proc:
-	//user_flog $msg_dd
+	user_flog $msg_dd
 loop_dd:
 	jmp loop_dd
-msg_dd: .string "raggiunto codice utente"
+msg_dd: .string "inizio dummy_proc"
 
 .balign 4096
-
+	.global proc0
 proc0:
 	movl %edi,%edx
 	user_flog $enter_proc0
@@ -550,18 +550,15 @@ a_flog:
 	//pushq %rdi
 	salva_registri
 	//movq (%rsp),%rdi
-    call flog
+	call flog
 	carica_registri
 	//addq $8,%rsp
 	iretq
 	
-a_delay:	// routine int $tipo_d [4.16][6.5]
-	pushq %rdi
+a_delay:	
 	call salva_stato
-	movq (%rsp),%rdi
-    call c_delay
+	call c_delay
 	call carica_stato
-	addq $8,%rsp
 	iretq
 
 

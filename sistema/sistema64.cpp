@@ -1087,7 +1087,7 @@ addr crea_pila(addr pml4,int dim, bool utente)
 		sequential_map(pml4,pila_phys,pag_pila,1,flags);
 	}
 
-	return reinterpret_cast<addr>((natq)pila_phys + DIM_PAGINA - 8);
+	return reinterpret_cast<addr>((natq)pila_phys + DIM_PAGINA );
 	
 }
 
@@ -1141,6 +1141,7 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	natq* pila_sistema_iretq;
 
 	addr pml4 = crea_pml4();
+	flog(LOG_INFO,"pml4=%x",pml4);
 
 	addr pml4_padre = readCR3();
 
@@ -1155,7 +1156,7 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	if (dp == 0) goto errore;
 	memset(dp, 0, sizeof(des_proc));
 	dp->cr3 = pml4;
-	dp->punt_nucleo = reinterpret_cast<addr>((natq)inizio_sistema_privato+DIM_SYS_STACK-8);
+	dp->punt_nucleo = reinterpret_cast<addr>((natq)inizio_sistema_privato+DIM_SYS_STACK);
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
 	if (pe == 0) goto errore;
@@ -1169,11 +1170,11 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 
 	pila_sistema_iretq = static_cast<natq*>(pila_sistema);
 
-	*(pila_sistema_iretq) = SEL_DATI_UTENTE;
-	*(pila_sistema_iretq-1) = (natq)inizio_utente_privato + DIM_USR_STACK - 8;
-	*(pila_sistema_iretq-2) = BIT_IF; //flags
-	*(pila_sistema_iretq-3) = SEL_CODICE_UTENTE;
-	*(pila_sistema_iretq-4) = (natq)inizio_utente_condiviso;
+	*(pila_sistema_iretq-1) = SEL_DATI_UTENTE;
+	*(pila_sistema_iretq-2) = (natq)inizio_utente_privato + DIM_USR_STACK;
+	*(pila_sistema_iretq-3) = BIT_IF; //flags
+	*(pila_sistema_iretq-4) = SEL_CODICE_UTENTE;
+	*(pila_sistema_iretq-5) = (natq)inizio_utente_condiviso;
 
 	dp->contesto[I_RSP] = (natq)inizio_sistema_privato + DIM_SYS_STACK - 8*5; 
 	dp->contesto[I_RDI] = param;
@@ -1188,8 +1189,11 @@ extern "C" natb proc0;
 extern "C" natb dummy_proc;
 void test_userspace()
 {
-	flog(LOG_INFO, "Creo il processo dummy");
-	esecuzione = crea_processo(&dummy_proc,1,13);
+	flog(LOG_INFO, "Creo il processo dummy. Indirizzo fisico:%p",&dummy_proc);
+	inserimento_lista(pronti,crea_processo(&dummy_proc,0,13));
+	flog(LOG_INFO, "Creo il processo proc0. Indirizzo fisico:%p",&proc0);
+	inserimento_lista(pronti,crea_processo(&proc0,1,13));
+	schedulatore();
 	flog(LOG_INFO, "Salto a spazio utente");
 	goto_user();
 }
