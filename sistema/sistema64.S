@@ -169,13 +169,13 @@ carica_stato:
 
 
 .set p_dpl_type, 0b10001001 //p=1,dpl=00,type=1001=tss ready
-.set pres_bit, 15+32
+.set pres_bit,   0b10000000
 	.global alloca_tss
 alloca_tss:
-	movq $0, %r11
-	movq $(NUM_TSS*16),%rax
+	movq $(des_tss-gdt), %r11
+	movq $(end_gdt-gdt),%rax
 iter_tss:
-	testq $pres_bit,des_tss(%r11)
+	testb $pres_bit,(gdt+5)(%r11)
 	jz set_entry_tss
 	addq $16, %r11
 	cmpq %r11,%rax
@@ -183,7 +183,7 @@ iter_tss:
 	movq $0,%rax
 	jmp end_tss
 set_entry_tss:
-	leaq des_tss(%r11), %rdx
+	leaq gdt(%r11), %rdx
 	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
 	movq %rdi, %rax
 	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
@@ -197,7 +197,6 @@ set_entry_tss:
 	movq $0, 12(%rdx)	//[127:96] = 0
 
 	movq %r11,%rax
-	addq $(des_tss-gdt),%rax 
 end_tss:
 	retq
 
@@ -345,13 +344,18 @@ msg_dd: .string "inizio dummy_proc"
 	.global proc0
 proc0:
 	movl %edi,%edx
+	movq %rdi,%r12
 	user_flog $enter_proc0
-	movl $1000,%edi
 loop_proc0:
+	movq %r12,%rdi
+	shlq $4,%rdi
+	addq $50,%rdi
 	int $TIPO_D
-	user_flog $enter_proc0
+	movq %r12,%rdx
+	user_flog $wake_proc0
 	jmp loop_proc0
-enter_proc0: .string "inizio proc0 param=%d"
+enter_proc0: .string "inizio proc0(%d)"
+wake_proc0: .string "svegliato proc0(%d)"
 .balign 4096
 
 ////////////////////////////////////////////////////////////////
@@ -496,6 +500,8 @@ comm_exc:
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
 //
+
+
 // driver del timer	[4.16]
 	.extern c_driver_td
 driver_td:
@@ -503,6 +509,7 @@ driver_td:
 	call c_driver_td
 	call ioapic_send_EOI
 	call carica_stato
+
 	iretq
 
 handler_msg:
@@ -616,10 +623,6 @@ panic:
 // sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
-.global		fine_codice_sistema
-fine_codice_sistema:
-		.long etext
-
 	.global esecuzione
 esecuzione: 
 	.quad 0
@@ -651,6 +654,7 @@ idt_pointer:
 	.quad idt			// base della IDT
 
 .balign 8
+.global gdt
 gdt:
 	.quad 0		//segmento nullo
 code_sys_seg:

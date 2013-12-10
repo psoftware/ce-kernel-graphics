@@ -5,352 +5,325 @@
 
 #include "libce.h"
 
-				///////////////////////////////////////////////////////////////////////////////////
-				//                   INIZIALIZZAZIONE [10]                                       //
-				///////////////////////////////////////////////////////////////////////////////////
-				const natq HEAP_START = 1024 * 1024U;
-				extern "C" natq start;
-				const natq HEAP_SIZE = (natq)&start - HEAP_START;
+///////////////////////////////////////////////////////////////////////////////////
+//                   INIZIALIZZAZIONE [10]                                       //
+///////////////////////////////////////////////////////////////////////////////////
+const natq HEAP_START = 1024 * 1024U;
+extern "C" natq start;
+const natq HEAP_SIZE = (natq)&start - HEAP_START;
 
 
-				/////////////////////////////////////////////////////////////////////////////////
-				//                     PROCESSI [4]                                            //
-				/////////////////////////////////////////////////////////////////////////////////
-				const int N_REG = 16;	// [4.6]
+/////////////////////////////////////////////////////////////////////////////////
+//                     PROCESSI [4]                                            //
+/////////////////////////////////////////////////////////////////////////////////
+const int N_REG = 16;	// [4.6]
 
-				// descrittore di processo [4.6]
-				struct des_proc {	
-					natl riservato1;	
-					addr punt_nucleo;
-					// due quad  a disposizione (puntatori alle pile ring 1 e 2)
-					natq disp1[2];		
-					natq riservato2;
-					//entry della IST, non usata
-					natq disp2[7];
-					natq riservato3;
-					//finiti i campi obbligatori
-					addr cr3;
-					natq contesto[N_REG];
-				}__attribute__((packed));
+// descrittore di processo [4.6]
+struct des_proc {	
+	natl riservato1;	
+	addr punt_nucleo;
+	// due quad  a disposizione (puntatori alle pile ring 1 e 2)
+	natq disp1[2];		
+	natq riservato2;
+	//entry della IST, non usata
+	natq disp2[7];
+	natq riservato3;
+	//finiti i campi obbligatori
+	addr cr3;
+	natq contesto[N_REG];
+}__attribute__((packed));
 
-				//indici nell'array contesto
-				enum { I_RAX, I_RCX, I_RDX, I_RBX,
-							 I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
-							 I_R11, I_R12, I_R13, I_R14, I_R15 };
-				// )
+//indici nell'array contesto
+enum { I_RAX, I_RCX, I_RDX, I_RBX,
+			 I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
+			 I_R11, I_R12, I_R13, I_R14, I_R15 };
+// )
 
-				// elemento di una coda di processi [4.6]
-				struct proc_elem {
-					natl id;
-					natl precedenza;
-					proc_elem *puntatore;
-				};
-				extern proc_elem *esecuzione;	// [4.6]
-				extern proc_elem *pronti;	// [4.6]
+// elemento di una coda di processi [4.6]
+struct proc_elem {
+	natl id;
+	natl precedenza;
+	proc_elem *puntatore;
+};
+extern proc_elem *esecuzione;	// [4.6]
+extern proc_elem *pronti;	// [4.6]
 
-				void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
-				{
-				// ( inserimento in una lista semplice ordinata
-				//   (tecnica dei due puntatori)
-					proc_elem *pp, *prevp;
+void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
+{
+// ( inserimento in una lista semplice ordinata
+//   (tecnica dei due puntatori)
+	proc_elem *pp, *prevp;
 
-					pp = p_lista;
-					prevp = 0;
-					while (pp != 0 && pp->precedenza >= p_elem->precedenza) {
-						prevp = pp;
-						pp = pp->puntatore;
-					}
+	pp = p_lista;
+	prevp = 0;
+	while (pp != 0 && pp->precedenza >= p_elem->precedenza) {
+		prevp = pp;
+		pp = pp->puntatore;
+	}
 
-					if (prevp == 0)
-						p_lista = p_elem;
-					else
-						prevp->puntatore = p_elem;
+	if (prevp == 0)
+		p_lista = p_elem;
+	else
+		prevp->puntatore = p_elem;
 
-					p_elem->puntatore = pp;
-				// )
-				}
+	p_elem->puntatore = pp;
+// )
+}
 
-				// [4.8]
-				void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
-				{
-				// ( estrazione dalla testa
-					p_elem = p_lista;  	// 0 se la lista e' vuota
+// [4.8]
+void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
+{
+// ( estrazione dalla testa
+	p_elem = p_lista;  	// 0 se la lista e' vuota
 
-					if (p_lista)
-						p_lista = p_lista->puntatore;
+	if (p_lista)
+		p_lista = p_lista->puntatore;
 
-					if (p_elem)
-						p_elem->puntatore = 0;
-				// )
-				}
+	if (p_elem)
+		p_elem->puntatore = 0;
+// )
+}
 
-				extern "C" void inspronti()
-				{
-				// (
-					inserimento_lista(pronti, esecuzione);
-				// )
-				}
+extern "C" void inspronti()
+{
+// (
+	inserimento_lista(pronti, esecuzione);
+// )
+}
 
-				// [4.8]
-				extern "C" void schedulatore(void)
-				{
-				// ( poiche' la lista e' gia' ordinata in base alla priorita',
-				//   e' sufficiente estrarre l'elemento in testa
-					rimozione_lista(pronti, esecuzione);
-				// )
-				}
+// [4.8]
+extern "C" void schedulatore(void)
+{
+// ( poiche' la lista e' gia' ordinata in base alla priorita',
+//   e' sufficiente estrarre l'elemento in testa
+	rimozione_lista(pronti, esecuzione);
+// )
+}
 
-				/////////////////////////////////////////////////////////////////////////////////
-				//                         TIMER [4][9]                                        //
-				/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
+//                         TIMER [4][9]                                        //
+/////////////////////////////////////////////////////////////////////////////////
 
-				// richiesta al timer [4.16]
-				struct richiesta {
-					natl d_attesa;
-					richiesta *p_rich;
-					proc_elem *pp;
-				};
+// richiesta al timer [4.16]
+struct richiesta {
+	natl d_attesa;
+	richiesta *p_rich;
+	proc_elem *pp;
+};
 
-				richiesta *p_sospesi; // [4.16]
+richiesta *p_sospesi; // [4.16]
 
-				void inserimento_lista_attesa(richiesta *p); // [4.16]
-				// parte "C++" della primitiva delay [4.16]
-				extern "C" void c_delay(natl n)
-				{
-					richiesta *p;
+void inserimento_lista_attesa(richiesta *p); // [4.16]
+// parte "C++" della primitiva delay [4.16]
+extern "C" void c_delay(natl n)
+{
+	richiesta *p;
 
-					p = static_cast<richiesta*>(alloca(sizeof(richiesta)));
-					p->d_attesa = n;	
-					p->pp = esecuzione;
+	p = static_cast<richiesta*>(alloca(sizeof(richiesta)));
+	p->d_attesa = n;	
+	p->pp = esecuzione;
 
-					inserimento_lista_attesa(p);
-					schedulatore();
-				}
+	inserimento_lista_attesa(p);
+	schedulatore();
+}
 
-				// inserisce P nella coda delle richieste al timer [4.16]
-				void inserimento_lista_attesa(richiesta *p)
-				{
-					richiesta *r, *precedente;
-					bool ins;
+// inserisce P nella coda delle richieste al timer [4.16]
+void inserimento_lista_attesa(richiesta *p)
+{
+	richiesta *r, *precedente;
+	bool ins;
 
-					r = p_sospesi;
-					precedente = 0;
-					ins = false;
+	r = p_sospesi;
+	precedente = 0;
+	ins = false;
 
-					while (r != 0 && !ins)
-						if (p->d_attesa > r->d_attesa) {
-							p->d_attesa -= r->d_attesa;
-							precedente = r;
-							r = r->p_rich;
-						} else
-							ins = true;
+	while (r != 0 && !ins)
+		if (p->d_attesa > r->d_attesa) {
+			p->d_attesa -= r->d_attesa;
+			precedente = r;
+			r = r->p_rich;
+		} else
+			ins = true;
 
-					p->p_rich = r;
-					if (precedente != 0)
-						precedente->p_rich = p;
-					else
-						p_sospesi = p;
+	p->p_rich = r;
+	if (precedente != 0)
+		precedente->p_rich = p;
+	else
+		p_sospesi = p;
 
-					if (r != 0)
-						r->d_attesa -= p->d_attesa;
-				}
-
-				// driver del timer [4.16][9.6]
-				extern "C" void c_driver_td(void)
-				{
-					richiesta *p;
-
-					if(p_sospesi != 0)
-						p_sospesi->d_attesa--;
-
-					while(p_sospesi != 0 && p_sospesi->d_attesa == 0) {
-						inserimento_lista(pronti, p_sospesi->pp);
-						p = p_sospesi;
-						p_sospesi = p_sospesi->p_rich;
-						dealloca(p);
-					}
-
-					inspronti();
-					schedulatore();
-				}
-
-				// (* in caso di errori fatali, useremo la segunte funzione, che blocca il sistema:
-				extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
-				// implementazione in [P_PANIC]
-				// *)
-				extern "C" void init_idt();
-
-				const ioaddr iRBR = 0x03F8;		// DLAB deve essere 0
-				const ioaddr iTHR = 0x03F8;		// DLAB deve essere 0
-				const ioaddr iLSR = 0x03FD;
-				const ioaddr iLCR = 0x03FB;
-				const ioaddr iDLR_LSB = 0x03F8;		// DLAB deve essere 1
-				const ioaddr iDLR_MSB = 0x03F9;		// DLAB deve essere 1
-				const ioaddr iIER = 0x03F9;		// DLAB deve essere 0
-				const ioaddr iMCR = 0x03FC;
-				const ioaddr iIIR = 0x03FA;
+	if (r != 0)
+		r->d_attesa -= p->d_attesa;
+}
 
 
-				void ini_COM1()
-				{
-					natw CBITR = 0x000C;		// 9600 bit/sec.
-					natb dummy;
-					outputb(0x80, iLCR);		// DLAB 1
-					outputb(CBITR, iDLR_LSB);
-					outputb(CBITR >> 8, iDLR_MSB);
-					outputb(0x03, iLCR);		// 1 bit STOP, 8 bit/car, parita  dis, DLAB 0
-					outputb(0x00, iIER);		// richieste di interruzione disabilitate
-					inputb(iRBR, dummy);		// svuotamento buffer RBR
-				}
+// (* in caso di errori fatali, useremo la segunte funzione, che blocca il sistema:
+extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
+// implementazione in [P_PANIC]
+// *)
+extern "C" void init_idt();
 
-				void serial_o(natb c)
-				{
-					natb s;
-					do
-					{
-						inputb(iLSR, s);
-					}
-					while (! (s & 0x20));
-					outputb(c, iTHR);
-				}
+const ioaddr iRBR = 0x03F8;		// DLAB deve essere 0
+const ioaddr iTHR = 0x03F8;		// DLAB deve essere 0
+const ioaddr iLSR = 0x03FD;
+const ioaddr iLCR = 0x03FB;
+const ioaddr iDLR_LSB = 0x03F8;		// DLAB deve essere 1
+const ioaddr iDLR_MSB = 0x03F9;		// DLAB deve essere 1
+const ioaddr iIER = 0x03F9;		// DLAB deve essere 0
+const ioaddr iMCR = 0x03FC;
+const ioaddr iIIR = 0x03FA;
 
-				// invia un nuovo messaggio sul log
-				extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
-				{
-					const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
-					if (sev > MAX_LOG) {
-						flog(LOG_WARN, "Livello di log errato: %d", sev);
-						//panic("abort");
-					}
-					const natb* l = (const natb*)lev[sev];
-					while (*l)
-						serial_o(*l++);
-					serial_o((natb)'\t');
-					natb idbuf[10];
-					//snprintf((char*)idbuf, 10, "%d", esecuzione->id);
-					snprintf((char*)idbuf, 10, "%d", 0);
-					l = idbuf;
-					while (*l)
-						serial_o(*l++);
-					serial_o((natb)'\t');
 
-					for (natl i = 0; i < quanti; i++)
-						serial_o(buf[i]);
-					serial_o((natb)'\n');
-				}
-				extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
-				{
-					do_log(sev, buf, quanti);
-				}
+void ini_COM1()
+{
+	natw CBITR = 0x000C;		// 9600 bit/sec.
+	natb dummy;
+	outputb(0x80, iLCR);		// DLAB 1
+	outputb(CBITR, iDLR_LSB);
+	outputb(CBITR >> 8, iDLR_MSB);
+	outputb(0x03, iLCR);		// 1 bit STOP, 8 bit/car, parita  dis, DLAB 0
+	outputb(0x00, iIER);		// richieste di interruzione disabilitate
+	inputb(iRBR, dummy);		// svuotamento buffer RBR
+}
+
+void serial_o(natb c)
+{
+	natb s;
+	do
+	{
+		inputb(iLSR, s);
+	}
+	while (! (s & 0x20));
+	outputb(c, iTHR);
+}
+
+// invia un nuovo messaggio sul log
+extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
+{
+	const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
+	if (sev > MAX_LOG) {
+		flog(LOG_WARN, "Livello di log errato: %d", sev);
+		//panic("abort");
+	}
+	const natb* l = (const natb*)lev[sev];
+	while (*l)
+		serial_o(*l++);
+	serial_o((natb)'\t');
+	natb idbuf[10];
+	//snprintf((char*)idbuf, 10, "%d", esecuzione->id);
+	snprintf((char*)idbuf, 10, "%d", 0);
+	l = idbuf;
+	while (*l)
+		serial_o(*l++);
+	serial_o((natb)'\t');
+
+	for (natl i = 0; i < quanti; i++)
+		serial_o(buf[i]);
+	serial_o((natb)'\n');
+}
+extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
+{
+	do_log(sev, buf, quanti);
+}
 
 
 
+extern "C" addr readCR2();
+extern "C" addr readCR3();
+int i_PML4(addr);
+int i_PDP(addr);
+int i_PD(addr);
+int i_PT(addr);
+natq& get_entry(addr,natl);
+addr extr_IND_FISICO(natq);
+// gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
+// sistema.S, tranne il gestore di page fault)
+extern "C" void gestore_eccezioni(int tipo, natq errore,
+					addr rip, natq cs, natq rflag)
+{
+	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
+	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
+	if(tipo==14)
+	{
+		addr CR2 = readCR2();
+		flog(LOG_WARN, "CR2=   %p",CR2);
+		addr CR3 = readCR3();
+		flog(LOG_WARN, "CR3=   %p",CR3);
+		natq pml4e = get_entry(CR3,i_PML4(CR2));
+		flog(LOG_WARN, "pml4e= %p",pml4e);
+		addr pdp = extr_IND_FISICO(pml4e);
+		
+		natq pdpe = get_entry(pdp,i_PDP(CR2));
+		flog(LOG_WARN, "pdpe=  %p",pdpe);
+		addr pd = extr_IND_FISICO(pdpe);
+		
+		natq pde = get_entry(pd,i_PD(CR2));
+		flog(LOG_WARN, "pde=   %p",pde);
+		addr pt = extr_IND_FISICO(pde);
 
-
-				// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-				extern "C" addr fine_codice_sistema;
-
-				extern "C" addr readCR2();
-				extern "C" addr readCR3();
-				int i_PML4(addr);
-				int i_PDP(addr);
-				int i_PD(addr);
-				int i_PT(addr);
-				natq& get_entry(addr,natl);
-				addr extr_IND_FISICO(natq);
-				// gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
-				// sistema.S, tranne il gestore di page fault)
-				extern "C" void gestore_eccezioni(int tipo, natq errore,
-									addr rip, natq cs, natq rflag)
-				{
-					//if (rip < fine_codice_sistema) {
-					//	flog(LOG_ERR, "Eccezione %d, eip = %x, errore = %x", tipo, rip, errore);
-						//panic("eccezione dal modulo sistema");
-					//}
-					flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
-					flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
-					if(tipo==14)
-					{
-						addr CR2 = readCR2();
-						flog(LOG_WARN, "CR2=   %p",CR2);
-						addr CR3 = readCR3();
-						flog(LOG_WARN, "CR3=   %p",CR3);
-						natq pml4e = get_entry(CR3,i_PML4(CR2));
-						flog(LOG_WARN, "pml4e= %p",pml4e);
-						addr pdp = extr_IND_FISICO(pml4e);
-						
-						natq pdpe = get_entry(pdp,i_PDP(CR2));
-						flog(LOG_WARN, "pdpe=  %p",pdpe);
-						addr pd = extr_IND_FISICO(pdpe);
-						
-						natq pde = get_entry(pd,i_PD(CR2));
-						flog(LOG_WARN, "pde=   %p",pde);
-						addr pt = extr_IND_FISICO(pde);
-
-						natq pte = get_entry(pt,i_PT(CR2));
-						flog(LOG_WARN, "pte=   %p",pte);
-					}
-					
-				}
+		natq pte = get_entry(pt,i_PT(CR2));
+		flog(LOG_WARN, "pte=   %p",pte);
+	}
+	
+}
 
 
 
-				/////////////////////////////////////////////////////////////////////////////////
-				//                         PAGINE FISICHE [6]                                  //
-				/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
+//                         PAGINE FISICHE [6]                                  //
+/////////////////////////////////////////////////////////////////////////////////
 
 
-				enum tt { LIBERA, PML4, TABELLA_CONDIVISA, TABELLA_PRIVATA,
-					PAGINA_CONDIVISA, PAGINA_PRIVATA }; // [6.3]
-				struct des_pf {			// [6.3]
-					tt contenuto;	// uno dei valori precedenti
-					union {
-						struct {
-							bool	residente;	// pagina residente o meno
-							natl	processo;	// identificatore di processo
-							natl	ind_massa;	// indirizzo della pagina in memoria di massa
-							addr	ind_virtuale;
-							// indirizzo virtuale della pagina (ultimi 12 bit a 0)
-							// o della prima pagina indirizzata da una tabella (ultimi 22 bit uguali a 0)
-							natl	contatore;	// contatore per le statistiche
-						} pt; 	// rilevante se "contenuto" non vale LIBERA
-						struct  { // informazioni relative a una pagina libera
-							des_pf*	prossima_libera;// indice del descrittore della prossima pagina libera
-						} avl;	// rilevante se "contenuto" vale LIBERA
-					};
-				};
+enum tt { LIBERA, PML4, TABELLA_CONDIVISA, TABELLA_PRIVATA,
+	PAGINA_CONDIVISA, PAGINA_PRIVATA }; // [6.3]
+struct des_pf {			// [6.3]
+	tt contenuto;	// uno dei valori precedenti
+	union {
+		struct {
+			bool	residente;	// pagina residente o meno
+			natl	processo;	// identificatore di processo
+			natl	ind_massa;	// indirizzo della pagina in memoria di massa
+			addr	ind_virtuale;
+			// indirizzo virtuale della pagina (ultimi 12 bit a 0)
+			// o della prima pagina indirizzata da una tabella (ultimi 22 bit uguali a 0)
+			natl	contatore;	// contatore per le statistiche
+		} pt; 	// rilevante se "contenuto" non vale LIBERA
+		struct  { // informazioni relative a una pagina libera
+			des_pf*	prossima_libera;// indice del descrittore della prossima pagina libera
+		} avl;	// rilevante se "contenuto" vale LIBERA
+	};
+};
 
-				des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
-				addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
-				des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
+des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
+addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
+des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
 
-				// [9.3]
-				des_pf* descrittore_pf(addr indirizzo_pf)
-				{
-					natq indice = ((natq)indirizzo_pf - (natq)prima_pf_utile) / DIM_PAGINA;
-					return &dpf[indice];
-				}
+// [9.3]
+des_pf* descrittore_pf(addr indirizzo_pf)
+{
+	natq indice = ((natq)indirizzo_pf - (natq)prima_pf_utile) / DIM_PAGINA;
+	return &dpf[indice];
+}
 
-				// [9.3]
-				addr indirizzo_pf(des_pf* ppf)
-				{
-					natq indice = ppf - &dpf[0];
-					return (addr)((natq)prima_pf_utile + indice * DIM_PAGINA);
-				}
+// [9.3]
+addr indirizzo_pf(des_pf* ppf)
+{
+	natq indice = ppf - &dpf[0];
+	return (addr)((natq)prima_pf_utile + indice * DIM_PAGINA);
+}
 
-				// ( [P_MEM_PHYS]
-				// init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
-				// memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
-				// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
-				// e di inizializzarli in modo che tutte le pagine fisiche risultino libere
-				bool init_dpf()
-				{
+// ( [P_MEM_PHYS]
+// init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
+// memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
+// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
+// e di inizializzarli in modo che tutte le pagine fisiche risultino libere
+bool init_dpf()
+{
 
-					prima_pf_utile = (addr)(DIM_M1);
+	prima_pf_utile = (addr)(DIM_M1);
 
-					pagine_libere = &dpf[0];
-					for (natl i = 0; i < N_DPF - 1; i++) {
-						dpf[i].contenuto = LIBERA;
+	pagine_libere = &dpf[0];
+	for (natl i = 0; i < N_DPF - 1; i++) {
+		dpf[i].contenuto = LIBERA;
 		dpf[i].avl.prossima_libera = &dpf[i + 1];
 	}
 	dpf[N_DPF - 1].avl.prossima_libera = 0;
@@ -1115,14 +1088,8 @@ void copia_pagine_condivise(addr srcpml4, addr destpml4)
 	natq finestra_FM = get_entry(srcpml4,I_finestra_FM);
 	set_entry(destpml4,I_finestra_FM,finestra_FM);
 	
-	natq sistema_privato = get_entry(srcpml4,I_finestra_FM);
-	set_entry(destpml4,I_sistema_privato,sistema_privato);
-	
-	natq PCI_condiviso = get_entry(srcpml4,I_finestra_FM);
+	natq PCI_condiviso = get_entry(srcpml4,I_PCI_condiviso);
 	set_entry(destpml4,I_PCI_condiviso,PCI_condiviso);
-	
-	natq utente_privato = get_entry(srcpml4,I_utente_privato);
-	set_entry(destpml4,I_utente_privato,utente_privato);
 	
 	natq utente_condiviso = get_entry(srcpml4,I_utente_condiviso);
 	set_entry(destpml4,I_utente_condiviso,utente_condiviso);
@@ -1141,12 +1108,12 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	natq* pila_sistema_iretq;
 
 	addr pml4 = crea_pml4();
-	flog(LOG_INFO,"pml4=%x",pml4);
+	//flog(LOG_INFO,"pml4=%x",pml4);
 
 	addr pml4_padre = readCR3();
 
 	copia_pagine_condivise(pml4_padre,pml4);
-	
+
 	addr pila_sistema = crea_pila(pml4,DIM_SYS_STACK,false);
 	crea_pila(pml4,DIM_USR_STACK, true ); //pila_tuente
 
@@ -1162,10 +1129,11 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	if (pe == 0) goto errore;
 	
 	id = alloca_tss(dp);
+
 	if (id == 0) goto errore;
 	
 	pe->id = id;
-  pe->precedenza = precedenza;
+	pe->precedenza = precedenza;
 	pe->puntatore = 0;
 
 	pila_sistema_iretq = static_cast<natq*>(pila_sistema);
@@ -1189,15 +1157,41 @@ extern "C" natb proc0;
 extern "C" natb dummy_proc;
 void test_userspace()
 {
-	flog(LOG_INFO, "Creo il processo dummy. Indirizzo fisico:%p",&dummy_proc);
-	inserimento_lista(pronti,crea_processo(&dummy_proc,0,13));
-	flog(LOG_INFO, "Creo il processo proc0. Indirizzo fisico:%p",&proc0);
-	inserimento_lista(pronti,crea_processo(&proc0,1,13));
+	proc_elem* d = crea_processo(&dummy_proc,0,13);
+	flog(LOG_INFO, "Creo il processo dummy");
+	inserimento_lista(pronti,d);
+	for(int i = 1; i< 20; i++)
+	{
+		proc_elem* e = crea_processo(&proc0,i,i);
+		flog(LOG_INFO, "Creo il processo proc0(%d)",i);
+		inserimento_lista(pronti,e);
+	}
+	
 	schedulatore();
 	flog(LOG_INFO, "Salto a spazio utente");
 	goto_user();
 }
 
+// driver del timer [4.16][9.6]
+extern "C" void c_driver_td(void)
+{
+	richiesta *p;
+
+	if(p_sospesi != 0)
+	{
+		p_sospesi->d_attesa--;
+	}
+
+	while(p_sospesi != 0 && p_sospesi->d_attesa == 0) {
+		inserimento_lista(pronti, p_sospesi->pp);
+		p = p_sospesi;
+		p_sospesi = p_sospesi->p_rich;
+		dealloca(p);
+	}
+
+	inspronti();
+	schedulatore();
+}
 extern "C" void cmain ()
 {
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
