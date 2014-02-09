@@ -8,6 +8,23 @@
 #include "interp.h"
 #include "swap.h"
 
+class verbose {
+	bool v;
+public:
+	void set_verbose(bool v_) {
+		v = v_;
+	}
+
+	template<class T> verbose& operator << (const T& t) {
+		if (v) {
+			std::cout << t;
+		}
+		return *this;
+	}
+};
+
+verbose log;
+
 const uint32_t UPB = DIM_PAGINA / sizeof(uint32_t);
 const uint32_t BPU = sizeof(uint32_t) * 8;
 
@@ -122,7 +139,7 @@ bool bm_alloc(bm_t *bm, uint64_t& pos)
 
 	bm_set(bm, i);
 	pos = i;
-	//std::cout << "allocated block " << pos << std::endl;
+	//log << "allocated block " << pos << "\n";
 	return true;
 }
 
@@ -239,8 +256,8 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 		uint64_t dimensione = s->dimensione();
 		uint64_t end_addr = ind_virtuale + dimensione;
 
-		std::cout << "==> seg dim " << std::hex << dimensione << " addr " <<
-			ind_virtuale << std::endl;
+		log << "==> seg dim " << std::hex << dimensione << " addr " <<
+			ind_virtuale << "\n";
 
 		if (end_addr > last_address)
 			last_address = end_addr;
@@ -249,15 +266,15 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 		end_addr = (end_addr + 0x0000000000000fff) & 0xfffffffffffff000;
 		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
 		{
-			std::cout << "    addr " << std::hex << ind_virtuale << std::dec << std::endl;
+			log << "    addr " << std::hex << ind_virtuale << std::dec << "\n";
 			block_t b;
 			for (int l = 4; l > 1; l--) {
 				int i = i_tabella(ind_virtuale, l);
 				e[l] = &tab[l].e[i];
-				std::cout << "       T" << l << "[" << i << "] ->";
+				log << "       T" << l << "[" << i << "] ->";
 				if (e[l]->a.block == 0) {
 					b = c.nuova(l - 1);
-					std::cout << " NEW";
+					log << " NEW";
 					e[l]->a.block = b;
 					e[l]->a.PWT   = 0;
 					e[l]->a.PCD   = 0;
@@ -267,30 +284,30 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 				} else {
 					c.leggi(l - 1, e[l]->a.block);
 				}
-				std::cout << " T" << (l - 1) << " at " << e[l]->a.block << std::endl;
+				log << " T" << (l - 1) << " at " << e[l]->a.block << "\n";
 			}
 
 			int i = i_tabella(ind_virtuale, 1);
 			e[1] = &tab[1].e[i];
-			std::cout << "       T1[" << i << "] ->";
+			log << "       T1[" << i << "] ->";
 			if (e[1]->a.block == 0) {
 				if (! bm_alloc(&blocks, b) ) {
 					fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
 					exit(EXIT_FAILURE);
 				}
 				e[1]->a.block = b;
-				std::cout << " NEW";
+				log << " NEW";
 			} else {
 				CHECKSW(leggi_blocco, e[1]->a.block, &pag);
 			}
 			if (s->pagina_di_zeri()) {
 				CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
-				std::cout << " zero";
+				log << " zero";
 			} else {
 				s->copia_pagina(&pag);
 				CHECKSW(scrivi_blocco, e[1]->a.block, &pag);
 			}
-			std::cout << " page at " << e[1]->a.block << std::endl;
+			log << " page at " << e[1]->a.block << "\n";
 			e[1]->a.PWT = 0;
 			e[1]->a.PCD = 0;
 			e[1]->a.RW |= s->scrivibile();
@@ -308,10 +325,17 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 
 int main(int argc, char* argv[])
 {
+	if (argc >= 2 && std::string(argv[1]) == "-v") {
+		log.set_verbose(true);
+		argc--;
+		argv++;
+	}
+
 	if (argc < 3) {
-		fprintf(stderr, "Utilizzo: %s <swap> <modulo io> <modulo utente>\n", argv[0]);
+		fprintf(stderr, "Utilizzo: %s [-v] <swap> <modulo io> <modulo utente>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
+
 
 	ListaTipiSwap* tipiswap = ListaTipiSwap::instance();
 	tipiswap->rewind();
@@ -342,17 +366,17 @@ int main(int argc, char* argv[])
 
 	memset(&tab[4], 0, sizeof(tabella));
 
-	std::cout << "Loading " << argv[2] << std::endl;
+	log << "Loading " << argv[2] << "\n";
 	uint64_t last_address;
 	do_map(argv[2], 0, superblock.io_entry, last_address);
 	superblock.io_end = last_address;
 
-	std::cout << "Loading " << argv[3] << std::endl;
+	log << "Loading " << argv[3] << "\n";
 	do_map(argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = last_address;
 
 #if 0
-	std::cout << "Creating heap space\n";
+	log << "Creating heap space\n";
 	// le tabelle condivise per lo heap:
 	TabCache c;
 	for (uint64_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
