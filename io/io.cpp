@@ -584,7 +584,7 @@ extern "C" void hd_halt_inout(ioaddr iSTS);
 // disabilita l'interfaccia a generare interruzioni
 
 void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
-{	p_dmades->prd[0] = reinterpret_cast<natl>(iff);
+{	p_dmades->prd[0] = reinterpret_cast<natq>(iff);
 	p_dmades->prd[1] = 0x80000000 | quanti;					// EOT posto a 1
 }
 extern "C" void hd_select_device(short ms, ioaddr iHND);
@@ -782,7 +782,7 @@ bool hd_init()
 			hd.bus_master.iBMSTR  = (ioaddr)(base + 0x0a);
 			hd.bus_master.iBMDTPR = (ioaddr)(base + 0x0c);
 			addr iff = trasforma(&hd.prd[0]);
-			outputl(reinterpret_cast<natl>(iff),
+			outputl(reinterpret_cast<natq>(iff),
 					hd.bus_master.iBMDTPR);
 		}
 	}

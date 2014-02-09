@@ -1,10 +1,8 @@
 #include <stdint.h>
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-using namespace std;
+#include <iostream>
 
 #include "costanti.h"
 #include "interp.h"
@@ -15,103 +13,104 @@ const uint32_t BPU = sizeof(uint32_t) * 8;
 
 const uint32_t fine_utente_condiviso = (NTAB_SIS_C + NTAB_SIS_P + NTAB_MIO_C + NTAB_USR_C) * DIM_MACROPAGINA;
 
-union descrittore_pagina {
+union entrata {
 	// caso di pagina presente
 	struct {
 		// byte di accesso
-		unsigned int P:		1;	// bit di presenza
-		unsigned int RW:	1;	// Read/Write
-		unsigned int US:	1;	// User/Supervisor
-		unsigned int PWT:	1;	// Page Write Through
-		unsigned int PCD:	1;	// Page Cache Disable
-		unsigned int A:		1;	// Accessed
-		unsigned int D:		1;	// Dirty
-		unsigned int pgsz:	1;	// non visto a lezione
+		uint64_t P:		1;	// bit di presenza
+		uint64_t RW:	1;	// Read/Write
+		uint64_t US:	1;	// User/Supervisor
+		uint64_t PWT:	1;	// Page Write Through
+		uint64_t PCD:	1;	// Page Cache Disable
+		uint64_t A:		1;	// Accessed
+		uint64_t D:		1;	// Dirty
+		uint64_t PAT:	1;	// non visto a lezione
 		// fine byte di accesso
 		
-		unsigned int global:	1;	// non visto a lezione
-		unsigned int avail:	3;	// non usati
+		uint64_t global:	1;	// non visto a lezione
+		uint64_t avail:	3;	// non usati
 
-		unsigned int address:	20;	// indirizzo fisico
+		uint64_t address:	40;	// indirizzo fisico
+
+		uint64_t avail2:	11;
+		uint64_t NX:	1;
 	} p;
 	// caso di pagina assente
 	struct {
 		// informazioni sul tipo di pagina
-		unsigned int P:		1;
-		unsigned int RW:	1;
-		unsigned int US:	1;
-		unsigned int PWT:	1;
-		unsigned int PCD:	1;
+		uint64_t P:		1;
+		uint64_t RW:	1;
+		uint64_t US:	1;
+		uint64_t PWT:	1;
+		uint64_t PCD:	1;
+		uint64_t resvd:	5;
 
-		unsigned int block:	27;
+		uint64_t block:	51;
+
+		uint64_t NX:	1;
 	} a;	
 };
 
-typedef descrittore_pagina descrittore_tabella;
-
-struct direttorio {
-	descrittore_tabella entrate[1024];
-}; 
-
-struct tabella_pagine {
-	descrittore_pagina  entrate[1024];
+struct tabella {
+	entrata e[512];
 };
 
 struct pagina {
 	union {
-		unsigned char byte[DIM_PAGINA];
-		unsigned int  parole_lunghe[DIM_PAGINA / sizeof(unsigned int)];
+		uint8_t byte[DIM_PAGINA];
+		uint64_t parole_lunghe[DIM_PAGINA / sizeof(uint64_t)];
 	};
 };
 
-short indice_direttorio(uint32_t indirizzo) {
-	return (indirizzo & 0xffc00000) >> 22;
+int i_tabella(uint64_t ind_virt, int liv)
+{
+	int shift = 12 + (liv - 1) * 9;
+	uint64_t mask = 0x1ffUL << shift;
+	return (ind_virt & mask) >> shift;
 }
 
-short indice_tabella(uint32_t indirizzo) {
-	return (indirizzo & 0x003ff000) >> 12;
+
+tabella *tabella_puntata(entrata *e)
+{
+	return reinterpret_cast<tabella*>(e->p.address << 12);
 }
 
-tabella_pagine* tabella_puntata(descrittore_tabella* pdes_tab) {
-	return reinterpret_cast<tabella_pagine*>(pdes_tab->p.address << 12);
-}
-
-pagina* pagina_puntata(descrittore_pagina* pdes_pag) {
-	return reinterpret_cast<pagina*>(pdes_pag->p.address << 12);
+pagina* pagina_puntata(entrata* e) {
+	return reinterpret_cast<pagina*>(e->p.address << 12);
 }
 
 struct bm_t {
-	unsigned int *vect;
-	unsigned int size;
+	uint64_t *vect;
+	uint64_t size;
 };
 
-inline unsigned int bm_isset(bm_t *bm, unsigned int pos)
+inline uint64_t bm_isset(bm_t *bm, uint64_t pos)
 {
-	return !(bm->vect[pos / 32] & (1UL << (pos % 32)));
+	return !(bm->vect[pos / 64] & (1UL << (pos % 64)));
 }
 
-inline void bm_set(bm_t *bm, unsigned int pos)
+inline void bm_set(bm_t *bm, uint64_t pos)
 {
-	bm->vect[pos / 32] &= ~(1UL << (pos % 32));
+	bm->vect[pos / 64] &= ~(1UL << (pos % 64));
 }
 
-inline void bm_clear(bm_t *bm, unsigned int pos)
+inline void bm_clear(bm_t *bm, uint64_t pos)
 {
-	bm->vect[pos / 32] |= (1UL << (pos % 32));
+	bm->vect[pos / 64] |= (1UL << (pos % 64));
 }
 
-void bm_create(bm_t *bm, unsigned int *buffer, unsigned int size)
+void bm_create(bm_t *bm, uint64_t *buffer, uint64_t size)
 {
 	bm->vect = buffer;
 	bm->size = size;
-	unsigned int vecsize = size / BPU + (size % BPU ? 1 : 0);
+	uint64_t vecsize = size / BPU + (size % BPU ? 1 : 0);
 
 	for(int i = 0; i < vecsize; ++i)
 		bm->vect[i] = 0;
 }
 
 
-bool bm_alloc(bm_t *bm, unsigned int& pos)
+bool bm_alloc(bm_t *bm, uint64_t& pos)
 {
 	int i, l;
 
@@ -123,161 +122,185 @@ bool bm_alloc(bm_t *bm, unsigned int& pos)
 
 	bm_set(bm, i);
 	pos = i;
+	//std::cout << "allocated block " << pos << std::endl;
 	return true;
 }
 
-void bm_free(bm_t *bm, unsigned int pos)
+void bm_free(bm_t *bm, uint64_t pos)
 {
 	bm_clear(bm, pos);
 }
 
-#define CHECKSW(f, b, d)	do { if (!swap->f(b, d)) { fprintf(stderr, "blocco %d: " #f " fallita\n", b); exit(EXIT_FAILURE); } } while(0)
+#define CHECKSW(f, b, d) \
+	do { \
+		if (!swap->f(b, d)) { \
+			std::cerr << "blocco " << b << ": " #f " fallita\n";\
+			exit(EXIT_FAILURE);\
+		}\
+	} while(0)
 
 superblock_t superblock;
-direttorio main_dir;
+tabella tab[5];
 bm_t blocks;
 pagina pag;
 pagina zero_pag;
-tabella_pagine tab;
 Swap* swap = NULL;
 
 class TabCache {
-	bool dirty;
-	bool valid;
-	block_t block;
+	bool dirty[3];
+	bool valid[3];
+	block_t block[3];
 public:
 	
 	TabCache() {
-		valid = false;
+		for (int i = 0; i < 3; i++)
+			valid[i] = false;
 	}
 
 	~TabCache() {
-		if (valid && dirty) {
-			CHECKSW(scrivi_blocco, block, &tab);
+		for (int i = 0; i < 3; i++) {
+			if (valid[i] && dirty[i]) {
+				CHECKSW(scrivi_blocco, block[i], &tab[i + 1]);
+			}
 		}
 	}
 
-	block_t nuova() {
+	block_t nuova(int liv) {
 		block_t b;
+		int i = liv - 1;
 
-		if (valid && dirty) {
-			CHECKSW(scrivi_blocco, block, &tab);
+		if (valid[i] && dirty[i]) {
+			CHECKSW(scrivi_blocco, block[i], &tab[liv]);
 		}
-		memset(&tab, 0, sizeof(tabella_pagine));
+		memset(&tab[liv], 0, sizeof(tabella));
 	
 		if (! bm_alloc(&blocks, b) ) {
 			fprintf(stderr, "spazio insufficiente nello swap\n");
 			exit(EXIT_FAILURE);
 		}
-		valid = true;
-		dirty = true;
-		block = b;
+		valid[i] = true;
+		dirty[i] = true;
+		block[i] = b;
 		return b;
 	}
 
-	void leggi(block_t blocco) {
-		if (valid) {
-			if (blocco == block)
+	void leggi(int liv, block_t blocco) {
+		int i = liv - 1;
+		if (valid[i]) {
+			if (blocco == block[i])
 				return;
-			if (dirty)
-				CHECKSW(scrivi_blocco, block, &tab);
+			if (dirty[i])
+				CHECKSW(scrivi_blocco, block[i], &tab[liv]);
 		}
-		CHECKSW(leggi_blocco, blocco, &tab);
-		block = blocco;
-		valid = true;
-		dirty = false;
+		CHECKSW(leggi_blocco, blocco, &tab[liv]);
+		block[i] = blocco;
+		valid[i] = true;
+		dirty[i] = false;
 	}
-	void scrivi() {
-		dirty = true;
+	void scrivi(int liv) {
+		dirty[liv - 1] = true;
 	}
 };
 
 
-void do_map(char* fname, int liv, uint32_t& entry_point, uint32_t& last_address)
+void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 {
-	FILE* exe;
-	TabCache tabc;
+	FILE* file;
+	TabCache c;
+	entrata *e[5];
 
-	if ( !(exe = fopen(fname, "rb")) ) {
+	if ( !(file = fopen(fname, "rb")) ) {
 		perror(fname);
 		exit(EXIT_FAILURE);
 	}
 
 
-	descrittore_tabella* pdes_tab;
-	tabella_pagine* ptabella;
-	descrittore_pagina* pdes_pag;
 
-	Eseguibile *e = NULL;
+	Eseguibile *exe = NULL;
 	ListaInterpreti* interpreti = ListaInterpreti::instance();
 	interpreti->rewind();
 	while (interpreti->ancora()) {
-		e = interpreti->prossimo()->interpreta(exe);
-		if (e) break;
+		exe = interpreti->prossimo()->interpreta(file);
+		if (exe) break;
 	}
-	if (!e) {
+	if (!exe) {
 		fprintf(stderr, "Formato del file '%s' non riconosciuto\n", fname);
 		exit(EXIT_FAILURE);
 	}
 
-	entry_point = e->entry_point();
+	entry_point = exe->entry_point();
 
 	
 	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
 	last_address = 0;
 	Segmento *s = NULL;
-	while (s = e->prossimo_segmento()) {
-		uint32_t ind_virtuale = s->ind_virtuale();
-		uint32_t dimensione = s->dimensione();
-		uint32_t end_addr = ind_virtuale + dimensione;
+	while (s = exe->prossimo_segmento()) {
+		uint64_t ind_virtuale = s->ind_virtuale();
+		uint64_t dimensione = s->dimensione();
+		uint64_t end_addr = ind_virtuale + dimensione;
 
-		if (end_addr > last_address) 
+		std::cout << "==> seg dim " << std::hex << dimensione << " addr " <<
+			ind_virtuale << std::endl;
+
+		if (end_addr > last_address)
 			last_address = end_addr;
 
-		ind_virtuale &= 0xfffff000;
-		end_addr = (end_addr + 0x00000fff) & 0xfffff000;
+		ind_virtuale &= 0xfffffffffffff000;
+		end_addr = (end_addr + 0x0000000000000fff) & 0xfffffffffffff000;
 		for (; ind_virtuale < end_addr; ind_virtuale += sizeof(pagina))
 		{
+			std::cout << "    addr " << std::hex << ind_virtuale << std::dec << std::endl;
 			block_t b;
-			pdes_tab = &main_dir.entrate[indice_direttorio(ind_virtuale)];
-			if (pdes_tab->a.block == 0) {
-				b = tabc.nuova();
-				pdes_tab->a.block = b;
-				pdes_tab->a.PWT   = 0;
-				pdes_tab->a.PCD   = 0;
-				pdes_tab->a.RW	  = 1;
-				pdes_tab->a.US	  = liv;
-				pdes_tab->a.P	  = 0;
-			} else {
-				tabc.leggi(pdes_tab->a.block);
+			for (int l = 4; l > 1; l--) {
+				int i = i_tabella(ind_virtuale, l);
+				e[l] = &tab[l].e[i];
+				std::cout << "       T" << l << "[" << i << "] ->";
+				if (e[l]->a.block == 0) {
+					b = c.nuova(l - 1);
+					std::cout << " NEW";
+					e[l]->a.block = b;
+					e[l]->a.PWT   = 0;
+					e[l]->a.PCD   = 0;
+					e[l]->a.RW    = 1;
+					e[l]->a.US    = liv;
+					e[l]->a.P     = 0;
+				} else {
+					c.leggi(l - 1, e[l]->a.block);
+				}
+				std::cout << " T" << (l - 1) << " at " << e[l]->a.block << std::endl;
 			}
 
-			pdes_pag = &tab.entrate[indice_tabella(ind_virtuale)];
-			if (pdes_pag->a.block == 0) {
+			int i = i_tabella(ind_virtuale, 1);
+			e[1] = &tab[1].e[i];
+			std::cout << "       T1[" << i << "] ->";
+			if (e[1]->a.block == 0) {
 				if (! bm_alloc(&blocks, b) ) {
 					fprintf(stderr, "%s: spazio insufficiente nello swap\n", fname);
 					exit(EXIT_FAILURE);
 				}
-				pdes_pag->a.block = b;
+				e[1]->a.block = b;
+				std::cout << " NEW";
 			} else {
-				CHECKSW(leggi_blocco, pdes_pag->a.block, &pag);
+				CHECKSW(leggi_blocco, e[1]->a.block, &pag);
 			}
 			if (s->pagina_di_zeri()) {
-				CHECKSW(scrivi_blocco, pdes_pag->a.block, &zero_pag);
+				CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
+				std::cout << " zero";
 			} else {
 				s->copia_pagina(&pag);
-				CHECKSW(scrivi_blocco, pdes_pag->a.block, &pag);
+				CHECKSW(scrivi_blocco, e[1]->a.block, &pag);
 			}
-			pdes_pag->a.PWT = 0;
-			pdes_pag->a.PCD = 0;
-			pdes_pag->a.RW |= s->scrivibile();
-			pdes_pag->a.US |= liv;
-			tabc.scrivi();
+			std::cout << " page at " << e[1]->a.block << std::endl;
+			e[1]->a.PWT = 0;
+			e[1]->a.PCD = 0;
+			e[1]->a.RW |= s->scrivibile();
+			e[1]->a.US |= liv;
+			c.scrivi(1);
 			s->prossima_pagina();
 		}
 
 	}
-	fclose(exe);
+	fclose(file);
 }
 
 
@@ -305,7 +328,7 @@ int main(int argc, char* argv[])
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
 	
-	bm_create(&blocks, new uint32_t[nbmblocks * UPB], dim);
+	bm_create(&blocks, new uint64_t[nbmblocks * UPB], dim);
 
 	for (int i = 0; i < dim; i++)
 		bm_free(&blocks, i);
@@ -317,52 +340,67 @@ int main(int argc, char* argv[])
 	superblock.blocks = dim;
 	superblock.directory = nbmblocks + 1;
 
-	memset(&main_dir, 0, sizeof(direttorio));
+	memset(&tab[4], 0, sizeof(tabella));
 
-	uint32_t last_address;
+	std::cout << "Loading " << argv[2] << std::endl;
+	uint64_t last_address;
 	do_map(argv[2], 0, superblock.io_entry, last_address);
 	superblock.io_end = last_address;
 
+	std::cout << "Loading " << argv[3] << std::endl;
 	do_map(argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = last_address;
 
+#if 0
+	std::cout << "Creating heap space\n";
 	// le tabelle condivise per lo heap:
-	TabCache tabc;
-	for (uint32_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
-		descrittore_tabella *pdes_tab = &main_dir.entrate[indice_direttorio(addr)];
+	TabCache c;
+	for (uint64_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
+		entrata *e[5];
 		block_t b;
-		if (pdes_tab->a.block == 0) {
-			b = tabc.nuova();
-			pdes_tab->a.block = b;
-			pdes_tab->a.PWT   = 0;
-			pdes_tab->a.PCD   = 0;
-			pdes_tab->a.RW	  = 1;
-			pdes_tab->a.US	  = 1;
-			pdes_tab->a.P	  = 1;
-		} else {
-			tabc.leggi(pdes_tab->a.block);
+
+		for (int l = 4; l > 1; l--) {
+			block_t b;
+			e[l] = &tab[l].e[i_tabella(addr, l)];
+			if (e[l]->a.block == 0) {
+				b = c.nuova(l - 1);
+				e[l]->a.block = b;
+				e[l]->a.PWT   = 0;
+				e[l]->a.PCD   = 0;
+				e[l]->a.RW    = 1;
+				e[l]->a.US    = 1;
+				e[l]->a.P     = 0;
+			} else {
+				c.leggi(l - 1, e[l]->a.block);
+			}
 		}
 
-		descrittore_pagina* pdes_pag = &tab.entrate[indice_tabella(addr)];
-		if (pdes_pag->a.block == 0) {
+		e[1] = &tab[1].e[i_tabella(addr, 1)];
+		if (e[1]->a.block == 0) {
 			if (! bm_alloc(&blocks, b) ) {
-				fprintf(stderr, "user heap: spazio insufficiente nello swap\n");
+				std::cerr << argv[1] << ": spazio insufficiente nello swap\n";
 				exit(EXIT_FAILURE);
 			}
-			pdes_pag->a.block = b;
-			CHECKSW(scrivi_blocco, pdes_pag->a.block, &zero_pag);
+			e[1]->a.block = b;
+			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 		} 
-		pdes_pag->a.PWT = 0;
-		pdes_pag->a.PCD = 0;
-		pdes_pag->a.RW |= 1;
-		pdes_pag->a.US |= 1;
-		tabc.scrivi();
+		e[1]->a.PWT = 0;
+		e[1]->a.PCD = 0;
+		e[1]->a.RW |= 1;
+		e[1]->a.US |= 1;
+		c.scrivi(1);
+
 	}
+#endif
 		
 	superblock.magic[0] = 'C';
 	superblock.magic[1] = 'E';
-	superblock.magic[2] = 'S';
-	superblock.magic[3] = 'W';
+	superblock.magic[2] = '6';
+	superblock.magic[3] = '4';
+	superblock.magic[4] = 'S';
+	superblock.magic[5] = 'W';
+	superblock.magic[6] = 'A';
+	superblock.magic[7] = 'P';
 
 	int *w = (int*)&superblock, sum = 0;
 	for (int i = 0; i < sizeof(superblock) / sizeof(int) - 1; i++)
@@ -371,7 +409,7 @@ int main(int argc, char* argv[])
 
 	if ( !swap->scrivi_superblocco(superblock) ||
 	     !swap->scrivi_bitmap(blocks.vect, nbmblocks) ||
-	     !swap->scrivi_blocco(superblock.directory, &main_dir))
+	     !swap->scrivi_blocco(superblock.directory, &tab[4]))
 	{
 		fprintf(stderr, "errore nella creazione dello swap\n");
 		exit(EXIT_FAILURE);

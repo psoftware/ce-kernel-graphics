@@ -369,15 +369,15 @@ des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
 //per semplicita permettiamo di avere sono interi pdp condivisi e assegnamo ad 
 //ogni zona logicamente distinta di memoria un intera entry nel pml4 (tanto ce
 //ne sono ben 512 grandi 512Gb ciascuna per un totale di 256Tb indirizzabili)
-//per aiutare nel debug cercheremo di distanziare le zone tra loro
 //NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
 //in poi si trovano nella meta alta dello spazio di indirizzamento
 
-#define I_finestra_FM  0            //per ora coincide con sistema_condiviso
-#define I_sistema_privato  102
-#define I_PCI_condiviso  204
-#define I_utente_condiviso  308     //higher half
-#define I_utente_privato  410       //higher half
+#define I_finestra_FM  		0     //per ora coincide con sistema_condiviso
+#define I_sistema_privato  	1
+#define I_IO_condiviso   	2
+#define I_PCI_condiviso  	3
+#define I_utente_condiviso    510     //higher half
+#define I_utente_privato      511     //higher half
 
 #define ADDRESS(index) reinterpret_cast<addr>((index<256)?\
                        ((natq)index << 39):\
@@ -386,6 +386,7 @@ des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
 
 const addr inizio_finestra_FM = ADDRESS(I_finestra_FM); 
 const addr inizio_sistema_privato = ADDRESS(I_sistema_privato);
+const addr inizio_io_condiviso = ADDRESS(I_IO_condiviso);
 const addr inizio_pci_condiviso = ADDRESS(I_PCI_condiviso);
 const addr inizio_utente_condiviso = ADDRESS(I_utente_condiviso);
 const addr inizio_utente_privato = ADDRESS(I_utente_privato);

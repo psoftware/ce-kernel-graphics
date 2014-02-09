@@ -40,8 +40,8 @@ class EseguibileElf32: public Eseguibile {
 	public:
 		SegmentoElf32(EseguibileElf32 *padre_, Elf32_Phdr* ph_);
 		virtual bool scrivibile() const;
-		virtual uint32_t ind_virtuale() const;
-		virtual uint32_t dimensione() const;
+		virtual uint64_t ind_virtuale() const;
+		virtual uint64_t dimensione() const;
 		virtual bool finito() const;
 		virtual bool copia_pagina(void* dest);
 		virtual bool prossima_pagina();
@@ -54,7 +54,7 @@ public:
 	EseguibileElf32(FILE* pexe_);
 	bool init();
 	virtual Segmento* prossimo_segmento();
-	virtual uint32_t entry_point() const;
+	virtual uint64_t entry_point() const;
 	~EseguibileElf32();
 };
 
@@ -121,7 +121,7 @@ Segmento* EseguibileElf32::prossimo_segmento()
 	return NULL;
 }
 
-uint32_t EseguibileElf32::entry_point() const
+uint64_t EseguibileElf32::entry_point() const
 {
 	return h.e_entry;
 }
@@ -143,15 +143,15 @@ EseguibileElf32::SegmentoElf32::SegmentoElf32(EseguibileElf32* padre_, Elf32_Phd
 
 bool EseguibileElf32::SegmentoElf32::scrivibile() const
 {
-	return (ph->p_flags & PF_W);
+	return !!(ph->p_flags & PF_W);
 }
 
-uint32_t EseguibileElf32::SegmentoElf32::ind_virtuale() const
+uint64_t EseguibileElf32::SegmentoElf32::ind_virtuale() const
 {
 	return ph->p_vaddr;
 }
 
-uint32_t EseguibileElf32::SegmentoElf32::dimensione() const
+uint64_t EseguibileElf32::SegmentoElf32::dimensione() const
 {
 	return ph->p_memsz;
 }

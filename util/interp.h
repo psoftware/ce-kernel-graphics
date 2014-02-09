@@ -6,14 +6,12 @@
 #include <cstdio>
 #include <cstdlib>
 
-using namespace std;
-
 // interfaccia generica ai tipi di file eseguibile
 class Segmento {
 public:
 	virtual bool scrivibile() const = 0;
-	virtual unsigned int ind_virtuale() const = 0;
-	virtual unsigned int dimensione() const = 0;
+	virtual uint64_t ind_virtuale() const = 0;
+	virtual uint64_t dimensione() const = 0;
 	virtual bool finito() const = 0;
 	virtual bool prossima_pagina() = 0;
 	virtual bool pagina_di_zeri() const = 0;
@@ -24,7 +22,7 @@ public:
 class Eseguibile {
 public:
 	virtual Segmento* prossimo_segmento() = 0;
-	virtual uint32_t entry_point() const = 0;
+	virtual uint64_t entry_point() const = 0;
 	virtual ~Eseguibile() {}
 };
 

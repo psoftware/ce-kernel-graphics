@@ -5,20 +5,18 @@
 
 #include <cstdlib>
 
-using namespace std;
-
-typedef uint32_t block_t;
+typedef uint64_t block_t;
 
 struct superblock_t {
-	int8_t		magic[4];
+	int8_t		magic[8];
 	block_t		bm_start;
-	uint32_t	blocks;
+	uint64_t	blocks;
 	block_t		directory;
-	uint32_t	user_entry;
-	uint32_t	user_end;
-	uint32_t	io_entry;
-	uint32_t	io_end;
-	uint32_t	checksum;
+	uint64_t	user_entry;
+	uint64_t	user_end;
+	uint64_t	io_entry;
+	uint64_t	io_end;
+	uint64_t	checksum;
 };
 
 // interfaccia generica agli swap

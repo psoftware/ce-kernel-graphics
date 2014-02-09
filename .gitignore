@@ -1,7 +1,8 @@
 .swap
 swap.img
-*/*.o
+*.o
 build/*
 utente/utente.cpp
 *.swp
-
+decode
+showb

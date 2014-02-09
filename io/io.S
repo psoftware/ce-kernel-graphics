@@ -131,10 +131,11 @@
 // Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
 	pushq $LIV_UTENTE
-	pushq $\off
+	movabs $\off, %rax
+	pushq %rax
 	pushq $\gate
 	call fill_gate
-	addl $12, %esp
+	addq $12, %rsp
 .endm
 
 .macro check_cavallo
@@ -602,6 +603,7 @@ cursore:
 fill_io_gates:
 	pushq %rbp
 	movq %rsp, %rbp
+	pushq %rax
 
 	fill_io_gate	io_tipo_rsen	a_readse_n
 	fill_io_gate	io_tipo_rseln	a_readse_ln
@@ -614,6 +616,8 @@ fill_io_gates:
 	fill_io_gate	io_tipo_hdw	a_writehd_n
 	fill_io_gate	io_tipo_dmahdr	a_dmareadhd_n
 	fill_io_gate	io_tipo_dmahdw	a_dmawritehd_n
+
+	popq %rax
 	leave
 	ret
 
@@ -625,9 +629,9 @@ fill_io_gates:
 a_readse_n:
 	salva_registri
 	copia_param 4 7
-	cavallo_di_troia 1
-	cavallo_di_troia2 1 2
-	cavallo_di_troia 3
+	//cavallo_di_troia 1
+	//cavallo_di_troia2 1 2
+	//cavallo_di_troia 3
 	call c_readse_n
 	addl $16, %esp
 	carica_registri
@@ -637,10 +641,10 @@ a_readse_n:
 a_readse_ln:
 	salva_registri
 	copia_param 4 7
-	cavallo_di_troia 1
-	cavallo_di_troia 2
-	cavallo_di_troia3 1 2
-	cavallo_di_troia 3
+	//cavallo_di_troia 1
+	//cavallo_di_troia 2
+	//cavallo_di_troia3 1 2
+	//cavallo_di_troia 3
 	call c_readse_ln
 	addl $16, %esp
 	carica_registri
@@ -650,8 +654,8 @@ a_readse_ln:
 a_writese_n:
 	salva_registri
 	copia_param 3 7
-	cavallo_di_troia 1
-	cavallo_di_troia2 1 2
+	//cavallo_di_troia 1
+	//cavallo_di_troia2 1 2
 	call c_writese_n
 	addl $12, %esp
 	carica_registri
@@ -661,9 +665,9 @@ a_writese_n:
 a_writese_0:
 	salva_registri
 	copia_param 3 7
-	cavallo_di_troia 1
-	cavallo_di_troia 2
-	cavallo_di_troia3 1 2
+	//cavallo_di_troia 1
+	//cavallo_di_troia 2
+	//cavallo_di_troia3 1 2
 	call c_writese_0
 	addl $12, %esp
 	carica_registri
@@ -673,9 +677,9 @@ a_writese_0:
 a_readconsole:
 	salva_registri
 	copia_param 2 7
-	cavallo_di_troia 0
-	cavallo_di_troia 1
-	cavallo_di_troia3 0 1
+	//cavallo_di_troia 0
+	//cavallo_di_troia 1
+	//cavallo_di_troia3 0 1
 	call c_readconsole
 	addl $8, %esp
 	carica_registri
@@ -685,7 +689,7 @@ a_readconsole:
 a_writeconsole:
 	salva_registri
 	copia_param 1 7
-	cavallo_di_troia 0
+	//cavallo_di_troia 0
 	call c_writeconsole
 	addl $4, %esp
 	carica_registri
@@ -815,9 +819,9 @@ dmawritehd_n:	int		$io_tipo_dmahdw
 a_readhd_n:	# routine INT $io_tipo_hdr
 		salva_registri
 		copia_param 4 7
-		cavallo_di_troia 0
-		cavallo_di_troia2 0 2
-		cavallo_di_troia 3
+		//cavallo_di_troia 0
+		//cavallo_di_troia2 0 2
+		//cavallo_di_troia 3
 		call	c_readhd_n
 		addl $16, %esp
 		carica_registri
@@ -827,9 +831,9 @@ a_readhd_n:	# routine INT $io_tipo_hdr
 a_writehd_n:	# routine INT $io_tipo_hdw
 		salva_registri
 		copia_param 4 7
-		cavallo_di_troia 0
-		cavallo_di_troia2 0 2
-		cavallo_di_troia 3
+		//cavallo_di_troia 0
+		//cavallo_di_troia2 0 2
+		//cavallo_di_troia 3
 		call	c_writehd_n
 		addl $16, %esp
 		carica_registri
@@ -839,9 +843,9 @@ a_writehd_n:	# routine INT $io_tipo_hdw
 a_dmareadhd_n: 	# routine INT $dma_tipob_r
 		salva_registri
 		copia_param 4 7
-		cavallo_di_troia 0
-		cavallo_di_troia2 0 2
-		cavallo_di_troia 3
+		//cavallo_di_troia 0
+		//cavallo_di_troia2 0 2
+		//cavallo_di_troia 3
 		call	c_dmareadhd_n
 		addl $16, %esp
 		carica_registri
@@ -851,9 +855,9 @@ a_dmareadhd_n: 	# routine INT $dma_tipob_r
 a_dmawritehd_n:	# routine INT $dma_tipob_w
 		salva_registri
 		copia_param 4 7
-		cavallo_di_troia 0
-		cavallo_di_troia2 0 2
-		cavallo_di_troia 3
+		//cavallo_di_troia 0
+		//cavallo_di_troia2 0 2
+		//cavallo_di_troia 3
 		call	c_dmawritehd_n
 		addl $16, %esp
 		carica_registri

@@ -43,8 +43,8 @@ class EseguibileCoff_go32: public Eseguibile {
 	public:
 		SegmentoCoff_go32(EseguibileCoff_go32 *padre_, SCNHDR* ph_);
 		virtual bool scrivibile() const;
-		virtual uint ind_virtuale() const;
-		virtual uint dimensione() const;
+		virtual uint64_t ind_virtuale() const;
+		virtual uint64_t dimensione() const;
 		virtual bool finito() const;
 		virtual bool prossima_pagina();
 		virtual bool pagina_di_zeri() const;
@@ -57,7 +57,7 @@ public:
 	EseguibileCoff_go32(FILE* pexe_);
 	bool init();
 	virtual Segmento* prossimo_segmento();
-	virtual uint32_t entry_point() const;
+	virtual uint64_t entry_point() const;
 	~EseguibileCoff_go32();
 };
 
@@ -134,7 +134,7 @@ Segmento* EseguibileCoff_go32::prossimo_segmento()
 	return NULL;
 }
 
-uint32_t EseguibileCoff_go32::entry_point() const
+uint64_t EseguibileCoff_go32::entry_point() const
 {
 	return ah.entry;
 }
@@ -157,15 +157,15 @@ EseguibileCoff_go32::SegmentoCoff_go32::SegmentoCoff_go32(EseguibileCoff_go32* p
 
 bool EseguibileCoff_go32::SegmentoCoff_go32::scrivibile() const
 {
-	return (ph->s_flags & (STYP_DATA | STYP_BSS));
+	return !!(ph->s_flags & (STYP_DATA | STYP_BSS));
 }
 
-uint EseguibileCoff_go32::SegmentoCoff_go32::ind_virtuale() const
+uint64_t EseguibileCoff_go32::SegmentoCoff_go32::ind_virtuale() const
 {
 	return (ph->s_vaddr);
 }
 
-uint EseguibileCoff_go32::SegmentoCoff_go32::dimensione() const
+uint64_t EseguibileCoff_go32::SegmentoCoff_go32::dimensione() const
 {
 	return ph->s_size;
 }

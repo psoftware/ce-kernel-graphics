@@ -2,53 +2,62 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-union descrittore_pagina {
+union entrata {
 	// caso di pagina presente
 	struct {
 		// byte di accesso
-		unsigned int P:		1;	// bit di presenza
-		unsigned int RW:	1;	// Read/Write
-		unsigned int US:	1;	// User/Supervisor
-		unsigned int PWT:	1;	// Page Write Through
-		unsigned int PCD:	1;	// Page Cache Disable
-		unsigned int A:		1;	// Accessed
-		unsigned int D:		1;	// Dirty
-		unsigned int pgsz:	1;	// non visto a lezione
+		uint64_t P:		1;	// bit di presenza
+		uint64_t RW:		1;	// Read/Write
+		uint64_t US:		1;	// User/Supervisor
+		uint64_t PWT:		1;	// Page Write Through
+		uint64_t PCD:		1;	// Page Cache Disable
+		uint64_t A:		1;	// Accessed
+		uint64_t D:		1;	// Dirty
+		uint64_t PAT:		1;	// non visto a lezione
 		// fine byte di accesso
 		
-		unsigned int global:	1;	// non visto a lezione
-		unsigned int avail:	3;	// non usati
+		uint64_t global:	1;	// non visto a lezione
+		uint64_t avail:		3;	// non usati
 
-		unsigned int address:	20;	// indirizzo fisico
+		uint64_t address:	40;	// indirizzo fisico
+
+		uint64_t avail2:	11;
+		uint64_t NX:		1;
 	} p;
 	// caso di pagina assente
 	struct {
 		// informazioni sul tipo di pagina
-		unsigned int P:		1;
-		unsigned int RW:	1;
-		unsigned int US:	1;
-		unsigned int PWT:	1;
-		unsigned int PCD:	1;
+		uint64_t P:		1;
+		uint64_t RW:		1;
+		uint64_t US:		1;
+		uint64_t PWT:		1;
+		uint64_t PCD:		1;
+		uint64_t resvd:		5;
 
-		unsigned int block:	27;
+		uint64_t block:		51;
+
+		uint64_t NX:		1;
 	} a;	
 };
 
+typedef uint64_t block_t;
+
 struct superblock_t {
-	int8_t		magic[4];
-	uint32_t	bm_start;
-	uint32_t	blocks;
-	uint32_t	directory;
-	uint32_t	user_entry;
-	uint32_t	user_end;
-	uint32_t	io_entry;
-	uint32_t	io_end;
-	uint32_t	checksum;
+	int8_t		magic[8];
+	block_t		bm_start;
+	uint64_t	blocks;
+	block_t		directory;
+	uint64_t	user_entry;
+	uint64_t	user_end;
+	uint64_t	io_entry;
+	uint64_t	io_end;
+	uint64_t	checksum;
 };
+
 
 int get_bit() {
 	static int nbit = 0;
-	static unsigned int bitmap = 0;
+	static uint64_t bitmap = 0;
 	int bit;
 	if (nbit == 0) {
 		fread(&bitmap, sizeof(bitmap), 1, stdin);
@@ -62,9 +71,10 @@ int get_bit() {
 
 int main(int argc, char* argv[])
 {
-	union descrittore_pagina p;
+	union entrata *p;
+	uint64_t tmp;
 	struct superblock_t sb;
-	char buf[512];
+	char buf[4096];
 	int record = 0;
 	int count[2];
 	int bit, last_bit;
@@ -76,26 +86,33 @@ int main(int argc, char* argv[])
 	}
 	switch (argv[1][0]) {
 	case 'p':
-		while (fread(&p, sizeof(p), 1, stdin)) {
-			printf("%4d: P=%d RW=%d US=%d block=%d",
-				record++, p.a.P, p.a.RW, p.a.US, p.a.block);
-			printf(p.a.PWT? " PWT": "    ");
-			printf(p.a.PCD? " PCD": "    ");
+	case 'P':
+		for (record = 0; fread(&tmp, sizeof(tmp), 1, stdin); record++) {
+			if (argv[1][0] == 'P' && !tmp)
+				continue;
+			p = (union entrata*)&tmp;
+			printf("%4d: P=%d RW=%d US=%d block=%lu",
+				record, p->a.P, p->a.RW, p->a.US, (unsigned long)p->a.block);
+			printf(p->a.PWT? " PWT": "    ");
+			printf(p->a.PCD? " PCD": "    ");
+			printf(p->a.NX?  " NX" : "    ");
 			printf("\n");
 		}
 		break;
 	case 's':
 		fread(buf, 512, 1, stdin);
 		fread(&sb, sizeof(sb), 1, stdin);
-		printf("magic: %c%c%c%c\n", sb.magic[0], sb.magic[1], sb.magic[2], sb.magic[3]);
-		printf("bm_start: %d\n", sb.bm_start);
-		printf("blocks: %d\n", sb.blocks);
-		printf("directory: %d\n", sb.directory);
-		printf("user_entry: %x\n", (unsigned int)sb.user_entry);
-		printf("user_end: %x\n", (unsigned int)sb.user_end);
-		printf("io_entry: %x\n", (unsigned int)sb.io_entry);
-		printf("io_end: %x\n", (unsigned int)sb.io_end);
-		printf("checksum: %u", sb.checksum);
+		printf("magic:     %c%c%c%c%c%c%c%c\n",
+				sb.magic[0], sb.magic[1], sb.magic[2], sb.magic[3],
+				sb.magic[4], sb.magic[5], sb.magic[6], sb.magic[7]);
+		printf("bm_start:  %ld\n", sb.bm_start);
+		printf("blocks:    %ld\n", sb.blocks);
+		printf("pml4:      %ld\n", sb.directory);
+		printf("usr_entry: %016lx\n", sb.user_entry);
+		printf("usr_end:   %016lx\n", sb.user_end);
+		printf("io_entry:  %016lx\n", sb.io_entry);
+		printf("io_end:    %016lx\n", sb.io_end);
+		printf("checksum:  %lu", sb.checksum);
 		w = (int*)&sb;
 		sum = 0;
 		for (i = 0; i < sizeof(sb) / sizeof(int); i++)
@@ -105,8 +122,8 @@ int main(int argc, char* argv[])
 	case 'b':
 		record = 0;
 		last_bit = -1;
-		while(record <= 4096*32) {
-			if (record < 4096*32 && (bit = get_bit()) == last_bit)
+		while(record <= 4096*64) {
+			if (record < 4096*64 && (bit = get_bit()) == last_bit)
 				count[bit]++;
 			else {
 				if (last_bit >= 0) {
