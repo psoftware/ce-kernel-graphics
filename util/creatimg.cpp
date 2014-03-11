@@ -382,16 +382,16 @@ int main(int argc, char* argv[])
 	for (uint64_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
 		entrata *e[5];
 		block_t b;
-		std::cout << "    addr " << std::hex << addr << std::dec << "\n";
+		log << "    addr " << std::hex << addr << std::dec << "\n";
 
 		for (int l = 4; l > 1; l--) {
 			block_t b;
 			int i = i_tabella(addr, l);
 			e[l] = &tab[l].e[i];
-			std::cout << "       T" << l << "[" << i << "] ->";
+			log << "       T" << l << "[" << i << "] ->";
 			if (e[l]->a.block == 0) {
 				b = c.nuova(l - 1);
-				std::cout << " NEW";
+				log << " NEW";
 				e[l]->a.block = b;
 				e[l]->a.PWT   = 0;
 				e[l]->a.PCD   = 0;
@@ -401,12 +401,12 @@ int main(int argc, char* argv[])
 			} else {
 				c.leggi(l - 1, e[l]->a.block);
 			}
-			std::cout << " T" << (l - 1) << " at " << e[l]->a.block << "\n";
+			log << " T" << (l - 1) << " at " << e[l]->a.block << "\n";
 		}
 
 		int i = i_tabella(addr, 1);
 		e[1] = &tab[1].e[i];
-		std::cout << "       T1[" << i << "] ->";
+		log << "       T1[" << i << "] ->";
 		if (e[1]->a.block == 0) {
 			if (! bm_alloc(&blocks, b) ) {
 				std::cerr << argv[1] << ": spazio insufficiente nello swap\n";
@@ -414,9 +414,9 @@ int main(int argc, char* argv[])
 			}
 			e[1]->a.block = b;
 			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
-			std::cout << " NEW zero";
+			log << " NEW zero";
 		} 
-		std::cout << " page at " << e[1]->a.block << "\n";
+		log << " page at " << e[1]->a.block << "\n";
 		e[1]->a.PWT = 0;
 		e[1]->a.PCD = 0;
 		e[1]->a.RW |= 1;
