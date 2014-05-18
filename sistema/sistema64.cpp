@@ -229,10 +229,7 @@ extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
 
 extern "C" addr readCR2();
 extern "C" addr readCR3();
-int i_PML4(addr);
-int i_PDP(addr);
-int i_PD(addr);
-int i_PT(addr);
+int i_tab(addr, int lib);
 natq& get_entry(addr,natl);
 addr extr_IND_FISICO(natq);
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
@@ -248,19 +245,19 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 		flog(LOG_WARN, "CR2=   %p",CR2);
 		addr CR3 = readCR3();
 		flog(LOG_WARN, "CR3=   %p",CR3);
-		natq pml4e = get_entry(CR3,i_PML4(CR2));
+		natq pml4e = get_entry(CR3,i_tab(CR2, 4));
 		flog(LOG_WARN, "pml4e= %p",pml4e);
 		addr pdp = extr_IND_FISICO(pml4e);
 		
-		natq pdpe = get_entry(pdp,i_PDP(CR2));
+		natq pdpe = get_entry(pdp,i_tab(CR2, 3));
 		flog(LOG_WARN, "pdpe=  %p",pdpe);
 		addr pd = extr_IND_FISICO(pdpe);
 		
-		natq pde = get_entry(pd,i_PD(CR2));
+		natq pde = get_entry(pd,i_tab(CR2, 2));
 		flog(LOG_WARN, "pde=   %p",pde);
 		addr pt = extr_IND_FISICO(pde);
 
-		natq pte = get_entry(pt,i_PT(CR2));
+		natq pte = get_entry(pt,i_tab(CR2, 1));
 		flog(LOG_WARN, "pte=   %p",pte);
 	}
 	
@@ -472,35 +469,12 @@ void set_D(natq& descrittore, bool bitD) // [6.3]
 		descrittore &= ~BIT_D; // )
 }
 
-
-// funzione che restituisce i bit 47-39 di "ind_virt"
-// (indice nel PML4)
-int i_PML4(addr ind_virt)
+int i_tab(addr ind_virt, int liv)
 {
-	return ((natq)ind_virt & 0x0000ff8000000000) >> 39;
+	int shift = 12 + (liv - 1) * 9;
+	natq mask = 0x1ffUL << shift;
+	return ((natq)ind_virt & mask) >> shift;
 }
-
-// funzione che restituisce i bit 38-30 di "ind_virt"
-// (indice nel PDP)
-int i_PDP(addr ind_virt)
-{
-	return ((natq)ind_virt & 0x0000007fc0000000) >> 30;
-}
-
-// funzione che restituisce i bit 29-21 di "ind_virt"
-// (indice nel PD)
-int i_PD(addr ind_virt)
-{
-	return ((natq)ind_virt & 0x000000003fe00000) >> 21;
-}
-
-// funzione che restituisce i bit 20-12 di "ind_virt"
-// (indice nel PT)
-int i_PT(addr ind_virt)
-{
-	return ((natq)ind_virt & 0x00000000001ff000) >> 12;
-}
-
 natq& get_entry(addr tab, natl index) // [6.3]
 {
 	natq *pd = static_cast<natq*>(tab);
@@ -525,7 +499,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA)
 	{
 	//----PML4-------------------------------------------------
-		natq pml4e = get_entry(pml4, i_PML4(indv));
+		natq pml4e = get_entry(pml4, i_tab(indv, 4));
 		addr pdp;
 		if (! extr_P(pml4e))
 		{
@@ -540,7 +514,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			memset(pdp, 0, DIM_PAGINA);
 
 			pml4e = ((natq)pdp & ADDR_MASK) | flags | BIT_P;
-			set_entry(pml4, i_PML4(indv), pml4e);
+			set_entry(pml4, i_tab(indv, 4), pml4e);
 		}
 		else
 		{
@@ -548,7 +522,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 		}
 	//-----------------------------------------------------
 	//----PDP-------------------------------------------------
-		natq pdpe = get_entry(pdp,i_PDP(indv));
+		natq pdpe = get_entry(pdp,i_tab(indv, 3));
 		addr pd;
 		if (! extr_P(pdpe))
 		{
@@ -563,7 +537,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			memset(pd, 0, DIM_PAGINA);
 
 			pdpe = ((natq)pd & ADDR_MASK) | flags | BIT_P;
-			set_entry(pdp, i_PDP(indv), pdpe);
+			set_entry(pdp, i_tab(indv, 3), pdpe);
 		}
 		else
 		{
@@ -571,7 +545,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 		}
 	//-----------------------------------------------------
 	//----PD-------------------------------------------------
-		natq pde = get_entry(pd,i_PD(indv));
+		natq pde = get_entry(pd,i_tab(indv, 2));
 		addr pt;
 		if (! extr_P(pde))
 		{
@@ -586,7 +560,7 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 			memset(pt, 0, DIM_PAGINA);
 
 			pde = ((natq)pt & ADDR_MASK) | flags | BIT_P;
-			set_entry(pd, i_PD(indv), pde);
+			set_entry(pd, i_tab(indv, 2), pde);
 		}
 		else
 		{
@@ -595,25 +569,25 @@ bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq 
 	//-----------------------------------------------------
 	//----PT-------------------------------------------------
 		natq pte = ((natq)indf & ADDR_MASK) | flags | BIT_P;
-		set_entry(pt, i_PT(indv), pte);
+		set_entry(pt, i_tab(indv, 1), pte);
 	}
 
 //	flog(LOG_WARN, "phys_start=  %p",phys_start);
 //	flog(LOG_WARN, "virt_start=  %p",virt_start);
 //	flog(LOG_WARN, "pml4=        %p",pml4);
-//	natq pml4e = get_entry(pml4,i_PML4(virt_start));
+//	natq pml4e = get_entry(pml4,i_tab(virt_start, 4));
 //	flog(LOG_WARN, "pml4e=       %p",pml4e);
 //	addr pdp = extr_IND_FISICO(pml4e);
 //	
-//	natq pdpe = get_entry(pdp,i_PDP(virt_start));
+//	natq pdpe = get_entry(pdp,i_tab(virt_start, 3));
 //	flog(LOG_WARN, "pdpe=        %p",pdpe);
 //	addr pd = extr_IND_FISICO(pdpe);
 //	
-//	natq pde = get_entry(pd,i_PD(virt_start));
+//	natq pde = get_entry(pd,i_tab(virt_start, 2));
 //	flog(LOG_WARN, "pde=         %p",pde);
 //	addr pt = extr_IND_FISICO(pde);
 //
-//	natq pte = get_entry(pt,i_PT(virt_start));
+//	natq pte = get_entry(pt,i_tab(virt_start, 1));
 //	flog(LOG_WARN, "pte=         %p",pte);
 	
 	return true;
