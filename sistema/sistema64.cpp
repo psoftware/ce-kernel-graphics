@@ -1193,6 +1193,26 @@ extern "C" void c_driver_td(void)
 	inspronti();
 	schedulatore();
 }
+
+// super blocco (vedi [10.5] e [P_SWAP] avanti)
+struct superblock_t {
+	char	magic[8];
+	natq	bm_start;
+	natq	blocks;
+	natq	directory;
+	natq	user_entry;
+	natq	user_end;
+	natq	io_entry;
+	natq	io_end;
+	int	checksum;
+};
+
+// descrittore di swap (vedi [P_SWAP] avanti)
+struct des_swap {
+	natl *free;		// bitmap dei blocchi liberi
+	superblock_t sb;	// contenuto del superblocco 
+} swap_dev; 	// c'e' un unico oggetto swap
+bool swap_init();
 extern "C" void cmain ()
 {
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
@@ -1222,6 +1242,18 @@ extern "C" void cmain ()
 
 	ioapic_init();
 	flog(LOG_INFO, "APIC inizializzato!");
+	
+	// ( inizializzazione dello swap, che comprende la lettura
+	//   degli entry point di start_io e start_utente (vedi [10.4])
+	if (!swap_init())
+			goto error;
+	flog(LOG_INFO, "sb: blocks=%d user=%p/%p io=%p/%p", 
+			swap_dev.sb.blocks,
+			swap_dev.sb.user_entry,
+			swap_dev.sb.user_end,
+			swap_dev.sb.io_entry,
+			swap_dev.sb.io_end);
+	// )
 
 	attiva_timer(DELAY);
 	flog(LOG_INFO, "timer attivato!");
@@ -1237,5 +1269,217 @@ error:
 
 }
 
+// ( [P_HARDDISK]
+
+const ioaddr iBR = 0x01F0;
+const ioaddr iCNL = 0x01F4;
+const ioaddr iCNH = 0x01F5;
+const ioaddr iSNR = 0x01F3;
+const ioaddr iHND = 0x01F6;
+const ioaddr iSCR = 0x01F2;
+const ioaddr iERR = 0x01F1;
+const ioaddr iCMD = 0x01F7;
+const ioaddr iSTS = 0x01F7;
+const ioaddr iDCR = 0x03F6;
+
+void leggisett(natl lba, natb quanti, natw vetti[])
+{	
+	natb lba_0 = lba,
+		lba_1 = lba >> 8,
+		lba_2 = lba >> 16,
+		lba_3 = lba >> 24;
+	natb s;
+	do 
+		inputb(iSTS, s);
+	while (s & 0x80);
+
+	outputb(lba_0, iSNR); 			// indirizzo del settore e selezione drive
+	outputb(lba_1, iCNL);
+	outputb(lba_2, iCNH);
+	natb hnd = (lba_3 & 0x0F) | 0xE0;
+	outputb(hnd, iHND);
+	outputb(quanti, iSCR); 			// numero di settori
+	outputb(0x0A, iDCR);			// disabilitazione richieste di interruzione
+	outputb(0x20, iCMD);			// comando di lettura
+
+	for (int i = 0; i < quanti; i++) {
+		do 
+			inputb(iSTS, s);
+		while ((s & 0x88) != 0x08);
+		for (int j = 0; j < 512/2; j++)
+			inputw(iBR, vetti[i*512/2 + j]);
+	}
+}
+
+void scrivisett(natl lba, natb quanti, natw vetto[])
+{	
+	natb lba_0 = lba,
+		lba_1 = lba >> 8,
+		lba_2 = lba >> 16,
+		lba_3 = lba >> 24;
+	natb s;
+	do 
+		inputb(iSTS, s);
+	while (s & 0x80);
+	outputb(lba_0, iSNR);					// indirizzo del settore e selezione drive
+	outputb(lba_1, iCNL);
+	outputb(lba_2, iCNH);
+	natb hnd = (lba_3 & 0x0F) | 0xE0;
+	outputb(hnd, iHND);
+	outputb(quanti, iSCR);					// numero di settori
+	outputb(0x0A, iDCR);					// disabilitazione richieste di interruzione
+	outputb(0x30, iCMD);					// comando di scrittura
+	for (int i = 0; i < quanti; i++) {
+		do
+			inputb(iSTS, s);
+		while ((s & 0x88) != 0x08);
+		for (int j = 0; j < 512/2; j++)
+			outputw(vetto[i*512/2 + j], iBR);
+	}
+}
 
 
+// )
+
+// ( [P_SWAP]
+// lo swap e' descritto dalla struttura des_swap, che specifica il canale 
+// (primario o secondario) il drive (primario o master) e il numero della 
+// partizione che lo contiene. Inoltre, la struttura contiene una mappa di bit, 
+// utilizzata per l'allocazione dei blocchi in cui lo swap e' suddiviso, e un 
+// "super blocco".  Il contenuto del super blocco e' copiato, durante 
+// l'inizializzazione del sistema, dal primo settore della partizione di swap, 
+// e deve contenere le seguenti informazioni:
+// - magic (un valore speciale che serve a riconoscere la partizione, per 
+// evitare di usare come swap una partizione utilizzata per altri scopi)
+// - bm_start: il primo blocco, nella partizione, che contiene la mappa di bit 
+// (lo swap, inizialmente, avra' dei blocchi gia' occupati, corrispondenti alla 
+// parte utente/condivisa dello spazio di indirizzamento dei processi da 
+// creare: e' necessario, quindi, che lo swap stesso memorizzi una mappa di 
+// bit, che servira' come punto di partenza per le allocazioni dei blocchi 
+// successive)
+// - blocks: il numero di blocchi contenuti nella partizione di swap (esclusi 
+// quelli iniziali, contenenti il superblocco e la mappa di bit)
+// - directory: l'indice del blocco che contiene il direttorio
+// - l'indirizzo virtuale dell'entry point del programma contenuto nello swap 
+// (l'indirizzo di main)
+// - l'indirizzo virtuale successivo all'ultima istruzione del programma 
+// contenuto nello swap
+// - l'indirizzo virtuale dell'entry point del modulo io contenuto nello swap
+// - l'indirizzo virtuale successivo all'ultimo byte occupato dal modulo io
+// - checksum: somma dei valori precedenti (serve ad essere ragionevolmente 
+// sicuri che quello che abbiamo letto dall'hard disk e' effettivamente un 
+// superblocco di questo sistema, e che il superblocco stesso non e' stato 
+// corrotto)
+//
+
+// usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
+// efficiente il primo bit a 1 in v
+extern "C" int trova_bit(natl v);
+void scrivi_speciale(addr src, natl blocco);
+void leggi_speciale(addr dest, natl blocco);
+
+natl ceild(natl v, natl q)
+{
+	return v / q + (v % q != 0 ? 1 : 0);
+}
+
+// vedi [10.5]
+natq alloca_blocco()
+{
+	natl i = 0;
+	natq risu = 0;
+	natq vecsize = ceild(swap_dev.sb.blocks, sizeof(natl) * 8);
+	static natb pagina_di_zeri[DIM_PAGINA] = { 0 };
+
+	// saltiamo le parole lunghe che contengono solo zeri (blocchi tutti occupati)
+	while (i < vecsize && swap_dev.free[i] == 0) i++;
+	if (i < vecsize) {
+		natl pos = __builtin_ffs(swap_dev.free[i]) - 1;
+		swap_dev.free[i] &= ~(1UL << pos);
+		risu = pos + sizeof(natl) * 8 * i;
+	} 
+	if (risu) {
+		scrivi_speciale(pagina_di_zeri, risu);
+	}
+	return risu;
+}
+
+void dealloca_blocco(natl blocco)
+{
+	if (blocco == 0)
+		return;
+	swap_dev.free[blocco / 32] |= (1UL << (blocco % 32));
+}
+
+
+
+// legge dallo swap il blocco il cui indice e' passato come primo parametro, 
+// copiandone il contenuto a partire dall'indirizzo "dest"
+void leggi_speciale(addr dest, natl blocco)
+{
+	natl sector = blocco * 8;
+
+	leggisett(sector, 8, static_cast<natw*>(dest));
+}
+
+void scrivi_speciale(addr src, natl blocco)
+{
+	natl sector = blocco * 8;
+
+	scrivisett(sector, 8, static_cast<natw*>(src));
+}
+
+// lettura dallo swap (da utilizzare nella fase di inizializzazione)
+bool leggi_swap(addr buf, natl first, natl bytes)
+{
+	natl nsect = ceild(bytes, 512);
+
+	leggisett(first, nsect, static_cast<natw*>(buf));
+
+	return true;
+}
+
+// inizializzazione del descrittore di swap
+char read_buf[512];
+bool swap_init()
+{
+	// lettura del superblocco
+	flog(LOG_DEBUG, "lettura del superblocco dall'area di swap...");
+	if (!leggi_swap(read_buf, 1, sizeof(superblock_t)))
+		return false;
+
+	swap_dev.sb = *reinterpret_cast<superblock_t*>(read_buf);
+
+	// controlliamo che il superblocco contenga la firma di riconoscimento
+	for (int i = 0; i < 8; i++)
+		if (swap_dev.sb.magic[i] != "CE64SWAP"[i]) {
+			flog(LOG_ERR, "Firma errata nel superblocco");
+			return false;
+		}
+
+	// controlliamo il checksum
+	int *w = (int*)&swap_dev.sb, sum = 0;
+	for (natl i = 0; i < sizeof(swap_dev.sb) / sizeof(int); i++)
+		sum += w[i];
+
+	if (sum != 0) {
+		flog(LOG_ERR, "Checksum errato nel superblocco");
+		return false;
+	}
+
+	flog(LOG_DEBUG, "lettura della bitmap dei blocchi...");
+
+	// calcoliamo la dimensione della mappa di bit in pagine/blocchi
+	natl pages = ceild(swap_dev.sb.blocks, DIM_PAGINA * 8);
+
+	// quindi allochiamo in memoria un buffer che possa contenerla
+	swap_dev.free = static_cast<natl*>(alloca((pages * DIM_PAGINA)));
+	if (swap_dev.free == 0) {
+		flog(LOG_ERR, "Impossibile allocare la bitmap dei blocchi");
+		return false;
+	}
+	// infine, leggiamo la mappa di bit dalla partizione di swap
+	return leggi_swap(swap_dev.free,
+		swap_dev.sb.bm_start * 8, pages * DIM_PAGINA);
+}
+// )
