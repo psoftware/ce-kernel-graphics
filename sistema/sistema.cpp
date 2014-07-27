@@ -76,12 +76,13 @@ void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
 		pp = pp->puntatore;
 	}
 
+	p_elem->puntatore = pp;
+
 	if (prevp == 0)
 		p_lista = p_elem;
 	else
 		prevp->puntatore = p_elem;
 
-	p_elem->puntatore = pp;
 // )
 }
 
