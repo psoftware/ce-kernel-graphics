@@ -6,7 +6,7 @@
 
 
 //////////////////////////////////////////////////////////////////////////
-// AVVIO                                                                  //
+// AVVIO                                                                //
 //////////////////////////////////////////////////////////////////////////
 // Il bootstrap loader attiva il modo protetto (per poter accedere agli
 // indirizzi di memoria principale superiori a 1MiB) e carica il sistema
@@ -14,7 +14,8 @@
 // istruzione del sistema. Il bootstrap loader puo' anche passare
 // delle informazioni al sistema (tramite i registri e la memoria).
 //
-// In questo sistema usiamo lo standard multiboot, che definisce il formato che 
+// In questo sistema usiamo lo standard multiboot,
+// che definisce il formato che 
 // il file contentente il sistema deve rispettare e
 // il formato delle informazioni passate dal bootstrap loader al sistema.
 // Il formato del file contenente il sistema deve essere quello di un
@@ -43,14 +44,14 @@ start:
      .align  4
      // le seguenti informazioni sono richieste dal bootstrap loader
 multiboot_header:
-     .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
+     .long   MULTIBOOT_HEADER_MAGIC 			// valore magico
      .long   MULTIBOOT_HEADER_FLAGS   				// flag
      .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
 
 multiboot_entry:
 
      cli
-	 movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
+     movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
 
      pushl   %ebx			// parametri passati dal loader
      pushl   %eax			

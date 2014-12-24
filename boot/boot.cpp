@@ -26,7 +26,8 @@ natl carica_modulo(multiboot_module_t* mod) {
 	      elf_h->e_ident[EI_MAG2] == ELFMAG2 &&
 	      elf_h->e_ident[EI_MAG2] == ELFMAG2))
 	{
-		flog(LOG_ERR, "Formato del modulo '%s' non riconosciuto", mod->cmdline);
+		flog(LOG_ERR, "Formato del modulo '%s' non riconosciuto",
+			mod->cmdline);
 		return 0;
 	}
 
@@ -35,8 +36,8 @@ natl carica_modulo(multiboot_module_t* mod) {
 	      elf_h->e_type	       == ET_EXEC     &&
 	      elf_h->e_machine 	       == EM_AMD64))
 	{ 
-		flog(LOG_ERR, "Il modulo '%s' non contiene un esegubile per x86_64", 
-				mod->cmdline);
+		flog(LOG_ERR, "Il modulo '%s' non contiene "
+			"un esegubile per x86_64", mod->cmdline);
 		return 0;
 	}
 
@@ -49,16 +50,16 @@ natl carica_modulo(multiboot_module_t* mod) {
 		       (void*)(mod->mod_start + elf_ph->p_offset),
 		       elf_ph->p_filesz);
 		flog(LOG_INFO, "Copiata sezione di %d byte all'indirizzo %p",
-				(long)elf_ph->p_filesz, (void*)elf_ph->p_vaddr);
+			(long)elf_ph->p_filesz, (void*)elf_ph->p_vaddr);
 		memset((void*)(elf_ph->p_vaddr + elf_ph->p_filesz), 0,
 		       elf_ph->p_memsz - elf_ph->p_filesz);
 		flog(LOG_INFO, "azzerati ulteriori %d byte",
 				elf_ph->p_memsz - elf_ph->p_filesz);
-		elf_ph = (Elf64_Phdr*)((unsigned int)elf_ph + elf_h->e_phentsize);
+		elf_ph = (Elf64_Phdr*)((unsigned int)elf_ph +
+			elf_h->e_phentsize);
 	}
 	flog(LOG_INFO, "entry point %p", elf_h->e_entry);
 	return (natl)elf_h->e_entry;
-	//free((void*)mod->mod_start, mod->mod_end - mod->mod_start);
 }
 
 
@@ -82,24 +83,24 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 
 	// (* Carichiamo i vari moduli
 	//    Il numero dei moduli viene passato dal bootloader in mods_count
-	if (mbi->flags & MULTIBOOT_INFO_MODS) {
-
-		flog(LOG_INFO, "mods_count = %d, mods_addr = 0x%x",
-				mbi->mods_count, mbi->mods_addr);
-		multiboot_module_t* mod = (multiboot_module_t*) mbi->mods_addr;
-		for (unsigned int i = 0; i < mbi->mods_count; i++) {
-			flog(LOG_INFO, "mod[%d]:%s: start 0x%x end 0x%x",
-					i, mod->cmdline, mod->mod_start, mod->mod_end);
-			entry = carica_modulo(mod);
-		}
+	if (!(mbi->flags & MULTIBOOT_INFO_MODS) ||
+	      mbi->mods_count != 1)
+	{
+		flog(LOG_ERR, "Informazioni sui moduli assenti o errate");
+		return;
 	}
+
+	flog(LOG_INFO, "mods_count = %d, mods_addr = 0x%x",
+			mbi->mods_count, mbi->mods_addr);
+	multiboot_module_t* mod = (multiboot_module_t*) mbi->mods_addr;
+	flog(LOG_INFO, "mod[0]:%s: start 0x%x end 0x%x",
+		mod->cmdline, mod->mod_start, mod->mod_end);
+	entry = carica_modulo(mod);
 	// *)
 	loadCR3(&pml4);
 	attiva_paginazione(entry);
-
 	
-	
-	flog(LOG_INFO,"Paginazione attivata");
+	/* mai raggiunto */
 	return;
 }
 
