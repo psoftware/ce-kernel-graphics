@@ -1126,8 +1126,8 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "gdt inizializzata!");
 
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
-	heap_init((addr)4096, HEAP_SIZE);
-	flog(LOG_INFO, "Heap di sistema: %d B", HEAP_SIZE);
+	heap_init((addr)HEAP_START, HEAP_SIZE);
+	flog(LOG_INFO, "Heap di sistema: %x B @%x", HEAP_SIZE, HEAP_START);
 	// *)
 
 	// ( il resto della memoria e' per le pagine fisiche (parte M2, vedi [1.10])
