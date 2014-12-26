@@ -159,7 +159,7 @@ carica_stato:
 	movq R9(%rbx), %r9
 	movq R10(%rbx), %r10
 	movq R11(%rbx), %r11
-	movq R13(%rbx), %r12
+	movq R12(%rbx), %r12
 	movq R13(%rbx), %r13
 	movq R14(%rbx), %r14
 	movq R15(%rbx), %r15
