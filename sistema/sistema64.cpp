@@ -396,9 +396,9 @@ const natq BIT_D    = 1U << 6; // il bit "dirty"
 
 //TODO bit 63 NX (no-exec): che fare?
 const natq ACCB_MASK  = 0x00000000000000FF; // maschera per il byte di accesso
-const natq ADDR_MASK  = 0xFFFFFFFFFFFFF000; // maschera per l'indirizzo
-const natq INDMASS_MASK = 0xFFFFFFFFFFFFFFE0; // maschera per l'indirizzo in mem. di massa
-const natq INDMASS_SHIFT = 5;	    // primo bit che contiene l'ind. in mem. di massa
+const natq ADDR_MASK  = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo
+const natq INDMASS_MASK = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo in mem. di massa
+const natq INDMASS_SHIFT = 12;	    // primo bit che contiene l'ind. in mem. di massa
 // )
 
 bool  extr_P(natq descrittore)			// [6.3]

@@ -55,12 +55,12 @@ union entrata {
 	// caso di pagina assente
 	struct {
 		// informazioni sul tipo di pagina
-		uint64_t P:		1;
+		uint64_t P:	1;
 		uint64_t RW:	1;
 		uint64_t US:	1;
 		uint64_t PWT:	1;
 		uint64_t PCD:	1;
-		uint64_t resvd:	5;
+		uint64_t resvd:	7;
 
 		uint64_t block:	51;
 

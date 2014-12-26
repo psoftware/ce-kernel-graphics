@@ -32,7 +32,7 @@ union entrata {
 		uint64_t US:		1;
 		uint64_t PWT:		1;
 		uint64_t PCD:		1;
-		uint64_t resvd:		5;
+		uint64_t resvd:		7;
 
 		uint64_t block:		51;
 
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
 				sb.magic[4], sb.magic[5], sb.magic[6], sb.magic[7]);
 		printf("bm_start:  %ld\n", sb.bm_start);
 		printf("blocks:    %ld\n", sb.blocks);
-		printf("pml4:      %ld\n", sb.directory);
+		printf("tab4:      %ld\n", sb.directory);
 		printf("usr_entry: %016lx\n", sb.user_entry);
 		printf("usr_end:   %016lx\n", sb.user_end);
 		printf("io_entry:  %016lx\n", sb.io_entry);
