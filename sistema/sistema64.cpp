@@ -245,9 +245,9 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 		flog(LOG_WARN, "CR2=   %p",CR2);
 		addr CR3 = readCR3();
 		flog(LOG_WARN, "CR3=   %p",CR3);
-		natq pml4e = get_entry(CR3,i_tab(CR2, 4));
-		flog(LOG_WARN, "pml4e= %p",pml4e);
-		addr pdp = extr_IND_FISICO(pml4e);
+		natq tab4e = get_entry(CR3,i_tab(CR2, 4));
+		flog(LOG_WARN, "tab4e= %p",tab4e);
+		addr pdp = extr_IND_FISICO(tab4e);
 		
 		natq pdpe = get_entry(pdp,i_tab(CR2, 3));
 		flog(LOG_WARN, "pdpe=  %p",pdpe);
@@ -270,8 +270,11 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 /////////////////////////////////////////////////////////////////////////////////
 
 
-enum tt { LIBERA, PML4, TABELLA_CONDIVISA, TABELLA_PRIVATA,
-	PAGINA_CONDIVISA, PAGINA_PRIVATA }; // [6.3]
+enum tt {
+	LIBERA,
+	TAB1, TAB2, TAB3, TAB4,
+	PAGINA_CONDIVISA, PAGINA_PRIVATA
+}; // [6.3]
 struct des_pf {			// [6.3]
 	tt contenuto;	// uno dei valori precedenti
 	union {
@@ -293,6 +296,22 @@ struct des_pf {			// [6.3]
 des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
+
+tt TAB(int i)
+{
+	switch (i) {
+	case 1:
+		return TAB1;
+	case 2:
+		return TAB2;
+	case 3:
+		return TAB3;
+	case 4:
+		return TAB4;
+	default:
+		panic("errore di sistema");
+	}
+}
 
 // [9.3]
 des_pf* descrittore_pf(addr indirizzo_pf)
@@ -364,7 +383,7 @@ des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
 /////////////////////////////////////////////////////////////////////////////////
 
 //per semplicita permettiamo di avere sono interi pdp condivisi e assegnamo ad 
-//ogni zona logicamente distinta di memoria un intera entry nel pml4 (tanto ce
+//ogni zona logicamente distinta di memoria un intera entry nel tab4 (tanto ce
 //ne sono ben 512 grandi 512Gb ciascuna per un totale di 256Tb indirizzabili)
 //NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
 //in poi si trovano nella meta alta dello spazio di indirizzamento
@@ -487,25 +506,26 @@ void set_entry(addr tab, natl index, natq entry)
 	pd[index] = entry;
 }
 
+
 // ( [P_MEM_VIRT]
 
 //mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli
 //indirizzi fisici
 //che partono da phys_start, in sequenza.
-bool sequential_map(addr pml4,addr phys_start, addr virt_start, natl npag, natq flags)
+bool sequential_map(addr tab4,addr phys_start, addr virt_start, natl npag, natq flags)
 {
 	natb *indv = static_cast<natb*>(virt_start),
 		 *indf = static_cast<natb*>(phys_start);
 	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA)
 	{
-		addr tab = pml4;
+		addr tab = tab4;
 		for (int j = 4; j >= 2; j--) {
 			natq& e = get_entry(tab, i_tab(indv, j));
 			if (! extr_P(e)) {
 				des_pf* ppf = alloca_pagina_fisica_libera();
 				if (ppf == 0)
 					goto error;
-				ppf->contenuto = TABELLA_CONDIVISA;
+				ppf->contenuto = TAB(j - 1);
 				ppf->pt.residente = true;
 				addr ntab = indirizzo_pf(ppf);
 				memset(ntab, 0, DIM_PAGINA);
@@ -529,17 +549,17 @@ error:
 // mappa tutti gli indirizzi a partire da start (incluso) fino ad end (escluso)
 // in modo che l'indirizzo virtuale coincida con l'indirizzo fisico.
 // start e end devono essere allineati alla pagina.
-bool identity_map(addr pml4, addr start, addr end, natq flags)
+bool identity_map(addr tab4, addr start, addr end, natq flags)
 {
 	natl npag = (static_cast<natb*>(end) - static_cast<natb*>(start)) / DIM_PAGINA;
-	return sequential_map(pml4, start, start, npag, flags);
+	return sequential_map(tab4, start, start, npag, flags);
 }
 // mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella
 // memoria virtuale gestita dal direttorio pdir
 // (la funzione viene usata in fase di inizializzazione)
-bool crea_finestra_FM(addr pml4)
+bool crea_finestra_FM(addr tab4)
 {
-	return identity_map(pml4, (addr)DIM_PAGINA, (addr)MEM_TOT, BIT_RW);
+	return identity_map(tab4, (addr)DIM_PAGINA, (addr)MEM_TOT, BIT_RW);
 }
 
 
@@ -720,9 +740,9 @@ const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
 // ( [P_PCI]
 
 // mappa in memoria virtuale la porzione di spazio fisico dedicata all'I/O (PCI e altro)
-bool crea_finestra_PCI(addr pml4)
+bool crea_finestra_PCI(addr tab4)
 {
-	return sequential_map(pml4,
+	return sequential_map(tab4,
 			PCI_startmem,
 			inizio_pci_condiviso,
 			dim_pci_condiviso/DIM_PAGINA,
@@ -941,7 +961,7 @@ const natl DELAY = 59659;
 /////////////////////////////////////////////////////////////////////////////
 extern "C" void init_gdt();
 
-addr crea_pila(addr pml4,int dim, bool utente) 
+addr crea_pila(addr tab4,int dim, bool utente) 
 {
 	natq flags = BIT_RW;
 	
@@ -964,42 +984,42 @@ addr crea_pila(addr pml4,int dim, bool utente)
 		pila_phys = indirizzo_pf(ppf);
 		
 		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
-		sequential_map(pml4,pila_phys,pag_pila,1,flags);
+		sequential_map(tab4,pila_phys,pag_pila,1,flags);
 	}
 
 	return reinterpret_cast<addr>((natq)pila_phys + DIM_PAGINA );
 	
 }
 
-addr crea_pml4()
+addr crea_tab4()
 {
 	des_pf* ppf = alloca_pagina_fisica_libera();
 	if (ppf == 0) {
-		flog(LOG_ERR, "Impossibile allocare pml4");
+		flog(LOG_ERR, "Impossibile allocare tab4");
 		panic("errore");
 	}
-	ppf->contenuto = PML4;
+	ppf->contenuto = TAB4;
 	ppf->pt.residente = true;
-	addr pml4 = indirizzo_pf(ppf);
-	memset(pml4, 0, DIM_PAGINA);
+	addr tab4 = indirizzo_pf(ppf);
+	memset(tab4, 0, DIM_PAGINA);
 
-	return pml4;
+	return tab4;
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////
 //                          TESTS                                            //
 ///////////////////////////////////////////////////////////////////////////////
-void copia_pagine_condivise(addr srcpml4, addr destpml4)
+void copia_pagine_condivise(addr srctab4, addr desttab4)
 {
-	natq finestra_FM = get_entry(srcpml4,I_finestra_FM);
-	set_entry(destpml4,I_finestra_FM,finestra_FM);
+	natq finestra_FM = get_entry(srctab4,I_finestra_FM);
+	set_entry(desttab4,I_finestra_FM,finestra_FM);
 	
-	natq PCI_condiviso = get_entry(srcpml4,I_PCI_condiviso);
-	set_entry(destpml4,I_PCI_condiviso,PCI_condiviso);
+	natq PCI_condiviso = get_entry(srctab4,I_PCI_condiviso);
+	set_entry(desttab4,I_PCI_condiviso,PCI_condiviso);
 	
-	natq utente_condiviso = get_entry(srcpml4,I_utente_condiviso);
-	set_entry(destpml4,I_utente_condiviso,utente_condiviso);
+	natq utente_condiviso = get_entry(srctab4,I_utente_condiviso);
+	set_entry(desttab4,I_utente_condiviso,utente_condiviso);
 }
 
 
@@ -1014,22 +1034,22 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	natl id;	
 	natq* pila_sistema_iretq;
 
-	addr pml4 = crea_pml4();
-	//flog(LOG_INFO,"pml4=%x",pml4);
+	addr tab4 = crea_tab4();
+	//flog(LOG_INFO,"tab4=%x",tab4);
 
-	addr pml4_padre = readCR3();
+	addr tab4_padre = readCR3();
 
-	copia_pagine_condivise(pml4_padre,pml4);
+	copia_pagine_condivise(tab4_padre,tab4);
 
-	addr pila_sistema = crea_pila(pml4,DIM_SYS_STACK,false);
-	crea_pila(pml4,DIM_USR_STACK, true ); //pila_tuente
+	addr pila_sistema = crea_pila(tab4,DIM_SYS_STACK,false);
+	crea_pila(tab4,DIM_USR_STACK, true ); //pila_tuente
 
-	sequential_map(pml4,phys_start,inizio_utente_condiviso,1,BIT_RW | BIT_US);
+	sequential_map(tab4,phys_start,inizio_utente_condiviso,1,BIT_RW | BIT_US);
 
 	dp = static_cast<des_proc*>(alloca(sizeof(des_proc)));
 	if (dp == 0) goto errore;
 	memset(dp, 0, sizeof(des_proc));
-	dp->cr3 = pml4;
+	dp->cr3 = tab4;
 	dp->punt_nucleo = reinterpret_cast<addr>((natq)inizio_sistema_privato+DIM_SYS_STACK);
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
@@ -1135,15 +1155,15 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
 
-	addr initpml4 = crea_pml4();
+	addr inittab4 = crea_tab4();
 
-	if(!crea_finestra_FM(initpml4))
+	if(!crea_finestra_FM(inittab4))
 			goto error;
 	flog(LOG_INFO, "Creata finestra FM!");
-	if(!crea_finestra_PCI(initpml4))
+	if(!crea_finestra_PCI(inittab4))
 			goto error;
 	flog(LOG_INFO, "Creata finestra PCI!");
-	loadCR3(initpml4);
+	loadCR3(inittab4);
 	flog(LOG_INFO, "Caricato CR3!");
 
 	ioapic_init();
