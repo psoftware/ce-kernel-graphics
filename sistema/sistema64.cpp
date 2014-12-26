@@ -270,22 +270,16 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 /////////////////////////////////////////////////////////////////////////////////
 
 
-enum tt {
-	LIBERA, TABELLA, PAGINA
-}; // [6.3]
 struct des_pf {			// [6.3]
-	tt	contenuto;	// uno dei valori precedenti
+	int	livello;	// 0=pagina, -1=libera
 	bool	residente;	// pagina residente o meno
 	natl	processo;	// identificatore di processo
-	union {
-		natl	ind_massa;
-		natl	livello;
-	};
+	natl	ind_massa;
+	natq	contatore;	// contatore per le statistiche
 	union {
 		addr	ind_virtuale;
 		des_pf*	prossima_libera;
 	};
-	natq	contatore;	// contatore per le statistiche
 };
 
 des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
@@ -318,7 +312,7 @@ bool init_dpf()
 
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
-		dpf[i].contenuto = LIBERA;
+		dpf[i].livello = -1;
 		dpf[i].prossima_libera = &dpf[i + 1];
 	}
 	dpf[N_DPF - 1].prossima_libera = 0;
@@ -338,12 +332,12 @@ des_pf* alloca_pagina_fisica_libera()	// [6.4]
 //    ha per indice "i"
 void rilascia_pagina_fisica(des_pf* ppf)
 {
-	ppf->contenuto = LIBERA;
+	ppf->livello = -1;
 	ppf->prossima_libera = pagine_libere;
 	pagine_libere = ppf;
 }
 
-des_pf* alloca_pagina_fisica(natl proc, tt tipo, addr ind_virt)
+des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 {
 	des_pf *ppf = alloca_pagina_fisica_libera();
 	if (ppf == 0) {
@@ -518,7 +512,6 @@ bool sequential_map(addr tab4,addr phys_start, addr virt_start, natl npag, natq 
 				des_pf* ppf = alloca_pagina_fisica_libera();
 				if (ppf == 0)
 					goto error;
-				ppf->contenuto = TABELLA;
 				ppf->livello = j - 1;
 				ppf->residente = true;
 				addr ntab = indirizzo_pf(ppf);
@@ -973,7 +966,7 @@ addr crea_pila(addr tab4,int dim, bool utente)
 		if (ppf == 0) {
 			panic("impossibile allocare pila");
 		}
-		ppf->contenuto = PAGINA;
+		ppf->livello = 0;
 		ppf->residente = true;   //per ora no swap
 		pila_phys = indirizzo_pf(ppf);
 		
@@ -992,7 +985,6 @@ addr crea_tab4()
 		flog(LOG_ERR, "Impossibile allocare tab4");
 		panic("errore");
 	}
-	ppf->contenuto = TABELLA;
 	ppf->livello = 4;
 	ppf->residente = true;
 	addr tab4 = indirizzo_pf(ppf);
