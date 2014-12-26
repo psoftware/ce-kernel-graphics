@@ -361,24 +361,46 @@ des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 //NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
 //in poi si trovano nella meta alta dello spazio di indirizzamento
 
-#define I_finestra_FM  		0     //per ora coincide con sistema_condiviso
-#define I_sistema_privato  	1
-#define I_IO_condiviso   	2
-#define I_PCI_condiviso  	3
-#define I_utente_condiviso    510     //higher half
-#define I_utente_privato      511     //higher half
+#define i_sistema_condiviso	0
+#define i_sistema_privato  	1
+#define i_io_condiviso   	2
+#define i_pci_condiviso  	3
+#define i_utente_condiviso    510     //higher half
+#define i_utente_privato      511     //higher half
 
-#define ADDRESS(index) reinterpret_cast<addr>((index<256)?\
-                       ((natq)index << 39):\
-                       (((natq)(index) << 39) | (0xffffL<<48)))
+static const natq BIT_SEGNO = (1UL << 47);
+static const natq BIT_BASSI = 0x0000ffffffffffff;
+static inline addr normalizza(addr a)
+{
+	natq v = (natq)a;
+	return (addr)((v & BIT_SEGNO) ? (v | ~BIT_BASSI) : (v & BIT_BASSI));
+}
 
+static inline natq dim_pagina(int livello)
+{
+	natq v = 1UL << ((livello - 1) * 9 + 12);
+	return v;
+}
 
-const addr inizio_finestra_FM = ADDRESS(I_finestra_FM); 
-const addr inizio_sistema_privato = ADDRESS(I_sistema_privato);
-const addr inizio_io_condiviso = ADDRESS(I_IO_condiviso);
-const addr inizio_pci_condiviso = ADDRESS(I_PCI_condiviso);
-const addr inizio_utente_condiviso = ADDRESS(I_utente_condiviso);
-const addr inizio_utente_privato = ADDRESS(I_utente_privato);
+static inline addr ind_base(addr a, int livello)
+{
+	natq v = (natq)a;
+	natq mask = dim_pagina(livello + 1) - 1;
+	return (addr)(v & ~mask);
+}
+
+static inline addr primo_indirizzo(addr base, natl indice, int livello)
+{
+	natq v = (natq)ind_base(base, livello) | (dim_pagina(livello) * indice);
+	return normalizza((addr)v);
+}
+
+const addr inizio_sistema_condiviso = primo_indirizzo(0, i_sistema_condiviso, 4); 
+const addr inizio_sistema_privato   = primo_indirizzo(0, i_sistema_privato, 4);
+const addr inizio_io_condiviso      = primo_indirizzo(0, i_io_condiviso, 4);
+const addr inizio_pci_condiviso     = primo_indirizzo(0, i_pci_condiviso, 4);
+const addr inizio_utente_condiviso  = primo_indirizzo(0, i_utente_condiviso, 4);
+const addr inizio_utente_privato    = primo_indirizzo(0, i_utente_privato, 4);
 
 //   ( definiamo alcune costanti utili per la manipolazione dei descrittori
 //     di pagina e di tabella. Assegneremo a tali descrittori il tipo "natl"
@@ -999,14 +1021,14 @@ addr crea_tab4()
 ///////////////////////////////////////////////////////////////////////////////
 void copia_pagine_condivise(addr srctab4, addr desttab4)
 {
-	natq finestra_FM = get_entry(srctab4,I_finestra_FM);
-	set_entry(desttab4,I_finestra_FM,finestra_FM);
+	natq finestra_FM = get_entry(srctab4, i_sistema_condiviso);
+	set_entry(desttab4,i_sistema_condiviso,finestra_FM);
 	
-	natq PCI_condiviso = get_entry(srctab4,I_PCI_condiviso);
-	set_entry(desttab4,I_PCI_condiviso,PCI_condiviso);
+	natq PCI_condiviso = get_entry(srctab4,i_pci_condiviso);
+	set_entry(desttab4,i_pci_condiviso,PCI_condiviso);
 	
-	natq utente_condiviso = get_entry(srctab4,I_utente_condiviso);
-	set_entry(desttab4,I_utente_condiviso,utente_condiviso);
+	natq utente_condiviso = get_entry(srctab4,i_utente_condiviso);
+	set_entry(desttab4,i_utente_condiviso,utente_condiviso);
 }
 
 
@@ -1160,7 +1182,7 @@ des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
 
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
-	natq dim_pag = 1UL << (9 * (liv - 1) + 12);
+	natq dim_pag = dim_pagina(liv);
 
 	natl i = i_tab(ind, liv);
 	for (natl j = i; j < i + n; j++) {
@@ -1181,7 +1203,7 @@ bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
 
-	return carica_ric(proc, p->cr3, 4, ADDRESS(i), n);
+	return carica_ric(proc, p->cr3, 4, primo_indirizzo(0, i, 4), n);
 }
 
 
@@ -1222,21 +1244,21 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	// (  carichiamo le parti condivise nello spazio di indirizzamento del processo
 	//    dummy (vedi [10.2])
 	addr dummy_dir = des_p(dummy_proc)->cr3;
-	set_entry(dummy_dir, I_IO_condiviso, get_entry(tmp, I_IO_condiviso));
-	set_entry(dummy_dir, I_utente_condiviso, get_entry(tmp, I_utente_condiviso));
+	set_entry(dummy_dir, i_io_condiviso, get_entry(tmp, i_io_condiviso));
+	set_entry(dummy_dir, i_utente_condiviso, get_entry(tmp, i_utente_condiviso));
 	dealloca(tmp);
 	
-	if (!carica_tutto(dummy_proc, I_IO_condiviso, 1))
+	if (!carica_tutto(dummy_proc, i_io_condiviso, 1))
 		return false;
-	if (!carica_tutto(dummy_proc, I_utente_condiviso, 1))
+	if (!carica_tutto(dummy_proc, i_utente_condiviso, 1))
 		return false;
 	// )
 
 	// ( copiamo i descrittori relativi allo spazio condiviso anche nel direttorio
 	//   corrente, in modo che vengano ereditati dai processi che creeremo in seguito
 	addr my_dir = des_p(esecuzione->id)->cr3;
-	set_entry(my_dir, I_IO_condiviso, get_entry(dummy_dir, I_IO_condiviso));
-	set_entry(my_dir, I_utente_condiviso, get_entry(dummy_dir, I_utente_condiviso));
+	set_entry(my_dir, i_io_condiviso, get_entry(dummy_dir, i_io_condiviso));
+	set_entry(my_dir, i_utente_condiviso, get_entry(dummy_dir, i_utente_condiviso));
 	// )
 
 	invalida_TLB();
@@ -1260,6 +1282,13 @@ extern "C" void cmain ()
 	init_dpf();
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
+	
+	flog(LOG_INFO, "sis/cond %p", inizio_sistema_condiviso);
+	flog(LOG_INFO, "sis/priv %p", inizio_sistema_privato);
+	flog(LOG_INFO, "io /cond %p", inizio_io_condiviso);
+	flog(LOG_INFO, "pci/cond %p", inizio_pci_condiviso);
+	flog(LOG_INFO, "usr/cond %p", inizio_utente_condiviso);
+	flog(LOG_INFO, "usr/priv %p", inizio_utente_privato);
 
 	addr inittab4 = crea_tab4();
 
