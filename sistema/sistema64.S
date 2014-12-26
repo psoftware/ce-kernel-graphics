@@ -208,6 +208,23 @@ rilascia_tss:
 	movq $0,gdt(%rdi)
 	retq
 
+// dato l'identificatore di un processo,
+// ne restituisce il puntatore al descrittore
+// (0 se non allocato)
+	.global des_p
+des_p:	
+	leaq gdt(%rdi), %rax
+	testb $pres_bit, 5(%rax)
+	jz 1f
+	estrai_base
+1:	retq
+
+// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
+// eliminare la corrispondente traduzione dal TLB
+	.global invalida_entrata_TLB // [6.4]
+invalida_entrata_TLB:
+	invlpg (%rdi)
+	ret
 
 // Carica un gate della IDT
 // num: indice (a partire da 0) in IDT del gate da caricare

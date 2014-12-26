@@ -274,9 +274,8 @@ enum tt {
 	LIBERA, TABELLA, PAGINA
 }; // [6.3]
 struct des_pf {			// [6.3]
-	tt contenuto;	// uno dei valori precedenti
+	tt	contenuto;	// uno dei valori precedenti
 	bool	residente;	// pagina residente o meno
-	natl	contatore;	// contatore per le statistiche
 	natl	processo;	// identificatore di processo
 	union {
 		natl	ind_massa;
@@ -286,6 +285,7 @@ struct des_pf {			// [6.3]
 		addr	ind_virtuale;
 		des_pf*	prossima_libera;
 	};
+	natq	contatore;	// contatore per le statistiche
 };
 
 des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
@@ -483,6 +483,20 @@ void set_entry(addr tab, natl index, natq entry)
 {
 	natq *pd = static_cast<natq*>(tab);
 	pd[index] = entry;
+}
+
+extern "C" des_proc* des_p(natl id);
+natq& get_des(natl processo, int livello, addr ind_virt)
+{
+	des_proc *p = des_p(processo);
+	addr tab = p->cr3;
+	for (int i = 4; i > livello; i--) {
+		natq e = get_entry(tab, i_tab(ind_virt, i));
+		if (!extr_P(e))
+			panic("P=0 non ammesso");
+		tab = extr_IND_FISICO(e);
+	}
+	return get_entry(tab, i_tab(ind_virt, livello));
 }
 
 
@@ -1099,6 +1113,42 @@ extern "C" void c_driver_td(void)
 
 	inspronti();
 	schedulatore();
+}
+
+
+void leggisett(natl lba, natb quanti, natw vetti[]);
+void scrivisett(natl lba, natb quanti, natw vetto[]);
+
+void carica(des_pf* ppf) // [6.4][10.5]
+{
+	leggisett(ppf->ind_massa, 8, static_cast<natw*>(indirizzo_pf(ppf)));
+}
+
+void scarica(des_pf* ppf) // [6.4]
+{
+	scrivisett(ppf->ind_massa, 8, static_cast<natw*>(indirizzo_pf(ppf)));
+}
+
+void collega(des_pf *ppf)	// [6.4]
+{
+	natq& e = get_des(ppf->processo, ppf->livello, ppf->ind_virtuale);
+	set_IND_FISICO(e, indirizzo_pf(ppf));
+	set_P(e, true);
+	set_D(e, false);
+	set_A(e, false);
+}
+
+extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
+bool scollega(des_pf* ppf)	// [6.4][10.5]
+{
+	bool bitD;
+	natq& e = get_des(ppf->processo, ppf->livello, ppf->ind_virtuale);
+	bitD = extr_D(e);
+	bool occorre_salvare = bitD && ppf->livello == 0;
+	set_IND_MASSA(e, ppf->ind_massa);
+	set_P(e, false);
+	invalida_entrata_TLB(ppf->ind_virtuale);
+	return occorre_salvare;	// [10.5]
 }
 
 // super blocco (vedi [10.5] e [P_SWAP] avanti)
