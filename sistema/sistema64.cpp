@@ -271,47 +271,26 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 
 
 enum tt {
-	LIBERA,
-	TAB1, TAB2, TAB3, TAB4,
-	PAGINA_CONDIVISA, PAGINA_PRIVATA
+	LIBERA, TABELLA, PAGINA
 }; // [6.3]
 struct des_pf {			// [6.3]
 	tt contenuto;	// uno dei valori precedenti
+	bool	residente;	// pagina residente o meno
+	natl	contatore;	// contatore per le statistiche
+	natl	processo;	// identificatore di processo
 	union {
-		struct {
-			bool	residente;	// pagina residente o meno
-			natl	processo;	// identificatore di processo
-			natl	ind_massa;	// indirizzo della pagina in memoria di massa
-			addr	ind_virtuale;
-			// indirizzo virtuale della pagina (ultimi 12 bit a 0)
-			// o della prima pagina indirizzata da una tabella (ultimi 22 bit uguali a 0)
-			natl	contatore;	// contatore per le statistiche
-		} pt; 	// rilevante se "contenuto" non vale LIBERA
-		struct  { // informazioni relative a una pagina libera
-			des_pf*	prossima_libera;// indice del descrittore della prossima pagina libera
-		} avl;	// rilevante se "contenuto" vale LIBERA
+		natl	ind_massa;
+		natl	livello;
+	};
+	union {
+		addr	ind_virtuale;
+		des_pf*	prossima_libera;
 	};
 };
 
 des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
-
-tt TAB(int i)
-{
-	switch (i) {
-	case 1:
-		return TAB1;
-	case 2:
-		return TAB2;
-	case 3:
-		return TAB3;
-	case 4:
-		return TAB4;
-	default:
-		panic("errore di sistema");
-	}
-}
 
 // [9.3]
 des_pf* descrittore_pf(addr indirizzo_pf)
@@ -340,9 +319,9 @@ bool init_dpf()
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
 		dpf[i].contenuto = LIBERA;
-		dpf[i].avl.prossima_libera = &dpf[i + 1];
+		dpf[i].prossima_libera = &dpf[i + 1];
 	}
-	dpf[N_DPF - 1].avl.prossima_libera = 0;
+	dpf[N_DPF - 1].prossima_libera = 0;
 
 	return true;
 }
@@ -351,7 +330,7 @@ des_pf* alloca_pagina_fisica_libera()	// [6.4]
 {
 	des_pf* p = pagine_libere;
 	if (pagine_libere != 0)
-		pagine_libere = pagine_libere->avl.prossima_libera;
+		pagine_libere = pagine_libere->prossima_libera;
 	return p;
 }
 
@@ -360,7 +339,7 @@ des_pf* alloca_pagina_fisica_libera()	// [6.4]
 void rilascia_pagina_fisica(des_pf* ppf)
 {
 	ppf->contenuto = LIBERA;
-	ppf->avl.prossima_libera = pagine_libere;
+	ppf->prossima_libera = pagine_libere;
 	pagine_libere = ppf;
 }
 
@@ -525,8 +504,9 @@ bool sequential_map(addr tab4,addr phys_start, addr virt_start, natl npag, natq 
 				des_pf* ppf = alloca_pagina_fisica_libera();
 				if (ppf == 0)
 					goto error;
-				ppf->contenuto = TAB(j - 1);
-				ppf->pt.residente = true;
+				ppf->contenuto = TABELLA;
+				ppf->livello = j - 1;
+				ppf->residente = true;
 				addr ntab = indirizzo_pf(ppf);
 				memset(ntab, 0, DIM_PAGINA);
 
@@ -979,8 +959,8 @@ addr crea_pila(addr tab4,int dim, bool utente)
 		if (ppf == 0) {
 			panic("impossibile allocare pila");
 		}
-		ppf->contenuto = PAGINA_PRIVATA;
-		ppf->pt.residente = true;   //per ora no swap
+		ppf->contenuto = PAGINA;
+		ppf->residente = true;   //per ora no swap
 		pila_phys = indirizzo_pf(ppf);
 		
 		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
@@ -998,8 +978,9 @@ addr crea_tab4()
 		flog(LOG_ERR, "Impossibile allocare tab4");
 		panic("errore");
 	}
-	ppf->contenuto = TAB4;
-	ppf->pt.residente = true;
+	ppf->contenuto = TABELLA;
+	ppf->livello = 4;
+	ppf->residente = true;
 	addr tab4 = indirizzo_pf(ppf);
 	memset(tab4, 0, DIM_PAGINA);
 
