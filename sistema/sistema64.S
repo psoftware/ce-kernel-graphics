@@ -213,11 +213,15 @@ rilascia_tss:
 // (0 se non allocato)
 	.global des_p
 des_p:	
+	pushq %rbx
+	xorq %rbx, %rbx
 	leaq gdt(%rdi), %rax
 	testb $pres_bit, 5(%rax)
 	jz 1f
 	estrai_base
-1:	retq
+1:	movq %rbx, %rax
+	popq %rbx
+	retq
 
 // dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
 // eliminare la corrispondente traduzione dal TLB
