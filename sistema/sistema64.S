@@ -554,12 +554,7 @@ handler 23
 handler 24
 
 a_flog:
-	//pushq %rdi
-	salva_registri
-	//movq (%rsp),%rdi
 	call flog
-	carica_registri
-	//addq $8,%rsp
 	iretq
 	
 a_delay:	
