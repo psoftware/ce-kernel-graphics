@@ -60,9 +60,16 @@
 .globl  _start, start
 _start:				// entry point
 start:
-	movq    $(stack + STACK_SIZE), %rsp
+	movq $(stack + STACK_SIZE), %rsp
 	call init_idt
-	call    cmain			// il resto dell'inizializzazione
+	movabs $__init_array_start, %rax
+	movq %rax, %rbx
+1:	cmpq $__init_array_end, %rbx
+	je 2f
+	call *(%rbx)
+	addq $8, %rbx
+	jmp 1b
+2:	call cmain			// il resto dell'inizializzazione
 	hlt				// e' scritto in C++
 
 
