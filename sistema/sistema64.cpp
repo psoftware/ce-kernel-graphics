@@ -1071,9 +1071,6 @@ extern "C" natb proc0;
 extern "C" natb dummy_proc;
 void test_userspace()
 {
-	proc_elem* d = crea_processo(&dummy_proc,0,13);
-	flog(LOG_INFO, "Creo il processo dummy");
-	inserimento_lista(pronti,d);
 	for(int i = 1; i< 20; i++)
 	{
 		proc_elem* e = crea_processo(&proc0,i,i);
@@ -1107,23 +1104,23 @@ extern "C" void c_driver_td(void)
 	schedulatore();
 }
 
+void scrivi_swap(addr src, natl blocco);
+void leggi_swap(addr dest, natl blocco);
 
-void leggisett(natl lba, natb quanti, natw vetti[]);
-void scrivisett(natl lba, natb quanti, natw vetto[]);
 
 void carica(des_pf* ppf) // [6.4][10.5]
 {
-	leggisett(ppf->ind_massa, 8, static_cast<natw*>(indirizzo_pf(ppf)));
+	leggi_swap(indirizzo_pf(ppf), ppf->ind_massa);
 }
 
 void scarica(des_pf* ppf) // [6.4]
 {
-	scrivisett(ppf->ind_massa, 8, static_cast<natw*>(indirizzo_pf(ppf)));
+	scrivi_swap(indirizzo_pf(ppf), ppf->ind_massa);
 }
 
 void collega(des_pf *ppf)	// [6.4]
 {
-	natq& e = get_des(ppf->processo, ppf->livello, ppf->ind_virtuale);
+	natq& e = get_des(ppf->processo, ppf->livello + 1, ppf->ind_virtuale);
 	set_IND_FISICO(e, indirizzo_pf(ppf));
 	set_P(e, true);
 	set_D(e, false);
@@ -1134,7 +1131,7 @@ extern "C" void invalida_entrata_TLB(addr ind_virtuale); // [6.4]
 bool scollega(des_pf* ppf)	// [6.4][10.5]
 {
 	bool bitD;
-	natq& e = get_des(ppf->processo, ppf->livello, ppf->ind_virtuale);
+	natq& e = get_des(ppf->processo, ppf->livello + 1, ppf->ind_virtuale);
 	bitD = extr_D(e);
 	bool occorre_salvare = bitD && ppf->livello == 0;
 	set_IND_MASSA(e, ppf->ind_massa);
@@ -1142,6 +1139,52 @@ bool scollega(des_pf* ppf)	// [6.4][10.5]
 	invalida_entrata_TLB(ppf->ind_virtuale);
 	return occorre_salvare;	// [10.5]
 }
+
+des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
+{
+	des_pf* ppf = alloca_pagina_fisica(proc, livello, ind_virt);
+	if (!ppf)
+		return 0;
+	natq e = get_des(proc, livello + 1, ind_virt);
+	natq m = extr_IND_MASSA(e);
+	ppf->livello = livello;
+	ppf->residente = residente;
+	ppf->processo = proc;
+	ppf->ind_virtuale = ind_virt;
+	ppf->ind_massa = m;
+	ppf->contatore = 0;
+	carica(ppf);
+	collega(ppf);
+	return ppf;
+}
+
+bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
+{
+	natq dim_pag = 1UL << (9 * (liv - 1) + 12);
+
+	natl i = i_tab(ind, liv);
+	for (natl j = i; j < i + n; j++) {
+		natq e = get_entry(tab, j);
+		if (!extr_IND_MASSA(e))
+			break;
+		des_pf *ppf = swap2(proc, liv - 1, ind, true);
+		if (!ppf)
+			return false;
+		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
+			return false;
+		ind = (addr)((natq)ind + dim_pag);
+	}
+	return true;
+}
+
+bool carica_tutto(natl proc, natl i, natl n)
+{
+	des_proc *p = des_p(proc);
+
+	return carica_ric(proc, p->cr3, 4, ADDRESS(i), n);
+}
+
+
 
 // super blocco (vedi [10.5] e [P_SWAP] avanti)
 struct superblock_t {
@@ -1162,13 +1205,53 @@ struct des_swap {
 	superblock_t sb;	// contenuto del superblocco 
 } swap_dev; 	// c'e' un unico oggetto swap
 bool swap_init();
+
+bool crea_spazio_condiviso(natl dummy_proc)
+{
+	
+	// ( lettura del direttorio principale dallo swap
+	flog(LOG_INFO, "lettura del direttorio principale...");
+	addr tmp = alloca(DIM_PAGINA);
+	if (tmp == 0) {
+		flog(LOG_ERR, "memoria insufficiente");
+		return false;
+	}
+	leggi_swap(tmp, swap_dev.sb.directory);
+	// )
+
+	// (  carichiamo le parti condivise nello spazio di indirizzamento del processo
+	//    dummy (vedi [10.2])
+	addr dummy_dir = des_p(dummy_proc)->cr3;
+	set_entry(dummy_dir, I_IO_condiviso, get_entry(tmp, I_IO_condiviso));
+	set_entry(dummy_dir, I_utente_condiviso, get_entry(tmp, I_utente_condiviso));
+	dealloca(tmp);
+	
+	if (!carica_tutto(dummy_proc, I_IO_condiviso, 1))
+		return false;
+	if (!carica_tutto(dummy_proc, I_utente_condiviso, 1))
+		return false;
+	// )
+
+	// ( copiamo i descrittori relativi allo spazio condiviso anche nel direttorio
+	//   corrente, in modo che vengano ereditati dai processi che creeremo in seguito
+	addr my_dir = des_p(esecuzione->id)->cr3;
+	set_entry(my_dir, I_IO_condiviso, get_entry(dummy_dir, I_IO_condiviso));
+	set_entry(my_dir, I_utente_condiviso, get_entry(dummy_dir, I_utente_condiviso));
+	// )
+
+	invalida_TLB();
+	return true;
+}
+
 extern "C" void cmain ()
 {
+	proc_elem *d;
+
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata!");
 
-	// (* Assegna allo heap di sistema HEAP_SIZE byte nel primo MiB
+	// (* Assegna allo heap di sistema HEAP_SIZE byte nel secondo MiB
 	heap_init((addr)HEAP_START, HEAP_SIZE);
 	flog(LOG_INFO, "Heap di sistema: %x B @%x", HEAP_SIZE, HEAP_START);
 	// *)
@@ -1204,10 +1287,19 @@ extern "C" void cmain ()
 			swap_dev.sb.io_end);
 	// )
 
-	attiva_timer(DELAY);
-	flog(LOG_INFO, "timer attivato!");
+	flog(LOG_INFO, "Creo il processo dummy");
+	d = crea_processo(&dummy_proc, 0, 13);
+	inserimento_lista(pronti,d);
+	
 
-	test_userspace();
+	flog(LOG_INFO, "Creo lo spazio condiviso");
+	if (!crea_spazio_condiviso(d->id))
+		goto error;
+
+	//attiva_timer(DELAY);
+	//flog(LOG_INFO, "timer attivato!");
+
+	//test_userspace();
 
 	flog(LOG_INFO, "Uscita!");
 	return;
@@ -1324,8 +1416,8 @@ void scrivisett(natl lba, natb quanti, natw vetto[])
 // usa l'istruzione macchina BSF (Bit Scan Forward) per trovare in modo
 // efficiente il primo bit a 1 in v
 extern "C" int trova_bit(natl v);
-void scrivi_speciale(addr src, natl blocco);
-void leggi_speciale(addr dest, natl blocco);
+void scrivi_swap(addr src, natl blocco);
+void leggi_swap(addr dest, natl blocco);
 
 natl ceild(natl v, natl q)
 {
@@ -1348,7 +1440,7 @@ natq alloca_blocco()
 		risu = pos + sizeof(natl) * 8 * i;
 	} 
 	if (risu) {
-		scrivi_speciale(pagina_di_zeri, risu);
+		scrivi_swap(pagina_di_zeri, risu);
 	}
 	return risu;
 }
@@ -1364,38 +1456,27 @@ void dealloca_blocco(natl blocco)
 
 // legge dallo swap il blocco il cui indice e' passato come primo parametro, 
 // copiandone il contenuto a partire dall'indirizzo "dest"
-void leggi_speciale(addr dest, natl blocco)
+void leggi_swap(addr dest, natl blocco)
 {
 	natl sector = blocco * 8;
 
 	leggisett(sector, 8, static_cast<natw*>(dest));
 }
 
-void scrivi_speciale(addr src, natl blocco)
+void scrivi_swap(addr src, natl blocco)
 {
 	natl sector = blocco * 8;
 
 	scrivisett(sector, 8, static_cast<natw*>(src));
 }
 
-// lettura dallo swap (da utilizzare nella fase di inizializzazione)
-bool leggi_swap(addr buf, natl first, natl bytes)
-{
-	natl nsect = ceild(bytes, 512);
-
-	leggisett(first, nsect, static_cast<natw*>(buf));
-
-	return true;
-}
-
 // inizializzazione del descrittore di swap
-char read_buf[512];
+natw read_buf[256];
 bool swap_init()
 {
 	// lettura del superblocco
 	flog(LOG_DEBUG, "lettura del superblocco dall'area di swap...");
-	if (!leggi_swap(read_buf, 1, sizeof(superblock_t)))
-		return false;
+	leggisett(1, 1, read_buf);
 
 	swap_dev.sb = *reinterpret_cast<superblock_t*>(read_buf);
 
@@ -1428,7 +1509,7 @@ bool swap_init()
 		return false;
 	}
 	// infine, leggiamo la mappa di bit dalla partizione di swap
-	return leggi_swap(swap_dev.free,
-		swap_dev.sb.bm_start * 8, pages * DIM_PAGINA);
+	leggisett(swap_dev.sb.bm_start * 8, pages * 8, reinterpret_cast<natw*>(swap_dev.free));
+	return true;
 }
 // )
