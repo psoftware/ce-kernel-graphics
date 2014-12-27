@@ -1492,16 +1492,15 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 	natq dp = dim_pag(liv);
 
 	natl i = i_tab(ind, liv);
-	for (natl j = i; j < i + n; j++) {
+	for (natl j = i; j < i + n; j++, ind = (addr)((natq)ind + dp)) {
 		natq e = get_entry(tab, j);
 		if (!extr_IND_MASSA(e))
-			break;
+			continue;
 		des_pf *ppf = swap2(proc, liv - 1, ind, true);
 		if (!ppf)
 			return false;
 		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
-		ind = (addr)((natq)ind + dp);
 	}
 	return true;
 }
