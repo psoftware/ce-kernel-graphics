@@ -1,18 +1,17 @@
 #!/usr/bin/perl -n
 
-
 BEGIN {
 	my $hex = qr/[a-fA-F0-9]/;
 
 	sub toLine($) {
 		my $h = shift;
 
-		if    ($h ge '80000000') { $exe = 'build/utente';  }
-		elsif ($h ge '40000000') { $exe = 'build/io';      }
-		elsif ($h ge '0010f000') { $exe = "build/sistema64"; }
-		else                     { $exe = "build/boot"; }
+		if    ($h ge 'ffffff0000000000') { $exe = 'build/utente';  }
+		elsif ($h ge '0000010000000000') { $exe = 'build/io';      }
+		elsif ($h ge '0000000000200000') { $exe = "build/sistema64"; }
+		else                             { $exe = "build/boot"; }
 
-		my $out = `addr2line-Cfe $exe $h`;
+		my $out = `addr2line -Cfe $exe $h`;
 		if ($?) {
 			return $h;
 		}

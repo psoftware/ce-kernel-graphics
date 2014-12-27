@@ -1339,7 +1339,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		processi++;			// [4.7]
 		id = p->id;			// id del processo creato
 						// (allocato da crea_processo)
-		flog(LOG_INFO, "proc=%d entry=%x(%d) prio=%d liv=%d", id, f, a, prio, liv);
+		flog(LOG_INFO, "proc=%d entry=%p(%d) prio=%d liv=%d", id, f, a, prio, liv);
 	}
 
 	return id;
