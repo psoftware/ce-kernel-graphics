@@ -1269,6 +1269,13 @@ extern "C" void cmain ()
 {
 	proc_elem *d;
 
+#ifdef DEBUG
+	flog(LOG_DEBUG, "Attendo debugger...");
+	volatile int gdb = 0;
+	while (!gdb)
+		;
+#endif
+
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata!");
