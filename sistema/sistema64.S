@@ -308,8 +308,22 @@ init_idt:
 	carica_gate	VETT_S		handler_24	LIV_SISTEMA
 	
 	//primitive
+	carica_gate	TIPO_A		a_activate_p	LIV_UTENTE
+	carica_gate	TIPO_T		a_terminate_p	LIV_UTENTE
+	carica_gate	TIPO_SI		a_sem_ini	LIV_UTENTE
+	carica_gate	TIPO_W		a_sem_wait	LIV_UTENTE
+	carica_gate	TIPO_S		a_sem_signal	LIV_UTENTE
 	carica_gate	TIPO_D		a_delay		LIV_UTENTE
-	carica_gate	TIPO_L		a_flog	    LIV_UTENTE
+	carica_gate	TIPO_L		a_log		LIV_UTENTE
+	carica_gate	TIPO_EP		a_end_program	LIV_SISTEMA
+
+	// primitive per il livello I/O
+	carica_gate	TIPO_APE	a_activate_pe	LIV_SISTEMA
+	carica_gate	TIPO_WFI	a_wfi		LIV_SISTEMA
+	carica_gate	TIPO_FG		a_fill_gate	LIV_SISTEMA
+	carica_gate	TIPO_P		a_panic		LIV_SISTEMA
+	carica_gate	TIPO_AB		a_abort_p	LIV_SISTEMA
+	carica_gate	TIPO_TRA	a_trasforma	LIV_SISTEMA
 
 	lidt idt_pointer
 	ret
@@ -353,38 +367,101 @@ goto_user:
 	call carica_stato
 	iretq
 
-.macro user_flog msg
-	movl $1,%edi
-	movq \msg, %rsi
-	movl $0, %eax
-	int $TIPO_L
-.endm
-	
-.balign 4096
-	.global dummy_proc
-dummy_proc:
-	user_flog $msg_dd
-loop_dd:
-	jmp loop_dd
-msg_dd: .string "inizio dummy_proc"
+////////////////////////////////////////////////////////
+// a_primitive                                        //
+////////////////////////////////////////////////////////
+        .extern c_activate_p
+a_activate_p:	// routine int $tipo_a [4.6]
+	//cavallo_di_troia 0
+        call c_activate_p
+        iret
 
-.balign 4096
-	.global proc0
-proc0:
-	movl %edi,%edx
-	movq %rdi,%r12
-	user_flog $enter_proc0
-loop_proc0:
-	movq %r12,%rdi
-	shlq $4,%rdi
-	addq $50,%rdi
-	int $TIPO_D
-	movq %r12,%rdx
-	user_flog $wake_proc0
-	jmp loop_proc0
-enter_proc0: .string "inizio proc0(%d)"
-wake_proc0: .string "svegliato proc0(%d)"
-.balign 4096
+        .extern c_terminate_p
+a_terminate_p:	// routine int $tipo_t [4.6]
+	movl $terminate_stack_end, %esp
+        call c_terminate_p
+	call carica_stato
+	iret
+
+	.extern c_sem_ini
+a_sem_ini:	// routine int $tipo_si [4.11]
+	call c_sem_ini
+	iret
+
+	.extern c_sem_wait
+a_sem_wait:	// routine int $tipo_w [4.11][6.5]
+	call salva_stato
+	call c_sem_wait
+	call carica_stato
+	iret
+
+	.extern c_sem_signal
+a_sem_signal:	// routine int $tipo_s [4.11][6.5]
+	call salva_stato
+	call c_sem_signal
+	call carica_stato
+	iret
+
+	.extern c_delay
+a_delay:	// routine int $tipo_d [4.16][6.5]
+	call salva_stato
+	call c_delay
+	call carica_stato
+	iret
+
+
+//
+// Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
+//
+
+	.extern c_activate_pe
+a_activate_pe:
+	//cavallo_di_troia 0
+        call c_activate_pe
+	iret
+
+
+a_wfi:		// routine int $tipo_wfi [7.3][9.1]
+	call salva_stato
+	call apic_send_EOI
+	call schedulatore
+	call carica_stato
+	iret
+
+a_fill_gate:
+	call init_gate
+	iret
+
+	.extern c_panic
+a_panic:	// routine int $tipo_p
+	call salva_stato
+	//cavallo_di_troia 1
+	call c_panic
+1:	nop
+	jmp 1b
+
+	.extern c_abort_p
+a_abort_p:
+	movl $terminate_stack_end, %esp
+        call c_abort_p
+	call carica_stato
+	iret
+
+	.extern c_trasforma
+a_trasforma:
+	call c_trasforma
+	iret
+	.extern c_log
+a_log:
+	call salva_stato
+	//cavallo_di_troia 1
+	//cavallo_di_troia2 1 2
+	call c_log
+	call carica_stato
+	iret
+
+a_end_program:
+	iret
 
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
@@ -581,17 +658,6 @@ handler 22
 handler 23
 handler 24
 
-a_flog:
-	call flog
-	iretq
-	
-a_delay:	
-	call salva_stato
-	call c_delay
-	call carica_stato
-	iretq
-
-
 	.global invalida_TLB  // [6.6]
 invalida_TLB:
 	movq %cr3, %rax
@@ -634,13 +700,59 @@ attiva_timer:
 
 	retq
 
-.global panic
+//////////////////////////////////////////////////////////
+// primitive richiamate dal nucleo stesso	        //
+//////////////////////////////////////////////////////////
+	.global sem_ini
+sem_ini:
+	int $TIPO_SI
+	ret
+
+	.global sem_wait
+sem_wait:
+	int $TIPO_W
+	ret
+
+	.global activate_p
+activate_p:
+	int $TIPO_A
+	ret
+
+	.global delay
+delay:
+	int $TIPO_D
+	ret
+	
+	.global terminate_p
+terminate_p:
+	int $TIPO_T
+	ret
+
+	.global panic
 panic:
-	movl %edi, %esi
-	movl $0,%edi
-	movl $0, %eax
-	call flog
-	hlt
+	int $TIPO_P
+	ret
+
+	.global abort_p
+abort_p:
+	int $TIPO_AB
+	ret
+
+	.global wfi
+wfi:
+	int $TIPO_WFI
+	ret
+
+	.global end_program
+end_program:
+	int $TIPO_EP
+	ret
+
+	.global salta_a_main
+salta_a_main:
+	call carica_stato		// carichiamo tr
+	iret				// torniamo al chiamante "trasformati" in processo
+
 
 ////////////////////////////////////////////////////////////////
 // sezione dati: tabelle e stack			      //
@@ -716,3 +828,6 @@ end_idt:
 	.global stack
 stack:
 	.space STACK_SIZE, 0
+terminate_stack:
+	.space STACK_SIZE, 0
+terminate_stack_end:
