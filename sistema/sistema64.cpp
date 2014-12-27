@@ -313,6 +313,7 @@ extern "C" addr readCR3();
 int i_tab(addr, int lib);
 natq& get_entry(addr,natl);
 addr extr_IND_FISICO(natq);
+bool extr_P(natq);
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, natq errore,
@@ -320,26 +321,19 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 {
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
-	if(tipo==14)
-	{
+	if (tipo == 14) {
 		addr CR2 = readCR2();
 		flog(LOG_WARN, "CR2=   %p",CR2);
-		addr CR3 = readCR3();
-		flog(LOG_WARN, "CR3=   %p",CR3);
-		natq tab4e = get_entry(CR3,i_tab(CR2, 4));
-		flog(LOG_WARN, "tab4e= %p",tab4e);
-		addr pdp = extr_IND_FISICO(tab4e);
-		
-		natq pdpe = get_entry(pdp,i_tab(CR2, 3));
-		flog(LOG_WARN, "pdpe=  %p",pdpe);
-		addr pd = extr_IND_FISICO(pdpe);
-		
-		natq pde = get_entry(pd,i_tab(CR2, 2));
-		flog(LOG_WARN, "pde=   %p",pde);
-		addr pt = extr_IND_FISICO(pde);
-
-		natq pte = get_entry(pt,i_tab(CR2, 1));
-		flog(LOG_WARN, "pte=   %p",pte);
+		addr tab = readCR3();
+		for (int i = 4; i >= 1; i--) {
+			flog(LOG_WARN, "tab%d: %p", i, tab);
+			natl idx = i_tab(CR2, i);
+			natq e = get_entry(tab, idx);
+			flog(LOG_WARN, "tab%d[%d] = %8x", i, idx, e);
+			if (!extr_P(e))
+				break;
+			tab = extr_IND_FISICO(e);
+		}
 	}
 	
 }
