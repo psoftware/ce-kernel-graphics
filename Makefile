@@ -19,6 +19,7 @@ COMM_CFLAGS=$(CFLAGS) \
 	-fno-pic 		\
 	-Iinclude		\
 	-I$(LIBCE)/include/ce	\
+	-mno-red-zone		\
 	-gdwarf-2
 
 COMM_LDFLAGS=\
