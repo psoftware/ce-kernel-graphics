@@ -274,8 +274,8 @@ struct des_pf {			// [6.3]
 	int	livello;	// 0=pagina, -1=libera
 	bool	residente;	// pagina residente o meno
 	natl	processo;	// identificatore di processo
-	natl	ind_massa;
-	natq	contatore;	// contatore per le statistiche
+	natl	contatore;	// contatore per le statistiche
+	natq	ind_massa;
 	union {
 		addr	ind_virtuale;
 		des_pf*	prossima_libera;
