@@ -374,40 +374,40 @@ goto_user:
 a_activate_p:	// routine int $tipo_a [4.6]
 	//cavallo_di_troia 0
         call c_activate_p
-        iret
+        iretq
 
         .extern c_terminate_p
 a_terminate_p:	// routine int $tipo_t [4.6]
 	movl $terminate_stack_end, %esp
         call c_terminate_p
 	call carica_stato
-	iret
+	iretq
 
 	.extern c_sem_ini
 a_sem_ini:	// routine int $tipo_si [4.11]
 	call c_sem_ini
-	iret
+	iretq
 
 	.extern c_sem_wait
 a_sem_wait:	// routine int $tipo_w [4.11][6.5]
 	call salva_stato
 	call c_sem_wait
 	call carica_stato
-	iret
+	iretq
 
 	.extern c_sem_signal
 a_sem_signal:	// routine int $tipo_s [4.11][6.5]
 	call salva_stato
 	call c_sem_signal
 	call carica_stato
-	iret
+	iretq
 
 	.extern c_delay
 a_delay:	// routine int $tipo_d [4.16][6.5]
 	call salva_stato
 	call c_delay
 	call carica_stato
-	iret
+	iretq
 
 
 //
@@ -418,7 +418,7 @@ a_delay:	// routine int $tipo_d [4.16][6.5]
 a_activate_pe:
 	//cavallo_di_troia 0
         call c_activate_pe
-	iret
+	iretq
 
 
 a_wfi:		// routine int $tipo_wfi [7.3][9.1]
@@ -426,11 +426,11 @@ a_wfi:		// routine int $tipo_wfi [7.3][9.1]
 	call apic_send_EOI
 	call schedulatore
 	call carica_stato
-	iret
+	iretq
 
 a_fill_gate:
 	call init_gate
-	iret
+	iretq
 
 	.extern c_panic
 a_panic:	// routine int $tipo_p
@@ -445,12 +445,12 @@ a_abort_p:
 	movl $terminate_stack_end, %esp
         call c_abort_p
 	call carica_stato
-	iret
+	iretq
 
 	.extern c_trasforma
 a_trasforma:
 	call c_trasforma
-	iret
+	iretq
 	.extern c_log
 a_log:
 	call salva_stato
@@ -458,10 +458,10 @@ a_log:
 	//cavallo_di_troia2 1 2
 	call c_log
 	call carica_stato
-	iret
+	iretq
 
 a_end_program:
-	iret
+	iretq
 
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
@@ -751,8 +751,7 @@ end_program:
 	.global salta_a_main
 salta_a_main:
 	call carica_stato		// carichiamo tr
-	iret				// torniamo al chiamante "trasformati" in processo
-
+	iretq				// torniamo al chiamante "trasformati" in processo
 
 ////////////////////////////////////////////////////////////////
 // sezione dati: tabelle e stack			      //
