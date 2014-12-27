@@ -355,52 +355,67 @@ des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 //                         PAGINAZIONE [6]                                     //
 /////////////////////////////////////////////////////////////////////////////////
 
-//per semplicita permettiamo di avere sono interi pdp condivisi e assegnamo ad 
-//ogni zona logicamente distinta di memoria un intera entry nel tab4 (tanto ce
-//ne sono ben 512 grandi 512Gb ciascuna per un totale di 256Tb indirizzabili)
+//per semplicita permettiamo di avere solo intere tab3 condivise
 //NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
 //in poi si trovano nella meta alta dello spazio di indirizzamento
 
-#define i_sistema_condiviso	0
-#define i_sistema_privato  	1
-#define i_io_condiviso   	2
-#define i_pci_condiviso  	3
-#define i_utente_condiviso    510     //higher half
-#define i_utente_privato      511     //higher half
+static const int i_sis_c =   0;
+static const int i_sis_p =   1;
+static const int i_io__c =   2;
+static const int i_pci_c =   3;
+static const int i_utn_c = 510;
+static const int i_utn_p = 511;
+
+static const int n_sis_c = 1;
+static const int n_sis_p = 1;
+static const int n_io__c = 1;
+static const int n_pci_c = 1;
+static const int n_utn_c = 1;
+static const int n_utn_p = 1;
+
 
 static const natq BIT_SEGNO = (1UL << 47);
 static const natq BIT_MODULO = BIT_SEGNO - 1;
-static inline addr normalizza(addr a)
+static inline addr norm(addr a)
 {
 	natq v = (natq)a;
 	return (addr)((v & BIT_SEGNO) ? (v | ~BIT_MODULO) : (v & BIT_MODULO));
 }
 
-static inline natq dim_pagina(int livello)
+static inline natq dim_pag(int liv)
 {
-	natq v = 1UL << ((livello - 1) * 9 + 12);
+	natq v = 1UL << ((liv- 1) * 9 + 12);
 	return v;
 }
 
-static inline addr ind_base(addr a, int livello)
+static inline addr base(addr a, int liv)
 {
 	natq v = (natq)a;
-	natq mask = dim_pagina(livello + 1) - 1;
+	natq mask = dim_pag(liv+ 1) - 1;
 	return (addr)(v & ~mask);
 }
 
-static inline addr primo_indirizzo(addr base, natl indice, int livello)
+void copy_des(addr src, addr dst, natl i, natl n)
 {
-	natq v = (natq)ind_base(base, livello) | (dim_pagina(livello) * indice);
-	return normalizza((addr)v);
+	natq *pdsrc = static_cast<natq*>(src),
+	     *pddst = static_cast<natq*>(dst);
+	for (natl j = i; j < i + n && j < 512; j++)
+		pddst[j] = pdsrc[j];
 }
 
-const addr inizio_sistema_condiviso = primo_indirizzo(0, i_sistema_condiviso, 4); 
-const addr inizio_sistema_privato   = primo_indirizzo(0, i_sistema_privato, 4);
-const addr inizio_io_condiviso      = primo_indirizzo(0, i_io_condiviso, 4);
-const addr inizio_pci_condiviso     = primo_indirizzo(0, i_pci_condiviso, 4);
-const addr inizio_utente_condiviso  = primo_indirizzo(0, i_utente_condiviso, 4);
-const addr inizio_utente_privato    = primo_indirizzo(0, i_utente_privato, 4);
+const addr ini_sis_c = norm((addr)(i_sis_c * dim_pag(4))); 
+const addr ini_sis_p = norm((addr)(i_sis_p * dim_pag(4)));
+const addr ini_io__c = norm((addr)(i_io__c * dim_pag(4)));
+const addr ini_pci_c = norm((addr)(i_pci_c * dim_pag(4)));
+const addr ini_utn_c = norm((addr)(i_utn_c * dim_pag(4)));
+const addr ini_utn_p = norm((addr)(i_utn_p * dim_pag(4)));
+
+const addr fin_sis_c = (addr)((natq)ini_sis_c + dim_pag(4) * n_sis_c); 
+const addr fin_sis_p = (addr)((natq)ini_sis_p + dim_pag(4) * n_sis_p); 
+const addr fin_io__c = (addr)((natq)ini_io__c + dim_pag(4) * n_io__c); 
+const addr fin_pci_c = (addr)((natq)ini_pci_c + dim_pag(4) * n_pci_c); 
+const addr fin_utn_c = (addr)((natq)ini_utn_c + dim_pag(4) * n_utn_c); 
+const addr fin_utn_p = (addr)((natq)ini_utn_p + dim_pag(4) * n_utn_p); 
 
 //   ( definiamo alcune costanti utili per la manipolazione dei descrittori
 //     di pagina e di tabella. Assegneremo a tali descrittori il tipo "natl"
@@ -743,7 +758,7 @@ extern "C" void c_pci_write(natw l, natw regn, natl res, natl size)
 /////////////////////////////////////////////////////////////////////////////////
 //                    SUPPORTO PCI                                             //
 /////////////////////////////////////////////////////////////////////////////////
-natl dim_pci_condiviso = 20*MiB;
+natl dim_pci_c = 20*MiB;
 const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
 
 // ( [P_PCI]
@@ -753,8 +768,8 @@ bool crea_finestra_PCI(addr tab4)
 {
 	return sequential_map(tab4,
 			PCI_startmem,
-			inizio_pci_condiviso,
-			dim_pci_condiviso/DIM_PAGINA,
+			ini_pci_c,
+			dim_pci_c/DIM_PAGINA,
 			BIT_RW | BIT_PCD);
 }
 
@@ -901,9 +916,9 @@ bool ioapic_init()
 	natq tmp_IOREGSEL = (natq)ioapic.IOREGSEL | apicbase_getxy(apicbase);
 	natq tmp_IOWIN    = (natq)ioapic.IOWIN    | apicbase_getxy(apicbase);
 	// 	trasformiamo gli indirizzi fisici in virtuali
-	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL - (natq)PCI_startmem + (natq)inizio_pci_condiviso);
-	ioapic.IOWIN    = (natl*)(tmp_IOWIN    - (natq)PCI_startmem + (natq)inizio_pci_condiviso);
-	ioapic.EOI	= (natl*)((natq)ioapic.EOI - (natq)PCI_startmem + (natq)inizio_pci_condiviso);
+	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL - (natq)PCI_startmem + (natq)ini_pci_c);
+	ioapic.IOWIN    = (natl*)(tmp_IOWIN    - (natq)PCI_startmem + (natq)ini_pci_c);
+	ioapic.EOI	= (natl*)((natq)ioapic.EOI - (natq)PCI_startmem + (natq)ini_pci_c);
 	flog(LOG_DEBUG, "IOAPIC: ioregsel %p, iowin %p", ioapic.IOREGSEL, ioapic.IOWIN);
 	// 	abilitare il /CS per l'IOAPIC
 	natl xbcs;
@@ -974,11 +989,11 @@ addr crea_pila(addr tab4,int dim, bool utente)
 {
 	natq flags = BIT_RW;
 	
-	addr pila_virt = inizio_sistema_privato;
+	addr pila_virt = ini_sis_p;
 	if(utente == true)
 	{
 		flags |= BIT_US;
-		pila_virt = inizio_utente_privato;    //per ora  hardcodato
+		pila_virt = ini_utn_p;    //per ora  hardcodato
 	}
 
 	addr pila_phys = 0;
@@ -1021,14 +1036,14 @@ addr crea_tab4()
 ///////////////////////////////////////////////////////////////////////////////
 void copia_pagine_condivise(addr srctab4, addr desttab4)
 {
-	natq finestra_FM = get_entry(srctab4, i_sistema_condiviso);
-	set_entry(desttab4,i_sistema_condiviso,finestra_FM);
+	natq finestra_FM = get_entry(srctab4, i_sis_c);
+	set_entry(desttab4,i_sis_c,finestra_FM);
 	
-	natq PCI_condiviso = get_entry(srctab4,i_pci_condiviso);
-	set_entry(desttab4,i_pci_condiviso,PCI_condiviso);
+	natq PCI_condiviso = get_entry(srctab4,i_pci_c);
+	set_entry(desttab4,i_pci_c,PCI_condiviso);
 	
-	natq utente_condiviso = get_entry(srctab4,i_utente_condiviso);
-	set_entry(desttab4,i_utente_condiviso,utente_condiviso);
+	natq utente_condiviso = get_entry(srctab4,i_utn_c);
+	set_entry(desttab4,i_utn_c,utente_condiviso);
 }
 
 
@@ -1053,13 +1068,13 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	addr pila_sistema = crea_pila(tab4,DIM_SYS_STACK,false);
 	crea_pila(tab4,DIM_USR_STACK, true ); //pila_tuente
 
-	sequential_map(tab4,phys_start,inizio_utente_condiviso,1,BIT_RW | BIT_US);
+	sequential_map(tab4,phys_start,ini_utn_c,1,BIT_RW | BIT_US);
 
 	dp = static_cast<des_proc*>(alloca(sizeof(des_proc)));
 	if (dp == 0) goto errore;
 	memset(dp, 0, sizeof(des_proc));
 	dp->cr3 = tab4;
-	dp->punt_nucleo = reinterpret_cast<addr>((natq)inizio_sistema_privato+DIM_SYS_STACK);
+	dp->punt_nucleo = reinterpret_cast<addr>((natq)ini_sis_p+DIM_SYS_STACK);
 
 	pe = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
 	if (pe == 0) goto errore;
@@ -1075,12 +1090,12 @@ proc_elem* crea_processo(addr phys_start,natl precedenza, natq param)
 	pila_sistema_iretq = static_cast<natq*>(pila_sistema);
 
 	*(pila_sistema_iretq-1) = SEL_DATI_UTENTE;
-	*(pila_sistema_iretq-2) = (natq)inizio_utente_privato + DIM_USR_STACK;
+	*(pila_sistema_iretq-2) = (natq)ini_utn_p + DIM_USR_STACK;
 	*(pila_sistema_iretq-3) = BIT_IF; //flags
 	*(pila_sistema_iretq-4) = SEL_CODICE_UTENTE;
-	*(pila_sistema_iretq-5) = (natq)inizio_utente_condiviso;
+	*(pila_sistema_iretq-5) = (natq)ini_utn_c;
 
-	dp->contesto[I_RSP] = (natq)inizio_sistema_privato + DIM_SYS_STACK - 8*5; 
+	dp->contesto[I_RSP] = (natq)ini_sis_p + DIM_SYS_STACK - 8*5; 
 	dp->contesto[I_RDI] = param;
 
 	return pe;
@@ -1182,7 +1197,7 @@ des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
 
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
-	natq dim_pag = dim_pagina(liv);
+	natq dp = dim_pag(liv);
 
 	natl i = i_tab(ind, liv);
 	for (natl j = i; j < i + n; j++) {
@@ -1194,7 +1209,7 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 			return false;
 		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
-		ind = (addr)((natq)ind + dim_pag);
+		ind = (addr)((natq)ind + dp);
 	}
 	return true;
 }
@@ -1203,7 +1218,7 @@ bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
 
-	return carica_ric(proc, p->cr3, 4, primo_indirizzo(0, i, 4), n);
+	return carica_ric(proc, p->cr3, 4, norm((addr)(i * dim_pag(4))), n);
 }
 
 
@@ -1244,21 +1259,21 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	// (  carichiamo le parti condivise nello spazio di indirizzamento del processo
 	//    dummy (vedi [10.2])
 	addr dummy_dir = des_p(dummy_proc)->cr3;
-	set_entry(dummy_dir, i_io_condiviso, get_entry(tmp, i_io_condiviso));
-	set_entry(dummy_dir, i_utente_condiviso, get_entry(tmp, i_utente_condiviso));
+	copy_des(tmp, dummy_dir, i_io__c, n_io__c);
+	copy_des(tmp, dummy_dir, i_utn_c, n_utn_c);
 	dealloca(tmp);
 	
-	if (!carica_tutto(dummy_proc, i_io_condiviso, 1))
+	if (!carica_tutto(dummy_proc, i_io__c, 1))
 		return false;
-	if (!carica_tutto(dummy_proc, i_utente_condiviso, 1))
+	if (!carica_tutto(dummy_proc, i_utn_c, 1))
 		return false;
 	// )
 
 	// ( copiamo i descrittori relativi allo spazio condiviso anche nel direttorio
 	//   corrente, in modo che vengano ereditati dai processi che creeremo in seguito
 	addr my_dir = des_p(esecuzione->id)->cr3;
-	set_entry(my_dir, i_io_condiviso, get_entry(dummy_dir, i_io_condiviso));
-	set_entry(my_dir, i_utente_condiviso, get_entry(dummy_dir, i_utente_condiviso));
+	copy_des(dummy_dir, my_dir, i_io__c, n_io__c);
+	copy_des(dummy_dir, my_dir, i_utn_c, n_utn_c);
 	// )
 
 	invalida_TLB();
@@ -1290,12 +1305,12 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
 	
-	flog(LOG_INFO, "sis/cond %p", inizio_sistema_condiviso);
-	flog(LOG_INFO, "sis/priv %p", inizio_sistema_privato);
-	flog(LOG_INFO, "io /cond %p", inizio_io_condiviso);
-	flog(LOG_INFO, "pci/cond %p", inizio_pci_condiviso);
-	flog(LOG_INFO, "usr/cond %p", inizio_utente_condiviso);
-	flog(LOG_INFO, "usr/priv %p", inizio_utente_privato);
+	flog(LOG_INFO, "sis/cond [%p, %p)", ini_sis_c, fin_sis_c);
+	flog(LOG_INFO, "sis/priv [%p, %p)", ini_sis_p, fin_sis_p);
+	flog(LOG_INFO, "io /cond [%p, %p)", ini_io__c, fin_io__c);
+	flog(LOG_INFO, "pci/cond [%p, %p)", ini_pci_c, fin_pci_c);
+	flog(LOG_INFO, "usr/cond [%p, %p)", ini_utn_c, fin_utn_c);
+	flog(LOG_INFO, "usr/priv [%p, %p)", ini_utn_p, fin_utn_p);
 
 	addr inittab4 = crea_tab4();
 
