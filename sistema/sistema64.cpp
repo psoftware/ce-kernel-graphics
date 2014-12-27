@@ -1109,13 +1109,14 @@ addr crea(natl proc, addr ind_virt, int liv, natl priv)
 		natl blocco = extr_IND_MASSA(dt);
 		if (!blocco) {
 			if (! (blocco = alloca_blocco()) ) {
+				flog(LOG_ERR, "swap pieno");
 				panic("spazio nello swap esaurito");
 			}
 			set_IND_MASSA(dt, blocco);
 			dt = dt | BIT_RW;
 			if (liv == LIV_UTENTE) dt = dt | BIT_US;
 		}
-		swap2(proc, liv, ind_virt, (priv == LIV_SISTEMA));
+		swap2(proc, liv - 1, ind_virt, (priv == LIV_SISTEMA));
 	}
 	return extr_IND_FISICO(dt);
 }
@@ -1214,7 +1215,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	//   (punto 3 in [4.6])
 	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
         if (p == 0) goto errore3;
-        p->id = identifier << 3U;
+        p->id = identifier;
         p->precedenza = prio;
 	p->puntatore = 0;
 	// )
@@ -1237,31 +1238,18 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// ( inizializziamo la pila sistema.
 		natq* pl = static_cast<natq*>(pila_sistema);
 
-		pl[1019] = (natq)f;		// EIP (codice utente)
-		pl[1020] = SEL_CODICE_UTENTE;	// CS (codice utente)
-		pl[1021] = (IF? BIT_IF : 0);	// EFLAG
-		pl[1022] = (natq)fin_utn_p - 2 * sizeof(int); // ESP (pila utente)
-		pl[1023] = SEL_DATI_UTENTE;	// SS (pila utente)
+		pl[507] = (natq)f;		// EIP (codice utente)
+		pl[508] = SEL_CODICE_UTENTE;	// CS (codice utente)
+		pl[509] = (IF? BIT_IF : 0);	// EFLAG
+		pl[510] = (natq)fin_utn_p;
+		pl[511] = SEL_DATI_UTENTE;	// SS (pila utente)
 		//   eseguendo una IRET da questa situazione, il processo
 		//   passera' ad eseguire la prima istruzione della funzione f,
 		//   usando come pila la pila utente (al suo indirizzo virtuale)
 		// )
 
-		// ( creazione e inizializzazione della pila utente
-		addr pila_utente = crea_pila(p->id, (natb*)fin_utn_p, DIM_USR_STACK, LIV_UTENTE);
-
-		//   dobbiamo ora fare in modo che la pila utente si trovi nella
-		//   situazione in cui si troverebbe dopo una CALL alla funzione
-		//   f, con parametro a:
-		pl = static_cast<natq*>(pila_utente);
-		pl[1022] = 0xffffffff;	// ind. di ritorno non significativo
-		pl[1023] = a;		// parametro del processo
-
-		// dobbiamo settare manualmente il bit D, perche' abbiamo
-		// scritto nella pila tramite la finestra FM, non tramite
-		// il suo indirizzo virtuale.
-		natq& dp = get_des(p->id, 1, (addr)((natq)fin_utn_p - DIM_PAGINA));
-		set_D(dp, true);
+		// ( creazione della pila utente
+		crea_pila(p->id, (natb*)fin_utn_p, DIM_USR_STACK, LIV_UTENTE);
 		// )
 
 		// ( infine, inizializziamo il descrittore di processo
@@ -1273,21 +1261,20 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//   inizialmente, il processo si trova a livello sistema, come
 		//   se avesse eseguito una istruzione INT, con la pila sistema
 		//   che contiene le 5 parole lunghe preparate precedentemente
-		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(int);
-
+		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
+		
+		pdes_proc->contesto[I_RDI] = a;
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
-		//pdes_proc->cpl = LIV_UTENTE;
+		pdes_proc->cpl = LIV_UTENTE;
 		//   tutti gli altri campi valgono 0
 		// )
 	} else {
 		// ( inizializzazione delle pila sistema
 		natq* pl = static_cast<natq*>(pila_sistema);
-		pl[1019] = (natq)f;	  	// EIP (codice sistema)
-		pl[1020] = SEL_CODICE_SISTEMA;  // CS (codice sistema)
-		pl[1021] = (IF? BIT_IF : 0);  	// EFLAG
-		pl[1022] = 0xffffffff;		// indirizzo ritorno?
-		pl[1023] = a;			// parametro
+		pl[509] = (natq)f;	  	// EIP (codice sistema)
+		pl[510] = SEL_CODICE_SISTEMA;   // CS (codice sistema)
+		pl[511] = (IF? BIT_IF : 0);  	// EFLAG
 		//   i processi esterni lavorano esclusivamente a livello
 		//   sistema. Per questo motivo, prepariamo una sola pila (la
 		//   pila sistema)
@@ -1295,11 +1282,12 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 		// ( inizializziamo il descrittore di processo
 		//   (punto 3 in [4.6])
-		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(int);
+		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 3 * sizeof(natq);
+		pdes_proc->contesto[I_RDI] = a;
 
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
-		//pdes_proc->cpl = LIV_SISTEMA;
+		pdes_proc->cpl = LIV_SISTEMA;
 		//   tutti gli altri campi valgono 0
 		// )
 	}
@@ -1657,7 +1645,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
-	apic_set_MIRQ(irq, false);
+	ioapic_set_MIRQ(irq, false);
 	return true;
 
 }
