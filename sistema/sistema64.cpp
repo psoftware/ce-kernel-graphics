@@ -369,11 +369,11 @@ des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 #define i_utente_privato      511     //higher half
 
 static const natq BIT_SEGNO = (1UL << 47);
-static const natq BIT_BASSI = 0x0000ffffffffffff;
+static const natq BIT_MODULO = BIT_SEGNO - 1;
 static inline addr normalizza(addr a)
 {
 	natq v = (natq)a;
-	return (addr)((v & BIT_SEGNO) ? (v | ~BIT_BASSI) : (v & BIT_BASSI));
+	return (addr)((v & BIT_SEGNO) ? (v | ~BIT_MODULO) : (v & BIT_MODULO));
 }
 
 static inline natq dim_pagina(int livello)
