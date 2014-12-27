@@ -1232,11 +1232,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// ( inizializziamo la pila sistema.
 		natq* pl = static_cast<natq*>(pila_sistema);
 
-		pl[507] = (natq)f;		// EIP (codice utente)
-		pl[508] = SEL_CODICE_UTENTE;	// CS (codice utente)
-		pl[509] = (IF? BIT_IF : 0);	// EFLAG
-		pl[510] = (natq)fin_utn_p;
-		pl[511] = SEL_DATI_UTENTE;	// SS (pila utente)
+		pl[-5] = (natq)f;		// EIP (codice utente)
+		pl[-4] = SEL_CODICE_UTENTE;	// CS (codice utente)
+		pl[-3] = (IF? BIT_IF : 0);	// EFLAG
+		pl[-2] = (natq)fin_utn_p;
+		pl[-1] = SEL_DATI_UTENTE;	// SS (pila utente)
 		//   eseguendo una IRET da questa situazione, il processo
 		//   passera' ad eseguire la prima istruzione della funzione f,
 		//   usando come pila la pila utente (al suo indirizzo virtuale)
@@ -1266,9 +1266,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	} else {
 		// ( inizializzazione delle pila sistema
 		natq* pl = static_cast<natq*>(pila_sistema);
-		pl[509] = (natq)f;	  	// EIP (codice sistema)
-		pl[510] = SEL_CODICE_SISTEMA;   // CS (codice sistema)
-		pl[511] = (IF? BIT_IF : 0);  	// EFLAG
+		pl[-5] = (natq)f;	  	// EIP (codice sistema)
+		pl[-4] = SEL_CODICE_SISTEMA;   // CS (codice sistema)
+		pl[-3] = (IF? BIT_IF : 0);  	// EFLAG
+		pl[-2] = (natq)fin_sis_p - sizeof(natq);
+		pl[-1] = 0;	// SS 
 		//   i processi esterni lavorano esclusivamente a livello
 		//   sistema. Per questo motivo, prepariamo una sola pila (la
 		//   pila sistema)
@@ -1276,7 +1278,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 		// ( inizializziamo il descrittore di processo
 		//   (punto 3 in [4.6])
-		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 3 * sizeof(natq);
+		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
 		pdes_proc->contesto[I_RDI] = a;
 
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
