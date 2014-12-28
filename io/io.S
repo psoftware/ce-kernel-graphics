@@ -184,36 +184,8 @@ start:	jmp cmain
 
 	.data
 
-param_err:
-	.asciz "parametro errato %x"
-
-// Descrittori delle interfacce seriali
-	.global com		// non comi, como
-com:	.word	0x03f8		// com[0].indreg.iRBR
-	.word	0x03f8		// com[0].indreg.iTHR
-	.word	0x03fd		// com[0].indreg.iLSR
-	.word	0x03f9		// com[0].indreg.iIER
-	.word	0x03fa		// com[0].indreg.iIIR
-	.word   0		// padding
-	.long	0		// com[0].mutex
-	.long	0		// com[0].sincr
-	.long	0		// com[0].cont
-	.long	0		// com[0].punt
-	.long	0		// com[0].funzione
-	.long	0		// com[0].stato
-	.word	0x02f8		// com[1].indreg.iRBR
-	.word	0x02f8		// com[1].indreg.iTHR
-	.word	0x03fd		// com[1].indreg.iLSR
-	.word	0x02f9		// com[1].indreg.iIER
-	.word	0x02fa		// com[1].indreg.iIIR
-	.word   0		// padding
-	.long	0		// com[1].mutex
-	.long	0		// com[1].sincr
-	.long	0		// com[1].cont
-	.long	0		// com[1].punt
-	.long	0		// com[1].funzione
-	.long	0		// com[1].stato
-
+#param_err:
+#	.asciz "parametro errato %x"
 	.global hd
 hd:
 	.word	0x0170		//hd.indreg.iBR

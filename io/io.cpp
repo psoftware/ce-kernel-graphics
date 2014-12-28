@@ -47,7 +47,38 @@ struct des_se {		// [9.2]
 };
 
 const natl S = 2;
-extern "C" des_se com[S];	// [9.2]
+des_se com[S] = {
+	{	// com[0]
+		{	// indreg
+			0x03f8,	// iRBR
+			0x03f8,	// iTHR
+			0x03fd,	// iLSR
+			0x03f9,	// iIER
+			0x03fa,	// iIIR
+		},
+		0,	// mutex
+		0,	// sincr
+		0,	// cont
+		0,	// punt
+		(funz)0,// funzione
+		0,	// stato
+	},
+	{	// com[0]
+		{	// indreg
+			0x02f8,	// iRBR
+			0x02f8,	// iTHR
+			0x03fd,	// iLSR
+			0x02f9,	// iIER
+			0x02fa,	// iIIR
+		},
+		0,	// mutex
+		0,	// sincr
+		0,	// cont
+		0,	// punt
+		(funz)0,// funzione
+		0,	// stato
+	}
+};
 
 void input_com(des_se* p_des);	// [9.2]
 void output_com(des_se* p_des);	// [9.2]
