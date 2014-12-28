@@ -591,21 +591,17 @@ a_iniconsole:
 hd_write_address:	
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
-	pushq %rdx
-	pushq %rdi
 	
-	movl 12(%ebp),%eax
-	movl 8(%ebp),%edi	// accede al descrittore per comodita`
-	movw 6(%edi),%dx
+	movl %esi,%eax
+	movw 6(%rdi),%dx
 	outb %al,%dx		// caricato SNR
-	movw 2(%edi),%dx
+	movw 2(%rdi),%dx
 	movb %ah,%al
 	outb %al,%dx		// caricato CNL
 	shrl $16,%eax
-	movw 4(%edi),%dx
+	movw 4(%rdi),%dx
 	outb %al,%dx		// caricato CNH
-	movw 8(%edi),%dx
+	movw 8(%rdi),%dx
 	inb %dx,%al		// HND in %al
 	andb $0xf0,%al		// maschera per l'indirizzo in HND
 	andb $0x0f,%ah		// maschera per i 4 bit +sign di primo
@@ -613,9 +609,6 @@ hd_write_address:
 	orb %ah,%al
 	outb %al,%dx		// caricato HND
 	
-	popq %rdi
-	popq %rdx
-	popq %rax
 	leave
 	ret
 
@@ -623,42 +616,28 @@ hd_write_address:
 hd_write_command: 
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rdx
-	pushq %rax
 
-	movb 8(%ebp), %al
-	movw 12(%ebp), %dx
+	movl %edi, %eax
+	movw %si, %dx
 	outb %al, %dx
 
-	popq %rax
-	popq %rdx
 	leave
 	ret
 
 
 .global		hd_go_inout
 hd_go_inout:		#...
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
+	movw %di, %dx		// ind. di DEV_CTL in edx
 	movb $0x08,%al
 	outb %al, %dx			// abilitazione dell' interfaccia a
 					// generare interruzioni
-	popq %rdx
-	popq %rax
 	ret
 .global			hd_halt_inout
 hd_halt_inout:	
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di DEV_CTL in edx
+	movw %di, %dx		// ind. di DEV_CTL in edx
 	movb $0x0A,%al
 	outb %al, %dx			// disabilitazione della generazione
 					// di interruzioni
-	popq %rdx
-	popq %rax
 	ret
 
 // Seleziona uno dei due drive di un canale ATA
