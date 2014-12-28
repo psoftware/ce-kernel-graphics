@@ -422,7 +422,7 @@ a_activate_pe:
 
 a_wfi:		// routine int $tipo_wfi [7.3][9.1]
 	call salva_stato
-	call apic_send_EOI
+	call ioapic_send_EOI
 	call schedulatore
 	call carica_stato
 	iretq
@@ -616,19 +616,16 @@ driver_td:
 
 	iretq
 
-handler_msg:
-	.string "handler %x"
-
 .macro handler n
 handler_\n: 
-	salva_registri
-	call ioapic_send_EOI
-	movq $(\n+VETT_0),%rdx
-    movq $handler_msg, %rsi
-    movl $1, %edi
-   	movl $0, %eax
-	call flog
-	carica_registri
+	call salva_stato
+	call inspronti
+	
+	movq $\n, %rcx
+	movq a_p(, %rcx, 8), %rax
+	movq %rax, esecuzione
+
+	call carica_stato
 	iretq
 .endm
 
