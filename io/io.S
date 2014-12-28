@@ -1,133 +1,6 @@
 #define ASM 1
 #include "costanti.h"
 
-////////////////////////////////////////////////////////////////////////////////
-//                                 COSTANTI                                   //
-////////////////////////////////////////////////////////////////////////////////
-
-// Tipi delle interruzioni delle chiamate di sistema usate
-// Devono coincidere con quelli usati in sistema.s e utente.s
-//
-.set tipo_a,  TIPO_A
-.set tipo_t,  TIPO_T
-.set tipo_si, TIPO_SI
-.set tipo_w,  TIPO_W
-.set tipo_s,  TIPO_S
-.set tipo_nd, TIPO_ND
-.set tipo_d,  TIPO_D
-.set tipo_l,  TIPO_L
-
-// Tipi delle interruzioni usate per interfacciarsi al modulo
-//  sistema
-// Devono coincidere con quelli usati in sistema.s
-//
-.set tipo_ape,  TIPO_APE
-.set tipo_wfi, TIPO_WFI
-.set tipo_va,   TIPO_VA
-.set tipo_p,    TIPO_P
-.set tipo_ab,   TIPO_AB
-.set tipo_fg,   TIPO_FG
-.set tipo_rl,   TIPO_RL
-.set tipo_tra,  TIPO_TRA
-
-// Tipi delle interruzioni usate dalle primitive di IO
-// Devono coincidere con quelli usati in utente.s
-//
-.set io_tipo_rsen,   IO_TIPO_RSEN
-.set io_tipo_rseln,  IO_TIPO_RSELN
-.set io_tipo_wsen,   IO_TIPO_WSEN
-.set io_tipo_wse0,   IO_TIPO_WSE0
-.set io_tipo_rcon,   IO_TIPO_RCON		
-.set io_tipo_wcon,   IO_TIPO_WCON		
-.set io_tipo_inic,   IO_TIPO_INIC
-.set io_tipo_hdr,    IO_TIPO_HDR
-.set io_tipo_hdw,    IO_TIPO_HDW
-.set io_tipo_dmahdr, IO_TIPO_DMAHDR
-.set io_tipo_dmahdw, IO_TIPO_DMAHDW
-
-
-////////////////////////////////////////////////////////////////////////////////
-//                  MACRO PER LA MANIPOLAZIONE DEI PARAMETRI                  //
-////////////////////////////////////////////////////////////////////////////////
-
-// Copia dei parametri di una chiamata di sistema dalla pila utente
-//  alla pila sistema
-.macro copia_param n_long offset
-        movl $\offset, %ecx
-        movl 4(%esp, %ecx, 4), %eax     // cs in eax
-        testl $3, %eax			// verifica del livello di privilegio
-					//  del chiamante
-        jz 1f                           // copia da pila sistema
-
-        movl 12(%esp, %ecx, 4), %eax    // vecchio esp (della pila utente)
-					//  in eax
-        leal 4(%eax), %esi		// indirizzo del primo parametro in
-					//  esi
-        jmp 2f
-1:
-        leal 16(%esp, %ecx, 4), %esi	// indirizzo del primo parametro in esi
-2:
-        movl $\n_long, %eax		// creazione in pila dello spazio per
-        shll $2, %eax			//  la copia dei parametri
-        subl %eax, %esp
-        leal (%esp), %edi		// indirizzo della destinazione del
-					//  primo parametro in edi
-
-        movl $\n_long, %ecx
-        cld
-        rep
-           movsl			// copia dei parametri
-.endm
-
-// Salvataggio dei registri in pila
-.macro salva_registri
-	pushq %rax
-	pushq %rcx
-	pushq %rdx
-	pushq %rbx
-	pushq %rsi
-	pushq %rdi
-	pushq %rbp
-.endm
-
-// Caricamento dei registri dalla pila (duale rispetto a salva_registri)
-.macro carica_registri
-	popq %rbp
-	popq %rdi
-	popq %rsi
-	popq %rbx
-	popq %rdx
-	popq %rcx
-	popq %rax
-.endm
-
-// salvataggio dei registri in pila per chiamate di sistema che ritornano
-//  un valore in eax, che non viene salvato
-.macro salva_reg_rit
-
-	pushq %rcx
-	pushq %rdx
-	pushq %rbx
-	pushq %rsi
-	pushq %rdi
-	pushq %rbp
-
-.endm
-
-
-// ripristino dei registri (tutti meno eax) dalla pila (duale rispetto a
-//  salva_reg_rit)
-.macro carica_reg_rit
-
-	popq %rbp
-	popq %rdi
-	popq %rsi
-	popq %rbx
-	popq %rdx
-	popq %rcx
-
-.endm
-
 // Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
 	pushq $LIV_UTENTE
@@ -138,41 +11,41 @@
 	addq $12, %rsp
 .endm
 
-.macro check_cavallo
-	testl $0x80000000, %eax
-	jnz 1f
-	pushq %rax
-	pushq $param_err
-	pushq $2
-	call flog
-	addl $12, %esp
-	int $tipo_ab
-1:
-
-.endm
-
-.macro cavallo_di_troia offset
-
-	movl (\offset * 4) (%esp), %eax
-	check_cavallo
-.endm
-
-.macro cavallo_di_troia2 offset1 offset2
-
-	movl (\offset1 * 4) (%esp), %eax
-	addl (\offset2 * 4) (%esp), %eax
-	decl %eax
-	check_cavallo
-.endm
-
-.macro cavallo_di_troia3 offset1 offset2
-
-	movl (\offset1 * 4) (%esp), %eax
-	movl (\offset2 * 4) (%esp), %ebx
-	addl (%ebx), %eax
-	decl %eax
-	check_cavallo
-.endm
+#.macro check_cavallo
+#	testl $0x80000000, %eax
+#	jnz 1f
+#	pushq %rax
+#	pushq $param_err
+#	pushq $2
+#	call flog
+#	addl $12, %esp
+#	int $tipo_ab
+#1:
+#
+#.endm
+#
+#.macro cavallo_di_troia offset
+#
+#	movl (\offset * 4) (%esp), %eax
+#	check_cavallo
+#.endm
+#
+#.macro cavallo_di_troia2 offset1 offset2
+#
+#	movl (\offset1 * 4) (%esp), %eax
+#	addl (\offset2 * 4) (%esp), %eax
+#	decl %eax
+#	check_cavallo
+#.endm
+#
+#.macro cavallo_di_troia3 offset1 offset2
+#
+#	movl (\offset1 * 4) (%esp), %eax
+#	movl (\offset2 * 4) (%esp), %ebx
+#	addl (%ebx), %eax
+#	decl %eax
+#	check_cavallo
+#.endm
 
 .global _start, start
 _start:
@@ -220,32 +93,32 @@ hd:
 	.text
 	.global activate_p
 activate_p:
-	int $tipo_a
+	int $TIPO_A
 	ret
 
 	.global terminate_p // [7.1]
 terminate_p:
-	int $tipo_t
+	int $TIPO_T
 	ret
 
 	.global sem_ini
 sem_ini:
-	int $tipo_si
+	int $TIPO_SI
 	ret
 
 	.global sem_wait	// [7.1]
 sem_wait:
-	int $tipo_w
+	int $TIPO_W
 	ret
 
 	.global sem_signal	// [7.1]
 sem_signal:
-	int $tipo_s
+	int $TIPO_S
 	ret
 
 	.global trasforma
 trasforma:
-	int $tipo_tra
+	int $TIPO_TRA
 	ret
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -254,42 +127,42 @@ trasforma:
 
 	.global activate_pe
 activate_pe:	// [7.1]
-	int $tipo_ape
+	int $TIPO_APE
 	ret
 
 	.global wfi	// [9.1]
 wfi:
-	int $tipo_wfi
+	int $TIPO_WFI
 	ret
 
 	.global panic
 panic:
-	int $tipo_p
+	int $TIPO_P
 	ret
 
 	.global abort_p
 abort_p:
-	int $tipo_ab
+	int $TIPO_AB
 	ret
 
 	.global fill_gate
 fill_gate:
-	int $tipo_fg
+	int $TIPO_FG
 	ret
 
 	.global delay
 delay:
-	int $tipo_d
+	int $TIPO_D
 	ret
 
 	.global log
 log:
-	int $tipo_l
+	int $TIPO_L
 	ret
 
 	.global writevid
 writevid:
-	int $io_tipo_wcon
+	int $IO_TIPO_WCON
 	ret
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -483,21 +356,19 @@ cursore:
 fill_io_gates:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
 
-	fill_io_gate	io_tipo_rsen	a_readse_n
-	fill_io_gate	io_tipo_rseln	a_readse_ln
-	fill_io_gate	io_tipo_wsen	a_writese_n
-	fill_io_gate	io_tipo_wse0	a_writese_0
-	fill_io_gate	io_tipo_rcon	a_readconsole
-	fill_io_gate	io_tipo_wcon	a_writeconsole
-	fill_io_gate	io_tipo_inic	a_iniconsole
-	fill_io_gate	io_tipo_hdr	a_readhd_n
-	fill_io_gate	io_tipo_hdw	a_writehd_n
-	fill_io_gate	io_tipo_dmahdr	a_dmareadhd_n
-	fill_io_gate	io_tipo_dmahdw	a_dmawritehd_n
+	fill_io_gate	IO_TIPO_RSEN	a_readse_n
+	fill_io_gate	IO_TIPO_RSELN	a_readse_ln
+	fill_io_gate	IO_TIPO_WSEN	a_writese_n
+	fill_io_gate	IO_TIPO_WSE0	a_writese_0
+	fill_io_gate	IO_TIPO_RCON	a_readconsole
+	fill_io_gate	IO_TIPO_WCON	a_writeconsole
+	fill_io_gate	IO_TIPO_INIC	a_iniconsole
+	fill_io_gate	IO_TIPO_HDR	a_readhd_n
+	fill_io_gate	IO_TIPO_HDW	a_writehd_n
+	fill_io_gate	IO_TIPO_DMAHDR	a_dmareadhd_n
+	fill_io_gate	IO_TIPO_DMAHDW	a_dmawritehd_n
 
-	popq %rax
 	leave
 	ret
 
@@ -507,82 +378,54 @@ fill_io_gates:
 
 	.extern c_readse_n
 a_readse_n:
-	salva_registri
-	copia_param 4 7
 	//cavallo_di_troia 1
 	//cavallo_di_troia2 1 2
 	//cavallo_di_troia 3
 	call c_readse_n
-	addl $16, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_readse_ln
 a_readse_ln:
-	salva_registri
-	copia_param 4 7
 	//cavallo_di_troia 1
 	//cavallo_di_troia 2
 	//cavallo_di_troia3 1 2
 	//cavallo_di_troia 3
 	call c_readse_ln
-	addl $16, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_writese_n
 a_writese_n:
-	salva_registri
-	copia_param 3 7
 	//cavallo_di_troia 1
 	//cavallo_di_troia2 1 2
 	call c_writese_n
-	addl $12, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_writese_0	// non c_writese_ln, che va lo stesso
 a_writese_0:
-	salva_registri
-	copia_param 3 7
 	//cavallo_di_troia 1
 	//cavallo_di_troia 2
 	//cavallo_di_troia3 1 2
 	call c_writese_0
-	addl $12, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_readconsole
 a_readconsole:
-	salva_registri
-	copia_param 2 7
 	//cavallo_di_troia 0
 	//cavallo_di_troia 1
 	//cavallo_di_troia3 0 1
 	call c_readconsole
-	addl $8, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_writeconsole
 a_writeconsole:
-	salva_registri
-	copia_param 1 7
 	//cavallo_di_troia 0
 	call c_writeconsole
-	addl $4, %esp
-	carica_registri
-	iret
+	iretq
 
 	.extern c_iniconsole
 a_iniconsole:
-	salva_registri
-	copia_param 1 7
 	call c_iniconsole
-	addl $4, %esp
-	carica_registri
-	iret
+	iretq
 
 
 # interface ATA
@@ -645,80 +488,60 @@ hd_halt_inout:
 hd_select_device:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
-	pushq %rdx
 
-	movl 8(%ebp),%eax
+	movl %edi,%eax
 	cmpl $0,%eax
 	je shd_ms
 shd_sl:	movb $0xf0,%al
 	jmp ms_out
 shd_ms:	movb $0xe0,%al
-ms_out:	movl 12(%ebp),%edx
+ms_out:	movw %si,%dx
 	outb %al,%dx
 
-	popq %rdx
-	popq %rax
 	leave
 	ret
 
 .global		readhd_n
-readhd_n:	int		$io_tipo_hdr
+readhd_n:	int		$IO_TIPO_HDR
 		ret
 .global		writehd_n
-writehd_n:	int		$io_tipo_hdw
+writehd_n:	int		$IO_TIPO_HDW
 		ret
 .global		dmareadhd_n
-dmareadhd_n:	int		$io_tipo_dmahdr
+dmareadhd_n:	int		$IO_TIPO_DMAHDR
 		ret
 .global		dmawritehd_n
-dmawritehd_n:	int		$io_tipo_dmahdw
+dmawritehd_n:	int		$IO_TIPO_DMAHDW
 		ret
 .extern		c_readhd_n
 a_readhd_n:	# routine INT $io_tipo_hdr
-		salva_registri
-		copia_param 4 7
 		//cavallo_di_troia 0
 		//cavallo_di_troia2 0 2
 		//cavallo_di_troia 3
 		call	c_readhd_n
-		addl $16, %esp
-		carica_registri
-		iret
+		iretq
 
 .EXTERN		c_writehd_n
 a_writehd_n:	# routine INT $io_tipo_hdw
-		salva_registri
-		copia_param 4 7
 		//cavallo_di_troia 0
 		//cavallo_di_troia2 0 2
 		//cavallo_di_troia 3
 		call	c_writehd_n
-		addl $16, %esp
-		carica_registri
-		iret
+		iretq
 
 .EXTERN		c_dmareadhd_n
 a_dmareadhd_n: 	# routine INT $dma_tipob_r
-		salva_registri
-		copia_param 4 7
 		//cavallo_di_troia 0
 		//cavallo_di_troia2 0 2
 		//cavallo_di_troia 3
 		call	c_dmareadhd_n
-		addl $16, %esp
-		carica_registri
-		iret
+		iretq
 
 .EXTERN		c_dmawritehd_n
 a_dmawritehd_n:	# routine INT $dma_tipob_w
-		salva_registri
-		copia_param 4 7
 		//cavallo_di_troia 0
 		//cavallo_di_troia2 0 2
 		//cavallo_di_troia 3
 		call	c_dmawritehd_n
-		addl $16, %esp
-		carica_registri
-		iret
+		iretq
 
