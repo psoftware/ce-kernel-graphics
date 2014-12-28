@@ -1791,19 +1791,6 @@ extern "C" void cmain ()
 	salta_a_main(); 
 	// )
 
-#if 0	
-	flog(LOG_INFO, "Creo lo spazio condiviso");
-	if (!crea_spazio_condiviso(d->id))
-		goto error;
-
-	//attiva_timer(DELAY);
-	//flog(LOG_INFO, "timer attivato!");
-
-	//test_userspace();
-
-	flog(LOG_INFO, "Uscita!");
-	return;
-#endif
 error:
 	panic("Errore di inizializzazione");
 }
@@ -1831,6 +1818,7 @@ void main_sistema(int n)
 		flog(LOG_ERR, "impossibile creare il processo main I/O");
 		goto error;
 	}
+	flog(LOG_INFO, "attendo inizializzazione modulo I/O...");
 	sem_wait(sync_io);
 	// )
 
@@ -1843,8 +1831,10 @@ void main_sistema(int n)
 	// )
 	// (* attiviamo il timer
 	attiva_timer(DELAY);
+	flog(LOG_INFO, "attivato timer (DELAY=%d)", DELAY);
 	// *)
 	// ( terminazione [10.4]
+	flog(LOG_INFO, "passo il controllo al processo utente...");
 	terminate_p();
 	// )
 error:
