@@ -597,8 +597,7 @@ comm_exc:
 	pushq %rcx
 	pushq %rdx
 	call gestore_eccezioni
-	//jmp a_abort_p
-	hlt
+	jmp a_abort_p
 
 
 ////////////////////////////////////////////////////////
