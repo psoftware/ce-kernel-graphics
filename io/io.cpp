@@ -478,14 +478,14 @@ extern "C" void c_writeconsole(cstr buff) // [9.5]
 	sem_signal(p_des->mutex);
 }
 
-extern "C" void go_inputkbd(interfkbd_reg indreg); // [9.5]
-extern "C" void halt_inputkbd(interfkbd_reg indreg); // [9.5]
+extern "C" void go_inputkbd(interfkbd_reg* indreg); // [9.5]
+extern "C" void halt_inputkbd(interfkbd_reg* indreg); // [9.5]
 
 void startkbd_in(des_kbd* p_des, str buff) // [9.5]
 {
 	p_des->punt = buff;
 	p_des->cont = 80;
-	go_inputkbd(p_des->indreg);
+	go_inputkbd(&p_des->indreg);
 }
 
 extern "C" void c_readconsole(str buff, natl& quanti) // [9.5]
@@ -521,7 +521,7 @@ void estern_kbd(int h) // [9.5]
 	bool fine;
 
 	for(;;) {
-		halt_inputkbd(p_des->kbd.indreg);
+		halt_inputkbd(&p_des->kbd.indreg);
 
 		inputb(p_des->kbd.indreg.iRBR, c);
 		
@@ -565,7 +565,7 @@ void estern_kbd(int h) // [9.5]
 		if (fine == true) 
 			sem_signal(p_des->sincr);
 		else
-			go_inputkbd(p_des->kbd.indreg);
+			go_inputkbd(&p_des->kbd.indreg);
 		wfi();
 	}
 }

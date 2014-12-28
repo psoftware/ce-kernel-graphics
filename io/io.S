@@ -282,13 +282,13 @@ go_inputkbd:
 	pushq %rbp
 	movq %rsp, %rbp
 
-	movw %si, %dx
+	movw 6(%rdi), %dx
 	movb $KBD_WCB, %al
 	outb %al, %dx
-	movw %di, %dx
+	movw 2(%rdi), %dx
 	movb $0x61, %al
 	outb %al, %dx
-	movw %si, %dx
+	movw 6(%rdi), %dx
 1:	inb %dx, %al	
 	testb $0x02, %al
 	jnz 1b
@@ -304,13 +304,13 @@ halt_inputkbd:
 	pushq %rbp
 	movq %rsp, %rbp
 
-	movw %si, %dx
+	movw 6(%rdi), %dx
 	movb $KBD_WCB, %al
 	outb %al, %dx
-	movw %di, %dx
+	movw 2(%rdi), %dx
 	movb $0x60, %al
 	outb %al, %dx
-	movw %si, %dx
+	movw 6(%rdi), %dx
 1:	inb %dx, %al	 
 	testb $0x02, %al 
 	jnz 1b
