@@ -3,12 +3,11 @@
 
 // Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
-	pushq $LIV_UTENTE
+	movq $\gate, %rdi
 	movabs $\off, %rax
-	pushq %rax
-	pushq $\gate
+	movq %rax, %rsi
+	movq $LIV_UTENTE, %rdx
 	call fill_gate
-	addq $12, %rsp
 .endm
 
 #.macro check_cavallo
