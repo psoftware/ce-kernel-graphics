@@ -319,7 +319,62 @@ struct des_console { // [9.5]
 	des_vid vid;
 };
 
-extern "C" des_console console; // [9.5]
+des_console console = {
+	0,	// mutex (da inizializzare)
+	0,	// sync  (da inizializzare)
+	{	// kbd
+		{	// indreg
+			0x60,	// iRBR
+			0x60,	// iTBR
+			0x64,	// iCMR
+			0x64,	// iSTR
+		},
+		0,	// punt
+		0,	// cont
+		0,	// shift
+		{	// tab
+			0x10, 0x11, 0x12,
+			0x13, 0x14, 0x15, 0x16,
+			0x17, 0x18, 0x19, 0x1E,
+			0x1F, 0x20, 0x21, 0x22,
+			0x23, 0x24, 0x25, 0x26,
+			0x2C, 0x2D, 0x2E, 0x2F,
+			0x30, 0x31, 0x32, 0x39,
+			0x1C, 0x0e, 0x01
+		},
+		{	// tamin
+			'q',
+			'w', 'e', 'r', 't',
+			'y', 'u', 'i', 'o',
+			'p', 'a', 's', 'd',
+			'f', 'g', 'h', 'j',
+			'k', 'l', 'z', 'x',
+			'c', 'v', 'b', 'n',
+			'm', ' ', '\n', '\b',
+			0x1B
+		},
+		{	// tabmai
+			'Q', 'W', 'E',
+			'R', 'T', 'Y', 'U',
+			'I', 'O', 'P', 'A',
+			'S', 'D', 'F', 'G',
+			'H', 'J', 'K', 'L',
+			'Z', 'X', 'C', 'V',
+			'B', 'N', 'M', ' ',
+			'\r', '\b', 0x1B
+		}
+	},
+	{	// vid
+		{	// indreg
+			0x03d4,	// iIND
+			0x03d5,	// iDAT
+		},
+		(natw*)0xb8000,	// video
+		0,		// x
+		0,		// y
+		0x4b00,		// attr
+	}
+};
 
 extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); // [9.5]
 

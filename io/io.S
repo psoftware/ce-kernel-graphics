@@ -214,57 +214,6 @@ com:	.word	0x03f8		// com[0].indreg.iRBR
 	.long	0		// com[1].funzione
 	.long	0		// com[1].stato
 
-// descrittore console
-	.global console	// [9.5]
-console:
-	.long	0		// mutex
-	.long	0		// sincr
-	// descrittore tastiera
-	.word	0x60		// kbd.indreg.iRBR
-	.word	0x60		// kbd.indreg.iTBR
-	.word	0x64		// kbd.indreg.iCMR
-	.word	0x64		// kbd.indreg.iSTR
-	.long	0		// kbd.punt
-	.long   0		// kbd.cont
-	.byte	0		// kbd.shift
-	// tab
-	.byte	0x10, 0x11, 0x12
-	.byte   0x13, 0x14, 0x15, 0x16
-	.byte   0x17, 0x18, 0x19, 0x1E 
-	.byte   0x1F, 0x20, 0x21, 0x22
-	.byte   0x23, 0x24, 0x25, 0x26
-	.byte	0x2C, 0x2D, 0x2E, 0x2F
-	.byte   0x30, 0x31, 0x32, 0x39
-	.byte   0x1C, 0x0e, 0x01
-	// tabmin
-        .byte  'q'
-	.byte  'w', 'e', 'r', 't'
-	.byte  'y', 'u', 'i', 'o'
-	.byte  'p', 'a', 's', 'd'
-	.byte  'f', 'g', 'h', 'j'
-	.byte  'k', 'l', 'z', 'x'
-	.byte  'c', 'v', 'b', 'n'
-	.byte  'm', ' ', '\n', '\b'
-	.byte  0x1B
-	// tabmai
-        .byte  'Q', 'W', 'E'
-	.byte  'R', 'T', 'Y', 'U'
-	.byte  'I', 'O', 'P', 'A'
-	.byte  'S', 'D', 'F', 'G'
-	.byte  'H', 'J', 'K', 'L'
-        .byte  'Z', 'X', 'C', 'V'
-	.byte  'B', 'N', 'M', ' '
-	.byte  '\r', '\b', 0x1B
-	.byte  0	// allineamento
-	// Descrittore del video
-	.word	0x03D4		// vid.indreg.iIND
-	.word	0x03D5		// vid.indreg.iDAT
-	.long	0xB8000 	// vid.video
-	.long	0		// vid.x
-	.long   0		// vid.y
-	.word   0x4B00		// vid.attr
-	.word	0		// allineamento
-
 	.global hd
 hd:
 	.word	0x0170		//hd.indreg.iBR
