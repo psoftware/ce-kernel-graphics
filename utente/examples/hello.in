@@ -1,7 +1,3 @@
-/*
- * Mailbox
- */
-
 #include <sys.h>
 #include <lib.h>
 
