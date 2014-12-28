@@ -28,7 +28,6 @@ verbose log;
 const uint32_t UPB = DIM_PAGINA / sizeof(uint32_t);
 const uint32_t BPU = sizeof(uint32_t) * 8;
 
-const uint32_t fine_utente_condiviso = (NTAB_SIS_C + NTAB_SIS_P + NTAB_MIO_C + NTAB_USR_C) * DIM_MACROPAGINA;
 
 union entrata {
 	// caso di pagina presente

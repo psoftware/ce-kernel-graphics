@@ -12,15 +12,13 @@
 // ( varie dimensioni
 #define KiB			1024U
 #define MiB			(1024*KiB)
+#define GiB			(1024*Mib)
 #define MEM_TOT			(16*MiB)
-#define DIM_M1			(5*MiB) //TODO aumentato perche' ora a 2MiB c'e il sistema.WTF sistema finisce oltre i 4M???
+#define DIM_M1			(5*MiB)
 #define DIM_M2			(MEM_TOT - DIM_M1)
+#define DIM_DESP                236     // descrittore di processo
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096U
-#define DIM_MACROPAGINA		(DIM_PAGINA * 1024U)
-#define DIM_DESP		236 	// descrittore di processo
-#define DIM_DESS		8	// descrittore di semaforo
-#define BYTE_SEM		(DIM_DESS * MAX_SEM)
 #define MAX_PRD			16
 #define N_DPF			(DIM_M2 / DIM_PAGINA)
 #define DIM_USR_HEAP		(256*KiB)
@@ -88,19 +86,29 @@
 // )
 
 // ( suddivisione della memoria virtuale
-//   NTAB = Numero di Tabelle delle pagine
+//   N    = Numero di entrate in tab4
+//   I	  = Indice della prima entrata in tab4
 //   SIS  = SIStema
 //   MIO  = Modulo IO
-//   USR  = utente (USeR)
-//   C    = condiviso
-//   P    = privato
-#define NTAB_SIS_C		256	// 1GiB
-#define NTAB_SIS_P		1	// 4MiB
-#define NTAB_MIO_C		250	// 1GiB - 4MiB - 20MiB
-#define NTAB_PCI_C		5	// 20MiB
-#define NTAB_USR_C		256	// 1GiB
-#define NTAB_USR_P		256	// 1GiB
+//   UTN  = modulo UTeNte
+//   PCI  = registri mappati in memoria (PCI)
+//   C    = Condiviso
+//   P    = Privato
+#define I_SIS_C		0
+#define I_SIS_P		1
+#define I_MIO_C		2
+#define I_PCI_C		3
+#define I_UTN_C       510
+#define I_UTN_P	      511
+
+#define N_SIS_C		1
+#define N_SIS_P		1
+#define N_MIO_C		1
+#define N_PCI_C		1
+#define N_UTN_C		1
+#define N_UTN_P		1
 // )
+
 // (* log di sistema
 #ifndef AUTOCORR
 #define MAX_LOG			LOG_ERR

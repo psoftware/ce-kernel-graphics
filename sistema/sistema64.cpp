@@ -430,25 +430,6 @@ des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 //                         PAGINAZIONE [6]                                     //
 /////////////////////////////////////////////////////////////////////////////////
 
-//per semplicita permettiamo di avere solo intere tab3 condivise
-//NB: gli indirizzi finali saranno in forma canonica, quindi le entry dalla 256
-//in poi si trovano nella meta alta dello spazio di indirizzamento
-
-static const int i_sis_c =   0;
-static const int i_sis_p =   1;
-static const int i_io__c =   2;
-static const int i_pci_c =   3;
-static const int i_utn_c = 510;
-static const int i_utn_p = 511;
-
-static const int n_sis_c = 1;
-static const int n_sis_p = 1;
-static const int n_io__c = 1;
-static const int n_pci_c = 1;
-static const int n_utn_c = 1;
-static const int n_utn_p = 1;
-
-
 static const natq BIT_SEGNO = (1UL << 47);
 static const natq BIT_MODULO = BIT_SEGNO - 1;
 static inline addr norm(addr a)
@@ -478,19 +459,19 @@ void copy_des(addr src, addr dst, natl i, natl n)
 		pddst[j] = pdsrc[j];
 }
 
-const addr ini_sis_c = norm((addr)(i_sis_c * dim_pag(4))); 
-const addr ini_sis_p = norm((addr)(i_sis_p * dim_pag(4)));
-const addr ini_io__c = norm((addr)(i_io__c * dim_pag(4)));
-const addr ini_pci_c = norm((addr)(i_pci_c * dim_pag(4)));
-const addr ini_utn_c = norm((addr)(i_utn_c * dim_pag(4)));
-const addr ini_utn_p = norm((addr)(i_utn_p * dim_pag(4)));
+const addr ini_sis_c = norm((addr)(I_SIS_C * dim_pag(4)));
+const addr ini_sis_p = norm((addr)(I_SIS_P * dim_pag(4)));
+const addr ini_mio_c = norm((addr)(I_MIO_C * dim_pag(4)));
+const addr ini_pci_c = norm((addr)(I_PCI_C * dim_pag(4)));
+const addr ini_utn_c = norm((addr)(I_UTN_C * dim_pag(4)));
+const addr ini_utn_p = norm((addr)(I_UTN_P * dim_pag(4)));
 
-const addr fin_sis_c = (addr)((natq)ini_sis_c + dim_pag(4) * n_sis_c); 
-const addr fin_sis_p = (addr)((natq)ini_sis_p + dim_pag(4) * n_sis_p); 
-const addr fin_io__c = (addr)((natq)ini_io__c + dim_pag(4) * n_io__c); 
-const addr fin_pci_c = (addr)((natq)ini_pci_c + dim_pag(4) * n_pci_c); 
-const addr fin_utn_c = (addr)((natq)ini_utn_c + dim_pag(4) * n_utn_c); 
-const addr fin_utn_p = (addr)((natq)ini_utn_p + dim_pag(4) * n_utn_p); 
+const addr fin_sis_c = (addr)((natq)ini_sis_c + dim_pag(4) * N_SIS_C);
+const addr fin_sis_p = (addr)((natq)ini_sis_p + dim_pag(4) * N_SIS_P);
+const addr fin_mio_c = (addr)((natq)ini_mio_c + dim_pag(4) * N_MIO_C);
+const addr fin_pci_c = (addr)((natq)ini_pci_c + dim_pag(4) * N_PCI_C);
+const addr fin_utn_c = (addr)((natq)ini_utn_c + dim_pag(4) * N_UTN_C);
+const addr fin_utn_p = (addr)((natq)ini_utn_p + dim_pag(4) * N_UTN_P);
 
 //   ( definiamo alcune costanti utili per la manipolazione dei descrittori
 //     di pagina e di tabella. Assegneremo a tali descrittori il tipo "natl"
@@ -1150,24 +1131,6 @@ addr crea_tab4()
 }
 
 
-///////////////////////////////////////////////////////////////////////////////
-//                          TESTS                                            //
-///////////////////////////////////////////////////////////////////////////////
-void copia_pagine_condivise(addr srctab4, addr desttab4)
-{
-	natq finestra_FM = get_entry(srctab4, i_sis_c);
-	set_entry(desttab4,i_sis_c,finestra_FM);
-	
-	natq PCI_condiviso = get_entry(srctab4,i_pci_c);
-	set_entry(desttab4,i_pci_c,PCI_condiviso);
-	
-	natq utente_condiviso = get_entry(srctab4,i_utn_c);
-	set_entry(desttab4,i_utn_c,utente_condiviso);
-}
-
-
-
-extern "C" void goto_user();
 extern "C" natl alloca_tss(des_proc*);
 extern "C" void rilascia_tss(int indice);
 const natl BIT_IF = 1L << 9;
@@ -1178,10 +1141,10 @@ void crea_tab4(addr dest)
 
 	memset(dest, 0, DIM_PAGINA);
 
-	copy_des(pdir, dest, i_sis_c, n_sis_c);
-	copy_des(pdir, dest, i_io__c, n_io__c);
-	copy_des(pdir, dest, i_pci_c, n_pci_c);
-	copy_des(pdir, dest, i_utn_c, n_utn_c);
+	copy_des(pdir, dest, I_SIS_C, N_SIS_C);
+	copy_des(pdir, dest, I_MIO_C, N_MIO_C);
+	copy_des(pdir, dest, I_PCI_C, N_PCI_C);
+	copy_des(pdir, dest, I_UTN_C, N_UTN_C);
 }
 
 proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
@@ -1354,8 +1317,8 @@ void distruggi_processo(proc_elem* p)
 	des_proc* pdes_proc = des_p(p->id);
 
 	addr tab4 = pdes_proc->cr3;
-	rilascia_tutto(tab4, i_sis_p, n_sis_p);
-	rilascia_tutto(tab4, i_utn_p, n_utn_p);
+	rilascia_tutto(tab4, I_SIS_P, N_SIS_P);
+	rilascia_tutto(tab4, I_UTN_P, N_UTN_P);
 	rilascia_pagina_fisica(descrittore_pf(tab4));
 	rilascia_tss(p->id);
 	dealloca(pdes_proc);
@@ -1550,21 +1513,21 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	// (  carichiamo le parti condivise nello spazio di indirizzamento del processo
 	//    dummy (vedi [10.2])
 	addr dummy_dir = des_p(dummy_proc)->cr3;
-	copy_des(tmp, dummy_dir, i_io__c, n_io__c);
-	copy_des(tmp, dummy_dir, i_utn_c, n_utn_c);
+	copy_des(tmp, dummy_dir, I_MIO_C, N_MIO_C);
+	copy_des(tmp, dummy_dir, I_UTN_C, N_UTN_C);
 	dealloca(tmp);
 	
-	if (!carica_tutto(dummy_proc, i_io__c, 1))
+	if (!carica_tutto(dummy_proc, I_MIO_C, 1))
 		return false;
-	if (!carica_tutto(dummy_proc, i_utn_c, 1))
+	if (!carica_tutto(dummy_proc, I_UTN_C, 1))
 		return false;
 	// )
 
 	// ( copiamo i descrittori relativi allo spazio condiviso anche nel direttorio
 	//   corrente, in modo che vengano ereditati dai processi che creeremo in seguito
 	addr my_dir = des_p(esecuzione->id)->cr3;
-	copy_des(dummy_dir, my_dir, i_io__c, n_io__c);
-	copy_des(dummy_dir, my_dir, i_utn_c, n_utn_c);
+	copy_des(dummy_dir, my_dir, I_MIO_C, N_MIO_C);
+	copy_des(dummy_dir, my_dir, I_UTN_C, N_UTN_C);
 	// )
 
 	invalida_TLB();
@@ -1733,7 +1696,7 @@ extern "C" void cmain ()
 	
 	flog(LOG_INFO, "sis/cond [%p, %p)", ini_sis_c, fin_sis_c);
 	flog(LOG_INFO, "sis/priv [%p, %p)", ini_sis_p, fin_sis_p);
-	flog(LOG_INFO, "io /cond [%p, %p)", ini_io__c, fin_io__c);
+	flog(LOG_INFO, "io /cond [%p, %p)", ini_mio_c, fin_mio_c);
 	flog(LOG_INFO, "pci/cond [%p, %p)", ini_pci_c, fin_pci_c);
 	flog(LOG_INFO, "usr/cond [%p, %p)", ini_utn_c, fin_utn_c);
 	flog(LOG_INFO, "usr/priv [%p, %p)", ini_utn_p, fin_utn_p);
