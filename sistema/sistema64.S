@@ -377,7 +377,7 @@ a_activate_p:	// routine int $tipo_a [4.6]
 
         .extern c_terminate_p
 a_terminate_p:	// routine int $tipo_t [4.6]
-	movl $terminate_stack_end, %esp
+	movq $terminate_stack_end, %rsp
         call c_terminate_p
 	call carica_stato
 	iretq
@@ -460,7 +460,8 @@ a_log:
 	iretq
 
 a_end_program:
-	iretq
+	lidt triple_fault_idt
+	int $1
 
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
@@ -782,6 +783,9 @@ gdt_pointer:
 idt_pointer:
 	.word 0xFFF			// limite della IDT (256 entrate)
 	.quad idt			// base della IDT
+triple_fault_idt:
+	.word 0
+	.quad 0
 
 .balign 8
 .global gdt
