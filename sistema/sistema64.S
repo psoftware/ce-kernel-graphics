@@ -179,18 +179,16 @@ carica_stato:
 .set pres_bit,   0b10000000
 	.global alloca_tss
 alloca_tss:
-	movq $(des_tss-gdt), %r11
-	movq $(end_gdt-gdt),%rax
+	movq $des_tss, %rdx
 iter_tss:
-	testb $pres_bit,(gdt+5)(%r11)
+	testb $pres_bit, 5(%rdx)
 	jz set_entry_tss
-	addq $16, %r11
-	cmpq %r11,%rax
+	addq $16, %rdx
+	cmpq $end_gdt, %rdx
 	jne iter_tss
-	movq $0,%rax
+	movq $0, %rax
 	jmp end_tss
 set_entry_tss:
-	leaq gdt(%r11), %rdx
 	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
 	movq %rdi, %rax
 	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
@@ -201,18 +199,19 @@ set_entry_tss:
 	movb %ah, 7(%rdx)	//[63:56] = base[31:24]
 	shrq $16, %rax
 	movl %eax, 8(%rdx) //[95:64] = base[63:32]
-	movq $0, 12(%rdx)	//[127:96] = 0
+	movl $0, 12(%rdx)	//[127:96] = 0
 
-	movq %r11,%rax
+	movq %rdx,%rax
+	subq $gdt, %rax
 end_tss:
 	retq
 
 	
 	.global rilascia_tss
 rilascia_tss:
-	movq $0,gdt(%rdi)
-	addq $8,%rdi
-	movq $0,gdt(%rdi)
+	movq $0, gdt(%rdi)
+	addq $8, %rdi
+	movq $0, gdt(%rdi)
 	retq
 
 // dato l'identificatore di un processo,
