@@ -483,6 +483,7 @@ const natq BIT_PWT  = 1U << 3; // il bit Page Wright Through
 const natq BIT_PCD  = 1U << 4; // il bit Page Cache Disable
 const natq BIT_A    = 1U << 5; // il bit di accesso
 const natq BIT_D    = 1U << 6; // il bit "dirty"
+const natq BIT_ZERO = 1U << 7; // (* nuova pagina, da azzerare *)
 
 // (*) attenzione, la convenzione Intel e' diversa da quella
 // illustrata nel libro: 0 = sistema, 1 = utente.
@@ -506,6 +507,10 @@ bool extr_A(natq descrittore)			// [6.3]
 { // (
 	return (descrittore & BIT_A); // )
 }
+bool extr_ZERO(natq descrittore)			// [6.3]
+{ // (
+	return (descrittore & BIT_ZERO); // )
+}
 addr extr_IND_FISICO(natq descrittore)		// [6.3]
 { // (
 	return (addr)(descrittore & ADDR_MASK); // )
@@ -527,6 +532,13 @@ void set_A(natq& descrittore, bool bitA)	// [6.3]
 		descrittore |= BIT_A;
 	else
 		descrittore &= ~BIT_A; // )
+}
+void set_ZERO(natq& descrittore, bool bitZERO)
+{
+	if (bitZERO)
+		descrittore |= BIT_ZERO;
+	else
+		descrittore &= ~BIT_ZERO;
 }
 // (* definiamo anche la seguente funzione:
 //    clear_IND_M: azzera il campo M (indirizzo in memoria di massa)
@@ -1088,6 +1100,7 @@ addr crea(natl proc, addr ind_virt, int liv, natl priv)
 				panic("spazio nello swap esaurito");
 			}
 			set_IND_MASSA(dt, blocco);
+			set_ZERO(dt, true);
 			dt = dt | BIT_RW;
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
@@ -1402,7 +1415,13 @@ void leggi_swap(addr dest, natl blocco);
 
 void carica(des_pf* ppf) // [6.4][10.5]
 {
-	leggi_swap(indirizzo_pf(ppf), ppf->ind_massa);
+	natq& e = get_des(ppf->processo, ppf->livello + 1, ppf->ind_virtuale);
+	if (extr_ZERO(e)) {
+		memset(indirizzo_pf(ppf), 0, DIM_PAGINA);
+		set_ZERO(e, false);
+	} else {
+		leggi_swap(indirizzo_pf(ppf), ppf->ind_massa);
+	}
 }
 
 void scarica(des_pf* ppf) // [6.4]
