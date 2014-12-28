@@ -1054,38 +1054,6 @@ const natl DELAY = 59659;
 /////////////////////////////////////////////////////////////////////////////
 extern "C" void init_gdt();
 
-#if 0
-addr crea_pila(addr tab4,int dim, bool utente) 
-{
-	natq flags = BIT_RW;
-	
-	addr pila_virt = ini_sis_p;
-	if(utente == true)
-	{
-		flags |= BIT_US;
-		pila_virt = ini_utn_p;    //per ora  hardcodato
-	}
-
-	addr pila_phys = 0;
-	for(int i = 0; i<dim;i+=DIM_PAGINA)
-	{
-		des_pf* ppf = alloca_pagina_fisica_libera();
-		if (ppf == 0) {
-			panic("impossibile allocare pila");
-		}
-		ppf->livello = 0;
-		ppf->residente = true;   //per ora no swap
-		pila_phys = indirizzo_pf(ppf);
-		
-		addr pag_pila = reinterpret_cast<addr>((natq)pila_virt+i);
-		sequential_map(tab4,pila_phys,pag_pila,1,flags);
-	}
-
-	return reinterpret_cast<addr>((natq)pila_phys + DIM_PAGINA );
-	
-}
-#endif
-
 natq alloca_blocco();
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente);
 addr crea(natl proc, addr ind_virt, int liv, natl priv)
