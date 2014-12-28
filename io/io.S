@@ -299,62 +299,39 @@ writevid:
 // Inizio dell' ingresso da una interfaccia seriale
 	.global go_inputse
 go_inputse:
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di IER in edx
+	movw %di, %dx		// ind. di IER in edx
 	inb %dx, %al
-	orb $0x01, %al			// abilitazione dell' interfaccia a
-					//  generare interruzioni in ingresso
+	orb $0x01, %al		// abilitazione dell' interfaccia a
+				//  generare interruzioni in ingresso
 	outb %al, %dx
-
-	popq %rdx
-	popq %rax
 	ret
 
 // Fine dell' ingresso da un' interfaccia seriale
 	.global halt_inputse
 halt_inputse:
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di IER in edx
+	movw %di, %dx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfe, %al
-	outb %al, %dx			// disabilitazione della generazione
-					//  di interruzioni
-	popq %rdx
-	popq %rax
+	outb %al, %dx		// disabilitazione della generazione
+				//  di interruzioni
 	ret
 
 // Inizio dell' uscita su interfaccia seriale
 	.global go_outputse
 go_outputse:
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di IER in edx
+	movw %di, %dx		// ind. di IER in edx
 	inb %dx, %al
 	orb $0x02, %al
 	outb %al, %dx
-
-	popq %rdx
-	popq %rax
 	ret
 
 // Fine dell' uscita su interfaccia seriale
 	.global halt_outputse
 halt_outputse:
-	pushq %rax
-	pushq %rdx
-
-	movl 12(%esp), %edx		// ind. di IER in edx
+	movw %di, %dx		// ind. di IER in edx
 	inb %dx, %al
 	and $0xfd, %al
 	outb %al, %dx
-
-	popq %rdx
-	popq %rax
 	ret
 
 // Indirizzi delle porte delle interfacce seriali
@@ -375,9 +352,6 @@ halt_outputse:
 // Inizializzazione delle interfacce seriali
 	.global com_setup
 com_setup:
-	pushq %rax
-	pushq %rdx
-
 	movb $0x80, %al
 	movw $LCR1, %dx
 	outb %al, %dx
@@ -420,10 +394,6 @@ com_setup:
 	outb %al, %dx
 
 	inb %dx, %al
-
-	popq %rdx
-	popq %rax
-
 	ret
 
 .set KBD_WCB,	0x60
@@ -439,20 +409,18 @@ com_setup:
 go_inputkbd:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
 
-	movw 12(%ebp), %dx
+	movw %si, %dx
 	movb $KBD_WCB, %al
 	outb %al, %dx
-	movw 8(%ebp), %dx
+	movw %di, %dx
 	movb $0x61, %al
 	outb %al, %dx
-	movw 12(%ebp), %dx
+	movw %si, %dx
 1:	inb %dx, %al	
 	testb $0x02, %al
 	jnz 1b
 
-	popq %rax
 	leave
 	ret
 	
@@ -463,22 +431,19 @@ go_inputkbd:
 halt_inputkbd:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
 
-	movw 12(%ebp), %dx
+	movw %si, %dx
 	movb $KBD_WCB, %al
 	outb %al, %dx
-	movw 8(%ebp), %dx
+	movw %di, %dx
 	movb $0x60, %al
 	outb %al, %dx
-	movw 12(%ebp), %dx
+	movw %si, %dx
 1:	inb %dx, %al	 
 	testb $0x02, %al 
 	jnz 1b
 
-	popq %rax
 	leave
-	ret
 	ret
 
 // indirizzi delle porte relative alla gestione del cursore, nel controllore 
