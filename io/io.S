@@ -331,21 +331,21 @@ cursore:
 	pushq %rbp
 	movq %rsp, %rbp
 	movb  $80, %al
-	mulb  %dl
-	addb  %cl, %al
+	mulb  %cl
+	addb  %dl, %al
 	adcb  $0, %ah
 	movw  %ax, %cx 	
 	movw  %di, %dx
 	movb  $CUR_HIGH, %al
 	outb  %al, %dx
 	movw  %si, %dx
-	movb  %bh, %al
+	movb  %ch, %al
 	outb  %al, %dx
 	movw  %di, %dx
 	movb  $CUR_LOW, %al
 	outb  %al, %dx
 	movw  %si, %dx
-	movb  %bl, %al
+	movb  %cl, %al
 	outb  %al, %dx
 	leave
 	retq
