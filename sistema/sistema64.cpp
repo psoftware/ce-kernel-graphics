@@ -1661,7 +1661,7 @@ extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type
 	if (!aggiungi_pe(p, type) ) 
 		goto error2;
 
-	flog(LOG_INFO, "estern=%d entry=%x(%d) prio=%d liv=%d type=%d", p->id, f, a, prio, liv, type);
+	flog(LOG_INFO, "estern=%d entry=%p(%d) prio=%d liv=%d type=%d", p->id, f, a, prio, liv, (long)type);
 
 	return p->id;
 
