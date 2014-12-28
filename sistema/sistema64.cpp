@@ -1108,7 +1108,7 @@ addr crea(natl proc, addr ind_virt, int liv, natl priv)
 			}
 			set_IND_MASSA(dt, blocco);
 			dt = dt | BIT_RW;
-			if (liv == LIV_UTENTE) dt = dt | BIT_US;
+			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
 		swap2(proc, liv - 1, ind_virt, (priv == LIV_SISTEMA));
 	}
