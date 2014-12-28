@@ -521,31 +521,25 @@ halt_inputkbd:
 cursore:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %rax
-	pushq %rbx
-	pushq %rdx
 	movb  $80, %al
-	mulb  20(%ebp)
-	addb  16(%ebp), %al
+	mulb  %dl
+	addb  %cl, %al
 	adcb  $0, %ah
-	movw  %ax, %bx 	
-	movw  8(%ebp), %dx
+	movw  %ax, %cx 	
+	movw  %di, %dx
 	movb  $CUR_HIGH, %al
 	outb  %al, %dx
-	movw  12(%ebp), %dx
+	movw  %si, %dx
 	movb  %bh, %al
 	outb  %al, %dx
-	movw  8(%ebp), %dx
+	movw  %di, %dx
 	movb  $CUR_LOW, %al
 	outb  %al, %dx
-	movw  12(%ebp), %dx
+	movw  %si, %dx
 	movb  %bl, %al
 	outb  %al, %dx
-	popq %rdx
-	popq %rbx
-	popq %rax
 	leave
-	ret
+	retq
 
 // Inizializzazione dei gate per le primitive di IO
 	.global fill_io_gates
