@@ -1719,7 +1719,7 @@ extern "C" void cmain ()
 
 	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v4.02");
 	init_gdt();
-	flog(LOG_INFO, "gdt inizializzata!");
+	flog(LOG_INFO, "gdt inizializzata");
 
 	// (* Assegna allo heap di sistema HEAP_SIZE byte nel secondo MiB
 	heap_init((addr)HEAP_START, HEAP_SIZE);
@@ -1750,7 +1750,7 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "Caricato CR3");
 
 	ioapic_init();
-	flog(LOG_INFO, "APIC inizializzato!");
+	flog(LOG_INFO, "APIC inizializzato");
 	
 	// ( inizializzazione dello swap, che comprende la lettura
 	//   degli entry point di start_io e start_utente (vedi [10.4])
