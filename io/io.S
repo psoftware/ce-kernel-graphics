@@ -1,6 +1,9 @@
 #define ASM 1
 #include "costanti.h"
 
+param_err:
+	.asciz "indirizzo non valido: %p"
+
 // Chiama fill_gate con i parametri specificati
 .macro fill_io_gate gate off
 	movq $\gate, %rdi
@@ -10,41 +13,42 @@
 	call fill_gate
 .endm
 
-#.macro check_cavallo
-#	testl $0x80000000, %eax
-#	jnz 1f
-#	pushq %rax
-#	pushq $param_err
-#	pushq $2
-#	call flog
-#	addl $12, %esp
-#	int $tipo_ab
-#1:
-#
-#.endm
-#
-#.macro cavallo_di_troia offset
-#
-#	movl (\offset * 4) (%esp), %eax
-#	check_cavallo
-#.endm
-#
-#.macro cavallo_di_troia2 offset1 offset2
-#
-#	movl (\offset1 * 4) (%esp), %eax
-#	addl (\offset2 * 4) (%esp), %eax
-#	decl %eax
-#	check_cavallo
-#.endm
-#
-#.macro cavallo_di_troia3 offset1 offset2
-#
-#	movl (\offset1 * 4) (%esp), %eax
-#	movl (\offset2 * 4) (%esp), %ebx
-#	addl (%ebx), %eax
-#	decl %eax
-#	check_cavallo
-#.endm
+.macro check_cavallo
+	movq %rax, %rcx
+	movabs $0xffff000000000000, %rax
+	testq %rcx, %rax
+	jnz 1f
+	movq $2, %rdi
+	movabs $param_err, %rax
+	movq %rax, %rsi
+	call flog
+	int $TIPO_AB
+1:
+
+.endm
+
+.macro cavallo_di_troia reg
+
+	movq \reg, %rax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 reg1 reg2
+
+	movq \reg1, %rax
+	addq \reg2, %rax
+	decq %rax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia3 reg1 reg2
+
+	movq \reg2, %rax
+	shlq $9, %rax
+	addq \reg1, %rax
+	decq %rax
+	check_cavallo
+.endm
 
 .global _start, start
 _start:
@@ -377,47 +381,50 @@ fill_io_gates:
 
 	.extern c_readse_n
 a_readse_n:
-	//cavallo_di_troia 1
-	//cavallo_di_troia2 1 2
-	//cavallo_di_troia 3
+	cavallo_di_troia %rsi
+	cavallo_di_troia2 %rsi %rdx
+	cavallo_di_troia %rcx
 	call c_readse_n
 	iretq
 
 	.extern c_readse_ln
 a_readse_ln:
-	//cavallo_di_troia 1
-	//cavallo_di_troia 2
-	//cavallo_di_troia3 1 2
-	//cavallo_di_troia 3
+	cavallo_di_troia %rsi
+	cavallo_di_troia %rdx
+	cavallo_di_troia2 %rdx $4
+	cavallo_di_troia2 %rsi (%rdx)
+	cavallo_di_troia %rcx
 	call c_readse_ln
 	iretq
 
 	.extern c_writese_n
 a_writese_n:
-	//cavallo_di_troia 1
-	//cavallo_di_troia2 1 2
+	cavallo_di_troia %rdi
+	cavallo_di_troia2 %rdi %rdx
 	call c_writese_n
 	iretq
 
 	.extern c_writese_0	// non c_writese_ln, che va lo stesso
 a_writese_0:
-	//cavallo_di_troia 1
-	//cavallo_di_troia 2
-	//cavallo_di_troia3 1 2
+	cavallo_di_troia %rsi
+	cavallo_di_troia %rdx
+	cavallo_di_troia2 %rdx $4
+	cavallo_di_troia2 %rsi (%rdx)
 	call c_writese_0
 	iretq
 
 	.extern c_readconsole
 a_readconsole:
-	//cavallo_di_troia 0
-	//cavallo_di_troia 1
-	//cavallo_di_troia3 0 1
+	cavallo_di_troia %rdi
+	cavallo_di_troia %rsi
+	cavallo_di_troia2 %rsi $4
+	cavallo_di_troia2 %rdi (%rsi)
 	call c_readconsole
 	iretq
 
 	.extern c_writeconsole
 a_writeconsole:
-	//cavallo_di_troia 0
+	cavallo_di_troia %rdi
 	call c_writeconsole
 	iretq
 
@@ -514,33 +521,33 @@ dmawritehd_n:	int		$IO_TIPO_DMAHDW
 		ret
 .extern		c_readhd_n
 a_readhd_n:	# routine INT $io_tipo_hdr
-		//cavallo_di_troia 0
-		//cavallo_di_troia2 0 2
-		//cavallo_di_troia 3
+		cavallo_di_troia %rdi
+		cavallo_di_troia3 %rdi %rdx
+		cavallo_di_troia %rcx
 		call	c_readhd_n
 		iretq
 
 .EXTERN		c_writehd_n
 a_writehd_n:	# routine INT $io_tipo_hdw
-		//cavallo_di_troia 0
-		//cavallo_di_troia2 0 2
-		//cavallo_di_troia 3
+		cavallo_di_troia %rdi
+		cavallo_di_troia3 %rdi %rdx
+		cavallo_di_troia %rcx
 		call	c_writehd_n
 		iretq
 
 .EXTERN		c_dmareadhd_n
 a_dmareadhd_n: 	# routine INT $dma_tipob_r
-		//cavallo_di_troia 0
-		//cavallo_di_troia2 0 2
-		//cavallo_di_troia 3
+		cavallo_di_troia %rdi
+		cavallo_di_troia3 %rdi %rdx
+		cavallo_di_troia %rcx
 		call	c_dmareadhd_n
 		iretq
 
 .EXTERN		c_dmawritehd_n
 a_dmawritehd_n:	# routine INT $dma_tipob_w
-		//cavallo_di_troia 0
-		//cavallo_di_troia2 0 2
-		//cavallo_di_troia 3
+		cavallo_di_troia %rdi
+		cavallo_di_troia3 %rdi %rdx
+		cavallo_di_troia %rcx
 		call	c_dmawritehd_n
 		iretq
 
