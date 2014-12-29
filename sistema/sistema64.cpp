@@ -1142,18 +1142,18 @@ bool crea(natl proc, addr ind_virt, int liv, natl priv)
 			dt = dt | BIT_RW;
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
+		if (liv > 0)
+			swap2(proc, liv, ind_virt, (priv == LIV_SISTEMA));
 	}
 	return true;
 }
 
 bool crea_pagina(natl proc, addr ind_virt, natl priv)
 {
-	for (int i = 3; i >= 1; i--) {
+	for (int i = 3; i >= 0; i--) {
 		if (!crea(proc, ind_virt, i, priv))
 			return false;
-		swap2(proc, i, ind_virt, (priv == LIV_SISTEMA));
-	}
-	crea(proc, ind_virt, 0, priv);
+	}	
 	return true;
 }
 
