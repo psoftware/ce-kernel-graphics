@@ -408,10 +408,12 @@ extern "C" void c_pre_routine_pf(	// [6.4]
 //                         PAGINE FISICHE [6]                                  //
 /////////////////////////////////////////////////////////////////////////////////
 
+static const natq PF_FINESTRA_FM = 1;
+static const natq PF_RESIDENTE   = 2;
 
 struct des_pf {			// [6.3]
 	int	livello;	// 0=pagina, -1=libera
-	bool	residente;	// pagina residente o meno
+	natl	flags;		// pagina residente o meno
 	natl	processo;	// identificatore di processo
 	natl	contatore;	// contatore per le statistiche
 	natq	ind_massa;
@@ -688,7 +690,7 @@ bool sequential_map(addr tab4,addr phys_start, addr virt_start, natl npag, natq 
 				if (ppf == 0)
 					goto error;
 				ppf->livello = j - 1;
-				ppf->residente = true;
+				ppf->flags |= PF_FINESTRA_FM;
 				addr ntab = indirizzo_pf(ppf);
 				memset(ntab, 0, DIM_PAGINA);
 
@@ -1184,7 +1186,7 @@ addr crea_tab4()
 		panic("errore");
 	}
 	ppf->livello = 4;
-	ppf->residente = true;
+	ppf->flags |= PF_FINESTRA_FM;
 	addr tab4 = indirizzo_pf(ppf);
 	memset(tab4, 0, DIM_PAGINA);
 
@@ -1243,7 +1245,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	dpf_tab4 = alloca_pagina_fisica(p->id, 4, 0);
 	if (dpf_tab4 == 0) goto errore4;
 	dpf_tab4->livello = 4;
-	dpf_tab4->residente = true;
+	dpf_tab4->flags |= PF_FINESTRA_FM;
 	pdes_proc->cr3 = indirizzo_pf(dpf_tab4);
 	crea_tab4(pdes_proc->cr3);
 	// )
@@ -1538,7 +1540,7 @@ void swap(int liv, addr ind_virt)
 	}
 	// *)
 	nuovo_dpf->livello = liv;
-	nuovo_dpf->residente = false;
+	nuovo_dpf->flags = 0;
 	nuovo_dpf->processo = esecuzione->id;
 	nuovo_dpf->ind_virtuale = ind_virt;
 	nuovo_dpf->ind_massa = IM;
@@ -1555,24 +1557,54 @@ bool vietato(des_pf* ppf, natl proc, int liv, addr ind_virt)
 	return false;
 }
 
+void stat();
 des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale) // [6.4]
 {
 	des_pf *ppf, *dpf_vittima;
 	ppf = &dpf[0];
-	while ( (ppf < &dpf[N_DPF] && ppf->residente) ||
+	while ( (ppf < &dpf[N_DPF] && ppf->flags) ||
 			vietato(ppf, proc, liv, ind_virtuale))
 		ppf++;
 	if (ppf == &dpf[N_DPF]) return 0;
 	dpf_vittima = ppf;
-	//stat();
+	stat();
 	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
-		if (ppf->residente || vietato(ppf, proc, liv, ind_virtuale))
+		if (ppf->flags || vietato(ppf, proc, liv, ind_virtuale))
 			continue;
 		if (ppf->contatore < dpf_vittima->contatore ||
 		    (ppf->contatore == dpf_vittima->contatore && dpf_vittima->livello > ppf->livello))
 			dpf_vittima = ppf;
 	}
 	return dpf_vittima;
+}
+
+void stat()
+{
+	des_pf *ppf1, *ppf2;
+	addr ff1, ff2;
+	bool bitA;
+
+	for (natq i = 0; i < N_DPF; i++) {
+		ppf1 = &dpf[i];
+		if (ppf1->livello < 1 || ppf1->flags & PF_FINESTRA_FM)
+			continue;
+		ff1 = indirizzo_pf(ppf1);
+		for (int j = 0; j < 512; j++) {
+			natq& des = get_entry(ff1, j);
+			if (!extr_P(des))
+				continue;
+			bitA = extr_A(des);
+			set_A(des, false);
+			ff2 = extr_IND_FISICO(des);
+			ppf2 = descrittore_pf(ff2);
+			if (ppf2->flags)
+				continue;
+			ppf2->contatore >>= 1;
+			if (bitA)
+				ppf2->contatore |= 0x80000000;
+		}
+	}
+	invalida_TLB();
 }
 
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
@@ -1583,7 +1615,8 @@ des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
 	natq e = get_des(proc, livello + 1, ind_virt);
 	natq m = extr_IND_MASSA(e);
 	ppf->livello = livello;
-	ppf->residente = residente;
+	if (residente)
+		ppf->flags |= PF_RESIDENTE;
 	ppf->processo = proc;
 	ppf->ind_virtuale = ind_virt;
 	ppf->ind_massa = m;
