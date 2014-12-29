@@ -16,6 +16,7 @@ int main()
 	natq start_utente = norm(((natq)I_UTN_C << 39UL) + 0x100);
 
 	ofstream startmk("start.mk");
+	startmk << "MEM=" << MEM_TOT/MiB << endl;
 	startmk << hex;
 	startmk << "START_IO=0x"      << start_io << endl;
 	startmk << "START_UTENTE=0x"  << start_utente << endl;

@@ -1,4 +1,5 @@
 #!/bin/bash
+source start.mk
 
 [ -n "$QEMU" ] || {
 	QEMU=qemu-system-x86_64
@@ -24,9 +25,9 @@ fi
 	-kernel build/boot 		\
 	-initrd build/sistema64	\
 	-drive file=.swap,cache=unsafe  \
+	-m $MEM				\
 	$hdc                  		\
 	$output 	      		\
 	$CUSTOM				\
 	-no-reboot 	      		|
 util/show_log.pl
-	

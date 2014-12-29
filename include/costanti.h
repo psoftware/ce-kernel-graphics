@@ -19,7 +19,7 @@
 #define DIM_PAGINA		4096UL
 #define MAX_PRD			16
 #define DIM_USR_HEAP		(1*MiB)
-#define DIM_USR_STACK		(64*KiB)
+#define DIM_USR_STACK		(10*MiB)
 #define DIM_SYS_STACK		(4*KiB)
 #define DIM_BLOCK		512
 // )
