@@ -2033,7 +2033,6 @@ natq alloca_blocco()
 	natl i = 0;
 	natq risu = 0;
 	natq vecsize = ceild(swap_dev.sb.blocks, sizeof(natl) * 8);
-	static natb pagina_di_zeri[DIM_PAGINA] = { 0 };
 
 	// saltiamo le parole lunghe che contengono solo zeri (blocchi tutti occupati)
 	while (i < vecsize && swap_dev.free[i] == 0) i++;
@@ -2042,9 +2041,6 @@ natq alloca_blocco()
 		swap_dev.free[i] &= ~(1UL << pos);
 		risu = pos + sizeof(natl) * 8 * i;
 	} 
-	if (risu) {
-		scrivi_swap(pagina_di_zeri, risu);
-	}
 	return risu;
 }
 
