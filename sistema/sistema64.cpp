@@ -283,15 +283,14 @@ extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
 	const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
 	if (sev > MAX_LOG) {
 		flog(LOG_WARN, "Livello di log errato: %d", sev);
-		//panic("abort");
+		abort_p();
 	}
 	const natb* l = (const natb*)lev[sev];
 	while (*l)
 		serial_o(*l++);
 	serial_o((natb)'\t');
 	natb idbuf[10];
-	//snprintf((char*)idbuf, 10, "%d", esecuzione->id);
-	snprintf((char*)idbuf, 10, "%d", 0);
+	snprintf((char*)idbuf, 10, "%d", esecuzione->id);
 	l = idbuf;
 	while (*l)
 		serial_o(*l++);
