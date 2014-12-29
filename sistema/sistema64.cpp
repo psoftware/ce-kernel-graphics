@@ -517,7 +517,7 @@ static inline natq dim_pag(int liv)
 static inline addr base(addr a, int liv)
 {
 	natq v = (natq)a;
-	natq mask = dim_pag(liv) - 1;
+	natq mask = dim_pag(liv + 1) - 1;
 	return (addr)(v & ~mask);
 }
 
