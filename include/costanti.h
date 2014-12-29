@@ -10,18 +10,15 @@
 // )
 
 // ( varie dimensioni
-#define KiB			1024U
+#define KiB			1024UL
 #define MiB			(1024*KiB)
-#define GiB			(1024*Mib)
-#define MEM_TOT			(16*MiB)
-#define DIM_M1			(5*MiB)
-#define DIM_M2			(MEM_TOT - DIM_M1)
+#define GiB			(1024*MiB)
+#define MEM_TOT			(256*MiB)
 #define DIM_DESP                236     // descrittore di processo
 #define MAX_SEM			4096
-#define DIM_PAGINA		4096U
+#define DIM_PAGINA		4096UL
 #define MAX_PRD			16
-#define N_DPF			(DIM_M2 / DIM_PAGINA)
-#define DIM_USR_HEAP		(256*KiB)
+#define DIM_USR_HEAP		(1*MiB)
 #define DIM_USR_STACK		(64*KiB)
 #define DIM_SYS_STACK		(4*KiB)
 #define DIM_BLOCK		512
@@ -98,15 +95,15 @@
 #define I_SIS_P		1
 #define I_MIO_C		2
 #define I_PCI_C		3
-#define I_UTN_C       510
-#define I_UTN_P	      511
+#define I_UTN_C       256
+#define I_UTN_P	      384
 
 #define N_SIS_C		1
 #define N_SIS_P		1
 #define N_MIO_C		1
 #define N_PCI_C		1
-#define N_UTN_C		1
-#define N_UTN_P		1
+#define N_UTN_C	      128
+#define N_UTN_P	      127
 // )
 
 // (* log di sistema

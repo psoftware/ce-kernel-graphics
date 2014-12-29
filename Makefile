@@ -1,9 +1,8 @@
 START_BOOT=	 0x0000000000100100
 START_SISTEMA=   0x0000000000200100
-START_IO=        0x0000010000000100
-START_UTENTE=	 0xffffff0000000100
-SWAP_SIZE=	 20M
+SWAP_SIZE=	 80M
 SWAP=		 swap.img
+include start.mk
 
 LIBCE ?= $(HOME)/CE
 
@@ -131,7 +130,7 @@ util/fswap.o: include/costanti.h util/swap.h util/fswap.cpp
 util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
 	g++ -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
 
-build/creatimg: util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
+build/creatimg: include/costanti.h util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 	g++ -g -o build/creatimg util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
@@ -153,3 +152,9 @@ build:
 
 utente/prog:
 	mkdir -p $@
+
+build/mkstart: include/costanti.h util/mkstart.cpp
+	g++ -g -Iinclude -o build/mkstart util/mkstart.cpp
+
+start.mk: include/costanti.h include/tipo.h build/mkstart
+	build/mkstart

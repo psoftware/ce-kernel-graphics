@@ -751,6 +751,9 @@ salta_a_main:
 // sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
+.global		fine_codice_sistema
+fine_codice_sistema:
+		.quad etext
 	.global esecuzione
 esecuzione: 
 	.quad 0
@@ -814,6 +817,7 @@ des_tss:
 end_gdt:
 
 
+.bss
 .balign 16
 idt:
 	// spazio per 256 gate
@@ -827,6 +831,3 @@ stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
-.global		fine_codice_sistema
-fine_codice_sistema:
-		.quad etext

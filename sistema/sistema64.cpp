@@ -16,7 +16,9 @@ const natq HEAP_START = 1024 * 1024U;
 extern "C" natq start;
 const natq HEAP_SIZE = (natq)&start - HEAP_START;
 
-
+natq N_DPF;
+natq DIM_M1;
+natq DIM_M2;
 /////////////////////////////////////////////////////////////////////////////////
 //                     PROCESSI [4]                                            //
 /////////////////////////////////////////////////////////////////////////////////
@@ -419,7 +421,7 @@ struct des_pf {			// [6.3]
 	};
 };
 
-des_pf dpf[N_DPF];	// vettore di descrittori di pagine fisiche [9.3]
+des_pf* dpf;		// vettore di descrittori di pagine fisiche [9.3]
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2 [9.3]
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera [9.3]
 
@@ -445,7 +447,13 @@ addr indirizzo_pf(des_pf* ppf)
 bool init_dpf()
 {
 
-	prima_pf_utile = (addr)(DIM_M1);
+	N_DPF = (MEM_TOT - 5*MiB) / (DIM_PAGINA + sizeof(des_pf));
+	natq m1 = 5*MiB + N_DPF * sizeof(des_pf);
+	DIM_M1 = (m1 + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
+	DIM_M2 = MEM_TOT - DIM_M1;
+	dpf = (des_pf*)(5*MiB);
+
+	prima_pf_utile = (addr)DIM_M1;
 
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
@@ -1161,7 +1169,7 @@ bool crea_pila(natl proc, natb *bottom, natq size, natl priv)
 
 addr carica_pila(natl proc, natb *bottom, natq size)
 {
-	des_pf *dp;
+	des_pf *dp = 0;
 	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
 		dp = swap2(proc, 0, ind, true);
 	return (addr)((natq)indirizzo_pf(dp) + DIM_PAGINA);
