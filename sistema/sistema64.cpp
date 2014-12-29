@@ -1568,18 +1568,9 @@ des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale) // [6.4]
 	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
 		if (ppf->residente || vietato(ppf, proc, liv, ind_virtuale))
 			continue;
-		switch (ppf->livello) {
-		case 0:
-			if (ppf->contatore < dpf_vittima->contatore ||
-			    (ppf->contatore == dpf_vittima->contatore &&
-			    		dpf_vittima->livello > 0))
-				dpf_vittima = ppf;
-			break;
-		default:
-			if (ppf->contatore < dpf_vittima->contatore) 
-				dpf_vittima = ppf;
-			break;
-		}
+		if (ppf->contatore < dpf_vittima->contatore ||
+		    (ppf->contatore == dpf_vittima->contatore && dpf_vittima->livello > ppf->livello))
+			dpf_vittima = ppf;
 	}
 	return dpf_vittima;
 }
