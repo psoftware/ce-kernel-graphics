@@ -30,21 +30,21 @@
 
 .macro carica_registri
 
-	popq %rax
-	popq %rcx
-	popq %rdx
-	popq %rbx
-	popq %rsi
-	popq %rdi
-	popq %rbp
-	popq %r8
-	popq %r9
-	popq %r10
-	popq %r11
-	popq %r12
-	popq %r13
-	popq %r14
 	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %r11
+	popq %r10
+	popq %r9
+	popq %r8
+	popq %rbp
+	popq %rdi
+	popq %rsi
+	popq %rbx
+	popq %rdx
+	popq %rcx
+	popq %rax
 
 .endm
 
@@ -557,6 +557,7 @@ int_tipo_pf:
 	movq 128(%rsp), %rsi // eip
 	call c_pre_routine_pf
 	carica_registri
+	addq $8, %rsp
 	iretq
 
 .global readCR2

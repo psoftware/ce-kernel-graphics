@@ -320,21 +320,22 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 {
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
-	if (tipo == 14) {
-		addr CR2 = readCR2();
-		flog(LOG_WARN, "CR2=   %p",CR2);
-		addr tab = readCR3();
-		for (int i = 4; i >= 1; i--) {
-			flog(LOG_WARN, "tab%d: %p", i, tab);
-			natl idx = i_tab(CR2, i);
-			natq e = get_entry(tab, idx);
-			flog(LOG_WARN, "tab%d[%d] = %8x", i, idx, e);
-			if (!extr_P(e))
-				break;
-			tab = extr_IND_FISICO(e);
-		}
-	}
-	
+	abort_p();
+	//if (tipo == 14) {
+	//	addr CR2 = readCR2();
+	//	flog(LOG_WARN, "CR2=   %p",CR2);
+	//	addr tab = readCR3();
+	//	for (int i = 4; i >= 1; i--) {
+	//		flog(LOG_WARN, "tab%d: %p", i, tab);
+	//		natl idx = i_tab(CR2, i);
+	//		natq e = get_entry(tab, idx);
+	//		flog(LOG_WARN, "tab%d[%d] = %8x", i, idx, e);
+	//		if (!extr_P(e))
+	//			break;
+	//		tab = extr_IND_FISICO(e);
+	//	}
+	//}
+	//
 }
 // (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
 //   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
@@ -363,6 +364,7 @@ struct pf_error {
 // (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
 extern "C" addr fine_codice_sistema; 
 // *)
+void c_routine_pf();
 extern "C" void c_pre_routine_pf(	// [6.4]
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -396,9 +398,8 @@ extern "C" void c_pre_routine_pf(	// [6.4]
 	// *)
 	
 
-	//c_routine_pf();
+	c_routine_pf();
 }
-
 
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -1117,43 +1118,53 @@ extern "C" void init_gdt();
 
 natq alloca_blocco();
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente);
-addr crea(natl proc, addr ind_virt, int liv, natl priv)
+bool crea(natl proc, addr ind_virt, int liv, natl priv)
 {
-	natq& dt = get_des(proc, liv, ind_virt);
+	natq& dt = get_des(proc, liv + 1, ind_virt);
 	bool bitP = extr_P(dt);
 	if (!bitP) {
 		natl blocco = extr_IND_MASSA(dt);
 		if (!blocco) {
 			if (! (blocco = alloca_blocco()) ) {
 				flog(LOG_ERR, "swap pieno");
-				panic("spazio nello swap esaurito");
+				return false;
 			}
 			set_IND_MASSA(dt, blocco);
 			set_ZERO(dt, true);
 			dt = dt | BIT_RW;
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
-		swap2(proc, liv - 1, ind_virt, (priv == LIV_SISTEMA));
 	}
-	return extr_IND_FISICO(dt);
+	return true;
 }
 
-addr crea_pagina(natl proc, addr ind_virt, natl priv)
+bool crea_pagina(natl proc, addr ind_virt, natl priv)
 {
-	addr ret;
-	for (int i = 4; i >= 0; i--)
-		ret = crea(proc, ind_virt, i, priv);
-	return ret;
+	for (int i = 3; i >= 1; i--) {
+		if (!crea(proc, ind_virt, i, priv))
+			return false;
+		swap2(proc, i, ind_virt, (priv == LIV_SISTEMA));
+	}
+	crea(proc, ind_virt, 0, priv);
+	return true;
 }
 
-addr crea_pila(natl proc, natb *bottom, natl size, natl priv)
+bool crea_pila(natl proc, natb *bottom, natq size, natl priv)
 {
 	size = (size + (DIM_PAGINA - 1)) & ~(DIM_PAGINA - 1);
 
-	addr ind_fisico;
 	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
-		ind_fisico = crea_pagina(proc, (addr)ind, priv);
-	return ind_fisico;
+		if (!crea_pagina(proc, (addr)ind, priv))
+			return false;
+	return true;
+}
+
+addr carica_pila(natl proc, natb *bottom, natq size)
+{
+	des_pf *dp;
+	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
+		dp = swap2(proc, 0, ind, true);
+	return (addr)((natq)indirizzo_pf(dp) + DIM_PAGINA);
 }
 
 
@@ -1189,6 +1200,7 @@ void crea_tab4(addr dest)
 	copy_des(pdir, dest, I_UTN_C, N_UTN_C);
 }
 
+void rilascia_tutto(addr tab4, natl i, natl n);
 proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
@@ -1219,8 +1231,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	p->puntatore = 0;
 	// )
 
-	// ( creazione del direttorio del processo (vedi [10.3]
-	//   e la funzione "carica()")
+	// ( creazione della tab4 del processo (vedi [10.3]
 	dpf_tab4 = alloca_pagina_fisica(p->id, 4, 0);
 	if (dpf_tab4 == 0) goto errore4;
 	dpf_tab4->livello = 4;
@@ -1230,7 +1241,11 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	// )
 
 	// ( creazione della pila sistema (vedi [10.3]).
-	pila_sistema = crea_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK, LIV_SISTEMA);
+	if (!crea_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK, LIV_SISTEMA))
+		goto errore5;
+	pila_sistema = carica_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK);
+	if (pila_sistema == 0)
+		goto errore6;
 	// )
 
 	if (liv == LIV_UTENTE) {
@@ -1295,10 +1310,8 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 
 	return p;
 
-#if 0
-errore6:	rilascia_tutto(indirizzo_pf(dpf_direttorio), i_sistema_privato, ntab_sistema_privato);
-errore5:	rilascia_pagina_fisica(dpf_direttorio);
-#endif
+errore6:	rilascia_tutto(indirizzo_pf(dpf_tab4), I_SIS_P, N_SIS_P);
+errore5:	rilascia_pagina_fisica(dpf_tab4);
 errore4:	dealloca(p);
 errore3:	rilascia_tss(identifier);
 errore2:	dealloca(pdes_proc);
@@ -1478,6 +1491,53 @@ bool scollega(des_pf* ppf)	// [6.4][10.5]
 	set_P(e, false);
 	invalida_entrata_TLB(ppf->ind_virtuale);
 	return occorre_salvare;	// [10.5]
+}
+
+void swap(int liv, addr ind_virt); // [6.4]
+void c_routine_pf()	// [6.4][10.2]
+{
+	addr ind_virt = readCR2();
+	flog(LOG_DEBUG, "pf at %p", ind_virt);
+
+	for (int i = 3; i >= 0; i--) {
+		natq d = get_des(esecuzione->id, i + 1, ind_virt);
+		bool bitP = extr_P(d);
+		if (!bitP)
+			swap(i, ind_virt);
+	}
+}
+
+void swap(int liv, addr ind_virt)
+{
+	// "ind_virt" e' l'indirizzo virtuale non tradotto
+	// carica una tabella delle pagine o una pagina
+	des_pf* nuovo_dpf = alloca_pagina_fisica_libera();
+	if (nuovo_dpf == 0) {
+		panic("memoria esaurita");
+		//des_pf* dpf_vittima = scegli_vittima(tipo, ind_virt);
+		//bool occorre_salvare = scollega(dpf_vittima);
+		//if (occorre_salvare)
+		//	scarica(dpf_vittima);
+		//nuovo_dpf = dpf_vittima;
+	}
+	natq des = get_des(esecuzione->id, liv + 1, ind_virt);
+	natl IM = extr_IND_MASSA(des);
+	// (* non tutto lo spazio virtuale e' disponibile
+	if (!IM) {
+		flog(LOG_WARN, "indirizzo %p fuori dallo spazio virtuale allocato",
+				ind_virt);
+		rilascia_pagina_fisica(nuovo_dpf);
+		abort_p();
+	}
+	// *)
+	nuovo_dpf->livello = liv;
+	nuovo_dpf->residente = false;
+	nuovo_dpf->processo = esecuzione->id;
+	nuovo_dpf->ind_virtuale = ind_virt;
+	nuovo_dpf->ind_massa = IM;
+	nuovo_dpf->contatore  = 0;
+	carica(nuovo_dpf);
+	collega(nuovo_dpf);
 }
 
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
