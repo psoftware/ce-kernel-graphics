@@ -510,14 +510,14 @@ static inline addr norm(addr a)
 
 static inline natq dim_pag(int liv)
 {
-	natq v = 1UL << ((liv- 1) * 9 + 12);
+	natq v = 1UL << ((liv - 1) * 9 + 12);
 	return v;
 }
 
 static inline addr base(addr a, int liv)
 {
 	natq v = (natq)a;
-	natq mask = dim_pag(liv+ 1) - 1;
+	natq mask = dim_pag(liv) - 1;
 	return (addr)(v & ~mask);
 }
 
@@ -1505,7 +1505,6 @@ void swap(int liv, addr ind_virt); // [6.4]
 void c_routine_pf()	// [6.4][10.2]
 {
 	addr ind_virt = readCR2();
-	flog(LOG_DEBUG, "pf at %p", ind_virt);
 
 	for (int i = 3; i >= 0; i--) {
 		natq d = get_des(esecuzione->id, i + 1, ind_virt);
@@ -1515,18 +1514,19 @@ void c_routine_pf()	// [6.4][10.2]
 	}
 }
 
+des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // [6.4]
 void swap(int liv, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
 	// carica una tabella delle pagine o una pagina
 	des_pf* nuovo_dpf = alloca_pagina_fisica_libera();
 	if (nuovo_dpf == 0) {
-		panic("memoria esaurita");
-		//des_pf* dpf_vittima = scegli_vittima(tipo, ind_virt);
-		//bool occorre_salvare = scollega(dpf_vittima);
-		//if (occorre_salvare)
-		//	scarica(dpf_vittima);
-		//nuovo_dpf = dpf_vittima;
+		des_pf* dpf_vittima =
+			scegli_vittima(esecuzione->id, liv, ind_virt);
+		bool occorre_salvare = scollega(dpf_vittima);
+		if (occorre_salvare)
+			scarica(dpf_vittima);
+		nuovo_dpf = dpf_vittima;
 	}
 	natq des = get_des(esecuzione->id, liv + 1, ind_virt);
 	natl IM = extr_IND_MASSA(des);
@@ -1546,6 +1546,43 @@ void swap(int liv, addr ind_virt)
 	nuovo_dpf->contatore  = 0;
 	carica(nuovo_dpf);
 	collega(nuovo_dpf);
+}
+
+bool vietato(des_pf* ppf, natl proc, int liv, addr ind_virt)
+{
+	if (ppf->livello > liv && ppf->processo == proc &&
+	    base(ppf->ind_virtuale, ppf->livello) == base(ind_virt, ppf->livello))
+		return true;
+	return false;
+}
+
+des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale) // [6.4]
+{
+	des_pf *ppf, *dpf_vittima;
+	ppf = &dpf[0];
+	while ( (ppf < &dpf[N_DPF] && ppf->residente) ||
+			vietato(ppf, proc, liv, ind_virtuale))
+		ppf++;
+	if (ppf == &dpf[N_DPF]) return 0;
+	dpf_vittima = ppf;
+	//stat();
+	for (ppf++; ppf < &dpf[N_DPF]; ppf++) {
+		if (ppf->residente || vietato(ppf, proc, liv, ind_virtuale))
+			continue;
+		switch (ppf->livello) {
+		case 0:
+			if (ppf->contatore < dpf_vittima->contatore ||
+			    (ppf->contatore == dpf_vittima->contatore &&
+			    		dpf_vittima->livello > 0))
+				dpf_vittima = ppf;
+			break;
+		default:
+			if (ppf->contatore < dpf_vittima->contatore) 
+				dpf_vittima = ppf;
+			break;
+		}
+	}
+	return dpf_vittima;
 }
 
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)

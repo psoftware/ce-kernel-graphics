@@ -13,7 +13,7 @@
 #define KiB			1024UL
 #define MiB			(1024*KiB)
 #define GiB			(1024*MiB)
-#define MEM_TOT			(256*MiB)
+#define MEM_TOT			(8*MiB)
 #define DIM_DESP                236     // descrittore di processo
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096UL
