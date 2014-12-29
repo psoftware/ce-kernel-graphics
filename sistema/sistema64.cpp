@@ -337,6 +337,68 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 	}
 	
 }
+// (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
+//   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
+//   significativi specificano piu' precisamente il motivo per cui si e' 
+//   verificato un page fault. Il significato dei bit e' il seguente:
+//   - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
+//   di protezione: il processore si trovava a livello utente e la pagina (o la 
+//   tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
+//   tabella erano assenti (bit P = 0)
+//   - write: l'accesso che ha causato il page fault era in scrittura (non 
+//   implica che la pagina non fosse scrivibile)
+//   - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
+//   utente (non implica che la pagina fosse invece di livello sistema)
+//   - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
+//   avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
+//   tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
+struct pf_error {
+	natq prot  : 1;
+	natq write : 1;
+	natq user  : 1;
+	natq res   : 1;
+	natq pad   : 60; // bit non significativi
+};
+// *)
+
+// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
+extern "C" addr fine_codice_sistema; 
+// *)
+extern "C" void c_pre_routine_pf(	// [6.4]
+	// (* prevediamo dei parametri aggiuntivi:
+		pf_error errore,	/* vedi sopra */
+		addr rip		/* ind. dell'istruzione che ha causato il fault */
+	// *)
+	)
+{
+	// (* il sistema non e' progettato per gestire page fault causati 
+	//   dalle primitie di nucleo (vedi [6.5]), quindi, se cio' si e' verificato, 
+	//   si tratta di un bug
+	if (rip < fine_codice_sistema || errore.res == 1) {
+		flog(LOG_ERR, "rip: %p, page fault a %p", rip, readCR2());
+		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
+			errore.prot  ? "protezione"	: "pag/tab assente",
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema",
+			errore.res   ? "bit riservato"	: "");
+		panic("page fault dal modulo sistema");
+	}
+	// *)
+	
+	// (* l'errore di protezione non puo' essere risolto: il processo ha 
+	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
+	//    sistema)
+	if (errore.prot == 1) {
+		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", rip, readCR2(),
+			errore.write ? "scrittura"	: "lettura",
+			errore.user  ? "da utente"	: "da sistema");
+		abort_p();
+	}
+	// *)
+	
+
+	//c_routine_pf();
+}
 
 
 
@@ -1638,9 +1700,10 @@ bool init_pe()
 }
 // )
 
-extern "C" void c_panic()
+extern "C" void c_panic(const char *msg)
 {
-	flog(LOG_WARN, "PANIC");
+	flog(LOG_WARN, "PANIC: %s", msg);
+	end_program();
 }
 
 extern "C" addr c_trasforma(addr ind_virt)

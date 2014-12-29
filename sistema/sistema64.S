@@ -552,15 +552,12 @@ prot_fault:
 // - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale
 // non tradotto che ha generato il fault
 int_tipo_pf:
-	//salva_registri
-	//movq 120(%rsp), %rsi // errore
-	//movq 128(%rsp), %rdi // eip
-	//TODO call c_pre_routine_pf
-	//carica_registri
-	//addq $8, %rsp
-	//iretq
-	pushq $14
-	jmp comm_exc
+	salva_registri
+	movq 120(%rsp), %rdi // errore
+	movq 128(%rsp), %rsi // eip
+	call c_pre_routine_pf
+	carica_registri
+	iretq
 
 .global readCR2
 readCR2:
@@ -829,3 +826,6 @@ stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
+.global		fine_codice_sistema
+fine_codice_sistema:
+		.quad etext
