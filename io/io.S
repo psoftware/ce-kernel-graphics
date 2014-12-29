@@ -14,9 +14,9 @@ param_err:
 .endm
 
 .macro check_cavallo
-	movq %rax, %rcx
+	movq %rax, %rdx
 	movabs $0xffff000000000000, %rax
-	testq %rcx, %rax
+	testq %rdx, %rax
 	jnz 1f
 	movq $2, %rdi
 	movabs $param_err, %rax
