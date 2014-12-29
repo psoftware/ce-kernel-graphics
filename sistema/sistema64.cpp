@@ -1397,8 +1397,7 @@ void rilascia_ric(addr tab, int liv, natl i, natl n)
 			addr sub = extr_IND_FISICO(dt);
 			if (liv > 1)
 				rilascia_ric(sub, liv - 1, 0, 512);
-			else
-				rilascia_pagina_fisica(descrittore_pf(sub));
+			rilascia_pagina_fisica(descrittore_pf(sub));
 		} else {
 			natl blocco = extr_IND_MASSA(dt);
 			dealloca_blocco(blocco);
