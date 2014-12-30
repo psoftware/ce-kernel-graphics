@@ -17,10 +17,10 @@ process big9 body big_c(9), 10, LIV_UTENTE;
 
 const int N = 9000000;
 const int B_MSG_SIZE = 100;
-unsigned int values[N];
 
 process_body big_c(int a)
 {
+	unsigned int values[N];
 	char buf[B_MSG_SIZE];
 	char *ptr;
 	ptr = convint(a, buf);
@@ -33,7 +33,7 @@ process_body big_c(int a)
 	copy(": ora li sommo", ptr);
 	writeconsole(buf);
 	unsigned int sum = 0;
-	for (int i = 0; i < N; i++) {
+	for (unsigned int i = 0; i < N; i++) {
 		if (values[i] != i) {
 			ptr = convint(a, buf);
 			copy(": ERRORE!", ptr);
