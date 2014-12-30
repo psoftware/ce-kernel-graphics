@@ -13,14 +13,17 @@
 #define KiB			1024UL
 #define MiB			(1024*KiB)
 #define GiB			(1024*MiB)
-#define MEM_TOT			(8*MiB)
+
 #define DIM_DESP                236     // descrittore di processo
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096UL
 #define MAX_PRD			16
+
+#define MEM_TOT			(8*MiB)
 #define DIM_USR_HEAP		(1*MiB)
 #define DIM_USR_STACK		(10*MiB)
 #define DIM_SYS_STACK		(4*KiB)
+#define DIM_SWAP		(20*MiB)
 #define DIM_BLOCK		512
 // )
 

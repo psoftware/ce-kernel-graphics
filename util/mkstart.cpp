@@ -17,6 +17,7 @@ int main()
 
 	ofstream startmk("start.mk");
 	startmk << "MEM=" << MEM_TOT/MiB << endl;
+	startmk << "SWAP_SIZE=" << DIM_SWAP << endl;
 	startmk << hex;
 	startmk << "START_IO=0x"      << start_io << endl;
 	startmk << "START_UTENTE=0x"  << start_utente << endl;

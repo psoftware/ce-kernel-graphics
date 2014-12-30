@@ -1,6 +1,5 @@
 START_BOOT=	 0x0000000000100100
 START_SISTEMA=   0x0000000000200100
-SWAP_SIZE=	 80M
 SWAP=		 swap.img
 include start.mk
 
@@ -125,7 +124,7 @@ build/creatimg: include/costanti.h util/creatimg.o util/elf32.o util/elf64.o uti
 	g++ -g -o build/creatimg util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
-$(SWAP):
+$(SWAP): start.mk
 	truncate -s $(SWAP_SIZE) $(SWAP)
 
 .PHONY: swap clean reset
