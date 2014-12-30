@@ -484,13 +484,15 @@ void rilascia_pagina_fisica(des_pf* ppf)
 	pagine_libere = ppf;
 }
 
+des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // [6.4]
+bool scollega(des_pf* ppf);	// [6.4][10.5]
+void scarica(des_pf* ppf); // [6.4]
 des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 {
 	des_pf *ppf = alloca_pagina_fisica_libera();
 	if (ppf == 0) {
-					panic("NO MORE PF :(" ); //TODO SWAP
-		//if ( (ppf = scegli_vittima2(proc, tipo, ind_virt)) && scollega(ppf) )
-		//	scarica(ppf);
+		if ( (ppf = scegli_vittima(proc, livello, ind_virt)) && scollega(ppf) )
+			scarica(ppf);
 	}
 	return ppf;
 }
@@ -1516,7 +1518,6 @@ void c_routine_pf()	// [6.4][10.2]
 	}
 }
 
-des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // [6.4]
 void swap(int liv, addr ind_virt)
 {
 	// "ind_virt" e' l'indirizzo virtuale non tradotto
