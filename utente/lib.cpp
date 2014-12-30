@@ -48,6 +48,18 @@ int printf(const char *fmt, ...)
 	return l;
 }
 
+int sprintf(char *buf, natq size, const char *fmt, ...)
+{
+	va_list ap;
+	int l;
+
+	va_start(ap, fmt);
+	l = vsnprintf(buf, size, fmt, ap);
+	va_end(ap);
+
+	return l;
+}
+
 char pause_buf[1];
 natl pause_len = 1;
 void pause()
