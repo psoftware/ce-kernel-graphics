@@ -1116,8 +1116,7 @@ extern "C" void ioapic_reset()
 // )
 
 // timer
-extern natl ticks;
-extern natl clocks_per_usec;
+extern volatile natl ticks;
 extern "C" void attiva_timer(natl count);
 const natl DELAY = 59659;
 
@@ -1443,6 +1442,8 @@ extern "C" void c_abort_p()
 extern "C" void c_driver_td(void)
 {
 	richiesta *p;
+
+	ticks++;
 
 	if(p_sospesi != 0)
 	{

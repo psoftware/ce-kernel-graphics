@@ -721,10 +721,7 @@ pronti:
 
 	.global		ticks
 ticks:		
-	.long 0
-	.global		clocks_per_usec
-clocks_per_usec:
-		.long 1
+	.quad 0
 	.global ioapic
 ioapic:
 	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
