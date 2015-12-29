@@ -28,7 +28,7 @@ int line_needed = 0;
  * Stampa di un messaggio di errore in presenza di un errore nel parsing
  *  ed uscita dal programma
  */
-inline void atteso(const char *msg, char c)
+void atteso(const char *msg, char c)
 {
 	char buf[256];
 
@@ -66,8 +66,8 @@ void errore(const char *msg)
  * Legge il carattere successivo dall' ingresso
  */
 void emetti_line();
-inline void emetti(const char *t);
-inline void leggi_car()
+void emetti(const char *t);
+void leggi_car()
 {
 	look = fgetc(input);
 	if(look == '\n') {
@@ -88,18 +88,18 @@ inline void leggi_car()
 /*
  * Salta i caratteri di spaziatura letti
  */
-inline void salta_spazi()
+void salta_spazi()
 {
 	while(isspace(look))
 		leggi_car();
 }
 
-inline void copia_car();
+void copia_car();
 
 /*
  * Salta un commento (riportandolo sull' uscita)
  */
-inline void salta_commento()
+void salta_commento()
 {
 	copia_car();
 	leggi_car();
@@ -131,7 +131,7 @@ inline void salta_commento()
  * Legge l' identificatore successivo (comprende il carattere look attuale),
  *  lo lascia in nome e avanza
  */
-inline void leggi_nome(int salta)
+void leggi_nome(int salta)
 {
 	int i = 0;
 
@@ -156,7 +156,7 @@ inline void leggi_nome(int salta)
  * Legge il numero successivo e lascia la stringa che lo rappresenta in nome,
  *  si comporta come leggi_nome
  */
-inline void leggi_numero(int salta)
+void leggi_numero(int salta)
 {
 	int i = 0;
 
@@ -180,7 +180,7 @@ inline void leggi_numero(int salta)
 /*
  * Verifica che look sia uguale a c ed avanza
  */
-inline void trova(char c, int salta)
+void trova(char c, int salta)
 {
 	if(look != c)
 		atteso(0, c);
@@ -193,7 +193,7 @@ inline void trova(char c, int salta)
 /*
  * Verifica che nome sia uguale a n ed avanza
  */
-inline void trova_nome(const char *n, int salta)
+void trova_nome(const char *n, int salta)
 {
 	leggi_nome(0);
 	if(strcmp(nome, n))
@@ -205,7 +205,7 @@ inline void trova_nome(const char *n, int salta)
 /*
  * Copia look sull' uscita
  */
-inline void copia_car()
+void copia_car()
 {
 	fprintf(output, "%c", look);
 }
@@ -213,7 +213,7 @@ inline void copia_car()
 /*
  * Copia nome sull' uscita
  */
-inline void copia_nome()
+void copia_nome()
 {
 	fprintf(output, "%s", nome);
 }
@@ -221,7 +221,7 @@ inline void copia_nome()
 /*
  * Scrive sull' uscita t
  */
-inline void emetti(const char *t)
+void emetti(const char *t)
 {
 	fprintf(output, "%s", t);
 }
@@ -236,7 +236,7 @@ void emetti_line()
 /*
  * Alloca s bytes, verificando la presenza di errori
  */
-inline void *xmalloc(size_t s)
+void *xmalloc(size_t s)
 {
 	void *rv;
 
