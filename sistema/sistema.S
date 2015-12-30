@@ -1,16 +1,13 @@
 // sistema.s
 
+
 #define ASM 1
 #include "mboot.h"
 #include "costanti.h"
 
-
 ////////////////////////////////////////////////////////////////
 // MACRO                                                      //
 ////////////////////////////////////////////////////////////////
-// definiamo delle macro che verranno utilizzate piu' avanti
-
-// salvataggio dei registri in pila
 .macro salva_registri
 
 	pushq %rax
@@ -20,12 +17,27 @@
 	pushq %rsi
 	pushq %rdi
 	pushq %rbp
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
 
 .endm
 
-// caricamento dei registri dalla pila (duale rispetto a salva_registri)
 .macro carica_registri
 
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %r11
+	popq %r10
+	popq %r9
+	popq %r8
 	popq %rbp
 	popq %rdi
 	popq %rsi
@@ -36,103 +48,193 @@
 
 .endm
 
-// salvataggio dei registri in pila per chiamate di sistema che ritornano
-//  un valore in eax, che non viene salvato
-.macro salva_reg_rit
+//////////////////////////////////////////////////////////////////////////
+// AVVIO                                                                  //
+//////////////////////////////////////////////////////////////////////////
 
-	pushq %rcx
-	pushq %rdx
+#define STACK_SIZE                      0x8000
+
+
+
+
+.globl  _start, start
+_start:				// entry point
+start:
+	movq $(stack + STACK_SIZE), %rsp
+	call init_idt
+	movabs $__init_array_start, %rax
+	movq %rax, %rbx
+1:	cmpq $__init_array_end, %rbx
+	je 2f
+	call *(%rbx)
+	addq $8, %rbx
+	jmp 1b
+2:	call cmain			// il resto dell'inizializzazione
+	hlt				// e' scritto in C++
+
+
+
+.set CR3,100
+.set RAX,CR3+8
+.set RCX,CR3+16
+.set RDX,CR3+24
+.set RBX,CR3+32
+.set RSP,CR3+40
+.set RBP,CR3+48
+.set RSI,CR3+56
+.set RDI,CR3+64
+.set R8, CR3+80
+.set R9, CR3+88
+.set R10,CR3+96
+.set R11,CR3+104
+.set R12,CR3+112
+.set R13,CR3+120
+.set R14,CR3+128
+.set R15,CR3+136
+
+.macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e 
+					//lascia il risultato in %rbx
+	movl 8(%eax), %ebx
+	shlq $32, %rbx      //bit 63:32 nella parte alta di %rbx
+    movb 7(%eax), %bh	// bit 31:24 della base in %bh
+    movb 4(%eax), %bl	// bit 23:16 della base in %bl
+    shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
+	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
+	
+.endm
+
+salva_stato:
 	pushq %rbx
-	pushq %rsi
-	pushq %rdi
-	pushq %rbp
-
-.endm
-
-
-// ripristino dei registri (tutti meno eax) dalla pila (duale rispetto a
-//  salva_reg_rit)
-.macro carica_reg_rit
-
-	popq %rbp
-	popq %rdi
-	popq %rsi
-	popq %rbx
-	popq %rdx
-	popq %rcx
-
-.endm
-
-// copia i parametri dalla pila utente (o sistema) 
-// alla pila sistema, da usare nelle a_primitive
-// n_long: numero di parole lunghe da copiare
-// n_reg: numero di registri salvati in cima alla pila
-//        (questa informazione e' necessaria, in 
-//         quanto copia_param verra' chiamata dopo
-//         il salvataggio dei registri in pila, e tale
-//         numero varia da primitiva a primitiva)
-.data
-.global possibili_pf
-possibili_pf:
-	.long 1f
-1:
-.text
-
-.macro copia_param n_long n_reg
-
-        movl $\n_reg, %ecx
-        movw 4(%esp, %ecx, 4), %dx      // CS in DX
-        andb $0b00000011, %dl	        // CPL del chiamante in CL
-	cmpb $LIV_SISTEMA, %dl		// se sistema, non c'e' stato cambio pila
-        je 1f                           // copia da pila sistema 
-        movl 12(%esp, %ecx, 4), %eax    // vecchio ESP (della pila utente) in EAX
-        leal 4(%eax), %esi		// indirizzo del primo parametro in ESI
-        jmp 2f
-1:	leal 16(%esp, %ecx, 4), %esi	// indirizzo del primo parametro in ESI
-2:	movl $\n_long, %eax		// creazione in pila dello spazio per
-        shll $2, %eax			//  la copia dei parametri
-        subl %eax, %esp
-        leal (%esp), %edi		// indirizzo della destinazione del
-					//  primo parametro in EDI
-        movl $\n_long, %ecx
-        cld
-.data
-	.long 3f
-.text
-3:	rep movsl				// copia dei parametri
-
-.endm
-
-// DL livello
-.macro check_cavallo
-	cmpb $LIV_SISTEMA, %dl
-	je 1f
-	testl $0x80000000, %eax
-	jnz 1f
 	pushq %rax
-	pushq $param_err
-	pushq $2
-	call flog
-	addl $12, %esp
-	int $tipo_ab
-1:
 
-.endm
+	movq esecuzione,%rax
+	movq $0, %rbx
+	movw (%rax),%bx
+	leaq gdt(%ebx), %rax
+	estrai_base
 
-.macro cavallo_di_troia offset
+	popq %rax
 
-	movl (\offset * 4) (%esp), %eax
-	check_cavallo
-.endm
+	movq %rax, RAX(%rbx)
+	movq %rcx, RDX(%rbx)
+	movq %rdx, RDX(%rbx)
+	popq %rax
+	movq %rax, RBX(%rbx)
+	movq %rsp, %rax
+	addq $8, %rax   //non includo l'indirizzo di ritorno
+	movq %rax, RSP(%rbx)
+	movq %rbp, RBP(%rbx)
+	movq %rsi, RSI(%rbx)
+	movq %rdi, RDI(%rbx)
+	movq %r8,  R8 (%rbx)
+	movq %r9,  R9 (%rbx)
+	movq %r10, R10(%rbx)
+	movq %r11, R11(%rbx)
+	movq %r12, R12(%rbx)
+	movq %r13, R13(%rbx)
+	movq %r14, R14(%rbx)
+	movq %r15, R15(%rbx)
+	
+	ret
 
-.macro cavallo_di_troia2 offset1 offset2
 
-	movl (\offset1 * 4) (%esp), %eax
-	addl (\offset2 * 4) (%esp), %eax
-	decl %eax
-	check_cavallo
-.endm
+carica_stato:
+	movq esecuzione, %rdx
+	movq $0, %rbx
+	movw (%rdx), %bx
+	movq %rbx, %rcx
+	leaq gdt(%ebx), %rax
+	estrai_base
+	andb $0b11111101, 5(%rax)
+	ltr %cx
 
+	popq %rcx   //ind di ritorno, va messo nella nuova pila
+
+	movq CR3(%rbx), %rax
+	movq %rax, %cr3
+
+	movq RSP(%rbx), %rsp    //cambio pila
+	pushq %rcx              //rimetto l'indirizzo di ritorno
+
+	movq RCX(%rbx), %rcx
+	movq RDI(%rbx), %rdi
+	movq RSI(%rbx), %rsi
+	movq RBP(%rbx), %rbp
+	movq RDX(%rbx), %rdx
+	movq RAX(%rbx), %rax
+	movq R8(%rbx), %r8
+	movq R9(%rbx), %r9
+	movq R10(%rbx), %r10
+	movq R11(%rbx), %r11
+	movq R12(%rbx), %r12
+	movq R13(%rbx), %r13
+	movq R14(%rbx), %r14
+	movq R15(%rbx), %r15
+	movq RBX(%rbx), %rbx
+
+	retq
+
+
+.set p_dpl_type, 0b10001001 //p=1,dpl=00,type=1001=tss ready
+.set pres_bit,   0b10000000
+	.global alloca_tss
+alloca_tss:
+	movq $des_tss, %rdx
+iter_tss:
+	testb $pres_bit, 5(%rdx)
+	jz set_entry_tss
+	addq $16, %rdx
+	cmpq $end_gdt, %rdx
+	jne iter_tss
+	movq $0, %rax
+	jmp end_tss
+set_entry_tss:
+	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
+	movq %rdi, %rax
+	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
+	shrq $16,%rax
+	movb %al, 4(%rdx)	//[39:32] = base[24:16]
+	movb $p_dpl_type, 5(%rdx)	//[47:40] = p_dpl_type
+	movb $0, 6(%rdx)	//[55:48] = 0
+	movb %ah, 7(%rdx)	//[63:56] = base[31:24]
+	shrq $16, %rax
+	movl %eax, 8(%rdx) //[95:64] = base[63:32]
+	movl $0, 12(%rdx)	//[127:96] = 0
+
+	movq %rdx,%rax
+	subq $gdt, %rax
+end_tss:
+	retq
+
+	
+	.global rilascia_tss
+rilascia_tss:
+	movq $0, gdt(%rdi)
+	addq $8, %rdi
+	movq $0, gdt(%rdi)
+	retq
+
+// dato l'identificatore di un processo,
+// ne restituisce il puntatore al descrittore
+// (0 se non allocato)
+	.global des_p
+des_p:	
+	pushq %rbx
+	xorq %rbx, %rbx
+	leaq gdt(%rdi), %rax
+	testb $pres_bit, 5(%rax)
+	jz 1f
+	estrai_base
+1:	movq %rbx, %rax
+	popq %rbx
+	retq
+
+// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
+// eliminare la corrispondente traduzione dal TLB
+	.global invalida_entrata_TLB // [6.4]
+invalida_entrata_TLB:
+	invlpg (%rdi)
+	ret
 
 // Carica un gate della IDT
 // num: indice (a partire da 0) in IDT del gate da caricare
@@ -143,410 +245,18 @@ possibili_pf:
 //       motivi puramente estetici
 .macro carica_gate num routine dpl
 
-	pushq $\dpl
-	pushq $\routine
-	pushq $\num
-	call init_gate
-	addl $12, %esp
-
-.endm
-
-// campi in un descrittore di segmento
-.set PRES, 0b10000000
-.set NON_P, 0b00000000
-.set SEG_CODICE, 0b00011010
-.set SEG_DATI, 0b00010010
-.set SEG_TSS, 0b00001001
-.set G_PAGINA, 0b10000000
-.set G_BYTE, 0b00000000
-
-// Carica un descrittore della GDT
-// num: indice (a partire da 0) in GDT del descrittore da caricare
-// base: base del segmento
-// limite: campo limite (su 20 bit)
-// pres: bit di presenza (usare le costanti PRES e NON_P)
-// dpl: dpl del segmento (usare le costanti LIV_SISTEMA o LIV_UTENTE)
-// tipo: tipo del gate (usare le costanti SEG_CODICE, SEG_DATI o SEG_TSS)
-// gran: granularita' (usare le costanti G_PAGINA o G_BYTE)
-// NOTA: la macro si limita a chiamare la routine init_descrittore
-//       con gli stessi parametri. Verra' utilizzata per
-//       motivi puramente estetici
-.macro carica_descr num base limite pres dpl tipo gran
-
-/*	pushq $\gran
-	pushq $\tipo
-	pushq $\dpl
-	pushq $\pres
-	pushq $\limite
-	pushq $\base
-	pushq $\num
-	call  init_descrittore
-	addq $56, %rsp*/
-	
 	movq $\num, %rdi
-	movq $\base, %rsi
-	movq $\limite, %rdx
-	movq $\pres, %rcx
-	movq $\dpl, %r8
-	movq $\tipo, %r9
-	pushq $\gran
-	call init_descrittore
-	
-
-.endm
-
-// Estrae la base del segmento da un descrittore.
-// Si aspetta l'indirizzo del descrittore in %eax,
-// lascia la base del segmento in %ebx
-// NOTA: il formato dei descrittori di segmento dei 
-//       processori Intel x86, per motivi di compatibilita'
-//       con i processori Intel 286 (che erano a 16 bit),
-//       e' piu' complicato di quello visto a lezione.
-//       In particolare, i byte che compongono il campo base
-//       non sono consecutivi
-.macro estrai_base 
-
-        movb 7(%eax), %bh	// bit 31:24 della base in %bh
-        movb 4(%eax), %bl	// bit 23:16 della base in %bl
-        shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
-	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
-	
+	movq $\routine, %rsi
+	movq $\dpl, %rdx
+	call init_gate
 .endm
 
 
-//////////////////////////////////////////////////////////////////////////
-// AVVIO                                                                  //
-//////////////////////////////////////////////////////////////////////////
-// Il bootstrap loader attiva il modo protetto (per poter accedere agli
-// indirizzi di memoria principale superiori a 1MiB) e carica il sistema
-// in memoria, quindi salta alla prima
-// istruzione del sistema. Il bootstrap loader puo' anche passare
-// delle informazioni al sistema (tramite i registri e la memoria).
-//
-// In questo sistema usiamo lo standard multiboot, che definisce il formato che 
-// il file contentente il sistema deve rispettare e
-// il formato delle informazioni passate dal bootstrap loader al sistema.
-// Il formato del file contenente il sistema deve essere quello di un
-// normale file eseguibile, ma, nei primi 2*4KiB, deve contenere 
-// la struttura multiboot_header, definita piu' avanti. 
-// Il boot loader, prima di saltare alla prima istruzione del sistema
-// (l'entry point specificato nel file eseguibile), lascia nel registro
-// %eax un valore di riconoscimento e in %ebx l'indirizzo di una struttura
-// dati, contentente varie informazioni (in particolare, la quantita'
-// di memoria principale installata nel sistema, il dispositivo da cui
-// e' stato eseguito il bootstrap e l'indirizzo di memoria in cui sono
-// stati caricati gli eventuali moduli)
-     .text
-
-#define STACK_SIZE                      0x4000
-#define MULTIBOOT_HEADER_FLAGS         0x00000003
-
-
-     .globl  _start, start
-_start:				// entry point
-start:
-#1:	jmp 1b
-#     jmp     multiboot_entry	// scavalchiamo la struttra richiesta
-#     				// dal bootstrap loader, che deve
-#				// trovarsi verso l'inizio del file
-#
-#     .align  4
-#     // le seguenti informazioni sono richieste dal bootstrap loader
-#multiboot_header:
-#     .long   MULTIBOOT_HEADER_MAGIC 				// valore magico
-#     .long   MULTIBOOT_HEADER_FLAGS   				// flag
-#     .long   -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS) // checksum
-#
-#multiboot_entry:
-#     movl    %esp, save_esp
-#     movl    $(stack + STACK_SIZE), %esp // inizializziamo lo stack
-#
-#     pushf
-#     pushal
-#     pushl   %ds
-#     pushl   %es
-#     pushl   %fs
-#     pushl   %gs
-#     pushl   %ss
-#
-#     call    init_gdt
-#     sgdt    save_gdt
-#     lgdt    gdt_pointer		// carichiamo la nuova GDT
-#
-#     ljmp    $SEL_CODICE_SISTEMA, $qui	// ricarichiamo CS
-#qui:
-#     movw    $SEL_DATI_SISTEMA,   %cx   // e gli altri selettori
-#     movw    %cx, %ss
-#     movw    %cx, %ds
-#     movw    %cx, %es
-#     movw    $0,  %cx			// FS e GS non sono usati
-#     movw    %cx, %fs
-#     movw    %cx, %gs
-#
-#     movl    $0, %ebp			// azzeriamo il base pointer
-#					// (utile per capire dove finisce la 
-#					// lista dei frame di attivazione)
-#
-#     call    init_idt			// riempie i gate per le eccezioni
-#     sidt    save_idt
-#     lidt    idt_pointer		// carichiamo la nuova IDT
-#	
-#     pushl   $0				// resettiamo EFLAG
-#     popf				// N.B.: interrupt disabilitati
-#					// (perche', azzerando tutti i flag,
-#					// abbiamo azzerato anche IF)
-     jmp    cmain			// il resto dell'inizializzazione
-#     					// e' scritto in C++
-#     addl    $8, %esp     
-#	
-#     lidt   save_idt
-#     lgdt   save_gdt
-#     popl   %ss
-#     popl   %gs
-#     popl   %fs
-#     popl   %es
-#     popl   %ds
-#     popal
-#     popf
-#
-#     movl save_esp, %esp
-#     ret
-
-
-//////////////////////////////////////////////////////////////////
-// funzioni di utilita'						//
-//////////////////////////////////////////////////////////////////
-
-// stampa sulla seriale lo stack degli indirizzi di ritorno
-// attualmente in pila (utile per il debugging)
-stringa_backtrace:
-	.asciz "%x  "
-buf_backtrace:
-	.fill 80
-count_backtrace:
-	.long 0
-off_backtrace:
-	.long 0
-	.global backtrace
-backtrace:
-	pushq %rsi
-	pushq %rax
-
-	movl 12(%esp), %eax
-	movl %eax, off_backtrace
-
-	movl $20, count_backtrace
-	movl %ebp, %esi
-3:
-	cmpl $0, count_backtrace
-	je 2f
-	cmpl $0, %esi
-	je 2f
-	cmpl $0x80000000, %esi
-	jae 2f
-
-	pushq 4(%esi)
-	pushq $stringa_backtrace
-	pushq $3	// LOG_ERR
-	call flog
-	addl $12, %esp
-	
-	movl (%esi), %esi
-	decl count_backtrace
-	jmp 3b
-2:
-	popq %rax
-	popq %rsi
-	ret
-
-	
-
-// offset, all'interno della struttura des_proc, dei campi
-// destinati a contere i registri del processore
-.set EAX, 40
-.set ECX, 44
-.set EDX, 48
-.set EBX, 52
-.set ESP, 56
-.set EBP, 60
-.set ESI, 64
-.set EDI, 68
-.set ES, 72
-.set SS, 80 
-.set DS, 84
-.set FS, 88
-.set GS, 92
-
-.set CR3, 28
-
-.set FPU, 104
-
-// salva lo stato del processo corrente nel suo descrittore [4.8]
-salva_stato:
-        pushq %rbx
-	pushq %rax
-
-	movl esecuzione, %eax
-	movl $0, %ebx
-        movw (%eax), %bx		// esecuzione->identifier in ebx
-	shrl $3, %ebx			// trasformo selettore->indice
-        leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
-	estrai_base			// ind. TSS -> %ebx
-
-        popq %rax
-
-	movl %eax, EAX(%ebx)		// salvataggio dei registri
-	movl %ecx, ECX(%ebx)
-	movl %edx, EDX(%ebx)
-	popq %rax			// vecchio valore di %ebx in %eax
-	movl %eax, EBX(%ebx)
-	movl %esp, %eax
-	addl $4, %eax			// salviamo ind. rit. di salva_stato...
-	movl %eax, ESP(%ebx)		// ... prima di memorizzare %esp
-	movl %ebp, EBP(%ebx)
-	movl %esi, ESI(%ebx)
-	movl %edi, EDI(%ebx)
-	movw %es, ES(%ebx)
-	movw %ss, SS(%ebx)
-	movw %ds, DS(%ebx)
-	movw %fs, FS(%ebx)
-	movw %gs, GS(%ebx)
-
-	movw $SEL_DATI_SISTEMA, %ax		// selettori usati dal nucleo
-	movw %ax, %ds
-	movw %ax, %es
-	// ss contiene gia' il valore corretto
-	movw $0, %ax
-	movw %ax, %fs
-	movw %ax, %gs
-
-	fsave FPU(%ebx)
-
-	ret
-
-// carica lo stato del processo in esecuzione [4.8]
-carica_stato:
-        movl esecuzione, %edx
-	movl $0, %ebx
-        movw (%edx), %bx		// esecuzione->identifier in ebx
-	
-	movl %ebx, %ecx			
-	shrl $3, %ebx			// trasformo selettore->indice
-
-        leal gdt(, %ebx, 8), %eax       // ind. entrata della gdt relativa in eax
-	estrai_base			// ind. del TSS in %ebx
-        andl $0xfffffdff, 4(%eax)       // bit busy del TSS a zero
-
-       	ltr %cx				// nuovo valore in TR
-
-        frstor FPU(%ebx)
-
-	movw GS(%ebx), %ax		// ripristino dei registri
-	movw %ax, %gs
-	movw FS(%ebx), %ax
-	movw %ax, %fs
-	movw DS(%ebx), %ax
-	movw %ax, %ds
-	movw SS(%ebx), %ax
-	movw %ax, %ss
-	movw ES(%ebx), %ax
-	movw %ax, %es
-
-	popq %rcx                       // toglie dalla pila l' ind. di ritorno
-
-	movl CR3(%ebx), %eax		// cambio di direttorio
-	movq %rax, %cr3			// NOTA: siamo sicuri della continuita'
-					// dell'indirizzamento, in quanto il sistema
-					// e' mappato agli stessi indirizzi in tutti
-					// gli spazi di memoria
-
-	movl ESP(%ebx), %esp            // nuovo punt. di pila...
-	pushq %rcx			// salvataggio ind. di ritorno nella nuova pila
-
-	movl ECX(%ebx), %ecx
-	movl EDI(%ebx), %edi
-	movl ESI(%ebx), %esi
-	movl EBP(%ebx), %ebp
-	movl EDX(%ebx), %edx
-	movl EAX(%ebx), %eax
-	movl EBX(%ebx), %ebx
-
-	ret
-
-// carica la gdt
-// Utilizziamo il modello di memoria flat: usiamo solo 4 segmenti 
-// sovrapposti, grandi quanto tutto lo spazio di indirizzamento linerare (4GB)
-// Due segmenti (indici 1 e 2) servono per il livello di privilegio sistema
-// e due (indici 3 e 4) per il livello di privilegio utente.
-// Il segmento di indice 0 deve essere nullo.
-// A partire dal descrittore di indice 5 caricheremo i descrittori di segmento 
-// TSS, ognuno associato alla corrispondente struttura des_proc.
-// Usiamo il bit P di presenza nel descrittore per specificare quali 
-// descrittori sono effettivamente utilizzati.
-// Inizialmente, tutti i bit di presenza sono 0 e passeranno ad 1 quando 
-// verrano invocate le primitive activate_p e activate_pe
-init_gdt:
-	pushq %rbp
-	movq %rsp, %rbp
-	pushq %rdi
-	pushq %rcx
-	pushq %rax
-
-	// azzeriamo la gdt
-	movl $gdt, %edi
-	movl $0x4000, %ecx
-	movl $0, %eax
-	rep
-	stosl
-
-
-		//indice	base	limite	P	DPL		TIPO		
-	carica_descr	0	0	0	NON_P	0		0		0
-	carica_descr	1	0	0xfffff	PRES	LIV_SISTEMA	SEG_CODICE	G_PAGINA
-	carica_descr	2	0	0xfffff	PRES	LIV_SISTEMA	SEG_DATI	G_PAGINA
-	carica_descr	3	0	0xfffff	PRES	LIV_UTENTE	SEG_CODICE	G_PAGINA
-	carica_descr	4	0	0xfffff	PRES	LIV_UTENTE	SEG_DATI	G_PAGINA
-
-	popq %rax
-	popq %rcx
-	popq %rdi
-	leave
-	ret
-
-// Tipi delle primitive di sistema
-.set tipo_a, TIPO_A
-.set tipo_t, TIPO_T
-.set tipo_g, TIPO_G
-.set tipo_si, TIPO_SI
-.set tipo_w, TIPO_W
-.set tipo_s, TIPO_S
-.set tipo_ma, TIPO_MA
-.set tipo_mf, TIPO_MF
-.set tipo_d, TIPO_D
-.set tipo_re, TIPO_RE
-.set tipo_ep, TIPO_EP
-.set tipo_tra, TIPO_TRA
-
-// Tipi delle interruzioni usate per l' interfaccia con il modulo di IO
-.set tipo_ape, TIPO_APE
-.set tipo_wfi, TIPO_WFI
-.set tipo_va, TIPO_VA
-.set tipo_fg, TIPO_FG
-.set tipo_p, TIPO_P
-.set tipo_ab, TIPO_AB
-.set tipo_l,  TIPO_L
-
-// funzioni PCI
-.set tipo_pcif, TIPO_PCIF
-.set tipo_pcir, TIPO_PCIR
-.set tipo_pciw, TIPO_PCIW
-
-// carica la idt
+/ carica la idt
 // le prime 20 entrate sono definite dall'Intel, e corrispondono
-// alle possibili eccezioni. 
+// alle possibili eccezioni.
+.global init_idt
 init_idt:
-	pushq %rbp
-	movq %rsp, %rbp
 	//		indice		routine			dpl
 	// gestori eccezioni:
 	carica_gate	0 		divide_error 	LIV_SISTEMA
@@ -594,325 +304,171 @@ init_idt:
 	carica_gate	VETT_21		handler_21	LIV_SISTEMA
 	carica_gate	VETT_22		handler_22	LIV_SISTEMA
 	carica_gate	VETT_23		handler_23	LIV_SISTEMA
-	carica_gate	VETT_S		spurious	LIV_SISTEMA
-
-	// primitive utente
-	carica_gate	tipo_a		a_activate_p	LIV_UTENTE
-	carica_gate	tipo_t		a_terminate_p	LIV_UTENTE
-	carica_gate	tipo_si		a_sem_ini	LIV_UTENTE
-	carica_gate	tipo_w		a_sem_wait	LIV_UTENTE
-	carica_gate	tipo_s		a_sem_signal	LIV_UTENTE
-	carica_gate	tipo_d		a_delay		LIV_UTENTE
-	carica_gate	tipo_l		a_log		LIV_UTENTE
-	carica_gate	tipo_ep		a_end_program	LIV_SISTEMA
+	carica_gate	VETT_S		handler_24	LIV_SISTEMA
+	
+	//primitive
+	carica_gate	TIPO_A		a_activate_p	LIV_UTENTE
+	carica_gate	TIPO_T		a_terminate_p	LIV_UTENTE
+	carica_gate	TIPO_SI		a_sem_ini	LIV_UTENTE
+	carica_gate	TIPO_W		a_sem_wait	LIV_UTENTE
+	carica_gate	TIPO_S		a_sem_signal	LIV_UTENTE
+	carica_gate	TIPO_D		a_delay		LIV_UTENTE
+	carica_gate	TIPO_L		a_log		LIV_UTENTE
+	carica_gate	TIPO_EP		a_end_program	LIV_SISTEMA
 
 	// primitive per il livello I/O
-	carica_gate	tipo_ape	a_activate_pe	LIV_SISTEMA
-	carica_gate	tipo_wfi	a_wfi		LIV_SISTEMA
-	carica_gate	tipo_fg		a_fill_gate	LIV_SISTEMA
-	carica_gate	tipo_p		a_panic		LIV_SISTEMA
-	carica_gate	tipo_ab		a_abort_p	LIV_SISTEMA
-	carica_gate	tipo_tra	a_trasforma	LIV_SISTEMA
+	carica_gate	TIPO_APE	a_activate_pe	LIV_SISTEMA
+	carica_gate	TIPO_WFI	a_wfi		LIV_SISTEMA
+	carica_gate	TIPO_FG		a_fill_gate	LIV_SISTEMA
+	carica_gate	TIPO_P		a_panic		LIV_SISTEMA
+	carica_gate	TIPO_AB		a_abort_p	LIV_SISTEMA
+	carica_gate	TIPO_TRA	a_trasforma	LIV_SISTEMA
 
-	leave
+	lidt idt_pointer
 	ret
 
 // carica un gate nella IDT
 // parametri: (vedere la macro carica_gate)
 .global init_gate
-init_gate:
-	pushq %rbp
-	movq %rsp, %rbp
+init_gate: //rdi = indice nella idt; rsi = offset della routine; rdx = dpl
+	movq $idt, %r11
+	movq %rsi, %rax		// offset della routine
 
-	pushq %rbx
-	pushq %rcx
-	pushq %rax
-
-	movl $idt, %ebx
-	movl 8(%ebp), %ecx		// indice nella IDT
-	movl 12(%ebp), %eax		// offset della routine
-
-	movw %ax, (%ebx, %ecx, 8)  	// primi 16 bit dell'offset
-	movw $SEL_CODICE_SISTEMA, 2(%ebx, %ecx, 8)
+	shlq $4, %rdi	//indice moltiplicato la grandezza del gate (16)
+	movw %ax, (%r11, %rdi)  	// primi 16 bit dell'offset
+	movw $SEL_CODICE_SISTEMA, 2(%r11, %rdi)
 
 	movw $0, %ax
 	movb $0b10001110, %ah 	        // byte di accesso
 					// (presente, 32bit, tipo interrupt)
-	movb 16(%ebp), %al		// DPL
+	movb %dl, %al		// DPL
 	shlb $5, %al			// posizione del DPL nel byte di accesso
 	orb  %al, %ah			// byte di accesso con DPL in %ah
 	movb $0, %al			// la parte bassa deve essere 0
-	movl %eax, 4(%ebx, %ecx, 8)	// 16 bit piu' sign. dell'offset
+	movl %eax, 4(%r11, %rdi)	// 16 bit piu' sign. dell'offset
 					// e byte di accesso
+	shrq $32, %rax			//estensione a 64 bit dell'offset
+	movl %eax, 8(%r11,%rdi)
+	movl $0, 12(%r11,%rdi) 	//riservato
 
-	popq %rax
-	popq %rcx
-	popq %rbx
-	leave
 	ret
 
 
-// carica un descrittore di segmento in GDT
-// parametri: (vedere la macro carica_descr)
-.global init_descrittore
-init_descrittore:
-	pushq %rbp
-	movq %rsp, %rbp
 
-	pushq %rbx
-	pushq %rcx
-	pushq %rax
-	pushq %rdx
+	.global init_gdt
+init_gdt:
+	lgdt gdt_pointer
 
-	movl $gdt, %ebx
-	movl 8(%ebp), %ecx		// indice GDT -> %ecx
-	movl 16(%ebp), %edx		// limite -> %edx
-	movw %dx,  (%ebx, %ecx, 8)	// bit 15:00 limite -> 1a parola descr.
-	movw 12(%ebp), %ax		// bit 15:00 base -> %ax
-	movw %ax, 2(%ebx, %ecx, 8)	// -> 2a parola descr.
-	movb 14(%ebp), %al		// bit 23:16 base -> %al
-	orb  24(%ebp), %ah		// DPL
-	shlb $5, %ah			// posizione del DPL nel byte di accesso
-	orb  20(%ebp), %ah		// bit di presenza
-	orb  28(%ebp), %ah		// tipo
-	movw %ax, 4(%ebx, %ecx, 8)	// -> 3a parola descr.
-	movb 15(%ebp), %dh		// bit 31:24 base -> %dh
-	shrl $16, %edx			// bit 19:16 limite -> low nibble %dl
-	orb  $0b01000000, %dl		// operandi su 32 bit
-	orb  32(%ebp), %dl		// granularita'
-	movw %dx, 6(%ebx, %ecx, 8)	// -> 4a parola descr.
-	
-	popq %rdx
-	popq %rax
-	popq %rcx
-	popq %rbx
+	retq
 
-	leave
-	ret
+	.global goto_user
+goto_user:
+	call carica_stato
+	iretq
 
-// trova un descrittore di segmento TSS non ancora
-// utilizzato, e ne restituisce l'indice in %eax
-// (0 se tutti occupati)
-// lo stato occupato/libero del descrittore e' dato
-// dal valore del suo bit di presenza
+////////////////////////////////////////////////////////
+// a_primitive                                        //
+////////////////////////////////////////////////////////
+        .extern c_activate_p
+a_activate_p:	// routine int $tipo_a [4.6]
+	//cavallo_di_troia 0
+        call c_activate_p
+        iretq
 
-        .global alloca_tss
-alloca_tss:
-        pushq %rbp
-        movq %rsp, %rbp
-        pushq %rbx
-        pushq %rcx
+        .extern c_terminate_p
+a_terminate_p:	// routine int $tipo_t [4.6]
+	movq $terminate_stack_end, %rsp
+        call c_terminate_p
+	call carica_stato
+	iretq
 
-        movl $gdt, %ebx
-        movl $0, %eax
-        movl last_tss, %ecx
-1:
-        incl %ecx
-        andl $8191, %ecx
-        cmpl last_tss, %ecx
-        jne 2f
-        movl $0xFFFFFFFF, %eax
-        jmp 4f
-2:
-        testb $PRES, 5(%ebx, %ecx, 8)
-        jnz 1b
+	.extern c_sem_ini
+a_sem_ini:	// routine int $tipo_si [4.11]
+	call c_sem_ini
+	iretq
 
-        pushq $0                // gran. byte
-        pushq $SEG_TSS          // tipo
-        pushq $LIV_SISTEMA      // dpl
-        pushq $PRES             // bit presenza
-        pushq $(DIM_DESP - 1)   // limite
-        pushq 8(%ebp)           // base
-        pushq %rcx              // indice descr.
-        call  init_descrittore
-        addl $28, %esp
+	.extern c_sem_wait
+a_sem_wait:	// routine int $tipo_w [4.11][6.5]
+	call salva_stato
+	call c_sem_wait
+	call carica_stato
+	iretq
 
-        movl %ecx, last_tss
-        movl %ecx, %eax
-4:
-        popq %rcx
-        popq %rbx
-        leave
-        ret
+	.extern c_sem_signal
+a_sem_signal:	// routine int $tipo_s [4.11][6.5]
+	call salva_stato
+	call c_sem_signal
+	call carica_stato
+	iretq
+
+	.extern c_delay
+a_delay:	// routine int $tipo_d [4.16][6.5]
+	call salva_stato
+	call c_delay
+	call carica_stato
+	iretq
 
 
-// rende nuovamente libero un descrittore di segmento TSS
-// precedentemente occupato
-// parametri: indice in GDT del descrittore da rilasciare
-	.global rilascia_tss
-rilascia_tss:
-	pushq %rbp
-	movq %rsp, %rbp
-	pushq %rbx
-	pushq %rcx
-	pushq %rax
+//
+// Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
+//
 
-	movl 8(%ebp), %ecx
-	movl $gdt, %ebx
-	movb $PRES, %al
-	notb %al
-	andb %al, 5(%ebx, %ecx, 8)
+	.extern c_activate_pe
+a_activate_pe:
+	//cavallo_di_troia 0
+        call c_activate_pe
+	iretq
 
-	popq %rax
-	popq %rcx
-	popq %rbx
-	leave
-	ret
 
-// dato l'identificatore di un processo,
-// ne restituisce il puntatore al descrittore
-// (0 se non allocato)
-	.global des_p
-des_p:	
-	pushq %rbp
-	movq %rsp, %rbp
-	pushq %rbx
-	pushq %rcx
+a_wfi:		// routine int $tipo_wfi [7.3][9.1]
+	call salva_stato
+	call ioapic_send_EOI
+	call schedulatore
+	call carica_stato
+	iretq
 
-	movl $0, %ebx
-	movl $0, %ecx
-        movw 8(%ebp), %cx		// esecuzione->identifier in ebx
-	shrl $3, %ecx			// indice in %ebx
-        leal gdt(, %ecx, 8), %eax       // ind. entrata della gdt relativa in eax
-	testb $PRES, 5(%eax)
-	jz 1f
-	estrai_base			// ind. TSS -> %ebx
-1:
-	movl %ebx, %eax
+a_fill_gate:
+	call init_gate
+	iretq
 
-	popq %rcx
-	popq %rbx
-	leave
-	ret
+	.extern c_panic
+a_panic:	// routine int $tipo_p
+	call salva_stato
+	//cavallo_di_troia 1
+	call c_panic
+1:	nop
+	jmp 1b
 
-	.global invalida_TLB  // [6.6]
-invalida_TLB:
-	pushq %rax
-	movq %cr3, %rax
-	movq %rax, %cr3
-	popq %rax
-	ret
+	.extern c_abort_p
+a_abort_p:
+	movl $terminate_stack_end, %esp
+        call c_abort_p
+	call carica_stato
+	iretq
 
-// carica il registro cr3
-// parametri: indirizzo fisico del nuovo direttorio
-	.global loadCR3
-loadCR3:
-	pushq %rbp
-	movq %rsp, %rbp
-	pushq %rax
-
-	movq 8(%rbp), %rax
-	movq %rax, %cr3
-	
-	popq %rax
-	leave
-	ret
-
-// restituisce in %eax il contenuto di cr3
-	.global readCR3
-readCR3:
-	movq %cr3, %rax
-	ret
-
-// attiva la paginazione
-	.global attiva_paginazione
-attiva_paginazione:
-	pushq %rax
-
-	#movl $0, %eax
-	#movl %eax, %cr4
-	#movl %cr0, %eax
-	#orl $0x80000000, %eax
-	#movl %eax, %cr0
-
-	popq %rax
-	ret
-
-// disattiva la paginazione
-	.global disattiva_paginazione
-disattiva_paginazione:
-	pushq %rax
-
-	#movl %cr0, %eax
-	#andl $0x7FFFFFFF, %eax
-	#movl %eax, %cr0
-
-	popq %rax
-	ret
+	.extern c_trasforma
+a_trasforma:
+	call c_trasforma
+	iretq
+	.extern c_log
+a_log:
+	call salva_stato
+	//cavallo_di_troia 1
+	//cavallo_di_troia2 1 2
+	call c_log
+	call carica_stato
+	iretq
 
 a_end_program:
-	cli
-	movl shutdown_esp, %esp
-	movl shutdown_ebp, %ebp
-	call disattiva_paginazione
-	ret
-	
-
-// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
-// eliminare la corrispondente traduzione dal TLB
-	.global invalida_entrata_TLB // [6.4]
-invalida_entrata_TLB:
-	invlpg 4(%esp)
-	# non e' necessario predisporre e utilizzare EBP
-	ret
-	
-// trova efficientemente il primo bit a 0 nella doppia parola passata come 
-// parametro (usato nella realizzazione dell'allocatore a mappa di bit)
-	.global trova_bit
-trova_bit:
-	bsfl 4(%esp), %eax
-	ret
-
-//////////////////////////////////////////////////////////////////
-// hardware gestito direttamente dal nucleo: 			 //
-//  PIC, timer, console, swap					 //
-//////////////////////////////////////////////////////////////////
-
-// timer
-// registri dell'interfaccia di conteggio
-.set CWR,     0x43
-.set CTR_LSB, 0x40
-.set CTR_MSB, 0x40
-
-// attiva il timer di sistema
-// parametri: il valore da caricare nel registro CTR del timer
-	.global attiva_timer
-attiva_timer:
-	pushq %rbp
-	movq %rsp, %rbp
-        pushq %rax
-	
-	movb $0x36, %al
-	outb %al, $CWR
-	movl 8(%ebp), %eax
-	outb %al, $CTR_LSB
-	movb %ah, %al
-	outb %al, $CTR_MSB
-
-	pushq $0
-	pushq $2
-	call apic_set_MIRQ
-	addl $8, %esp
-
-        popq %rax
-	leave
-	ret
-
-	.global salta_a_main
-salta_a_main:
-	movl %esp, shutdown_esp
-	movl %ebp, shutdown_ebp
-	call carica_stato		// carichiamo tr
-	iret				// torniamo al chiamante "trasformati" in processo
-
-
+	lidt triple_fault_idt
+	int $1
 
 ////////////////////////////////////////////////////////////////
 // gestori delle eccezioni				       //
 ////////////////////////////////////////////////////////////////
-// alcune eccezioni lasciano in pila un ulteriore parola lunga
+// alcune eccezioni lasciano in pila un ulteriore quad
 // (il cui significato dipende dal tipo di eccezione)
-// Per uniforimita', facciamo eseguire una pushl $0 come
+// Per uniforimita', facciamo eseguire una pushq $0 come
 // prima istruzione di tutte le eccezioni che non prevedono
 // questa ulteriore parola lunga.
 // Inoltre, il trattamento di tutte le eccezioni e' simile:
@@ -985,31 +541,29 @@ prot_fault:
 	pushq $13
 	jmp comm_exc
 
-// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla 
-// per realizzare la memoria virtuale. Per far cio', invochiamo la routine 
+// l'eccezione di page fault la trattiamo a parte. Vogliamo, infatti, gestirla
+// per realizzare la memoria virtuale. Per far cio', invochiamo la routine
 // c_page_fault passandole tre parametri:
-// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale 
-// coppia ci permette di individuare l'istruzione che aveva causato il fault e 
-// di sapere se il fault si e' verificato mentre il processore era in stato 
-// utente o in stato sistema (se era in stato sistema, si tratta probabilmente 
+// - la coppia (cs, eip), salvata in pila del meccanismo di eccezione. Tale
+// coppia ci permette di individuare l'istruzione che aveva causato il fault e
+// di sapere se il fault si e' verificato mentre il processore era in stato
+// utente o in stato sistema (se era in stato sistema, si tratta probabilmente
 // di un bug nel nucleo, nel qual caso vogliamo fermare tutto)
-// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale 
+// - il contenuto del registro speciale %cr2, che contiene l'indirizzo virtuale
 // non tradotto che ha generato il fault
 int_tipo_pf:
 	salva_registri
-	movl 28(%esp), %eax // errore
-	movl 32(%esp), %ebx // eip
-	pushq %rbx
-	pushq %rax
+	movq 120(%rsp), %rdi // errore
+	movq 128(%rsp), %rsi // eip
 	call c_pre_routine_pf
-	addl $8, %esp
 	carica_registri
-	addl $4, %esp
-	iret
+	addq $8, %rsp
+	iretq
+
 .global readCR2
 readCR2:
 	movq %cr2, %rax
-	ret
+	retq
 
 fp_exc:
 	pushq $0
@@ -1032,505 +586,244 @@ simd_exc:
 
 
 comm_exc:
+	popq %rdi //tipo
+	popq %rsi //errore
+	popq %rdx //rip
+	popq %rcx //cs
+	popq %r8  //rflag
+	pushq %r8
+	pushq %rcx
+	pushq %rdx
 	call gestore_eccezioni
-	addl $8, %esp
 	jmp a_abort_p
-
-//////////////////////////////////////////////////////////
-// primitive richiamate dal nucleo stesso	        //
-//////////////////////////////////////////////////////////
-	.global sem_ini
-sem_ini:
-	int $tipo_si
-	ret
-
-	.global sem_wait
-sem_wait:
-	int $tipo_w
-	ret
-
-	.global activate_p
-activate_p:
-	int $tipo_a
-	ret
-
-	.global delay
-delay:
-	int $tipo_d
-	ret
-	
-	.global terminate_p
-terminate_p:
-	int $tipo_t
-	ret
-
-	.global panic
-panic:
-	int $tipo_p
-	ret
-
-	.global abort_p
-abort_p:
-	int $tipo_ab
-	ret
-
-	.global wfi
-wfi:
-	int $tipo_wfi
-	ret
-
-	.global end_program
-end_program:
-	int $tipo_ep
-	ret
 
 
 ////////////////////////////////////////////////////////
 // handler/driver                                     //
 ////////////////////////////////////////////////////////
 //
+
+
 // driver del timer	[4.16]
 	.extern c_driver_td
 driver_td:
-	call salva_stato	// interruzioni disabilitate
+	call salva_stato
 	call c_driver_td
-	call apic_send_EOI
+	call ioapic_send_EOI
 	call carica_stato
-	iret
 
+	iretq
 
-// handler generici	([7.1])
-	.extern proc_esterni
-handler_1:
+.macro handler n
+handler_\n: 
 	call salva_stato
 	call inspronti
-
-	movl $1, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_2:
-	call salva_stato
-	call inspronti
-
-	movl $2, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
+	
+	movq $\n, %rcx
+	movq a_p(, %rcx, 8), %rax
+	movq %rax, esecuzione
 
 	call carica_stato
-	iret
-
-handler_3:
-	call salva_stato
-	call inspronti
-
-	movl $3, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_4:
-	call salva_stato
-	call inspronti
-
-	movl $4, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_5:
-	call salva_stato
-	call inspronti
-
-	movl $5, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_6:
-	call salva_stato
-	call inspronti
-
-	movl $6, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_7:
-	call salva_stato
-	call inspronti
-
-	movl $7, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_8:
-	call salva_stato
-	call inspronti
-
-	movl $8, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_9:
-	call salva_stato
-	call inspronti
-
-	movl $9, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_10:
-	call salva_stato
-	call inspronti
-
-	movl $10, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_11:
-	call salva_stato
-	call inspronti
-
-	movl $11, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_12:
-	call salva_stato
-	call inspronti
-
-	movl $12, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_13:
-	call salva_stato
-	call inspronti
-
-	movl $13, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_14:
-	call salva_stato
-	call inspronti
-
-	movl $14, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_15:
-	call salva_stato
-	call inspronti
-
-	movl $15, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_16:
-	call salva_stato
-	call inspronti
-
-	movl $16, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_17:
-	call salva_stato
-	call inspronti
-
-	movl $17, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_18:
-	call salva_stato
-	call inspronti
-
-	movl $18, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_19:
-	call salva_stato
-	call inspronti
-
-	movl $19, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_20:
-	call salva_stato
-	call inspronti
-
-	movl $20, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_21:
-	call salva_stato
-	call inspronti
-
-	movl $21, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_22:
-	call salva_stato
-	call inspronti
-
-	movl $22, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-handler_23:
-	call salva_stato
-	call inspronti
-
-	movl $23, %ecx
-	movl a_p(, %ecx, 4), %eax
-	movl %eax, esecuzione
-
-	call carica_stato
-	iret
-
-sp_msg:
-	.asciz "interrupt spurio"
-spurious:
-	salva_registri
-	pushq $sp_msg
-	pushq $0 // LOG_DEBUG
-	call flog
-	addl $4, %esp
-	carica_registri
-	iret
-
-////////////////////////////////////////////////////////
-// a_primitive                                        //
-////////////////////////////////////////////////////////
-        .extern c_activate_p
-a_activate_p:	// routine int $tipo_a [4.6]
-	salva_reg_rit
-        copia_param 4 6		// salva_registri ha inserito 6 long in pila
-	cavallo_di_troia 0
-        call c_activate_p
-        addl $16, %esp
-        carica_reg_rit
-        iret
-
-        .extern c_terminate_p
-a_terminate_p:	// routine int $tipo_t [4.6]
-	movl $terminate_stack_end, %esp
-        call c_terminate_p
-	call carica_stato
-	iret
-
-	.extern c_sem_ini
-a_sem_ini:	// routine int $tipo_si [4.11]
-	salva_reg_rit
-	copia_param 1 6
-	call c_sem_ini
-	addl $4, %esp
-	carica_reg_rit
-	iret
-
-	.extern c_sem_wait
-a_sem_wait:	// routine int $tipo_w [4.11][6.5]
-	call salva_stato
-	copia_param 1 0	// ricopiamento del parametro sem
-	call c_sem_wait
-	//addl $4, %esp	// ripulitura pila (non necessaria)
-	call carica_stato
-	iret
-
-	.extern c_sem_signal
-a_sem_signal:	// routine int $tipo_s [4.11][6.5]
-	call salva_stato
-	copia_param 1 0	// ricopiamento del parametro sem
-	call c_sem_signal
-	//addl $4, %esp	// ripulitura pila (non necessaria)
-	call carica_stato
-	iret
-
-	.extern c_delay
-a_delay:	// routine int $tipo_d [4.16][6.5]
-	call salva_stato
-	copia_param 1 0	// ricopiamento del parametro n
-	call c_delay
-	// addl $4, %esp // ripulitura pila (non necessaria)
-	call carica_stato
-	iret
-
-
-//
-// Interfaccia offerta al modulo di IO, inaccessibile dal livello utente
-//
-
-	.extern c_activate_pe
-a_activate_pe:
-	salva_reg_rit
-        copia_param 5 6		// salva_registri ha inserito 7 long in pila
-	cavallo_di_troia 0
-        call c_activate_pe
-        addl $20, %esp	
-	carica_reg_rit
-	iret
-
-
-a_wfi:		// routine int $tipo_wfi [7.3][9.1]
-	call salva_stato
-	call apic_send_EOI
-	call schedulatore
-	call carica_stato
-	iret
-
-a_fill_gate:
-	salva_registri
-	copia_param 3 7
-	call init_gate
-	addl $12, %esp
-	carica_registri
-	iret
-
-	.extern c_panic
-a_panic:	// routine int $tipo_p
-	call salva_stato
-	copia_param 1 0
-	cavallo_di_troia 1
-	call c_panic
-1:	nop
-	jmp 1b
-
-	.extern c_abort_p
-a_abort_p:
-	movl $terminate_stack_end, %esp
-        call c_abort_p
-	call carica_stato
-	iret
-
-	.extern c_trasforma
-a_trasforma:
-	salva_reg_rit
-	copia_param 1 6
-	call c_trasforma
-	addl $4, %esp
-	carica_reg_rit
-	iret
-	.extern c_log
-a_log:
-	call salva_stato
-	copia_param 3 0
-	cavallo_di_troia 1
-	cavallo_di_troia2 1 2
-	call c_log
-	addl $12, %esp
-	call carica_stato
-	iret
+	iretq
+.endm
+
+handler 1
+handler 2
+handler 3
+handler 4
+handler 5
+handler 6
+handler 7
+handler 8
+handler 9
+handler 10
+handler 11
+handler 12
+handler 13
+handler 14
+handler 15
+handler 16
+handler 17
+handler 18
+handler 19
+handler 20
+handler 21
+handler 22
+handler 23
+handler 24
+
+	.global invalida_TLB  // [6.6]
+invalida_TLB:
+	movq %cr3, %rax
+	movq %rax, %cr3
+	retq
+
+// carica il registro cr3
+// parametri: indirizzo fisico del nuovo direttorio
+	.global loadCR3
+loadCR3:
+	movq %rdi, %cr3
+	retq
+
+// restituisce in %eax il contenuto di cr3
+	.global readCR3
+readCR3:
+	movq %cr3, %rax
+	retq
+/
+
+//TIMER
+.set CWR,     0x43
+.set CTR_LSB, 0x40
+.set CTR_MSB, 0x40
+
+// attiva il timer di sistema
+// parametri: il valore da caricare nel registro CTR del timer
+.extern ioapic_set_MIRQ
+	.global attiva_timer
+attiva_timer:
+	movb $0x36, %al
+	outb %al, $CWR
+	movl %edi, %eax
+	outb %al, $CTR_LSB
+	movb %ah, %al
+	outb %al, $CTR_MSB
+
+	movq $2, %rdi
+	call ioapic_unmask
+
+	retq
+
+//////////////////////////////////////////////////////////
+// primitive richiamate dal nucleo stesso	        //
+//////////////////////////////////////////////////////////
+	.global sem_ini
+sem_ini:
+	int $TIPO_SI
+	ret
+
+	.global sem_wait
+sem_wait:
+	int $TIPO_W
+	ret
+
+	.global activate_p
+activate_p:
+	int $TIPO_A
+	ret
+
+	.global delay
+delay:
+	int $TIPO_D
+	ret
+	
+	.global terminate_p
+terminate_p:
+	int $TIPO_T
+	ret
+
+	.global panic
+panic:
+	int $TIPO_P
+	ret
+
+	.global abort_p
+abort_p:
+	int $TIPO_AB
+	ret
+
+	.global wfi
+wfi:
+	int $TIPO_WFI
+	ret
+
+	.global end_program
+end_program:
+	int $TIPO_EP
+	ret
+
+	.global salta_a_main
+salta_a_main:
+	call carica_stato		// carichiamo tr
+	iretq				// torniamo al chiamante "trasformati" in processo
 
 ////////////////////////////////////////////////////////////////
 // sezione dati: tabelle e stack			      //
 ////////////////////////////////////////////////////////////////
 .data
-end_possibili_pf:
-		.long 0
-.global		ticks
-ticks:		.long 0
-.global		clocks_per_usec
-clocks_per_usec:
-		.long 1
 .global		fine_codice_sistema
 fine_codice_sistema:
-		.long etext
-.global		 esecuzione	// [4.6]
-esecuzione:	.long 0	
-.global		pronti		// [4.6]
-pronti:	.long 0
-.global		processi	// [4.7]
-processi:	.long 0
+		.quad etext
+	.global esecuzione
+esecuzione: 
+	.quad 0
+	.global pronti
+pronti: 
+	.quad 0
+
+	.global		ticks
+ticks:		
+	.long 0
+	.global		clocks_per_usec
+clocks_per_usec:
+		.long 1
+	.global ioapic
+ioapic:
+	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
+	.quad 0x00000000FEC00010	//ioapic.IOWIN
+pEOI:	.quad 0x00000000FEE000B0	//ioapic.EOI
+	.byte 0x10		//ioapic.RTO
+	.space 3, 0
+
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
 gdt_pointer:
-	.word 0xffff		 	// limite della GDT
-	.long gdt			// base della GDT
+	.word end_gdt-gdt		 	// limite della GDT
+	.quad gdt			// base della GDT
 idt_pointer:
-	.word 0x7FF			// limite della IDT (256 entrate)
-	.long idt			// base della IDT
-param_err:
-	.asciz "parametro errato %x"
-.bss
-.global		array_dess		// [4.11]
-array_dess:	.space BYTE_SEM
-.balign 8
-gdt:
-	// spazio per 5 descrittori piu' i descrittori di TSS 
-	// i descrittori verrano costruiti a tempo di esecuzione
-	.space 8 * 8192, 0
+	.word 0xFFF			// limite della IDT (256 entrate)
+	.quad idt			// base della IDT
+triple_fault_idt:
+	.word 0
+	.quad 0
 
 .balign 8
+.global gdt
+gdt:
+	.quad 0		//segmento nullo
+code_sys_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b10011010    //P|DPL|1|1|C|R|A|  DPL=00=sistema
+	.byte 0b00100000    //G|D|L|-|-------|  L=1 long mode
+	.byte 0b0           //base[31:24]   not used
+code_usr_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b11111010    //P|DPL|1|1|C|R|A|  DPL=11=utente
+	.byte 0b00100000    //G|D|L|-|-------|  L=1 long mode
+	.byte 0b0           //base[31:24]   not used
+data_usr_seg:
+	.word 0b0           //limit[15:0]   not used
+	.word 0b0           //base[15:0]    not used
+	.byte 0b0           //base[23:16]   not used
+	.byte 0b11110010    //P|DPL|1|0|E|W|A|  DPL=11=utente
+	.byte 0b00000000    //G|D|-|-|-------|  
+	.byte 0b0           //base[31:24]   not used
+des_tss:
+	.space 16*NUM_TSS,0	//segmento tss, riempito a runtime
+end_gdt:
+
+
+.bss
+.balign 16
 idt:
 	// spazio per 256 gate
 	// verra' riempita a tempo di esecuzione
-	.space 8 * 256, 0
+	.space 16 * 256, 0
+end_idt:
 
 	.global stack
 stack:
@@ -1538,22 +831,3 @@ stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
-save_gdt:
-	.word 0
-	.long 0
-save_idt:
-	.word 0
-	.long 0
-save_esp:
-	.long 0
-shutdown_esp:
-	.long 0
-shutdown_ebp:
-	.long 0
-save_pic_m:
-	.byte 0
-save_pic_s:
-	.byte 0
-	.fill 2, 0
-last_tss:
-	.long 4
