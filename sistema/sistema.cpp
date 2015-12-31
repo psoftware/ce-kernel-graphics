@@ -1,6 +1,5 @@
 				// sistema64.cpp
 				//
-#include "mboot.h"		// *****
 #include "costanti.h"		// *****
 
 #include "libce.h"

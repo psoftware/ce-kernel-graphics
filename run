@@ -1,15 +1,16 @@
 #!/bin/bash
 
 [ -n "$QEMU" ] || {
-	QEMU=qemu-system-i386
-	CEQEMU=$HOME/CE/bin/qemu-system-i386
+	QEMU=qemu-system-x86_64
+	CEQEMU=$HOME/CE/bin/qemu-system-x86_64
 	[ -x "$CEQEMU" ] && QEMU=$CEQEMU
 }
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
+BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
 
 DEBUG=
 if [ "$1" == -g ]; then
-	DEBUG="-s -S"
+	DEBUG="-s"
 	shift
 fi
 	
@@ -26,11 +27,12 @@ if [ -f "$CDEPATH" ]; then
 fi
 
 
-"$QEMU" $DEBUG		      		\
-	-kernel build/sistema 		\
+"$QEMU" $DEBUG 		    		\
+	-kernel $BOOT 			\
+	-initrd build/sistema		\
+	${DEBUG:+-append $DEBUG}	\
 	-drive file=.swap,cache=unsafe  \
 	$hdc                  		\
 	$output 	      		\
 	-no-reboot 	      		|
 util/show_log.pl
-	

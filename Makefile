@@ -1,4 +1,3 @@
-START_BOOT=	 0x0000000000100100
 START_SISTEMA=   0x0000000000200100
 SWAP=		 swap.img
 include start.mk
@@ -32,33 +31,16 @@ endif
 NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIBCE)/lib64/ce
 NLDLIBS=$(COMM_LDLIBS) -lce64
 
-BCC ?= $(NCC)
-BLD ?= $(NLD)
-BCFLAGS = $(COMM_CFLAGS) -m32
-BLDFLAGS = $(COMM_LDFLAGS) -melf_i386 -L$(LIBCE)/lib/ce
-BLDLIBS = $(COMM_LDLIBS) -lce
-
 ifdef AUTOCORR
 	NCFLAGS+=-DAUTOCORR
 endif
 
 all: \
-     build/boot \
      build/sistema \
      build/parse   \
      build/creatimg \
      utente/prog
 
-build/boot: boot/boot_s.o boot/boot_cpp.o
-	$(BLD) $(BLDFLAGS) -o build/boot -Ttext $(START_BOOT) boot/boot_s.o boot/boot_cpp.o $(BLDLIBS)
-
-# compilazione di boot.s e boot.cpp
-boot/boot_s.o: boot/boot.S include/costanti.h
-	$(BCC) $(BCFLAGS) -c boot/boot.S -o boot/boot_s.o
-
-boot/boot_cpp.o: boot/boot.cpp include/mboot.h include/costanti.h
-	$(BCC) $(BCFLAGS) -c boot/boot.cpp -o boot/boot_cpp.o
-     
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
@@ -72,7 +54,7 @@ build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 sistema/sist_s.o: sistema/sistema.S include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.S -o sistema/sist_s.o
 
-sistema/sist_cpp.o: sistema/sistema.cpp include/mboot.h include/costanti.h
+sistema/sist_cpp.o: sistema/sistema.cpp include/costanti.h
 	$(NCC) $(NCFLAGS) -c sistema/sistema.cpp -o sistema/sist_cpp.o
 
 # compilazione di io.s e io.cpp
@@ -132,7 +114,7 @@ swap: build/creatimg build/io build/utente $(SWAP)
 	build/creatimg $(SWAP) build/io build/utente && ln -fs $(SWAP) .swap
 
 clean:
-	rm -f boot/*.o sistema/*.o io/*.o utente/*.o util/*.o
+	rm -f sistema/*.o io/*.o utente/*.o util/*.o
 
 reset: clean
 	rm -f build/* swap
