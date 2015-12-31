@@ -13,8 +13,7 @@ extern "C" void loadCR3(addr dir);
 extern "C" addr readCR3();
 
 // attiva la paginazione [vedi sistema.S]
-extern "C" void attiva_paginazione(natl entry);
-
+extern "C" void attiva_paginazione(natl entry, int debug);
 
 void ini_COM1();
 
@@ -62,6 +61,39 @@ natl carica_modulo(multiboot_module_t* mod) {
 	return (natl)elf_h->e_entry;
 }
 
+static const int MAXARGS = 10;
+static int debug_mode = 0;
+
+static void
+parse_args(char *cmd)
+{
+	char *argv[MAXARGS];
+	int argc = 0;
+
+	char *scan = cmd;
+	do {
+		argv[argc] = scan;
+		while (*scan && *scan != ' ')
+			scan++;
+		if (*scan) {
+			*scan = '\0';
+			for (scan++; *scan && *scan == ' '; scan++)
+				;
+		}
+		flog(LOG_INFO, "argv[%d] = '%s'", argc, argv[argc]);
+		argc++;
+	} while (*scan && argc <= MAXARGS);
+
+	for (int i = 0; i < argc; i++) {
+		if (argv[i][0] != '-')
+			continue;
+		if (argv[i][1] == 's' && !debug_mode) {
+			flog(LOG_INFO, "DEBUG MODE");
+			debug_mode = 1;
+		}
+	}
+}
+
 
 extern "C" natl pml4;
 extern "C" void cmain (natl magic, multiboot_info_t* mbi)
@@ -81,6 +113,11 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 	}
 	// *)
 
+	if (mbi->flags & MULTIBOOT_INFO_CMDLINE) {
+		flog(LOG_INFO, "argomenti: %s", mbi->cmdline);
+		parse_args((char *)mbi->cmdline);
+	}
+
 	// (* Carichiamo i vari moduli
 	//    Il numero dei moduli viene passato dal bootloader in mods_count
 	if (!(mbi->flags & MULTIBOOT_INFO_MODS) ||
@@ -97,8 +134,11 @@ extern "C" void cmain (natl magic, multiboot_info_t* mbi)
 		mod->cmdline, mod->mod_start, mod->mod_end);
 	entry = carica_modulo(mod);
 	// *)
+	
 	loadCR3(&pml4);
-	attiva_paginazione(entry);
+	if (debug_mode)
+		flog(LOG_INFO, "Attendo collegamento da gdb...");
+	attiva_paginazione(entry, debug_mode);
 	
 	/* mai raggiunto */
 	return;

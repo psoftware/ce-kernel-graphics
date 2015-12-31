@@ -88,6 +88,8 @@ readCR3:
 	.global attiva_paginazione
 attiva_paginazione:
 	cli
+	movl 8(%esp), %eax
+	movl %eax, wait_for_gdb
 	movl 4(%esp), %eax
 	subl $jmp_off_rel, %eax
 	movl %eax, jmp_off
@@ -135,6 +137,11 @@ long_mode:
 # 
 #        mov $0x1F211F641F6C1F72, %rax
 #        mov %rax, 16(%edi)
+
+wait:
+	cmpl $1, wait_for_gdb(%rip)
+	je wait
+
 	.byte 0xe9
 jmp_off:
 	.long 0
@@ -178,4 +185,5 @@ gdt64_ptr:
 	.global stack
 stack:
 	.space STACK_SIZE, 0
-
+wait_for_gdb:
+	.long 0
