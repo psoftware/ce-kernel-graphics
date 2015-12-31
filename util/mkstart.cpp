@@ -15,7 +15,7 @@ int main()
 	natq start_io = norm(((natq)I_MIO_C << 39UL) + 0x100);
 	natq start_utente = norm(((natq)I_UTN_C << 39UL) + 0x100);
 
-	ofstream startmk("start.mk");
+	ofstream startmk("util/start.mk");
 	startmk << "MEM=" << MEM_TOT/MiB << endl;
 	startmk << "SWAP_SIZE=" << DIM_SWAP << endl;
 	startmk << hex;
@@ -23,7 +23,7 @@ int main()
 	startmk << "START_UTENTE=0x"  << start_utente << endl;
 	startmk.close();
 
-	ofstream startgdb("start.gdb");
+	ofstream startgdb("util/start.gdb");
 	startgdb << "set $START_IO="      << start_io << endl;
 	startgdb << "set $START_UTENTE="  << start_utente << endl;
 	startgdb.close();

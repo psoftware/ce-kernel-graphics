@@ -1,6 +1,6 @@
 START_SISTEMA=   0x0000000000200100
 SWAP=		 swap.img
-include start.mk
+-include util/start.mk
 
 LIBCE ?= $(HOME)/CE
 
@@ -106,7 +106,7 @@ build/creatimg: include/costanti.h util/creatimg.o util/elf32.o util/elf64.o uti
 	g++ -g -o build/creatimg util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
-$(SWAP): start.mk
+$(SWAP): util/start.mk
 	truncate -s $(SWAP_SIZE) $(SWAP)
 
 .PHONY: swap clean reset
@@ -115,6 +115,7 @@ swap: build/creatimg build/io build/utente $(SWAP)
 
 clean:
 	rm -f sistema/*.o io/*.o utente/*.o util/*.o
+	rm -f util/start.mk util/start.gdb util/start.pl
 
 reset: clean
 	rm -f build/* swap
@@ -128,5 +129,5 @@ utente/prog:
 build/mkstart: include/costanti.h util/mkstart.cpp
 	g++ -g -Iinclude -o build/mkstart util/mkstart.cpp
 
-start.mk: include/costanti.h include/tipo.h build/mkstart
+util/start.mk: include/costanti.h include/tipo.h build/mkstart
 	build/mkstart

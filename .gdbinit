@@ -2,7 +2,7 @@ set print static off
 set print pretty on
 set print array on
 file build/sistema
-source start.gdb
+source util/start.gdb
 add-symbol-file build/boot    0x100000
 add-symbol-file build/io      $START_IO
 add-symbol-file build/utente  $START_UTENTE
