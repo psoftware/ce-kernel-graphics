@@ -1,5 +1,6 @@
 #!/bin/bash
 
+cmd=
 [ -n "$QEMU" ] || {
 	QEMU=qemu-system-x86_64
 	CEQEMU=$HOME/CE/bin/qemu-system-x86_64
@@ -8,31 +9,29 @@
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
 
-DEBUG=
+cmd="$QEMU \
+	-kernel $BOOT \
+	-initrd build/sistema \
+	-drive file=.swap,cache=unsafe \
+	-no-reboot"
+
 if [ "$1" == -g ]; then
-	DEBUG="-s"
+	cmd="$cmd -s -append \"-s\""
 	shift
 fi
 	
 trap 'stty sane' exit
 
-output="-serial stdio"
 if [ "$AUTOCORR" == 1 ]; then
-	output=-nographic
+	cmd="$cmd -nographic"
+else
+	cmd="$cmd -serial stdio"
 fi
 
-hdc=
 if [ -f "$CDEPATH" ]; then
-	hdc="-hdc \"$CDEPATH\""
+	cmd="$cmd -hdc \"$CDEPATH\""
 fi
 
 
-"$QEMU" $DEBUG 		    		\
-	-kernel $BOOT 			\
-	-initrd build/sistema		\
-	${DEBUG:+-append $DEBUG}	\
-	-drive file=.swap,cache=unsafe  \
-	$hdc                  		\
-	$output 	      		\
-	-no-reboot 	      		|
-util/show_log.pl
+echo Eseguo: $cmd
+eval $cmd | util/show_log.pl
