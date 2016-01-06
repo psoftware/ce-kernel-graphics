@@ -244,40 +244,6 @@ extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 // *)
 extern "C" void init_idt();
 
-const ioaddr iRBR = 0x03F8;		// DLAB deve essere 0
-const ioaddr iTHR = 0x03F8;		// DLAB deve essere 0
-const ioaddr iLSR = 0x03FD;
-const ioaddr iLCR = 0x03FB;
-const ioaddr iDLR_LSB = 0x03F8;		// DLAB deve essere 1
-const ioaddr iDLR_MSB = 0x03F9;		// DLAB deve essere 1
-const ioaddr iIER = 0x03F9;		// DLAB deve essere 0
-const ioaddr iMCR = 0x03FC;
-const ioaddr iIIR = 0x03FA;
-
-
-void ini_COM1()
-{
-	natw CBITR = 0x000C;		// 9600 bit/sec.
-	natb dummy;
-	outputb(0x80, iLCR);		// DLAB 1
-	outputb(CBITR, iDLR_LSB);
-	outputb(CBITR >> 8, iDLR_MSB);
-	outputb(0x03, iLCR);		// 1 bit STOP, 8 bit/car, parita  dis, DLAB 0
-	outputb(0x00, iIER);		// richieste di interruzione disabilitate
-	inputb(iRBR, dummy);		// svuotamento buffer RBR
-}
-
-void serial_o(natb c)
-{
-	natb s;
-	do
-	{
-		inputb(iLSR, s);
-	}
-	while (! (s & 0x20));
-	outputb(c, iTHR);
-}
-
 // invia un nuovo messaggio sul log
 extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
 {
