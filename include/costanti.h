@@ -23,7 +23,7 @@
 #define DIM_USR_HEAP		(1*MiB)
 #define DIM_USR_STACK		(10*MiB)
 #define DIM_SYS_STACK		(4*KiB)
-#define DIM_SWAP		(20*MiB)
+#define DIM_SWAP		(80*MiB)
 #define DIM_BLOCK		512
 // )
 
