@@ -544,14 +544,11 @@ simd_exc:
 
 
 comm_exc:
-	popq %rdi //tipo
-	popq %rsi //errore
-	popq %rdx //rip
-	popq %rcx //cs
-	popq %r8  //rflag
-	pushq %r8
-	pushq %rcx
-	pushq %rdx
+	movq (%rsp), %rdi //tipo
+	movq 8(%rsp), %rsi //errore
+	movq 16(%rsp), %rdx //rip
+	movq 24(%rsp), %rcx //cs
+	movq 32(%rsp), %r8  //rflag
 	call gestore_eccezioni
 	jmp a_abort_p
 
