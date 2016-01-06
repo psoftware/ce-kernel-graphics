@@ -510,11 +510,12 @@ prot_fault:
 int_tipo_pf:
 	pushq %rdi
 	pushq %rsi
-	movq 120(%rsp), %rdi // errore
-	movq 128(%rsp), %rsi // eip
+	movq 16(%rsp), %rdi // errore
+	movq 24(%rsp), %rsi // eip
 	call c_pre_routine_pf
 	popq %rsi
 	popq %rdi
+	addq $8, %rsp
 	iretq
 
 .global readCR2
