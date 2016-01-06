@@ -23,8 +23,6 @@ start:
 2:	call cmain			// il resto dell'inizializzazione
 	hlt				// e' scritto in C++
 
-
-
 .set CR3,100
 .set RAX,CR3+8
 .set RCX,CR3+16
@@ -711,9 +709,6 @@ esecuzione:
 pronti: 
 	.quad 0
 
-	.global		ticks
-ticks:		
-	.quad 0
 	.global ioapic
 ioapic:
 	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
