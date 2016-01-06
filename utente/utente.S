@@ -1,6 +1,5 @@
 # utente.s
 #
-#define ASM 1
 #include <costanti.h>
 
 # Tipi di interruzione per le chiamate di sistema e per le primitive di IO

@@ -1,4 +1,3 @@
-#define ASM 1
 #include "costanti.h"
 
 param_err:

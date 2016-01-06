@@ -1,7 +1,5 @@
 // sistema.s
 
-
-#define ASM 1
 #include "costanti.h"
 
 //////////////////////////////////////////////////////////////////////////
@@ -9,9 +7,6 @@
 //////////////////////////////////////////////////////////////////////////
 
 #define STACK_SIZE                      0x8000
-
-
-
 
 .globl  _start, start
 _start:				// entry point
@@ -49,12 +44,12 @@ start:
 .set R15,CR3+136
 
 .macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e 
-					//lascia il risultato in %rbx
+		     //lascia il risultato in %rbx
 	movl 8(%eax), %ebx
-	shlq $32, %rbx      //bit 63:32 nella parte alta di %rbx
-    movb 7(%eax), %bh	// bit 31:24 della base in %bh
-    movb 4(%eax), %bl	// bit 23:16 della base in %bl
-    shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
+	shlq $32, %rbx      	//bit 63:32 nella parte alta di %rbx
+	movb 7(%eax), %bh	// bit 31:24 della base in %bh
+	movb 4(%eax), %bl	// bit 23:16 della base in %bl
+	shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
 	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
 	
 .endm
@@ -625,7 +620,7 @@ loadCR3:
 readCR3:
 	movq %cr3, %rax
 	retq
-/
+
 
 //TIMER
 .set CWR,     0x43
