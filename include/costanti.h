@@ -108,11 +108,3 @@
 #define N_UTN_C	      128
 #define N_UTN_P	      127
 // )
-
-// (* log di sistema
-#ifndef AUTOCORR
-#define MAX_LOG			LOG_ERR
-#else /* AUTOCORR */
-#define MAX_LOG			LOG_USR
-#endif /* AUTOCORR */
-// *)

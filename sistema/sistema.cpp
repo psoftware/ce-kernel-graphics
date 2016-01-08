@@ -244,29 +244,12 @@ extern "C" void panic(cstr msg) __attribute__ (( noreturn ));
 // *)
 extern "C" void init_idt();
 
-// invia un nuovo messaggio sul log
-extern "C" void do_log(log_sev sev, const char* buf, natl quanti)
-{
-	const char* lev[] = { "DBG", "INF", "WRN", "ERR", "USR" };
-	if (sev > MAX_LOG) {
-		flog(LOG_WARN, "Livello di log errato: %d", sev);
-		abort_p();
-	}
-	const natb* l = (const natb*)lev[sev];
-	while (*l)
-		serial_o(*l++);
-	serial_o((natb)'\t');
-	natb idbuf[10];
-	snprintf((char*)idbuf, 10, "%d", esecuzione->id);
-	l = idbuf;
-	while (*l)
-		serial_o(*l++);
-	serial_o((natb)'\t');
+#ifdef AUTOCORR
+int MAX_LOG = 4;
+#else
+int MAX_LOG = 5;
+#endif
 
-	for (natl i = 0; i < quanti; i++)
-		serial_o(buf[i]);
-	serial_o((natb)'\n');
-}
 extern "C" void c_log(log_sev sev, const char* buf, natl quanti)
 {
 	do_log(sev, buf, quanti);
