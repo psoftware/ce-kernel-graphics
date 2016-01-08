@@ -1774,13 +1774,6 @@ extern "C" void cmain ()
 {
 	natl dummy_proc;
 
-#ifdef DEBUG
-	flog(LOG_DEBUG, "Attendo debugger...");
-	volatile int gdb = 0;
-	while (!gdb)
-		;
-#endif
-	
 	// (* anche se il primo processo non e' completamente inizializzato,
 	//    gli diamo un identificatore, in modo che compaia nei log
 	init.id = 0;
