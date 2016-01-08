@@ -1,7 +1,6 @@
-				// sistema64.cpp
-				//
-#include "costanti.h"		// *****
-
+// sistema.cpp
+//
+#include "costanti.h"
 #include "libce.h"
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -45,8 +44,8 @@ extern "C" void terminate_p();	// [4.6]
 
 //indici nell'array contesto
 enum { I_RAX, I_RCX, I_RDX, I_RBX,
-			 I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
-			 I_R11, I_R12, I_R13, I_R14, I_R15 };
+	I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
+	I_R11, I_R12, I_R13, I_R14, I_R15 };
 // )
 
 // elemento di una coda di processi [4.6]
@@ -271,21 +270,6 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
 	abort_p();
-	//if (tipo == 14) {
-	//	addr CR2 = readCR2();
-	//	flog(LOG_WARN, "CR2=   %p",CR2);
-	//	addr tab = readCR3();
-	//	for (int i = 4; i >= 1; i--) {
-	//		flog(LOG_WARN, "tab%d: %p", i, tab);
-	//		natl idx = i_tab(CR2, i);
-	//		natq e = get_entry(tab, idx);
-	//		flog(LOG_WARN, "tab%d[%d] = %8x", i, idx, e);
-	//		if (!extr_P(e))
-	//			break;
-	//		tab = extr_IND_FISICO(e);
-	//	}
-	//}
-	//
 }
 // (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
 //   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
