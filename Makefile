@@ -24,7 +24,7 @@ COMM_LDFLAGS=\
 
 COMM_LDLIBS=
 
-NCFLAGS=$(COMM_CFLAGS) -m64 -mcmodel=large
+NCFLAGS=$(COMM_CFLAGS) -m64 -mcmodel=small -fpic
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif
