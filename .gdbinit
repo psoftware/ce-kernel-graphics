@@ -9,5 +9,5 @@ add-symbol-file build/utente  $START_UTENTE
 set arch i386:x86-64:intel
 target remote localhost:1234
 print wait_for_gdb=0
-break sistema.cpp:cmain
+break sistema.cpp:gdb_breakpoint
 continue

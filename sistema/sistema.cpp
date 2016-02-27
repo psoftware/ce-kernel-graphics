@@ -1860,6 +1860,8 @@ error:
 	panic("Errore di inizializzazione");
 }
 
+void gdb_breakpoint() {}
+
 void main_sistema(int n)
 {
 	natl sync_io;
@@ -1871,6 +1873,8 @@ void main_sistema(int n)
 	if (!crea_spazio_condiviso(dummy_proc))
 		goto error;
  	// )
+	
+	gdb_breakpoint();
 
 	// ( inizializzazione del modulo di io [7.1][10.4]
 	flog(LOG_INFO, "creazione del processo main I/O...");
