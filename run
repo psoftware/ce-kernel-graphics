@@ -12,7 +12,7 @@ BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
 cmd="$QEMU \
 	-kernel $BOOT \
 	-initrd build/sistema \
-	-drive file=.swap,cache=unsafe \
+	-drive file=.swap,format=raw,cache=unsafe \
 	-no-reboot"
 
 if [ "$1" == -g ]; then
