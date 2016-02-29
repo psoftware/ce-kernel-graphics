@@ -10,8 +10,7 @@ BEGIN {
 
 		if    ($h ge $START_UTENTE)      { $exe = 'build/utente';  }
 		elsif ($h ge $START_IO)          { $exe = 'build/io';      }
-		elsif ($h ge '0000000000200000') { $exe = "build/sistema64"; }
-		else                             { $exe = "build/boot"; }
+		else 				 { $exe = "build/sistema"; }
 
 		my $out = `addr2line -Cfe $exe $h`;
 		if ($?) {
