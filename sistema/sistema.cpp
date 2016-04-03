@@ -624,8 +624,6 @@ bool crea_finestra_FM(addr tab4)
 	return true;
 }
 
-
-
 // )
 const natl MAX_IRQ  = 24;
 proc_elem *a_p[MAX_IRQ];  // [7.1]

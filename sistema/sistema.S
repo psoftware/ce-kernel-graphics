@@ -627,7 +627,7 @@ readCR3:
 
 // attiva il timer di sistema
 // parametri: il valore da caricare nel registro CTR del timer
-.extern ioapic_set_MIRQ
+.extern apic_set_MIRQ
 	.global attiva_timer
 attiva_timer:
 	movb $0x36, %al
@@ -709,14 +709,6 @@ esecuzione:
 	.global pronti
 pronti: 
 	.quad 0
-
-	.global ioapic
-ioapic:
-	.quad 0x00000000FEC00000	//ioapic.IOREGSEL
-	.quad 0x00000000FEC00010	//ioapic.IOWIN
-pEOI:	.quad 0x00000000FEE000B0	//ioapic.EOI
-	.byte 0x10		//ioapic.RTO
-	.space 3, 0
 
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
