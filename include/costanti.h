@@ -91,20 +91,17 @@
 //   SIS  = SIStema
 //   MIO  = Modulo IO
 //   UTN  = modulo UTeNte
-//   PCI  = registri mappati in memoria (PCI)
 //   C    = Condiviso
 //   P    = Privato
 #define I_SIS_C		0
 #define I_SIS_P		1
 #define I_MIO_C		2
-#define I_PCI_C		3
 #define I_UTN_C       256
 #define I_UTN_P	      384
 
 #define N_SIS_C		1
 #define N_SIS_P		1
 #define N_MIO_C		1
-#define N_PCI_C		1
 #define N_UTN_C	      128
 #define N_UTN_P	      127
 // )

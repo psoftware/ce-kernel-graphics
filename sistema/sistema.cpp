@@ -469,14 +469,12 @@ void copy_des(addr src, addr dst, natl i, natl n)
 const addr ini_sis_c = norm((addr)(I_SIS_C * dim_pag(4)));
 const addr ini_sis_p = norm((addr)(I_SIS_P * dim_pag(4)));
 const addr ini_mio_c = norm((addr)(I_MIO_C * dim_pag(4)));
-const addr ini_pci_c = norm((addr)(I_PCI_C * dim_pag(4)));
 const addr ini_utn_c = norm((addr)(I_UTN_C * dim_pag(4)));
 const addr ini_utn_p = norm((addr)(I_UTN_P * dim_pag(4)));
 
 const addr fin_sis_c = (addr)((natq)ini_sis_c + dim_pag(4) * N_SIS_C);
 const addr fin_sis_p = (addr)((natq)ini_sis_p + dim_pag(4) * N_SIS_P);
 const addr fin_mio_c = (addr)((natq)ini_mio_c + dim_pag(4) * N_MIO_C);
-const addr fin_pci_c = (addr)((natq)ini_pci_c + dim_pag(4) * N_PCI_C);
 const addr fin_utn_c = (addr)((natq)ini_utn_c + dim_pag(4) * N_UTN_C);
 const addr fin_utn_p = (addr)((natq)ini_utn_p + dim_pag(4) * N_UTN_P);
 
@@ -608,60 +606,6 @@ natq& get_des(natl processo, int livello, addr ind_virt)
 
 // ( [P_MEM_VIRT]
 
-//mappa le ntab pagine virtuali a partire dall'indirizzo virt_start agli
-//indirizzi fisici
-//che partono da phys_start, in sequenza.
-bool sequential_map(addr tab4,addr phys_start, addr virt_start, natl npag, natq flags)
-{
-	natb *indv = static_cast<natb*>(virt_start),
-		 *indf = static_cast<natb*>(phys_start);
-	for (natl i = 0; i < npag; i++, indv += DIM_PAGINA, indf += DIM_PAGINA)
-	{
-		addr tab = tab4;
-		for (int j = 4; j >= 2; j--) {
-			natq& e = get_entry(tab, i_tab(indv, j));
-			if (! extr_P(e)) {
-				des_pf* ppf = alloca_pagina_fisica_libera();
-				if (ppf == 0)
-					goto error;
-				ppf->livello = j - 1;
-				ppf->flags |= PF_FINESTRA_FM;
-				addr ntab = indirizzo_pf(ppf);
-				memset(ntab, 0, DIM_PAGINA);
-
-				e = ((natq)ntab & ADDR_MASK) | flags | BIT_P;
-			}
-			tab = extr_IND_FISICO(e);
-		}
-		natq pte = ((natq)indf & ADDR_MASK) | flags | BIT_P;
-		set_entry(tab, i_tab(indv, 1), pte);
-	}
-
-	return true;
-
-error:
-	flog(LOG_ERR, "Impossibile allocare le tabelle condivise");
-	return false;
-}
-
-
-// mappa tutti gli indirizzi a partire da start (incluso) fino ad end (escluso)
-// in modo che l'indirizzo virtuale coincida con l'indirizzo fisico.
-// start e end devono essere allineati alla pagina.
-bool identity_map(addr tab4, addr start, addr end, natq flags)
-{
-	natl npag = (static_cast<natb*>(end) - static_cast<natb*>(start)) / DIM_PAGINA;
-	return sequential_map(tab4, start, start, npag, flags);
-}
-// mappa la memoria fisica, dall'indirizzo 0 all'indirizzo max_mem, nella
-// memoria virtuale gestita dal direttorio pdir
-// (la funzione viene usata in fase di inizializzazione)
-bool crea_finestra_FM(addr tab4)
-{
-	return identity_map(tab4, (addr)DIM_PAGINA, (addr)MEM_TOT, BIT_RW);
-}
-
-
 // carica un nuovo valore in cr3 [vedi sistema.S]
 extern "C" void loadCR3(addr dir);
 
@@ -670,6 +614,16 @@ extern "C" addr readCR3();
 
 //invalida il TLB
 extern "C" void invalida_TLB();
+
+// mappa la memoria fisica in memoria virtuale, inclusa l'area PCI
+// (copiamo la finestra gia' creata dal boot loader)
+bool crea_finestra_FM(addr tab4)
+{
+	addr boot_dir = readCR3();
+	copy_des(boot_dir, tab4, I_SIS_C, N_SIS_C);
+	return true;
+}
+
 
 
 // )
@@ -839,16 +793,6 @@ const addr PCI_startmem = reinterpret_cast<addr>(0x00000000fec00000);
 
 // ( [P_PCI]
 
-// mappa in memoria virtuale la porzione di spazio fisico dedicata all'I/O (PCI e altro)
-bool crea_finestra_PCI(addr tab4)
-{
-	return sequential_map(tab4,
-			PCI_startmem,
-			ini_pci_c,
-			dim_pci_c/DIM_PAGINA,
-			BIT_RW | BIT_PCD);
-}
-
 natb pci_getbus(natw l)
 {
 	return l >> 8;
@@ -992,9 +936,9 @@ bool ioapic_init()
 	natq tmp_IOREGSEL = (natq)ioapic.IOREGSEL | apicbase_getxy(apicbase);
 	natq tmp_IOWIN    = (natq)ioapic.IOWIN    | apicbase_getxy(apicbase);
 	// 	trasformiamo gli indirizzi fisici in virtuali
-	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL - (natq)PCI_startmem + (natq)ini_pci_c);
-	ioapic.IOWIN    = (natl*)(tmp_IOWIN    - (natq)PCI_startmem + (natq)ini_pci_c);
-	ioapic.EOI	= (natl*)((natq)ioapic.EOI - (natq)PCI_startmem + (natq)ini_pci_c);
+	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL);
+	ioapic.IOWIN    = (natl*)(tmp_IOWIN);
+	ioapic.EOI	= (natl*)((natq)ioapic.EOI);
 	flog(LOG_DEBUG, "IOAPIC: ioregsel %p, iowin %p", ioapic.IOREGSEL, ioapic.IOWIN);
 	// 	abilitare il /CS per l'IOAPIC
 	natl xbcs;
@@ -1139,7 +1083,6 @@ void crea_tab4(addr dest)
 
 	copy_des(pdir, dest, I_SIS_C, N_SIS_C);
 	copy_des(pdir, dest, I_MIO_C, N_MIO_C);
-	copy_des(pdir, dest, I_PCI_C, N_PCI_C);
 	copy_des(pdir, dest, I_UTN_C, N_UTN_C);
 }
 
@@ -1799,7 +1742,6 @@ extern "C" void cmain ()
 	flog(LOG_INFO, "sis/cond [%p, %p)", ini_sis_c, fin_sis_c);
 	flog(LOG_INFO, "sis/priv [%p, %p)", ini_sis_p, fin_sis_p);
 	flog(LOG_INFO, "io /cond [%p, %p)", ini_mio_c, fin_mio_c);
-	flog(LOG_INFO, "pci/cond [%p, %p)", ini_pci_c, fin_pci_c);
 	flog(LOG_INFO, "usr/cond [%p, %p)", ini_utn_c, fin_utn_c);
 	flog(LOG_INFO, "usr/priv [%p, %p)", ini_utn_p, fin_utn_p);
 
@@ -1807,10 +1749,6 @@ extern "C" void cmain ()
 
 	if(!crea_finestra_FM(inittab4))
 			goto error;
-	flog(LOG_INFO, "Creata finestra FM");
-	if(!crea_finestra_PCI(inittab4))
-			goto error;
-	flog(LOG_INFO, "Creata finestra PCI");
 	loadCR3(inittab4);
 	flog(LOG_INFO, "Caricato CR3");
 
