@@ -811,185 +811,32 @@ natb pci_getfun(natw l)
 
 // ( [P_IOAPIC]
 
-// parte piu' significativa di una redirection table entry
-const natl IOAPIC_DEST_MSK = 0xFF000000; // destination field mask
-const natl IOAPIC_DEST_SHF = 24;	 // destination field shift
-// parte meno significativa di una redirection table entry
-const natl IOAPIC_MIRQ_BIT = (1U << 16); // mask irq bit
-const natl IOAPIC_TRGM_BIT = (1U << 15); // trigger mode (1=level, 0=edge)
-const natl IOAPIC_IPOL_BIT = (1U << 13); // interrupt polarity (0=high, 1=low)
-const natl IOAPIC_DSTM_BIT = (1U << 11); // destination mode (0=physical, 1=logical)
-const natl IOAPIC_DELM_MSK = 0x00000700; // delivery mode field mask (000=fixed)
-const natl IOAPIC_DELM_SHF = 8;		 // delivery mode field shift
-const natl IOAPIC_VECT_MSK = 0x000000FF; // vector field mask
-const natl IOAPIC_VECT_SHF = 0;		 // vector field shift
-
-struct ioapic_des {
-	natl* IOREGSEL;
-	natl* IOWIN;
-	natl* EOI;
-	natb  RTO;	// Redirection Table Offset
-};
-
-extern "C"  ioapic_des ioapic;
-
-natl ioapic_in(natb off)
+void apic_fill()
 {
-	*ioapic.IOREGSEL = off;
-	return *ioapic.IOWIN;
-}
-
-void ioapic_out(natb off, natl v)
-{
-	*ioapic.IOREGSEL = off;
-	*ioapic.IOWIN = v;
-}
-
-natl ioapic_read_rth(natb irq)
-{
-	return ioapic_in(ioapic.RTO + irq * 2 + 1);
-}
-
-void ioapic_write_rth(natb irq, natl w)
-{
-	ioapic_out(ioapic.RTO + irq * 2 + 1, w);
-}
-
-natl ioapic_read_rtl(natb irq)
-{
-	return ioapic_in(ioapic.RTO + irq * 2);
-}
-
-void ioapic_write_rtl(natb irq, natl w)
-{
-	ioapic_out(ioapic.RTO + irq * 2, w);
-}
-
-void ioapic_set_VECT(natl irq, natb vec)
-{
-	natl work = ioapic_read_rtl(irq);
-	work = (work & ~IOAPIC_VECT_MSK) | (vec << IOAPIC_VECT_SHF);
-	ioapic_write_rtl(irq, work);
-}
-
-void ioapic_set_MIRQ(natl irq, bool v)
-{
-	natl work = ioapic_read_rtl(irq);
-	if (v)
-		work |= IOAPIC_MIRQ_BIT;
-	else
-		work &= ~IOAPIC_MIRQ_BIT;
-	ioapic_write_rtl(irq, work);
-}
-
-extern "C" void ioapic_send_EOI()
-{
-        *ioapic.EOI = 0;
-}       
-
-extern "C" void ioapic_mask(natl irq)
-{
-	ioapic_set_MIRQ(irq, true);
-}
-
-extern "C" void ioapic_unmask(natl irq)
-{
-	ioapic_set_MIRQ(irq, false);
-}
-
-void ioapic_set_TRGM(natl irq, bool v)
-{
-	natl work = ioapic_read_rtl(irq);
-	if (v)
-		work |= IOAPIC_TRGM_BIT;
-	else
-		work &= ~IOAPIC_TRGM_BIT;
-	ioapic_write_rtl(irq, work);
-}
-
-
-const natw PIIX3_VENDOR_ID = 0x8086;
-const natw PIIX3_DEVICE_ID = 0x7000;
-const natb PIIX3_APICBASE = 0x80;
-const natb PIIX3_XBCS = 0x4e;
-const natl PIIX3_XBCS_ENABLE = (1U << 8);
-
-natl apicbase_getxy(natl apicbase)
-{
-	return (apicbase & 0x01F) << 10U;
-}
-
-extern "C" void disable_8259();
-bool ioapic_init()
-{
-	natw l = 0;
-	// trovare il PIIX3 e
-	if (!pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID)) {
-		flog(LOG_WARN, "PIIX3 non trovato");
-		return false;
-	}
-	flog(LOG_DEBUG, "PIIX3: trovato a %2x.%2x.%2x",
-			pci_getbus(l), pci_getdev(l), pci_getfun(l));
-	// 	inizializzare IOREGSEL e IOWIN
-	natb apicbase;
-	apicbase = pci_read_confb(l, PIIX3_APICBASE);
-	natq tmp_IOREGSEL = (natq)ioapic.IOREGSEL | apicbase_getxy(apicbase);
-	natq tmp_IOWIN    = (natq)ioapic.IOWIN    | apicbase_getxy(apicbase);
-	// 	trasformiamo gli indirizzi fisici in virtuali
-	ioapic.IOREGSEL = (natl*)(tmp_IOREGSEL);
-	ioapic.IOWIN    = (natl*)(tmp_IOWIN);
-	ioapic.EOI	= (natl*)((natq)ioapic.EOI);
-	flog(LOG_DEBUG, "IOAPIC: ioregsel %p, iowin %p", ioapic.IOREGSEL, ioapic.IOWIN);
-	// 	abilitare il /CS per l'IOAPIC
-	natl xbcs;
-	xbcs = pci_read_confl(l, PIIX3_XBCS);
-	xbcs |= PIIX3_XBCS_ENABLE;
-	pci_write_confl(l, PIIX3_XBCS, xbcs);
-	disable_8259();
-	// riempire la redirection table
-	for (natb i = 0; i < MAX_IRQ; i++) {
-		ioapic_write_rth(i, 0);
-		ioapic_write_rtl(i, IOAPIC_MIRQ_BIT | IOAPIC_TRGM_BIT);
-	}
-	ioapic_set_VECT(0, VETT_0);	ioapic_set_TRGM(0, false);
-	ioapic_set_VECT(1, VETT_1);
-	ioapic_set_VECT(2, VETT_2);	ioapic_set_TRGM(2, false);
-	ioapic_set_VECT(3, VETT_3);
-	ioapic_set_VECT(4, VETT_4);
-	ioapic_set_VECT(5, VETT_5);
-	ioapic_set_VECT(6, VETT_6);
-	ioapic_set_VECT(7, VETT_7);
-	ioapic_set_VECT(8, VETT_8);
-	ioapic_set_VECT(9, VETT_9);
-	ioapic_set_VECT(10, VETT_10);
-	ioapic_set_VECT(11, VETT_11);
-	ioapic_set_VECT(12, VETT_12);
-	ioapic_set_VECT(13, VETT_13);
-	ioapic_set_VECT(14, VETT_14);
-	ioapic_set_VECT(15, VETT_15);
-	ioapic_set_VECT(16, VETT_16);
-	ioapic_set_VECT(17, VETT_17);
-	ioapic_set_VECT(18, VETT_18);
-	ioapic_set_VECT(19, VETT_19);
-	ioapic_set_VECT(20, VETT_20);
-	ioapic_set_VECT(21, VETT_21);
-	ioapic_set_VECT(22, VETT_22);
-	ioapic_set_VECT(23, VETT_23);
-	return true;
-}
-
-extern "C" void ioapic_reset()
-{
-	for (natb i = 0; i < MAX_IRQ; i++) {
-		ioapic_write_rth(i, 0);
-		ioapic_write_rtl(i, IOAPIC_MIRQ_BIT | IOAPIC_TRGM_BIT);
-	}
-	natw l = 0;
-	pci_find_dev(l, PIIX3_DEVICE_ID, PIIX3_VENDOR_ID);
-	natl xbcs;
-	xbcs = pci_read_confl(l, PIIX3_XBCS);
-	xbcs &= ~PIIX3_XBCS_ENABLE;
-	pci_write_confl(l, PIIX3_XBCS, xbcs);
+	apic_set_VECT(0, VETT_0);
+	apic_set_VECT(1, VETT_1);
+	apic_set_VECT(2, VETT_2);
+	apic_set_VECT(3, VETT_3);
+	apic_set_VECT(4, VETT_4);
+	apic_set_VECT(5, VETT_5);
+	apic_set_VECT(6, VETT_6);
+	apic_set_VECT(7, VETT_7);
+	apic_set_VECT(8, VETT_8);
+	apic_set_VECT(9, VETT_9);
+	apic_set_VECT(10, VETT_10);
+	apic_set_VECT(11, VETT_11);
+	apic_set_VECT(12, VETT_12);
+	apic_set_VECT(13, VETT_13);
+	apic_set_VECT(14, VETT_14);
+	apic_set_VECT(15, VETT_15);
+	apic_set_VECT(16, VETT_16);
+	apic_set_VECT(17, VETT_17);
+	apic_set_VECT(18, VETT_18);
+	apic_set_VECT(19, VETT_19);
+	apic_set_VECT(20, VETT_20);
+	apic_set_VECT(21, VETT_21);
+	apic_set_VECT(22, VETT_22);
+	apic_set_VECT(23, VETT_23);
 }
 
 // )
@@ -1654,7 +1501,7 @@ bool aggiungi_pe(proc_elem *p, natb irq)
 	distruggi_processo(a_p_save[irq]);
 	dealloca(a_p_save[irq]);
 	a_p_save[irq] = 0;
-	ioapic_set_MIRQ(irq, false);
+	apic_set_MIRQ(irq, false);
 	return true;
 
 }
@@ -1752,7 +1599,9 @@ extern "C" void cmain ()
 	loadCR3(inittab4);
 	flog(LOG_INFO, "Caricato CR3");
 
-	ioapic_init();
+	apic_init(); // in libce
+	apic_reset(); // in libce
+	apic_fill();
 	flog(LOG_INFO, "APIC inizializzato");
 	
 	// ( inizializzazione dello swap, che comprende la lettura

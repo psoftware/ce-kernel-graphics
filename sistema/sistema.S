@@ -371,7 +371,7 @@ a_activate_pe:
 
 a_wfi:		// routine int $tipo_wfi [7.3][9.1]
 	call salva_stato
-	call ioapic_send_EOI
+	call apic_send_EOI
 	call schedulatore
 	call carica_stato
 	iretq
@@ -557,7 +557,7 @@ comm_exc:
 driver_td:
 	call salva_stato
 	call c_driver_td
-	call ioapic_send_EOI
+	call apic_send_EOI
 	call carica_stato
 
 	iretq
@@ -638,7 +638,8 @@ attiva_timer:
 	outb %al, $CTR_MSB
 
 	movq $2, %rdi
-	call ioapic_unmask
+	movq $0, %rsi
+	call apic_set_MIRQ
 
 	retq
 
