@@ -6,13 +6,23 @@
 // AVVIO                                                                  //
 //////////////////////////////////////////////////////////////////////////
 
-#define STACK_SIZE                      0x8000
+#define STACK_SIZE                      0x1000
 
 .globl  _start, start
 _start:				// entry point
 start:
+	// usiamo la pila che abbiamo messo da parte
 	movq $(stack + STACK_SIZE), %rsp
+	// inizializziamo la IDT
 	call init_idt
+	// Il C++ prevede che si possa eseguire del codice prima di main (per
+	// es. nei costruttori degli oggetti globali). gcc organizza questo
+	// codice in una serie di funzioni di cui raccoglie i puntatori
+	// nell'array __init_array_start. Il C++ run time deve poi chiamare
+	// tutte queste funzioni prima di saltare a main.  Poiche' abbiamo
+	// compilato il modulo con -nostdlib, dobbiamo provvedere da soli a
+	// chiamare queste funzioni, altrimenti gli oggetti globali non saranno
+	// inizializzati correttamente.
 	movabs $__init_array_start, %rax
 	movq %rax, %rbx
 1:	cmpq $__init_array_end, %rbx
@@ -20,9 +30,24 @@ start:
 	call *(%rbx)
 	addq $8, %rbx
 	jmp 1b
-2:	call cmain			// il resto dell'inizializzazione
-	hlt				// e' scritto in C++
+	// il resto dell'inizializzazione e' scritto in C++
+2:	call cmain
+	// se arrivamo qui c'e' stato un errore, fermiamo la macchina
+	hlt			
 
+// macro per estrarre la base da un descrittore di TSS
+// si aspetta l'indirizzo del segmento in %rax e
+// lascia il risultato in %rbx
+.macro estrai_base
+	movl 8(%eax), %ebx
+	shlq $32, %rbx      	// bit 63:32 nella parte alta di %rbx
+	movb 7(%eax), %bh	// bit 31:24 della base in %bh
+	movb 4(%eax), %bl	// bit 23:16 della base in %bl
+	shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
+	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
+.endm
+
+// offset dei vari registri all'interno di des_proc
 .set CR3,100
 .set RAX,CR3+8
 .set RCX,CR3+16
@@ -41,26 +66,16 @@ start:
 .set R14,CR3+128
 .set R15,CR3+136
 
-.macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e
-		     //lascia il risultato in %rbx
-	movl 8(%eax), %ebx
-	shlq $32, %rbx      	//bit 63:32 nella parte alta di %rbx
-	movb 7(%eax), %bh	// bit 31:24 della base in %bh
-	movb 4(%eax), %bl	// bit 23:16 della base in %bl
-	shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
-	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
-
-.endm
-
 salva_stato:
 	pushq %rbx
 	pushq %rax
 
 	movq esecuzione,%rax
 	movq $0, %rbx
-	movw (%rax),%bx
-	leaq gdt(%ebx), %rax
-	estrai_base
+	movw (%rax),%bx		// campo id in proc_elem
+	leaq gdt(%rbx), %rax	// indirizzo della corrispondente
+				// entrata nella GDT -> %rax
+	estrai_base		// base del des_proc -> %rbx
 
 	popq %rax
 
@@ -70,7 +85,7 @@ salva_stato:
 	popq %rax
 	movq %rax, RBX(%rbx)
 	movq %rsp, %rax
-	addq $8, %rax   //non includo l'indirizzo di ritorno
+	addq $8, %rax   	//non includiamo l'indirizzo di ritorno
 	movq %rax, RSP(%rbx)
 	movq %rbp, RBP(%rbx)
 	movq %rsi, RSI(%rbx)
@@ -88,22 +103,36 @@ salva_stato:
 
 
 carica_stato:
+	
+	// otteniamo la base del des_proc del processo in esecuzione
+	// (come per salva_stato)
 	movq esecuzione, %rdx
 	movq $0, %rbx
 	movw (%rdx), %bx
 	movq %rbx, %rcx
-	leaq gdt(%ebx), %rax
+	leaq gdt(%rbx), %rax
 	estrai_base
-	andb $0b11111101, 5(%rax)
+
+	// carichiamo TR con l'id del nuovo processo
+	// (in modo che il meccanismo delle interruzioni usi la
+	// pila sistema del nuovo processo)
+	andb $0b11111101, 5(%rax)	// reset del bit BUSY
+					// (richiesto dal processore
+					// per compatibilita' con il modo
+					// a 32 bit)
 	ltr %cx
 
 	popq %rcx   //ind di ritorno, va messo nella nuova pila
 
+	// nuovo valore per cr3
 	movq CR3(%rbx), %rax
-	movq %rax, %cr3
+	movq %rax, %cr3		// il TLB viene invalidato
 
-	movq RSP(%rbx), %rsp    //cambio pila
-	pushq %rcx              //rimetto l'indirizzo di ritorno
+	// anche se abbiamo cambiato cr3 siamo sicuri che
+	// l'esecuzione prosegue da qui, perche' ci troviamo dentro
+	// la finestra FM che e' comune a tutti i processi
+	movq RSP(%rbx), %rsp    //cambiamo pila
+	pushq %rcx              //rimettiamo l'indirizzo di ritorno
 
 	movq RCX(%rbx), %rcx
 	movq RDI(%rbx), %rdi
@@ -124,21 +153,28 @@ carica_stato:
 	retq
 
 
+// alloca_tss: usata alla creazione di un processo
+// cerca un descrittore di TSS libero, lo inizializza
+// ponendo come base l'indirizzo del des_proc passato
+// come argomento. Restituisce l'offset del descrittore
+// TSS allocato, che funge da identificatore del processo
 .set p_dpl_type, 0b10001001 //p=1,dpl=00,type=1001=tss ready
 .set pres_bit,   0b10000000
 	.global alloca_tss
 alloca_tss:
 	movq $des_tss, %rdx
 iter_tss:
+	// usiamo il bit di presenza nel descrittore per
+	// distiunguere i descrittori liberi da quelli allocati
 	testb $pres_bit, 5(%rdx)
-	jz set_entry_tss
-	addq $16, %rdx
+	jz set_entry_tss	// libero, saltiamo all'inizializzazione
+	addq $16, %rdx		// occupato, passiamo al prossimo
 	cmpq $end_gdt, %rdx
 	jne iter_tss
-	movq $0, %rax
+	movq $0, %rax		// terminati, restituiamo 0
 	jmp end_tss
 set_entry_tss:
-	movw $DIM_DESP, (%rdx) //[15:0] = limit[15:0]
+	movw $DIM_DESP, (%rdx) 	//[15:0] = limit[15:0]
 	movq %rdi, %rax
 	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
 	shrq $16,%rax
@@ -147,7 +183,7 @@ set_entry_tss:
 	movb $0, 6(%rdx)	//[55:48] = 0
 	movb %ah, 7(%rdx)	//[63:56] = base[31:24]
 	shrq $16, %rax
-	movl %eax, 8(%rdx) //[95:64] = base[63:32]
+	movl %eax, 8(%rdx) 	//[95:64] = base[63:32]
 	movl $0, 12(%rdx)	//[127:96] = 0
 
 	movq %rdx,%rax
@@ -155,7 +191,9 @@ set_entry_tss:
 end_tss:
 	retq
 
-
+// rilascia_tss: usata alla terminazione di un processo
+// rende nuovamente libero il descrittore TSS associato al processo
+// il cui identificatore e' passato come argomento
 	.global rilascia_tss
 rilascia_tss:
 	movq $0, gdt(%rdi)

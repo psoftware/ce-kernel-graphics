@@ -32,6 +32,10 @@ if [ -f "$CDEPATH" ]; then
 	cmd="$cmd -hdc \"$CDEPATH\""
 fi
 
+show_log="| util/show_log.pl"
+if [ -n "$CERAW" ]; then
+	show_log=
+fi
 
 echo Eseguo: $cmd
-eval $cmd | util/show_log.pl
+eval $cmd $show_log

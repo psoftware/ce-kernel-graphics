@@ -1439,7 +1439,7 @@ const natl DELAY = 59659;
 extern "C" void init_gdt();
 
 extern "C" void salta_a_main();
-extern "C" void cmain ()
+extern "C" void cmain()
 {
 	natl dummy_proc;
 
@@ -1517,7 +1517,7 @@ extern "C" void cmain ()
 	// (* selezioniamo main_sistema
 	schedulatore();
 	// *)
-	// ( esegue CALL carica_stato; IRET (, vedi "sistema.S")
+	// ( esegue CALL carica_stato; IRETQ (vedi "sistema.S")
 	salta_a_main();
 	// )
 
@@ -1593,7 +1593,7 @@ error:
 // successive)
 // - blocks: il numero di blocchi contenuti nella partizione di swap (esclusi
 // quelli iniziali, contenenti il superblocco e la mappa di bit)
-// - directory: l'indice del blocco che contiene il direttorio
+// - directory: l'indice del blocco che contiene la tabella di livello 4
 // - l'indirizzo virtuale dell'entry point del programma contenuto nello swap
 // (l'indirizzo di main)
 // - l'indirizzo virtuale successivo all'ultima istruzione del programma
