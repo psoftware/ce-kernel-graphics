@@ -14,9 +14,6 @@ const natq HEAP_START = 1024 * 1024U;
 extern "C" natq start;
 const natq HEAP_SIZE = (natq)&start - HEAP_START;
 
-natq N_DPF;
-natq DIM_M1;
-natq DIM_M2;
 /////////////////////////////////////////////////////////////////////////////////
 //                     PROCESSI                                                //
 /////////////////////////////////////////////////////////////////////////////////
@@ -277,9 +274,10 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 //   significativi specificano piu' precisamente il motivo per cui si e' 
 //   verificato un page fault. Il significato dei bit e' il seguente:
 //   - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
-//   di protezione: il processore si trovava a livello utente e la pagina (o la 
-//   tabella) era di livello sistema (bit US = 0). Se prot = 0, la pagina o la 
-//   tabella erano assenti (bit P = 0)
+//   di protezione: il processore si trovava a livello utente e la pagina 
+//   era di livello sistema (bit US = 0 in una qualunque delle tabelle
+//   dell'albero che porta al descrittore della pagina). Se prot = 0, la pagina
+//   o una delle tabelle erano assenti (bit P = 0)
 //   - write: l'accesso che ha causato il page fault era in scrittura (non 
 //   implica che la pagina non fosse scrivibile)
 //   - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
@@ -357,7 +355,8 @@ des_pf* dpf;		// vettore di descrittori di pagine fisiche
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera
 
-//
+// dato un indirizzo di una pagina fisica restituisce un puntatore al
+// corrispondente descrittore
 des_pf* descrittore_pf(addr indirizzo_pf)
 {
 	if (indirizzo_pf < prima_pf_utile)
@@ -366,7 +365,8 @@ des_pf* descrittore_pf(addr indirizzo_pf)
 	return &dpf[indice];
 }
 
-//
+// dato un puntatore ad un descrittore di pagina fisica restiutisce
+// l'indirizzo del primo byte della pagina fisica corrispondente
 addr indirizzo_pf(des_pf* ppf)
 {
 	natq indice = ppf - &dpf[0];
@@ -378,13 +378,12 @@ addr indirizzo_pf(des_pf* ppf)
 // memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
 // si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
 // e di inizializzarli in modo che tutte le pagine fisiche risultino libere
+natq N_DPF;
 bool init_dpf()
 {
-
 	N_DPF = (MEM_TOT - 5*MiB) / (DIM_PAGINA + sizeof(des_pf));
 	natq m1 = 5*MiB + N_DPF * sizeof(des_pf);
-	DIM_M1 = (m1 + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
-	DIM_M2 = MEM_TOT - DIM_M1;
+	natq DIM_M1 = (m1 + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
 	dpf = (des_pf*)(5*MiB);
 
 	prima_pf_utile = (addr)DIM_M1;
@@ -399,7 +398,7 @@ bool init_dpf()
 	return true;
 }
 
-des_pf* alloca_pagina_fisica_libera()	//
+des_pf* alloca_pagina_fisica_libera()
 {
 	des_pf* p = pagine_libere;
 	if (pagine_libere != 0)
@@ -437,19 +436,24 @@ des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 /////////////////////////////////////////////////////////////////////////////////
 
 static const natq BIT_SEGNO = (1UL << 47);
-static const natq BIT_MODULO = BIT_SEGNO - 1;
+static const natq MASCHERA_MODULO = BIT_SEGNO - 1;
+// restituisce la versione normalizzata (16 bit piu' significativi uguali al
+// bit 47) dell'indirizzo a
 static inline addr norm(addr a)
 {
 	natq v = (natq)a;
-	return (addr)((v & BIT_SEGNO) ? (v | ~BIT_MODULO) : (v & BIT_MODULO));
+	return (addr)((v & BIT_SEGNO) ? (v | ~MASCHERA_MODULO) : (v & MASCHERA_MODULO));
 }
 
+// restituisce la dimensione di una pagina di livello liv
 static inline natq dim_pag(int liv)
 {
 	natq v = 1UL << ((liv - 1) * 9 + 12);
 	return v;
 }
 
+// dato un indirizzo 'a', restituisce l'indirizzo del primo byte della
+// pagina di livello 'liv' a cui 'a' appartiene
 static inline addr base(addr a, int liv)
 {
 	natq v = (natq)a;
@@ -457,6 +461,8 @@ static inline addr base(addr a, int liv)
 	return (addr)(v & ~mask);
 }
 
+// copia 'n' descrittori a partire da quello di indice 'i' dalla
+// tabella di indirizzo 'src' in quella di indirizzo 'dst'
 void copy_des(addr src, addr dst, natl i, natl n)
 {
 	natq *pdsrc = static_cast<natq*>(src),
@@ -465,12 +471,15 @@ void copy_des(addr src, addr dst, natl i, natl n)
 		pddst[j] = pdsrc[j];
 }
 
-const addr ini_sis_c = norm((addr)(I_SIS_C * dim_pag(4)));
-const addr ini_sis_p = norm((addr)(I_SIS_P * dim_pag(4)));
-const addr ini_mio_c = norm((addr)(I_MIO_C * dim_pag(4)));
-const addr ini_utn_c = norm((addr)(I_UTN_C * dim_pag(4)));
-const addr ini_utn_p = norm((addr)(I_UTN_P * dim_pag(4)));
+// indirizzo virtuale di partenza delle varie zone della memoria
+// virtuale dei proceii
+const addr ini_sis_c = norm((addr)(I_SIS_C * dim_pag(4))); // sistema condivisa
+const addr ini_sis_p = norm((addr)(I_SIS_P * dim_pag(4))); // sistema privata
+const addr ini_mio_c = norm((addr)(I_MIO_C * dim_pag(4))); // modulo IO
+const addr ini_utn_c = norm((addr)(I_UTN_C * dim_pag(4))); // utente condivisa
+const addr ini_utn_p = norm((addr)(I_UTN_P * dim_pag(4))); // utente privata
 
+// indirizzo del primo byte che non appartiene alla zona specificata
 const addr fin_sis_c = (addr)((natq)ini_sis_c + dim_pag(4) * N_SIS_C);
 const addr fin_sis_p = (addr)((natq)ini_sis_p + dim_pag(4) * N_SIS_P);
 const addr fin_mio_c = (addr)((natq)ini_mio_c + dim_pag(4) * N_MIO_C);
@@ -489,48 +498,44 @@ const natq BIT_A    = 1U << 5; // il bit di accesso
 const natq BIT_D    = 1U << 6; // il bit "dirty"
 const natq BIT_ZERO = 1U << 7; // (* nuova pagina, da azzerare *)
 
-// (*) attenzione, la convenzione Intel e' diversa da quella
-// illustrata nel libro: 0 = sistema, 1 = utente.
-
-//TODO bit 63 NX (no-exec): che fare?
 const natq ACCB_MASK  = 0x00000000000000FF; // maschera per il byte di accesso
 const natq ADDR_MASK  = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo
 const natq INDMASS_MASK = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo in mem. di massa
 const natq INDMASS_SHIFT = 12;	    // primo bit che contiene l'ind. in mem. di massa
 // )
 
-bool  extr_P(natq descrittore)			//
+bool  extr_P(natq descrittore)
 { // (
 	return (descrittore & BIT_P); // )
 }
-bool extr_D(natq descrittore)			//
+bool extr_D(natq descrittore)
 { // (
 	return (descrittore & BIT_D); // )
 }
-bool extr_A(natq descrittore)			//
+bool extr_A(natq descrittore)
 { // (
 	return (descrittore & BIT_A); // )
 }
-bool extr_ZERO(natq descrittore)			//
+bool extr_ZERO(natq descrittore)
 { // (
 	return (descrittore & BIT_ZERO); // )
 }
-addr extr_IND_FISICO(natq descrittore)		//
+addr extr_IND_FISICO(natq descrittore)
 { // (
 	return (addr)(descrittore & ADDR_MASK); // )
 }
-natq extr_IND_MASSA(natq descrittore)		//
+natq extr_IND_MASSA(natq descrittore)
 { // (
 	return (descrittore & INDMASS_MASK) >> INDMASS_SHIFT; // )
 }
-void set_P(natq& descrittore, bool bitP)	//
+void set_P(natq& descrittore, bool bitP)
 { // (
 	if (bitP)
 		descrittore |= BIT_P;
 	else
 		descrittore &= ~BIT_P; // )
 }
-void set_A(natq& descrittore, bool bitA)	//
+void set_A(natq& descrittore, bool bitA)
 { // (
 	if (bitA)
 		descrittore |= BIT_A;
@@ -570,13 +575,17 @@ void set_D(natq& descrittore, bool bitD) //
 		descrittore &= ~BIT_D; // )
 }
 
+// dato un indirizzo virtuale 'ind_virt' ne restituisce
+// l'indice del descrittore corrispondente nella tabella di livello 'liv'
 int i_tab(addr ind_virt, int liv)
 {
 	int shift = 12 + (liv - 1) * 9;
 	natq mask = 0x1ffUL << shift;
 	return ((natq)ind_virt & mask) >> shift;
 }
-natq& get_entry(addr tab, natl index) //
+// dato l'indirizzo di una tabella e un indice, restituisce un
+// riferimento alla corrispondente entrata
+natq& get_entry(addr tab, natl index)
 {
 	natq *pd = static_cast<natq*>(tab);
 	return  pd[index];
@@ -589,6 +598,11 @@ void set_entry(addr tab, natl index, natq entry)
 }
 
 extern "C" des_proc* des_p(natl id);
+// dato un identificatore di processo, un livello e
+// un indirizzo virtuale 'ind_virt', restituisce un riferimento
+// all'entrata di quel livello relativo alla pagina che
+// contiene 'ind_virt' (tutte le tabelle di livello
+// precedente devono essere gia' presenti)
 natq& get_des(natl processo, int livello, addr ind_virt)
 {
 	des_proc *p = des_p(processo);
@@ -627,48 +641,6 @@ bool crea_finestra_FM(addr tab4)
 const natl MAX_IRQ  = 24;
 proc_elem *a_p[MAX_IRQ];  //
 // )
-
-
-// ( [P_IOAPIC]
-
-void apic_fill()
-{
-	apic_set_VECT(0, VETT_0);
-	apic_set_VECT(1, VETT_1);
-	apic_set_VECT(2, VETT_2);
-	apic_set_VECT(3, VETT_3);
-	apic_set_VECT(4, VETT_4);
-	apic_set_VECT(5, VETT_5);
-	apic_set_VECT(6, VETT_6);
-	apic_set_VECT(7, VETT_7);
-	apic_set_VECT(8, VETT_8);
-	apic_set_VECT(9, VETT_9);
-	apic_set_VECT(10, VETT_10);
-	apic_set_VECT(11, VETT_11);
-	apic_set_VECT(12, VETT_12);
-	apic_set_VECT(13, VETT_13);
-	apic_set_VECT(14, VETT_14);
-	apic_set_VECT(15, VETT_15);
-	apic_set_VECT(16, VETT_16);
-	apic_set_VECT(17, VETT_17);
-	apic_set_VECT(18, VETT_18);
-	apic_set_VECT(19, VETT_19);
-	apic_set_VECT(20, VETT_20);
-	apic_set_VECT(21, VETT_21);
-	apic_set_VECT(22, VETT_22);
-	apic_set_VECT(23, VETT_23);
-}
-
-// )
-
-// timer
-extern "C" void attiva_timer(natl count);
-const natl DELAY = 59659;
-
-//////////////////////////////////////////////////////////////////////////////
-//							GDT												//
-/////////////////////////////////////////////////////////////////////////////
-extern "C" void init_gdt();
 
 natq alloca_blocco();
 des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente);
@@ -1378,6 +1350,43 @@ extern "C" addr c_trasforma(addr ind_virt)
 {
 	return 0;
 }
+
+// ( [P_IOAPIC]
+
+void apic_fill()
+{
+	apic_set_VECT(0, VETT_0);
+	apic_set_VECT(1, VETT_1);
+	apic_set_VECT(2, VETT_2);
+	apic_set_VECT(3, VETT_3);
+	apic_set_VECT(4, VETT_4);
+	apic_set_VECT(5, VETT_5);
+	apic_set_VECT(6, VETT_6);
+	apic_set_VECT(7, VETT_7);
+	apic_set_VECT(8, VETT_8);
+	apic_set_VECT(9, VETT_9);
+	apic_set_VECT(10, VETT_10);
+	apic_set_VECT(11, VETT_11);
+	apic_set_VECT(12, VETT_12);
+	apic_set_VECT(13, VETT_13);
+	apic_set_VECT(14, VETT_14);
+	apic_set_VECT(15, VETT_15);
+	apic_set_VECT(16, VETT_16);
+	apic_set_VECT(17, VETT_17);
+	apic_set_VECT(18, VETT_18);
+	apic_set_VECT(19, VETT_19);
+	apic_set_VECT(20, VETT_20);
+	apic_set_VECT(21, VETT_21);
+	apic_set_VECT(22, VETT_22);
+	apic_set_VECT(23, VETT_23);
+}
+
+// )
+
+// timer
+extern "C" void attiva_timer(natl count);
+const natl DELAY = 59659;
+extern "C" void init_gdt();
 
 extern "C" void salta_a_main();
 extern "C" void cmain ()
