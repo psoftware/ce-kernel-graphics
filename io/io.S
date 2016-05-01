@@ -98,7 +98,7 @@ activate_p:
 	int $TIPO_A
 	ret
 
-	.global terminate_p // [7.1]
+	.global terminate_p //
 terminate_p:
 	int $TIPO_T
 	ret
@@ -108,12 +108,12 @@ sem_ini:
 	int $TIPO_SI
 	ret
 
-	.global sem_wait	// [7.1]
+	.global sem_wait	//
 sem_wait:
 	int $TIPO_W
 	ret
 
-	.global sem_signal	// [7.1]
+	.global sem_signal	//
 sem_signal:
 	int $TIPO_S
 	ret
@@ -128,11 +128,11 @@ trasforma:
 ////////////////////////////////////////////////////////////////////////////////
 
 	.global activate_pe
-activate_pe:	// [7.1]
+activate_pe:	//
 	int $TIPO_APE
 	ret
 
-	.global wfi	// [9.1]
+	.global wfi	//
 wfi:
 	int $TIPO_WFI
 	ret

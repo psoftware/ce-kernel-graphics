@@ -41,7 +41,7 @@ start:
 .set R14,CR3+128
 .set R15,CR3+136
 
-.macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e 
+.macro estrai_base   //si aspetta l'indirizzo del segmento in %rax e
 		     //lascia il risultato in %rbx
 	movl 8(%eax), %ebx
 	shlq $32, %rbx      	//bit 63:32 nella parte alta di %rbx
@@ -49,7 +49,7 @@ start:
 	movb 4(%eax), %bl	// bit 23:16 della base in %bl
 	shll $16, %ebx		// bit 31:16 nella parte alta di %ebx
 	movw 2(%eax), %bx	// bit 15:0 nella parte basse di %ebx
-	
+
 .endm
 
 salva_stato:
@@ -83,7 +83,7 @@ salva_stato:
 	movq %r13, R13(%rbx)
 	movq %r14, R14(%rbx)
 	movq %r15, R15(%rbx)
-	
+
 	ret
 
 
@@ -155,7 +155,7 @@ set_entry_tss:
 end_tss:
 	retq
 
-	
+
 	.global rilascia_tss
 rilascia_tss:
 	movq $0, gdt(%rdi)
@@ -167,7 +167,7 @@ rilascia_tss:
 // ne restituisce il puntatore al descrittore
 // (0 se non allocato)
 	.global des_p
-des_p:	
+des_p:
 	pushq %rbx
 	xorq %rbx, %rbx
 	leaq gdt(%rdi), %rax
@@ -178,9 +178,9 @@ des_p:
 	popq %rbx
 	retq
 
-// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per 
+// dato un indirizzo virtuale (come parametro) usa l'istruzione invlpg per
 // eliminare la corrispondente traduzione dal TLB
-	.global invalida_entrata_TLB // [6.4]
+	.global invalida_entrata_TLB //
 invalida_entrata_TLB:
 	invlpg (%rdi)
 	ret
@@ -254,7 +254,7 @@ init_idt:
 	carica_gate	VETT_22		handler_22	LIV_SISTEMA
 	carica_gate	VETT_23		handler_23	LIV_SISTEMA
 	carica_gate	VETT_S		handler_24	LIV_SISTEMA
-	
+
 	//primitive
 	carica_gate	TIPO_A		a_activate_p	LIV_UTENTE
 	carica_gate	TIPO_T		a_terminate_p	LIV_UTENTE
@@ -319,39 +319,39 @@ goto_user:
 // a_primitive                                        //
 ////////////////////////////////////////////////////////
         .extern c_activate_p
-a_activate_p:	// routine int $tipo_a [4.6]
+a_activate_p:	// routine int $tipo_a
 	//cavallo_di_troia 0
         call c_activate_p
         iretq
 
         .extern c_terminate_p
-a_terminate_p:	// routine int $tipo_t [4.6]
+a_terminate_p:	// routine int $tipo_t
 	movq $terminate_stack_end, %rsp
         call c_terminate_p
 	call carica_stato
 	iretq
 
 	.extern c_sem_ini
-a_sem_ini:	// routine int $tipo_si [4.11]
+a_sem_ini:	// routine int $tipo_si
 	call c_sem_ini
 	iretq
 
 	.extern c_sem_wait
-a_sem_wait:	// routine int $tipo_w [4.11][6.5]
+a_sem_wait:	// routine int $tipo_w
 	call salva_stato
 	call c_sem_wait
 	call carica_stato
 	iretq
 
 	.extern c_sem_signal
-a_sem_signal:	// routine int $tipo_s [4.11][6.5]
+a_sem_signal:	// routine int $tipo_s
 	call salva_stato
 	call c_sem_signal
 	call carica_stato
 	iretq
 
 	.extern c_delay
-a_delay:	// routine int $tipo_d [4.16][6.5]
+a_delay:	// routine int $tipo_d
 	call salva_stato
 	call c_delay
 	call carica_stato
@@ -369,7 +369,7 @@ a_activate_pe:
 	iretq
 
 
-a_wfi:		// routine int $tipo_wfi [7.3][9.1]
+a_wfi:		// routine int $tipo_wfi
 	call salva_stato
 	call apic_send_EOI
 	call schedulatore
@@ -552,7 +552,7 @@ comm_exc:
 //
 
 
-// driver del timer	[4.16]
+// driver del timer
 	.extern c_driver_td
 driver_td:
 	call salva_stato
@@ -563,10 +563,10 @@ driver_td:
 	iretq
 
 .macro handler n
-handler_\n: 
+handler_\n:
 	call salva_stato
 	call inspronti
-	
+
 	movq $\n, %rcx
 	movq a_p(, %rcx, 8), %rax
 	movq %rax, esecuzione
@@ -600,7 +600,7 @@ handler 22
 handler 23
 handler 24
 
-	.global invalida_TLB  // [6.6]
+	.global invalida_TLB  //
 invalida_TLB:
 	movq %cr3, %rax
 	movq %rax, %cr3
@@ -665,7 +665,7 @@ activate_p:
 delay:
 	int $TIPO_D
 	ret
-	
+
 	.global terminate_p
 terminate_p:
 	int $TIPO_T
@@ -702,14 +702,7 @@ salta_a_main:
 .data
 .global		fine_codice_sistema
 fine_codice_sistema:
-		.quad etext
-	.global esecuzione
-esecuzione: 
-	.quad 0
-	.global pronti
-pronti: 
-	.quad 0
-
+	.quad etext
 	// puntatori alle tabelle GDT e IDT
 	// nel formato richiesto dalle istruzioni LGDT e LIDT
 gdt_pointer:
@@ -745,7 +738,7 @@ data_usr_seg:
 	.word 0b0           //base[15:0]    not used
 	.byte 0b0           //base[23:16]   not used
 	.byte 0b11110010    //P|DPL|1|0|E|W|A|  DPL=11=utente
-	.byte 0b00000000    //G|D|-|-|-------|  
+	.byte 0b00000000    //G|D|-|-|-------|
 	.byte 0b0           //base[31:24]   not used
 des_tss:
 	.space 16*NUM_TSS,0	//segmento tss, riempito a runtime

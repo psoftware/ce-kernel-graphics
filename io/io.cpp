@@ -21,22 +21,22 @@ extern "C" void terminate_p();
 extern "C" void sem_wait(natl sem);
 extern "C" void sem_signal(natl sem);
 extern "C" natl sem_ini(int val);
-extern "C" void wfi();	// [9.1]
+extern "C" void wfi();	//
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
 
 ////////////////////////////////////////////////////////////////////////////////
-//                    GESTIONE DELLE INTERFACCE SERIALI [9.2]                 //
+//                    GESTIONE DELLE INTERFACCE SERIALI                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-enum funz { input_n, input_ln, output_n, output_0 };  // [9.2]
+enum funz { input_n, input_ln, output_n, output_0 };  //
 
-struct interfse_reg {	// [9.2]
+struct interfse_reg {	//
 	ioaddr iRBR, iTHR, iLSR, iIER, iIIR;
 };
 
-struct des_se {		// [9.2]
+struct des_se {		//
 	interfse_reg indreg;
 	natl mutex;
 	natl sincr;
@@ -80,9 +80,9 @@ des_se com[S] = {
 	}
 };
 
-void input_com(des_se* p_des);	// [9.2]
-void output_com(des_se* p_des);	// [9.2]
-void estern_com(int i) // [9.2]
+void input_com(des_se* p_des);	//
+void output_com(des_se* p_des);	//
+void estern_com(int i) //
 {
 	natb r;
 	des_se *p_des;
@@ -310,30 +310,30 @@ bool com_init()
 // )
 
 ////////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE DELLA CONSOLE [9.5]                       //
+//                         GESTIONE DELLA CONSOLE                       //
 ////////////////////////////////////////////////////////////////////////////////
 
-const natl COLS = 80; 	// [9.5]
-const natl ROWS = 25;	// [9.5]
-const natl VIDEO_SIZE = COLS * ROWS;	// [9.5]
+const natl COLS = 80; 	//
+const natl ROWS = 25;	//
+const natl VIDEO_SIZE = COLS * ROWS;	//
 
-struct interfvid_reg {	// [9.5]
+struct interfvid_reg {	//
 	ioaddr iIND, iDAT;
 };
 
-struct des_vid {	// [9.5]
+struct des_vid {	//
 	interfvid_reg indreg;
 	natw* video;
 	natl x, y;
 	natw attr;
 };
 
-const natl MAX_CODE = 40; // [9.5]
-struct interfkbd_reg {	// [9.5]
+const natl MAX_CODE = 40; //
+struct interfkbd_reg {	//
 	ioaddr iRBR, iTBR, iCMR, iSTR;
 };
 
-struct des_kbd { // [9.5]
+struct des_kbd { //
 	interfkbd_reg indreg;
 	addr punt;
 	natl cont;
@@ -343,7 +343,7 @@ struct des_kbd { // [9.5]
 	natb tabmai[MAX_CODE];
 };
 
-struct des_console { // [9.5]
+struct des_console { //
 	natl mutex;
 	natl sincr;
 	des_kbd kbd;
@@ -397,9 +397,9 @@ des_console console = {
 	}
 };
 
-extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); // [9.5]
+extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); //
 
-void scroll(des_vid *p_des)	// [9.5]
+void scroll(des_vid *p_des)	//
 {
 	for (natl i = 0; i < VIDEO_SIZE - COLS; i++) 
 		p_des->video[i] = p_des->video[i + COLS];
@@ -408,7 +408,7 @@ void scroll(des_vid *p_des)	// [9.5]
 	p_des->y--;
 }
 
-void writeelem(natb c) {	// [9.5]
+void writeelem(natb c) {	//
 	des_vid* p_des = &console.vid;
 	switch (c) {
 	case 0:
@@ -446,7 +446,7 @@ void writeelem(natb c) {	// [9.5]
 		p_des->x, p_des->y);
 }
 
-void writeseq(cstr seq)	// [9.5]
+void writeseq(cstr seq)	//
 {
 	const natb* pn = static_cast<const natb*>(seq);
 	while (*pn != 0) {
@@ -455,7 +455,7 @@ void writeseq(cstr seq)	// [9.5]
 	}
 }
 
-extern "C" void c_writeconsole(cstr buff) // [9.5]
+extern "C" void c_writeconsole(cstr buff) //
 {
 	des_console *p_des = &console;
 	sem_wait(p_des->mutex);
@@ -468,17 +468,17 @@ extern "C" void c_writeconsole(cstr buff) // [9.5]
 	sem_signal(p_des->mutex);
 }
 
-extern "C" void go_inputkbd(interfkbd_reg* indreg); // [9.5]
-extern "C" void halt_inputkbd(interfkbd_reg* indreg); // [9.5]
+extern "C" void go_inputkbd(interfkbd_reg* indreg); //
+extern "C" void halt_inputkbd(interfkbd_reg* indreg); //
 
-void startkbd_in(des_kbd* p_des, str buff) // [9.5]
+void startkbd_in(des_kbd* p_des, str buff) //
 {
 	p_des->punt = buff;
 	p_des->cont = 80;
 	go_inputkbd(&p_des->indreg);
 }
 
-extern "C" void c_readconsole(str buff, natl& quanti) // [9.5]
+extern "C" void c_readconsole(str buff, natl& quanti) //
 {
 	des_console *p_des;
 
@@ -490,7 +490,7 @@ extern "C" void c_readconsole(str buff, natl& quanti) // [9.5]
 	sem_signal(p_des->mutex);
 }
 
-natb converti(des_kbd* p_des, natb c) { // [9.5]
+natb converti(des_kbd* p_des, natb c) { //
 	natb cc;
 	natl pos = 0;
 	while (pos < MAX_CODE && p_des->tab[pos] != c)
@@ -504,7 +504,7 @@ natb converti(des_kbd* p_des, natb c) { // [9.5]
 	return cc;
 }
 
-void estern_kbd(int h) // [9.5]
+void estern_kbd(int h) //
 {
 	des_console *p_des = &console;
 	natb a, c;
@@ -664,7 +664,7 @@ void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
 	p_dmades->prd[1] = 0x80000000 | quanti;					// EOT posto a 1
 }
 extern "C" void hd_select_device(short ms, ioaddr iHND);
-void hd_sel_drv(des_ata* p_des) // [9.3]
+void hd_sel_drv(des_ata* p_des) //
 {
 	natb stato;
 
