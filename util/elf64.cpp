@@ -60,14 +60,14 @@ public:
 
 EseguibileElf64::EseguibileElf64(FILE* pexe_)
 	: pexe(pexe_), curr_seg(0),
-	  seg_buf(NULL), sec_buf(NULL) 
+	  seg_buf(NULL), sec_buf(NULL)
 {}
 
-	
+
 
 bool EseguibileElf64::init()
 {
-	if (fseek(pexe, 0, SEEK_SET) != 0) 
+	if (fseek(pexe, 0, SEEK_SET) != 0)
 		return false;
 
 	if (fread(&h, sizeof(Elf64_Ehdr), 1, pexe) < 1)
@@ -94,7 +94,7 @@ bool EseguibileElf64::init()
 		fprintf(stderr, "Fine prematura del file ELF\n");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	// dall'intestazione, calcoliamo l'inizio della tabella delle sezioni
 	sec_buf = new char[h.e_shnum * h.e_shentsize];
 	if ( fseek(pexe, h.e_shoff, SEEK_SET) != 0 ||
@@ -112,7 +112,7 @@ Segmento* EseguibileElf64::prossimo_segmento()
 	while (curr_seg < h.e_phnum) {
 		Elf64_Phdr* ph = (Elf64_Phdr*)(seg_buf + h.e_phentsize * curr_seg);
 		curr_seg++;
-		
+
 		if (ph->p_type != PT_LOAD)
 			continue;
 

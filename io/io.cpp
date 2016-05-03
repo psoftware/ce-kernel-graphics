@@ -89,11 +89,11 @@ void estern_com(int i) //
 	p_des = &com[i];
 	for(;;) {
 		inputb(p_des->indreg.iIIR, r);
-		if ((r&0x06) == 0x04) 
+		if ((r&0x06) == 0x04)
 			input_com(p_des);
 		else if ((r&0x06) == 0x02)
 			output_com(p_des);
-		wfi(); 
+		wfi();
 	}
 }
 
@@ -237,7 +237,7 @@ void startse_out(des_se *p_des, natb vetto[], natl quanti, funz op) // [9.2.2]
 	p_des->punt = vetto;
 	p_des->funzione = op;
 	go_outputse(p_des->indreg.iIER);
-	output_com(p_des); 
+	output_com(p_des);
 }
 
 extern "C" void halt_outputse(ioaddr i_ctr);
@@ -254,7 +254,7 @@ void output_com(des_se *p_des)	// [9.2.2]
 		}
 		c = *static_cast<natb*>(p_des->punt); //prelievo
 		outputb(c, p_des->indreg.iTHR);
-		p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
+		p_des->punt = static_cast<natb*>(p_des->punt) + 1;
 	} else if (p_des->funzione == output_0) {
 		c = *static_cast<natb*>(p_des->punt); //prelievo
 		if (c == 0) {
@@ -263,7 +263,7 @@ void output_com(des_se *p_des)	// [9.2.2]
 		} else {
 			outputb(c, p_des->indreg.iTHR);
 			p_des->cont++;
-			p_des->punt = static_cast<natb*>(p_des->punt) + 1; 
+			p_des->punt = static_cast<natb*>(p_des->punt) + 1;
 		}
 	}
 
@@ -372,7 +372,7 @@ des_console console = {
 		},
 		{	// tamin
 			'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-			'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 
+			'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
 			'a', 's', 'd', 'f', 'g', 'h', 'j', 'k',
 			'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm',
 			' ', '\n', '\b', 0x1B
@@ -401,7 +401,7 @@ extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); //
 
 void scroll(des_vid *p_des)	//
 {
-	for (natl i = 0; i < VIDEO_SIZE - COLS; i++) 
+	for (natl i = 0; i < VIDEO_SIZE - COLS; i++)
 		p_des->video[i] = p_des->video[i + COLS];
 	for (natl i = 0; i < COLS; i++)
 		p_des->video[VIDEO_SIZE - COLS + i] = p_des->attr | ' ';
@@ -438,7 +438,7 @@ void writeelem(natb c) {	//
 			p_des->x = 0;
 			p_des->y++;
 		}
-		if (p_des->y >= ROWS) 
+		if (p_des->y >= ROWS)
 			scroll(p_des);
 		break;
 	}
@@ -514,7 +514,7 @@ void estern_kbd(int h) //
 		halt_inputkbd(&p_des->kbd.indreg);
 
 		inputb(p_des->kbd.indreg.iRBR, c);
-		
+
 		fine = false;
 		switch (c) {
 		case 0x2a: // left shift make code
@@ -552,7 +552,7 @@ void estern_kbd(int h) //
 			}
 			break;
 		}
-		if (fine == true) 
+		if (fine == true)
 			sem_signal(p_des->sincr);
 		else
 			go_inputkbd(&p_des->kbd.indreg);
@@ -588,7 +588,7 @@ extern "C" des_vid vid;
 bool vid_init()
 {
 	des_vid *p_des = &console.vid;
-	for (natl i = 0; i < VIDEO_SIZE; i++) 
+	for (natl i = 0; i < VIDEO_SIZE; i++)
 		p_des->video[i] = p_des->attr | ' ';
 	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
 		p_des->x, p_des->y);
@@ -616,16 +616,16 @@ bool console_init()
 // inerfacce ATA
 
 enum hd_cmd { WRITE_SECT = 0x30, READ_SECT = 0x20, WRITE_DMA = 0xCA, READ_DMA = 0xC8 };
-struct interfata_reg {	
+struct interfata_reg {
 	ioaddr iBR;
 	ioaddr iCNL, iCNH, iSNR, iHND, iSCR, iERR,
 	       iCMD, iSTS, iDCR, iASR;
-}; 
+};
 struct pci_ata
-{	
+{
 	ioaddr iBMCMD, iBMSTR, iBMDTPR;
 };
-struct des_ata {	
+struct des_ata {
 	interfata_reg indreg;
 	pci_ata bus_master;
 	natl prd[2];
@@ -652,7 +652,7 @@ des_ata hd = {
 	}
 	// il resto e' inizializzato a zero
 };
-			 
+
 
 const natb HD_IRQ = 15;
 
@@ -678,7 +678,7 @@ extern "C" void hd_halt_inout(ioaddr iSTS);
 // disabilita l'interfaccia a generare interruzioni
 
 void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
-{	
+{
 	p_dmades->prd[0] = reinterpret_cast<natq>(iff);
 	p_dmades->prd[1] = 0x80000000 | quanti;					// EOT posto a 1
 }
@@ -694,9 +694,9 @@ void hd_sel_drv(des_ata* p_des) //
 	} while ( (stato & 0x80) || (stato & 0x08) );
 }
 void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
-extern "C" void c_readhd_n(natw vetti[], natl primo, 
+extern "C" void c_readhd_n(natw vetti[], natl primo,
 		natb quanti, natb &errore)
-{	
+{
 	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
@@ -708,7 +708,7 @@ extern "C" void c_readhd_n(natw vetti[], natl primo,
 void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
 extern "C" void c_writehd_n(natw vetto[], natl primo,
 		natb quanti, natb &errore)
-{	
+{
 	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
@@ -718,7 +718,7 @@ extern "C" void c_writehd_n(natw vetto[], natl primo,
 	sem_signal(p_des->mutex);
 }
 void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
-{	
+{
 	p_des->cont = quanti;
 	p_des->punt = vetti;
 	p_des->comando = READ_SECT;
@@ -726,10 +726,10 @@ void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
 	hd_write_address(p_des, primo);
 	outputb(quanti, p_des->indreg.iSCR);
 	hd_go_inout(p_des->indreg.iDCR);
-	hd_write_command(READ_SECT, p_des->indreg.iCMD); 
+	hd_write_command(READ_SECT, p_des->indreg.iCMD);
 }
 void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
-{	
+{
 	p_des->cont = quanti;
 	p_des->punt = vetto + DIM_BLOCK / 2;
 	p_des->comando = WRITE_SECT;
@@ -744,7 +744,7 @@ void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
 void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
 extern "C" void c_dmareadhd_n(natw vetti[], natl primo, natb quanti,
 		natb &errore)
-{	
+{
 	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
@@ -754,9 +754,9 @@ extern "C" void c_dmareadhd_n(natw vetti[], natl primo, natb quanti,
 	sem_signal(p_des->mutex);
 }
 void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
-extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti, 
+extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti,
 		natb& errore)
-{	
+{
 	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
@@ -766,7 +766,7 @@ extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti,
 	sem_signal(p_des->mutex);
 }
 void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
-{	
+{
 	// la scrittura ini iBMDTPR di &prd[0] avviene in fase di inizializzazione
 	natb work; addr iff;
 	p_des->comando = READ_DMA;
@@ -786,10 +786,10 @@ void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
 	hd_write_command(READ_DMA, p_des->indreg.iCMD);
 	inputb(p_des->bus_master.iBMCMD, work);
 	work |= 0x01; 							// avvio dell’operazione
-	outputb(work, p_des->bus_master.iBMCMD); 
+	outputb(work, p_des->bus_master.iBMCMD);
 }
 void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
-{	
+{
 	// la scrittura in iBMDTPR di &prd[0] avviene in fase di inizializzazione
 	natb work; addr iff;
 	p_des->comando = WRITE_DMA;
@@ -809,20 +809,20 @@ void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
 	hd_write_command(WRITE_DMA, p_des->indreg.iCMD);
 	inputb(p_des->bus_master.iBMCMD, work);
 	work |= 1;								// avvio dell’operazione
-	outputb(work, p_des->bus_master.iBMCMD); 
+	outputb(work, p_des->bus_master.iBMCMD);
 }
 
 void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 {
 	des_ata* p_des = &hd;
 	natb stato, work;
-	for(;;) {	
+	for(;;) {
 		p_des->cont--;
-		if (p_des->cont == 0) 
+		if (p_des->cont == 0)
 			hd_halt_inout(p_des->indreg.iDCR);
 		p_des->errore = 0;
 		inputb(p_des->indreg.iSTS, stato); 				// ack dell'interrupt
-		switch (p_des->comando) {	
+		switch (p_des->comando) {
 		case READ_SECT:
 			if (!hd_wait_data(p_des->indreg.iSTS))
 				inputb(p_des->indreg.iERR, p_des->errore);
@@ -832,13 +832,13 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 			p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
 			break;
 		case WRITE_SECT:
-			if (p_des->cont != 0) {	
+			if (p_des->cont != 0) {
 				if (!hd_wait_data(p_des->indreg.iSTS))
 					inputb(p_des->indreg.iERR, p_des->errore);
 				else
 					outputbw(static_cast<natw*>(p_des->punt),
 							DIM_BLOCK / 2, p_des->indreg.iBR);
-				p_des->punt = static_cast<natw*>(p_des->punt) + 
+				p_des->punt = static_cast<natw*>(p_des->punt) +
 					DIM_BLOCK / 2;
 			}
 			break;

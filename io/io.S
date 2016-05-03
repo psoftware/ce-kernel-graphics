@@ -257,14 +257,14 @@ go_inputkbd:
 	movb $0x61, %al
 	outb %al, %dx
 	movw 6(%rdi), %dx
-1:	inb %dx, %al	
+1:	inb %dx, %al
 	testb $0x02, %al
 	jnz 1b
 
 	leave
 	ret
-	
-	
+
+
 	ret
 
 	.global halt_inputkbd
@@ -279,14 +279,14 @@ halt_inputkbd:
 	movb $0x60, %al
 	outb %al, %dx
 	movw 6(%rdi), %dx
-1:	inb %dx, %al	 
-	testb $0x02, %al 
+1:	inb %dx, %al
+	testb $0x02, %al
 	jnz 1b
 
 	leave
 	ret
 
-// indirizzi delle porte relative alla gestione del cursore, nel controllore 
+// indirizzi delle porte relative alla gestione del cursore, nel controllore
 // della scheda video
 .set CUR_HIGH, 0x0e
 .set CUR_LOW, 0x0f
@@ -302,7 +302,7 @@ cursore:
 	mulb  %cl
 	addb  %dl, %al
 	adcb  $0, %ah
-	movw  %ax, %cx 	
+	movw  %ax, %cx
 	movw  %di, %dx
 	movb  $CUR_HIGH, %al
 	outb  %al, %dx
@@ -401,10 +401,10 @@ a_iniconsole:
 # interface ATA
 
 .global			hd_write_address
-hd_write_address:	
+hd_write_address:
 	pushq %rbp
 	movq %rsp, %rbp
-	
+
 	movl %esi,%eax
 	movw 6(%rdi),%dx
 	outb %al,%dx		// caricato SNR
@@ -421,12 +421,12 @@ hd_write_address:
 	orb  $0xe0,%ah		// seleziona LBA
 	orb %ah,%al
 	outb %al,%dx		// caricato HND
-	
+
 	leave
 	ret
 
 .global			hd_write_command
-hd_write_command: 
+hd_write_command:
 	pushq %rbp
 	movq %rsp, %rbp
 
@@ -446,7 +446,7 @@ hd_go_inout:		#...
 					// generare interruzioni
 	ret
 .global			hd_halt_inout
-hd_halt_inout:	
+hd_halt_inout:
 	movw %di, %dx		// ind. di DEV_CTL in edx
 	movb $0x0A,%al
 	outb %al, %dx			// disabilitazione della generazione

@@ -33,7 +33,7 @@ Swap* TipoFileSwap::apri(const char *nome)
 {
 	FILE *img;
 
-	if ( !(img = fopen(nome, "rb+")) || 
+	if ( !(img = fopen(nome, "rb+")) ||
 	      (fseek(img, 0L, SEEK_END) != 0) )
 	{
 		return NULL;
@@ -41,7 +41,7 @@ Swap* TipoFileSwap::apri(const char *nome)
 
 	return new FileSwap(img);
 }
-	
+
 
 FileSwap::~FileSwap()
 {

@@ -12,11 +12,11 @@ const natl DUMMY_PRIORITY = 0x0000000;
 const int N_REG = 16;	//
 
 // descrittore di processo
-struct des_proc {	
-	natl riservato1;	
+struct des_proc {
+	natl riservato1;
 	addr punt_nucleo;
 	// due quad  a disposizione (puntatori alle pile ring 1 e 2)
-	natq disp1[2];		
+	natq disp1[2];
 	natq riservato2;
 	//entry della IST, non usata
 	natq disp2[7];
@@ -33,7 +33,7 @@ extern "C" void terminate_p();	//
 
 //indici nell'array contesto
 enum { I_RAX, I_RCX, I_RDX, I_RBX,
-	I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10, 
+	I_RSP, I_RBP, I_RSI, I_RDI, I_R8, I_R9, I_R10,
 	I_R11, I_R12, I_R13, I_R14, I_R15 };
 // )
 
@@ -191,7 +191,7 @@ extern "C" void c_delay(natl n)
 	richiesta *p;
 
 	p = static_cast<richiesta*>(alloca(sizeof(richiesta)));
-	p->d_attesa = n;	
+	p->d_attesa = n;
 	p->pp = esecuzione;
 
 	inserimento_lista_attesa(p);
@@ -261,21 +261,21 @@ extern "C" void gestore_eccezioni(int tipo, natq errore,
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
 	abort_p();
 }
-// (*il microprogramma di gestione delle eccezioni di page fault lascia in cima 
-//   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno 
-//   significativi specificano piu' precisamente il motivo per cui si e' 
+// (*il microprogramma di gestione delle eccezioni di page fault lascia in cima
+//   alla pila (oltre ai valori consueti) una doppia parola, i cui 4 bit meno
+//   significativi specificano piu' precisamente il motivo per cui si e'
 //   verificato un page fault. Il significato dei bit e' il seguente:
-//   - prot: se questo bit vale 1, il page fault si e' verificato per un errore 
-//   di protezione: il processore si trovava a livello utente e la pagina 
+//   - prot: se questo bit vale 1, il page fault si e' verificato per un errore
+//   di protezione: il processore si trovava a livello utente e la pagina
 //   era di livello sistema (bit US = 0 in una qualunque delle tabelle
 //   dell'albero che porta al descrittore della pagina). Se prot = 0, la pagina
 //   o una delle tabelle erano assenti (bit P = 0)
-//   - write: l'accesso che ha causato il page fault era in scrittura (non 
+//   - write: l'accesso che ha causato il page fault era in scrittura (non
 //   implica che la pagina non fosse scrivibile)
-//   - user: l'accesso e' avvenuto mentre il processore si trovava a livello 
+//   - user: l'accesso e' avvenuto mentre il processore si trovava a livello
 //   utente (non implica che la pagina fosse invece di livello sistema)
-//   - res: uno dei bit riservati nel descrittore di pagina o di tabella non 
-//   avevano il valore richiesto (il bit D deve essere 0 per i descrittori di 
+//   - res: uno dei bit riservati nel descrittore di pagina o di tabella non
+//   avevano il valore richiesto (il bit D deve essere 0 per i descrittori di
 //   tabella, e il bit pgsz deve essere 0 per i descrittori di pagina)
 struct pf_error {
 	natq prot  : 1;
@@ -287,7 +287,7 @@ struct pf_error {
 // *)
 
 // (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-extern "C" addr fine_codice_sistema; 
+extern "C" addr fine_codice_sistema;
 // *)
 void c_routine_pf();
 extern "C" void c_pre_routine_pf(	//
@@ -297,8 +297,8 @@ extern "C" void c_pre_routine_pf(	//
 	// *)
 	)
 {
-	// (* il sistema non e' progettato per gestire page fault causati 
-	//   dalle primitie di nucleo , quindi, se cio' si e' verificato, 
+	// (* il sistema non e' progettato per gestire page fault causati
+	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
 	if (rip < fine_codice_sistema || errore.res == 1) {
 		flog(LOG_ERR, "rip: %p, page fault a %p", rip, readCR2());
@@ -310,9 +310,9 @@ extern "C" void c_pre_routine_pf(	//
 		panic("page fault dal modulo sistema");
 	}
 	// *)
-	
-	// (* l'errore di protezione non puo' essere risolto: il processo ha 
-	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio 
+
+	// (* l'errore di protezione non puo' essere risolto: il processo ha
+	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio
 	//    sistema)
 	if (errore.prot == 1) {
 		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", rip, readCR2(),
@@ -321,7 +321,7 @@ extern "C" void c_pre_routine_pf(	//
 		abort_p();
 	}
 	// *)
-	
+
 
 	c_routine_pf();
 }
@@ -663,7 +663,7 @@ bool crea_pagina(natl proc, addr ind_virt, natl priv)
 	for (int i = 3; i >= 0; i--) {
 		if (!crea(proc, ind_virt, i, priv))
 			return false;
-	}	
+	}
 	return true;
 }
 
@@ -721,13 +721,13 @@ void rilascia_tutto(addr tab4, natl i, natl n);
 proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
-	natl		identifier;		// indice del tss nella gdt 
+	natl		identifier;		// indice del tss nella gdt
 	des_proc	*pdes_proc;		// descrittore di processo
 	des_pf*		dpf_tab4;		// tab4 del processo
 	addr		pila_sistema;
-	
 
-	// ( allocazione (e azzeramento preventivo) di un des_proc 
+
+	// ( allocazione (e azzeramento preventivo) di un des_proc
 	//   (parte del punto 3 in)
 	pdes_proc = static_cast<des_proc*>(alloca(sizeof(des_proc)));
 	if (pdes_proc == 0) goto errore1;
@@ -738,7 +738,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	identifier = alloca_tss(pdes_proc);
 	if (identifier == 0) goto errore2;
 	// )
-	
+
 	// ( allocazione e inizializzazione di un proc_elem
 	//   (punto 3 in)
 	p = static_cast<proc_elem*>(alloca(sizeof(proc_elem)));
@@ -793,7 +793,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//   se avesse eseguito una istruzione INT, con la pila sistema
 		//   che contiene le 5 parole lunghe preparate precedentemente
 		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
-		
+
 		pdes_proc->contesto[I_RDI] = a;
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
@@ -807,7 +807,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		pl[-4] = SEL_CODICE_SISTEMA;   // CS (codice sistema)
 		pl[-3] = (IF? BIT_IF : 0);  	// EFLAG
 		pl[-2] = (natq)fin_sis_p - sizeof(natq);
-		pl[-1] = 0;	// SS 
+		pl[-1] = 0;	// SS
 		//   i processi esterni lavorano esclusivamente a livello
 		//   sistema. Per questo motivo, prepariamo una sola pila (la
 		//   pila sistema)
@@ -849,8 +849,8 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		abort_p();
 	}
 	// *)
-	
-	// (* controlliamo che 'liv' contenga un valore ammesso 
+
+	// (* controlliamo che 'liv' contenga un valore ammesso
 	//    [segnalazione di E. D'Urso]
 	if (liv != LIV_UTENTE && liv != LIV_SISTEMA) {
 		flog(LOG_WARN, "livello non valido: %d", liv);
@@ -882,7 +882,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 
 void rilascia_tutto(addr tab4, natl i, natl n);
 void dealloca_blocco(natl blocco);
-// rilascia tutte le strutture dati private associate al processo puntato da 
+// rilascia tutte le strutture dati private associate al processo puntato da
 // "p" (tranne il proc_elem puntato da "p" stesso)
 void distruggi_processo(proc_elem* p)
 {
@@ -896,7 +896,7 @@ void distruggi_processo(proc_elem* p)
 	dealloca(pdes_proc);
 }
 
-// rilascia ntab tabelle (con tutte le pagine da esse puntate) a partire da 
+// rilascia ntab tabelle (con tutte le pagine da esse puntate) a partire da
 // quella puntata dal descrittore i-esimo di tab4.
 void rilascia_ric(addr tab, int liv, natl i, natl n)
 {
@@ -933,7 +933,7 @@ extern "C" void c_terminate_p()
 	schedulatore();			//
 }
 
-// come la terminate_p, ma invia anche un warning al log (da invocare quando si 
+// come la terminate_p, ma invia anche un warning al log (da invocare quando si
 // vuole terminare un processo segnalando che c'e' stato un errore)
 extern "C" void c_abort_p()
 {
@@ -1174,13 +1174,13 @@ struct superblock_t {
 // descrittore di swap (vedi [P_SWAP] avanti)
 struct des_swap {
 	natl *free;		// bitmap dei blocchi liberi
-	superblock_t sb;	// contenuto del superblocco 
+	superblock_t sb;	// contenuto del superblocco
 } swap_dev; 	// c'e' un unico oggetto swap
 bool swap_init();
 
 bool crea_spazio_condiviso(natl dummy_proc)
 {
-	
+
 	// ( lettura del direttorio principale dallo swap
 	flog(LOG_INFO, "lettura del direttorio principale...");
 	addr tmp = alloca(DIM_PAGINA);
@@ -1192,12 +1192,12 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	// )
 
 	// (  carichiamo le parti condivise nello spazio di indirizzamento del processo
-	//    dummy 
+	//    dummy
 	addr dummy_dir = des_p(dummy_proc)->cr3;
 	copy_des(tmp, dummy_dir, I_MIO_C, N_MIO_C);
 	copy_des(tmp, dummy_dir, I_UTN_C, N_UTN_C);
 	dealloca(tmp);
-	
+
 	if (!carica_tutto(dummy_proc, I_MIO_C, 1))
 		return false;
 	if (!carica_tutto(dummy_proc, I_UTN_C, 1))
@@ -1266,11 +1266,11 @@ proc_elem *a_p_save[MAX_IRQ];
 // primitiva di nucleo usata dal nucleo stesso
 extern "C" void wfi();
 
-// inizialmente, tutti gli interrupt esterni sono associati ad una istanza di 
-// questo processo esterno generico, che si limita ad inviare un messaggio al 
-// log ogni volta che viene attivato. Successivamente, la routine di 
-// inizializzazione del modulo di I/O provvedera' a sostituire i processi 
-// esterni generici con i processi esterni effettivi, per quelle periferiche 
+// inizialmente, tutti gli interrupt esterni sono associati ad una istanza di
+// questo processo esterno generico, che si limita ad inviare un messaggio al
+// log ogni volta che viene attivato. Successivamente, la routine di
+// inizializzazione del modulo di I/O provvedera' a sostituire i processi
+// esterni generici con i processi esterni effettivi, per quelle periferiche
 // che il modulo di I/O e' in grado di gestire.
 void estern_generico(int h)
 {
@@ -1282,7 +1282,7 @@ void estern_generico(int h)
 }
 
 // associa il processo esterno puntato da "p" all'interrupt "irq".
-// Fallisce se un processo esterno (non generico) era gia' stato associato a 
+// Fallisce se un processo esterno (non generico) era gia' stato associato a
 // quello stesso interrupt
 bool aggiungi_pe(proc_elem *p, natb irq)
 {
@@ -1310,8 +1310,8 @@ extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type
 	p = crea_processo(f, a, prio, liv, true);
 	if (p == 0)
 		goto error1;
-		
-	if (!aggiungi_pe(p, type) ) 
+
+	if (!aggiungi_pe(p, type) )
 		goto error2;
 
 	flog(LOG_INFO, "estern=%d entry=%p(%d) prio=%d liv=%d type=%d",
@@ -1320,11 +1320,11 @@ extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type
 	return p->id;
 
 error2:	distruggi_processo(p);
-error1:	
+error1:
 	return 0xFFFFFFFF;
 }
 
-// init_pe viene chiamata in fase di inizializzazione, ed associa una istanza 
+// init_pe viene chiamata in fase di inizializzazione, ed associa una istanza
 // di processo esterno generico ad ogni interrupt
 bool init_pe()
 {
@@ -1414,7 +1414,7 @@ extern "C" void cmain ()
 	init_dpf();
 	flog(LOG_INFO, "Pagine fisiche: %d", N_DPF);
 	// )
-	
+
 	flog(LOG_INFO, "sis/cond [%p, %p)", ini_sis_c, fin_sis_c);
 	flog(LOG_INFO, "sis/priv [%p, %p)", ini_sis_p, fin_sis_p);
 	flog(LOG_INFO, "io /cond [%p, %p)", ini_mio_c, fin_mio_c);
@@ -1432,16 +1432,16 @@ extern "C" void cmain ()
 	apic_reset(); // in libce
 	apic_fill();
 	flog(LOG_INFO, "APIC inizializzato");
-	
+
 	// ( inizializzazione dello swap, che comprende la lettura
-	//   degli entry point di start_io e start_utente 
+	//   degli entry point di start_io e start_utente
 	if (!swap_init())
 			goto error;
 	flog(LOG_INFO, "sb: blocks = %d", swap_dev.sb.blocks);
 	flog(LOG_INFO, "sb: user   = %p/%p",
 			swap_dev.sb.user_entry,
 			swap_dev.sb.user_end);
-	flog(LOG_INFO, "sb: io     = %p/%p", 
+	flog(LOG_INFO, "sb: io     = %p/%p",
 			swap_dev.sb.io_entry,
 			swap_dev.sb.io_end);
 	// )
@@ -1469,7 +1469,7 @@ extern "C" void cmain ()
 	schedulatore();
 	// *)
 	// ( esegue CALL carica_stato; IRET (, vedi "sistema.S")
-	salta_a_main(); 
+	salta_a_main();
 	// )
 
 error:
@@ -1481,7 +1481,7 @@ void gdb_breakpoint() {}
 void main_sistema(int n)
 {
 	natl sync_io;
-	natl dummy_proc = (natl)n; 
+	natl dummy_proc = (natl)n;
 
 
 	// ( caricamento delle tabelle e pagine residenti degli spazi condivisi ()
@@ -1489,7 +1489,7 @@ void main_sistema(int n)
 	if (!crea_spazio_condiviso(dummy_proc))
 		goto error;
  	// )
-	
+
 	gdb_breakpoint();
 
 	// ( inizializzazione del modulo di io
@@ -1527,33 +1527,33 @@ error:
 }
 
 // ( [P_SWAP]
-// lo swap e' descritto dalla struttura des_swap, che specifica il canale 
-// (primario o secondario) il drive (primario o master) e il numero della 
-// partizione che lo contiene. Inoltre, la struttura contiene una mappa di bit, 
-// utilizzata per l'allocazione dei blocchi in cui lo swap e' suddiviso, e un 
-// "super blocco".  Il contenuto del super blocco e' copiato, durante 
-// l'inizializzazione del sistema, dal primo settore della partizione di swap, 
+// lo swap e' descritto dalla struttura des_swap, che specifica il canale
+// (primario o secondario) il drive (primario o master) e il numero della
+// partizione che lo contiene. Inoltre, la struttura contiene una mappa di bit,
+// utilizzata per l'allocazione dei blocchi in cui lo swap e' suddiviso, e un
+// "super blocco".  Il contenuto del super blocco e' copiato, durante
+// l'inizializzazione del sistema, dal primo settore della partizione di swap,
 // e deve contenere le seguenti informazioni:
-// - magic (un valore speciale che serve a riconoscere la partizione, per 
+// - magic (un valore speciale che serve a riconoscere la partizione, per
 // evitare di usare come swap una partizione utilizzata per altri scopi)
-// - bm_start: il primo blocco, nella partizione, che contiene la mappa di bit 
-// (lo swap, inizialmente, avra' dei blocchi gia' occupati, corrispondenti alla 
-// parte utente/condivisa dello spazio di indirizzamento dei processi da 
-// creare: e' necessario, quindi, che lo swap stesso memorizzi una mappa di 
-// bit, che servira' come punto di partenza per le allocazioni dei blocchi 
+// - bm_start: il primo blocco, nella partizione, che contiene la mappa di bit
+// (lo swap, inizialmente, avra' dei blocchi gia' occupati, corrispondenti alla
+// parte utente/condivisa dello spazio di indirizzamento dei processi da
+// creare: e' necessario, quindi, che lo swap stesso memorizzi una mappa di
+// bit, che servira' come punto di partenza per le allocazioni dei blocchi
 // successive)
-// - blocks: il numero di blocchi contenuti nella partizione di swap (esclusi 
+// - blocks: il numero di blocchi contenuti nella partizione di swap (esclusi
 // quelli iniziali, contenenti il superblocco e la mappa di bit)
 // - directory: l'indice del blocco che contiene il direttorio
-// - l'indirizzo virtuale dell'entry point del programma contenuto nello swap 
+// - l'indirizzo virtuale dell'entry point del programma contenuto nello swap
 // (l'indirizzo di main)
-// - l'indirizzo virtuale successivo all'ultima istruzione del programma 
+// - l'indirizzo virtuale successivo all'ultima istruzione del programma
 // contenuto nello swap
 // - l'indirizzo virtuale dell'entry point del modulo io contenuto nello swap
 // - l'indirizzo virtuale successivo all'ultimo byte occupato dal modulo io
-// - checksum: somma dei valori precedenti (serve ad essere ragionevolmente 
-// sicuri che quello che abbiamo letto dall'hard disk e' effettivamente un 
-// superblocco di questo sistema, e che il superblocco stesso non e' stato 
+// - checksum: somma dei valori precedenti (serve ad essere ragionevolmente
+// sicuri che quello che abbiamo letto dall'hard disk e' effettivamente un
+// superblocco di questo sistema, e che il superblocco stesso non e' stato
 // corrotto)
 //
 
@@ -1580,7 +1580,7 @@ natq alloca_blocco()
 		natl pos = __builtin_ffs(swap_dev.free[i]) - 1;
 		swap_dev.free[i] &= ~(1UL << pos);
 		risu = pos + sizeof(natl) * 8 * i;
-	} 
+	}
 	return risu;
 }
 
@@ -1593,7 +1593,7 @@ void dealloca_blocco(natl blocco)
 
 
 
-// legge dallo swap il blocco il cui indice e' passato come primo parametro, 
+// legge dallo swap il blocco il cui indice e' passato come primo parametro,
 // copiandone il contenuto a partire dall'indirizzo "dest"
 void leggi_swap(addr dest, natl blocco)
 {
@@ -1652,10 +1652,10 @@ bool swap_init()
 	return true;
 }
 // )
-// ( [P_SEM_ALLOC] 
+// ( [P_SEM_ALLOC]
 // I semafori non vengono mai deallocati, quindi e' possibile allocarli
 // sequenzialmente. Per far questo, e' sufficiente ricordare quanti ne
-// abbiamo allocati 
+// abbiamo allocati
 natl sem_allocati = 0;
 natl alloca_sem()
 {

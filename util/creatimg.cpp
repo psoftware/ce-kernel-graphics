@@ -42,7 +42,7 @@ union entrata {
 		uint64_t D:		1;	// Dirty
 		uint64_t PAT:	1;	// non visto a lezione
 		// fine byte di accesso
-		
+
 		uint64_t global:	1;	// non visto a lezione
 		uint64_t avail:	3;	// non usati
 
@@ -64,7 +64,7 @@ union entrata {
 		uint64_t block:	51;
 
 		uint64_t NX:	1;
-	} a;	
+	} a;
 };
 
 struct tabella {
@@ -167,7 +167,7 @@ class TabCache {
 	bool valid[3];
 	block_t block[3];
 public:
-	
+
 	TabCache() {
 		for (int i = 0; i < 3; i++)
 			valid[i] = false;
@@ -189,7 +189,7 @@ public:
 			CHECKSW(scrivi_blocco, block[i], &tab[liv]);
 		}
 		memset(&tab[liv], 0, sizeof(tabella));
-	
+
 		if (! bm_alloc(&blocks, b) ) {
 			fprintf(stderr, "spazio insufficiente nello swap\n");
 			exit(EXIT_FAILURE);
@@ -246,7 +246,7 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 
 	entry_point = exe->entry_point();
 
-	
+
 	// dall'intestazione, calcoliamo l'inizio della tabella dei segmenti di programma
 	last_address = 0;
 	Segmento *s = NULL;
@@ -350,7 +350,7 @@ int main(int argc, char* argv[])
 	long dim = swap->dimensione() / DIM_PAGINA;
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
-	
+
 	bm_create(&blocks, new uint64_t[nbmblocks * UPB], dim);
 
 	for (int i = 0; i < dim; i++)
@@ -414,7 +414,7 @@ int main(int argc, char* argv[])
 			e[1]->a.block = b;
 			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 			log << " NEW zero";
-		} 
+		}
 		log << " page at " << e[1]->a.block << "\n";
 		e[1]->a.PWT = 0;
 		e[1]->a.PCD = 0;
@@ -423,7 +423,7 @@ int main(int argc, char* argv[])
 		c.scrivi(1);
 
 	}
-		
+
 	superblock.magic[0] = 'C';
 	superblock.magic[1] = 'E';
 	superblock.magic[2] = '6';
@@ -449,5 +449,5 @@ int main(int argc, char* argv[])
 }
 
 
-	
-	
+
+

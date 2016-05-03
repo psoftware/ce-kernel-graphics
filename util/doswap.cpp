@@ -81,12 +81,12 @@ Swap* TipoDOSwap::apri(const char *nome)
 
 	int drv = atoi(nome + 1);
 
-	if (drv < 0 || drv > MAX_DISCHI || partizioni[drv] == NULL) 
+	if (drv < 0 || drv > MAX_DISCHI || partizioni[drv] == NULL)
 		return NULL;
 
 	char *sep = index(nome + 1, '/');
 	int part = 0;
-	if (sep) 
+	if (sep)
 		part = atoi(sep + 1);
 	partizione *scan = partizioni[drv];
 	int i = 0;
@@ -99,20 +99,20 @@ Swap* TipoDOSwap::apri(const char *nome)
 
 	return new DOSwap(scan, drv + 0x80);
 }
-	
+
 
 static int lba_biosdisk(unsigned int13_drive_num, int cmd, unsigned long lba, unsigned nsects, void *buf)
 {
 /* INT 13h AH=42h/AH=43h command packet: */
 	struct
 	{
-		uint8_t  packet_len;	
+		uint8_t  packet_len;
 		uint8_t  reserved1;
-		uint8_t  nsects;	
-		uint8_t  reserved2;	
-		uint16_t buf_offset;	
-		uint16_t buf_segment;	
-		uint64_t lba;		
+		uint8_t  nsects;
+		uint8_t  reserved2;
+		uint16_t buf_offset;
+		uint16_t buf_segment;
+		uint64_t lba;
 	} __attribute__((packed)) lba_cmd_pkt;
 	unsigned tries, err = 0;
 	__dpmi_regs regs;
@@ -209,12 +209,12 @@ static int get_disk_size(unsigned int13_drive_num, unsigned& nsec)
 	nsec = (unsigned)int13ext_dparm.nsec;
 	return 0;
 }
-	
-	
+
+
 
 // descrittore di una partizione dell'hard disk
 //
-// descrittore di partizione. Le uniche informazioni che ci interessano sono 
+// descrittore di partizione. Le uniche informazioni che ci interessano sono
 // "offset" e "sectors"
 
 partizione* TipoDOSwap::leggi_partizioni(unsigned drv)
@@ -243,7 +243,7 @@ partizione* TipoDOSwap::leggi_partizioni(unsigned drv)
 	errore = lba_biosdisk(drv, _DISK_READ, 0, 1, buf);
 	if (errore != 0)
 		goto errore;
-		
+
 	p = reinterpret_cast<des_part*>(buf + 446);
 	// interpretiamo i descrittori delle partizioni primarie
 	estesa = 0;
@@ -261,7 +261,7 @@ partizione* TipoDOSwap::leggi_partizioni(unsigned drv)
 		pp->type  = p->type;
 		pp->first = p->offset;
 		pp->dim   = p->sectors;
-		
+
 		if (pp->type == 5)
 			estesa = *ptail;
 
@@ -277,9 +277,9 @@ partizione* TipoDOSwap::leggi_partizioni(unsigned drv)
 			if (errore != 0)
 				goto errore;
 			p = reinterpret_cast<des_part*>(buf + 446);
-			
+
 			*ptail = new partizione;
-			
+
 			(*ptail)->type  = p->type;
 			(*ptail)->first = p->offset + offset_logica;
 			(*ptail)->dim   = p->sectors;
@@ -293,7 +293,7 @@ partizione* TipoDOSwap::leggi_partizioni(unsigned drv)
 		}
 	}
 	*ptail = 0;
-	
+
 	return head;
 
 errore:
@@ -310,7 +310,7 @@ void TipoDOSwap::read_all_partitions()
 	for (unsigned drv = 0x80; drv < 0x80 + MAX_DISCHI; drv++)
 		partizioni[drv - 0x80] = leggi_partizioni(drv);
 }
-		
+
 unsigned int DOSwap::dimensione() const
 {
 	return p.dim * BPS;

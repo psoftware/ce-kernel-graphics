@@ -43,7 +43,7 @@ public:
 };
 
 class ListaTipiSwap {
-	
+
 public:
 	static ListaTipiSwap* instance();
 	void aggiungi(TipoSwap* in) { testa = new Elem(in, testa); }
@@ -53,7 +53,7 @@ public:
 private:
 	static ListaTipiSwap* instance_;
 	ListaTipiSwap() : testa(NULL), curr(NULL) {}
-	
+
 	struct Elem {
 		TipoSwap* in;
 		Elem* next;

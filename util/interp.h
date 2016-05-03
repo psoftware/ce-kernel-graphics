@@ -36,7 +36,7 @@ public:
 };
 
 class ListaInterpreti {
-	
+
 public:
 	static ListaInterpreti* instance();
 	void aggiungi(Interprete* in) { testa = new Elem(in, testa); }
@@ -46,7 +46,7 @@ public:
 private:
 	static ListaInterpreti* instance_;
 	ListaInterpreti() : testa(NULL), curr(NULL) {}
-	
+
 	struct Elem {
 		Interprete* in;
 		Elem* next;

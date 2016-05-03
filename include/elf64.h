@@ -54,5 +54,5 @@ typedef struct {
         Elf64_Word sh_entsize;
 } Elf64_Shdr;
 
-                     
+
 #endif

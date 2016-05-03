@@ -14,7 +14,7 @@ char* convint(int n, char* out)
        int i = 11;
        bool neg = false;
 
-       if (n == 0) 
+       if (n == 0)
                return copy("0", out);
 
        buf[i--] = '\0';

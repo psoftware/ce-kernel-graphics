@@ -65,7 +65,7 @@ EseguibileCoff_go32::EseguibileCoff_go32(FILE* pexe_)
 	: pexe(pexe_), curr_seg(0), seg_buf(NULL)
 {}
 
-	
+
 
 bool EseguibileCoff_go32::init()
 {
@@ -84,7 +84,7 @@ bool EseguibileCoff_go32::init()
 	if (dos.bytes_in_last_block)
 		  soff -= (512 - dos.bytes_in_last_block);
 
-	if (fseek(pexe, soff, SEEK_SET) != 0) 
+	if (fseek(pexe, soff, SEEK_SET) != 0)
 		return false;
 
 	if (fread(&h, FILHSZ, 1, pexe) < 1)
@@ -94,7 +94,7 @@ bool EseguibileCoff_go32::init()
 	if (h.f_magic != I386MAGIC)
 		return false;
 
-	if (!(h.f_flags & F_EXEC)) 
+	if (!(h.f_flags & F_EXEC))
 		return false;
 
 	// leggiamo l'a.out header
@@ -115,7 +115,7 @@ bool EseguibileCoff_go32::init()
 		fprintf(stderr, "Fine prematura del file COFF-go32\n");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	return true;
 }
 
@@ -128,7 +128,7 @@ Segmento* EseguibileCoff_go32::prossimo_segmento()
 		if (ph->s_vaddr == 0 ||
 		   ph->s_flags != STYP_TEXT && ph->s_flags != STYP_DATA && ph->s_flags != STYP_BSS)
 			continue;
-		
+
 		return new SegmentoCoff_go32(this, ph);
 	}
 	return NULL;
