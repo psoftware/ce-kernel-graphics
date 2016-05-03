@@ -6,7 +6,7 @@
 #define SEL_DATI_UTENTE 	0x1b
 #define LIV_UTENTE		3
 #define LIV_SISTEMA		0
-#define NUM_TSS 1024
+#define NUM_TSS 		1024
 // )
 
 // ( varie dimensioni

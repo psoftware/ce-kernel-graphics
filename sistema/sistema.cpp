@@ -3,20 +3,12 @@
 #include "costanti.h"
 #include "libce.h"
 
-///////////////////////////////////////////////////////////////////////////////////
-//                   INIZIALIZZAZIONE                                            //
-///////////////////////////////////////////////////////////////////////////////////
-const natl MAX_PRIORITY	= 0xfffffff;
-const natl MIN_PRIORITY	= 0x0000001;
-const natl DUMMY_PRIORITY = 0x0000000;
-
-const natq HEAP_START = 1024 * 1024U;
-extern "C" natq start;
-const natq HEAP_SIZE = (natq)&start - HEAP_START;
-
 /////////////////////////////////////////////////////////////////////////////////
 //                     PROCESSI                                                //
 /////////////////////////////////////////////////////////////////////////////////
+const natl MAX_PRIORITY	= 0xfffffff;
+const natl MIN_PRIORITY	= 0x0000001;
+const natl DUMMY_PRIORITY = 0x0000000;
 const int N_REG = 16;	//
 
 // descrittore di processo
@@ -33,9 +25,9 @@ struct des_proc {
 	addr cr3;
 	natq contesto[N_REG];
 	natl cpl;
-}__attribute__((packed));
+} __attribute__((packed));
 
-volatile natl processi;		//
+volatile natl processi;
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv); //
 extern "C" void terminate_p();	//
 
@@ -1222,6 +1214,15 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	invalida_TLB();
 	return true;
 }
+
+///////////////////////////////////////////////////////////////////////////////////
+//                   INIZIALIZZAZIONE                                            //
+///////////////////////////////////////////////////////////////////////////////////
+
+const natq HEAP_START = 1024 * 1024U;
+extern "C" natq start;
+const natq HEAP_SIZE = (natq)&start - HEAP_START;
+
 
 proc_elem init;
 
