@@ -596,7 +596,8 @@ bool vid_init()
 	return true;
 }
 
-bool console_init() {
+bool console_init()
+{
 	des_console *p_des = &console;
 
 	if ( (p_des->mutex = sem_ini(1)) == 0xFFFFFFFF) {
@@ -615,16 +616,17 @@ bool console_init() {
 // inerfacce ATA
 
 enum hd_cmd { WRITE_SECT = 0x30, READ_SECT = 0x20, WRITE_DMA = 0xCA, READ_DMA = 0xC8 };
-struct interfata_reg 
-{	ioaddr iBR;
+struct interfata_reg {	
+	ioaddr iBR;
 	ioaddr iCNL, iCNH, iSNR, iHND, iSCR, iERR,
 	       iCMD, iSTS, iDCR, iASR;
 }; 
 struct pci_ata
-{	ioaddr iBMCMD, iBMSTR, iBMDTPR;
+{	
+	ioaddr iBMCMD, iBMSTR, iBMDTPR;
 };
-struct des_ata
-{	interfata_reg indreg;
+struct des_ata {	
+	interfata_reg indreg;
 	pci_ata bus_master;
 	natl prd[2];
 	hd_cmd comando;
@@ -634,7 +636,23 @@ struct des_ata
 	natb cont;
 	addr punt;
 };
-extern "C" des_ata hd;
+des_ata hd = {
+	{
+		0x0170,	// iBR
+		0x0174, // iCNL
+		0x0175, // iCNH
+		0x0173, // iSNR
+		0x0176, // iHND
+		0x0172, // iSCR
+		0x0171, // iERR
+		0x0177, // iCMD
+		0x0177, // iSTS
+		0x0376, // iDCR
+		0x0376  // iASR
+	}
+	// il resto e' inizializzato a zero
+};
+			 
 
 const natb HD_IRQ = 15;
 
@@ -660,7 +678,8 @@ extern "C" void hd_halt_inout(ioaddr iSTS);
 // disabilita l'interfaccia a generare interruzioni
 
 void hd_componi_prd(des_ata* p_dmades, addr iff, natw quanti)
-{	p_dmades->prd[0] = reinterpret_cast<natq>(iff);
+{	
+	p_dmades->prd[0] = reinterpret_cast<natq>(iff);
 	p_dmades->prd[1] = 0x80000000 | quanti;					// EOT posto a 1
 }
 extern "C" void hd_select_device(short ms, ioaddr iHND);
@@ -677,7 +696,8 @@ void hd_sel_drv(des_ata* p_des) //
 void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
 extern "C" void c_readhd_n(natw vetti[], natl primo, 
 		natb quanti, natb &errore)
-{	des_ata *p_des;
+{	
+	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
 	starthd_in(p_des, vetti, primo, quanti);
@@ -688,7 +708,8 @@ extern "C" void c_readhd_n(natw vetti[], natl primo,
 void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
 extern "C" void c_writehd_n(natw vetto[], natl primo,
 		natb quanti, natb &errore)
-{	des_ata *p_des;
+{	
+	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
 	starthd_out(p_des, vetto, primo, quanti);
@@ -697,7 +718,8 @@ extern "C" void c_writehd_n(natw vetto[], natl primo,
 	sem_signal(p_des->mutex);
 }
 void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
-{	p_des->cont = quanti;
+{	
+	p_des->cont = quanti;
 	p_des->punt = vetti;
 	p_des->comando = READ_SECT;
 	hd_sel_drv(p_des);
@@ -707,7 +729,8 @@ void starthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
 	hd_write_command(READ_SECT, p_des->indreg.iCMD); 
 }
 void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
-{	p_des->cont = quanti;
+{	
+	p_des->cont = quanti;
 	p_des->punt = vetto + DIM_BLOCK / 2;
 	p_des->comando = WRITE_SECT;
 	hd_sel_drv(p_des);
@@ -721,7 +744,8 @@ void starthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
 void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti);
 extern "C" void c_dmareadhd_n(natw vetti[], natl primo, natb quanti,
 		natb &errore)
-{	des_ata *p_des;
+{	
+	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
 	dmastarthd_in(p_des, vetti, primo, quanti);
@@ -732,7 +756,8 @@ extern "C" void c_dmareadhd_n(natw vetti[], natl primo, natb quanti,
 void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti);
 extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti, 
 		natb& errore)
-{	des_ata *p_des;
+{	
+	des_ata *p_des;
 	p_des = &hd;
 	sem_wait(p_des->mutex);
 	dmastarthd_out(p_des, vetto, primo, quanti);
@@ -741,7 +766,8 @@ extern "C" void c_dmawritehd_n(natw vetto[], natl primo, natb quanti,
 	sem_signal(p_des->mutex);
 }
 void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
-{	// la scrittura ini iBMDTPR di &prd[0] avviene in fase di inizializzazione
+{	
+	// la scrittura ini iBMDTPR di &prd[0] avviene in fase di inizializzazione
 	natb work; addr iff;
 	p_des->comando = READ_DMA;
 	p_des->cont = 1;					// informazione per il driver
@@ -763,7 +789,8 @@ void dmastarthd_in(des_ata *p_des, natw vetti[], natl primo, natb quanti)
 	outputb(work, p_des->bus_master.iBMCMD); 
 }
 void dmastarthd_out(des_ata *p_des, natw vetto[], natl primo, natb quanti)
-{	// la scrittura in iBMDTPR di &prd[0] avviene in fase di inizializzazione
+{	
+	// la scrittura in iBMDTPR di &prd[0] avviene in fase di inizializzazione
 	natb work; addr iff;
 	p_des->comando = WRITE_DMA;
 	p_des->cont = 1; 				// informazione per il driver
@@ -789,14 +816,14 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 {
 	des_ata* p_des = &hd;
 	natb stato, work;
-	for(;;)
-	{	p_des->cont--;
+	for(;;) {	
+		p_des->cont--;
 		if (p_des->cont == 0) 
 			hd_halt_inout(p_des->indreg.iDCR);
 		p_des->errore = 0;
 		inputb(p_des->indreg.iSTS, stato); 				// ack dell'interrupt
-		switch (p_des->comando) 
-		{	case READ_SECT:
+		switch (p_des->comando) {	
+		case READ_SECT:
 			if (!hd_wait_data(p_des->indreg.iSTS))
 				inputb(p_des->indreg.iERR, p_des->errore);
 			else
@@ -804,10 +831,10 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 						DIM_BLOCK / 2);
 			p_des->punt = static_cast<natw*>(p_des->punt) + DIM_BLOCK / 2;
 			break;
-			case WRITE_SECT:
-			if (p_des->cont != 0)
-			{	if (!hd_wait_data(p_des->indreg.iSTS))
-				inputb(p_des->indreg.iERR, p_des->errore);
+		case WRITE_SECT:
+			if (p_des->cont != 0) {	
+				if (!hd_wait_data(p_des->indreg.iSTS))
+					inputb(p_des->indreg.iERR, p_des->errore);
 				else
 					outputbw(static_cast<natw*>(p_des->punt),
 							DIM_BLOCK / 2, p_des->indreg.iBR);
@@ -815,16 +842,18 @@ void esternAta(int h)			// codice commune ai 2 processi esterni ATA
 					DIM_BLOCK / 2;
 			}
 			break;
-			case READ_DMA:
-			case WRITE_DMA:
+		case READ_DMA:
+		case WRITE_DMA:
 			inputb(p_des->bus_master.iBMCMD, work);
 			work &= 0xFE;				// azzeramento del bit n. 0 (start/stop)
 			outputb(work, p_des->bus_master.iBMCMD);
 			inputb(p_des->bus_master.iBMSTR, stato);	// ack  interrupt in DMA
 			if ((stato & 0x05) == 0)
 				inputb(p_des->indreg.iERR, p_des->errore);
+			break;
 		}
-		if (p_des->cont == 0) sem_signal(p_des->sincr);
+		if (p_des->cont == 0)
+			sem_signal(p_des->sincr);
 		wfi();
 	}
 }

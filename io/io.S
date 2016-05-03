@@ -49,50 +49,15 @@ param_err:
 	check_cavallo
 .endm
 
+	.text
 .global _start, start
 _start:
 start:	jmp cmain
 
 ////////////////////////////////////////////////////////////////////////////////
-//                             SEZIONE DATI                                   //
-////////////////////////////////////////////////////////////////////////////////
-
-	.data
-
-#param_err:
-#	.asciz "parametro errato %x"
-	.global hd
-hd:
-	.word	0x0170		//hd.indreg.iBR
-	.word	0x0174		//hd.indreg.iCNL
-	.word	0x0175		//hd.indreg.iCNH
-	.word	0x0173		//hd.indreg.iSNR
-	.word	0x0176		//hd.indreg.iHND
-	.word 	0x0172		//hd.indreg.iSCR
-	.word	0x0171		//hd.indreg.iERR
-	.word	0x0177		//hd.indreg.iCMD
-	.word	0x0177		//hd.indreg.iSTS
-	.word	0x0376		//hd.indreg.iDCR
-	.word	0x0376		//hd.indreg.iASR
-	.word	0		//hd.bus_master.iCMD
-	.word	0		//hd.bus_master.iSTATUS
-	.word	0		//hd.bus_master.iDPTR
-	.space  8*2, 0		//hd.prd
-	.long	0		//hd.comando
-	.byte	0		//hd.errore
-	.space  3, 0		//padding
-	.long	0		//hd.mutex
-	.long	0		//hd.sincr
-	.byte	0		//hd.cont
-	.space	3, 0		//padding
-	.long	0		//hd.punt
-
-
-////////////////////////////////////////////////////////////////////////////////
 //                          CHIAMATE DI SISTEMA                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-	.text
 	.global activate_p
 activate_p:
 	int $TIPO_A
