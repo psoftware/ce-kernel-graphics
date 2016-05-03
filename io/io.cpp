@@ -25,6 +25,7 @@ extern "C" void wfi();	//
 extern "C" void abort_p();
 extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
+extern "C" void panic(const char *msg);
 
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI                 //

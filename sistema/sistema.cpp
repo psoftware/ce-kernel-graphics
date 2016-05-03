@@ -301,7 +301,7 @@ extern "C" void c_pre_routine_pf(	//
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
 	if (rip < fine_codice_sistema || errore.res == 1) {
-		flog(LOG_ERR, "rip: %p, page fault a %p", rip, readCR2());
+		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
@@ -772,7 +772,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		pl[-5] = (natq)f;		// EIP (codice utente)
 		pl[-4] = SEL_CODICE_UTENTE;	// CS (codice utente)
 		pl[-3] = (IF? BIT_IF : 0);	// EFLAG
-		pl[-2] = (natq)fin_utn_p;
+		pl[-2] = (natq)fin_utn_p - sizeof(natq);
 		pl[-1] = SEL_DATI_UTENTE;	// SS (pila utente)
 		//   eseguendo una IRET da questa situazione, il processo
 		//   passera' ad eseguire la prima istruzione della funzione f,
@@ -1341,9 +1341,58 @@ bool init_pe()
 }
 // )
 
-extern "C" void c_panic(const char *msg)
+extern "C" void c_panic(const char *msg, natq rip, natl cpl, natq rflags, natq rsp)
 {
+	static int in_panic = 0;
+	struct des_proc *p = des_p(esecuzione->id);
+
+	if (in_panic) {
+		flog(LOG_ERR, "panic ricorsivo. STOP");
+		end_program();
+	}
+	in_panic = 1;
+
 	flog(LOG_WARN, "PANIC: %s", msg);
+	flog(LOG_WARN, "  RIP=%lx", *(natq *)rsp - 5);
+        flog(LOG_WARN, "  RFLAGS=%lx [%s %s %s %s %s %s %s %s %s %s, IOPL=%s]",
+		rflags,
+		(rflags & 1U << 14) ? "NT" : "nt",
+		(rflags & 1U << 11) ? "OF" : "of",
+		(rflags & 1U << 10) ? "DF" : "df",
+		(rflags & 1U << 9)  ? "IF" : "if",
+		(rflags & 1U << 8)  ? "TF" : "tf",
+		(rflags & 1U << 7)  ? "SF" : "sf",
+		(rflags & 1U << 6)  ? "ZF" : "zf",
+		(rflags & 1U << 4)  ? "AF" : "af",
+		(rflags & 1U << 2)  ? "PF" : "pf",
+		(rflags & 1U << 0)  ? "CF" : "cf",
+		(rflags & 0x3000) == 3 ? "UTENTE" : "SISTEMA");
+	flog(LOG_WARN, "  RAX=%lx RBX=%lx RCX=%lx RDX=%lx",
+			p->contesto[I_RAX],
+			p->contesto[I_RBX],
+			p->contesto[I_RCX],
+			p->contesto[I_RDX]);
+	flog(LOG_WARN, "  RDI=%lx RSI=%lx RBP=%lx RSP=%lx",
+			p->contesto[I_RDI],
+			p->contesto[I_RSI],
+			p->contesto[I_RBP],
+			rsp + 8);
+	flog(LOG_WARN, "  R8 =%lx R9 =%lx R10=%lx R11=%lx",
+			p->contesto[I_R8],
+			p->contesto[I_R9],
+			p->contesto[I_R10],
+			p->contesto[I_R11]);
+	flog(LOG_WARN, "  R12=%lx R13=%lx R14=%lx R15=%lx",
+			p->contesto[I_R12],
+			p->contesto[I_R13],
+			p->contesto[I_R14],
+			p->contesto[I_R15]);
+	flog(LOG_WARN, "  backtrace:");
+	natq rbp = p->contesto[I_RBP];
+	while (rbp) {
+		flog(LOG_WARN, "  > %lx", *((natq *)rbp + 1));
+		rbp = *(natq *)rbp;
+	}
 	end_program();
 }
 
