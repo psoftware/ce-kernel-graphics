@@ -3,4 +3,3 @@
   (per intercettare i page fault)
 - aggiungere un parametro 'quanti' a panic
   (per controllare cavallo di troia)
-- completare l'output di panic (con backtrace)
