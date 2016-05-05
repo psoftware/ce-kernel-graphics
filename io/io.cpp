@@ -454,7 +454,6 @@ void writeseq(cstr seq)	//
 		writeelem(*pn);
 		pn++;
 	}
-	panic("perche' si'");
 }
 
 extern "C" void c_writeconsole(cstr buff) //
