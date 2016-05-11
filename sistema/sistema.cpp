@@ -365,20 +365,33 @@ addr indirizzo_pf(des_pf* ppf)
 	return (addr)((natq)prima_pf_utile + indice * DIM_PAGINA);
 }
 
+addr allinea(addr a, natq m)
+{
+	return (addr) (((natq)a + m - 1) & ~(m - 1));
+}
+
 // ( [P_MEM_PHYS]
 // init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
 // memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
 // si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
 // e di inizializzarli in modo che tutte le pagine fisiche risultino libere
 natq N_DPF;
+// &end e' l'indirizzo del primo byte non occupato dal modulo sistema
+// (e' calcolato dal collegatore).
+extern "C" natq end;
 bool init_dpf()
 {
-	N_DPF = (MEM_TOT - 5*MiB) / (DIM_PAGINA + sizeof(des_pf));
-	natq m1 = 5*MiB + N_DPF * sizeof(des_pf);
-	natq DIM_M1 = (m1 + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
-	dpf = (des_pf*)(5*MiB);
-
-	prima_pf_utile = (addr)DIM_M1;
+	// L'array di decrittori di pagine fisiche comincia subito dopo
+	// la fine del programma
+	dpf = (des_pf*)allinea(&end, sizeof(addr));
+	// N_DPF e' il numero di pagine fisiche di cui sara' composta M2.
+	// Per calcolarlo dobbiamo tenere conto che ci servira' un des_pf
+	// per ogni pagina fisica.
+	N_DPF = (MEM_TOT - (natq)dpf) / (DIM_PAGINA + sizeof(des_pf));
+	// M1 finisce dopo la fine dell'array dpf;
+	addr fine_M1 = &dpf[N_DPF];
+	// prima_pf_utile e' la prima pagina che inizia dopo la fine di M1
+	prima_pf_utile = allinea(fine_M1, DIM_PAGINA);
 
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
