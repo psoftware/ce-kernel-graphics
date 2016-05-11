@@ -8,12 +8,14 @@ cmd=
 }
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
+MEM=${MEM:-8}
 
 cmd="$QEMU \
 	-kernel $BOOT \
 	-initrd build/sistema \
 	-drive file=.swap,format=raw,cache=unsafe \
-	-no-reboot"
+	-no-reboot \
+	-m $MEM"
 
 if [ "$1" == -g ]; then
 	cmd="$cmd -s -append \"-s\""
