@@ -1234,7 +1234,7 @@ bool crea_spazio_condiviso(natl dummy_proc)
 //                   INIZIALIZZAZIONE                                            //
 ///////////////////////////////////////////////////////////////////////////////////
 
-const natq HEAP_START = 1024 * 1024U;
+const natq HEAP_START = 1*MiB;
 extern "C" natq start;
 const natq HEAP_SIZE = (natq)&start - HEAP_START;
 
