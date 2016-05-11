@@ -8,7 +8,7 @@ cmd=
 }
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
-MEM=${MEM:-8}
+source util/start.mk
 
 cmd="$QEMU \
 	-kernel $BOOT \
