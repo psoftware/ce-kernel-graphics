@@ -1154,8 +1154,10 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 		if (!extr_IND_MASSA(e))
 			continue;
 		des_pf *ppf = swap2(proc, liv - 1, ind, true);
-		if (!ppf)
+		if (!ppf) {
+			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
+		}
 		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
 	}
