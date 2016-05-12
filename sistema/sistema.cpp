@@ -818,24 +818,25 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//   che contiene le 5 parole lunghe preparate precedentemente
 		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
 
+		//   il registro RDI deve contenere il parametro da passare
+		//   alla funzione f
 		pdes_proc->contesto[I_RDI] = a;
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
 		pdes_proc->cpl = LIV_UTENTE;
-		// (
-		//    il campo iomap_base contiene l'offset (nel TSS) dell'inizio 
-		//    della "I/O bitmap". Questa bitmap contiene un bit per ogni
-		//    possibile indirizzo di I/O. Le istruzioni in e out eseguite
-		//    da livello utente verranno permesse se il bit corrispondente
-		//    all'indirizzo di I/O a cui si riferiscono vale 1.
-		//    Per disattivare questo meccanismo dobbiamo inizializzare
-		//    il campo iomap_base con un offset maggiore o uguale
-		//    della dimensione del segmento TSS (come scritta nel
-		//    descrittore di segmento TSS nella GDT, vedere 'set_entry_tss'
-		//    in sistema.S)
-		// )
-
+	
+		//   il campo iomap_base contiene l'offset (nel TSS) dell'inizio 
+		//   della "I/O bitmap". Questa bitmap contiene un bit per ogni
+		//   possibile indirizzo di I/O. Le istruzioni in e out eseguite
+		//   da livello utente verranno permesse se il bit corrispondente
+		//   all'indirizzo di I/O a cui si riferiscono vale 1.
+		//   Per disattivare questo meccanismo dobbiamo inizializzare
+		//   il campo iomap_base con un offset maggiore o uguale
+		//   della dimensione del segmento TSS (come scritta nel
+		//   descrittore di segmento TSS nella GDT, vedere 'set_entry_tss'
+		//   in sistema.S)
 		pdes_proc->iomap_base = DIM_DESP;
+
 		//   tutti gli altri campi valgono 0
 		// )
 	} else {
