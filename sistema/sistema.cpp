@@ -298,6 +298,13 @@ extern "C" void c_pre_routine_pf(	//
 	// *)
 	)
 {
+	static bool in_pf = false;
+
+	if (in_pf) {
+		panic("page fault ricorsivo: STOP");
+	}
+
+	in_pf = true;
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
@@ -325,6 +332,8 @@ extern "C" void c_pre_routine_pf(	//
 
 
 	c_routine_pf();
+
+	in_pf = false;
 }
 
 
