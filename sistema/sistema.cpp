@@ -933,7 +933,7 @@ void rilascia_tutto(addr tab4, natl i, natl n)
 }
 
 //
-// parte "C++" della terminate_p, descritta in
+// parte "C++" della terminate_p
 extern "C" void c_terminate_p()
 {
 	// il processo che deve terminare e' quello che ha invocato
@@ -964,12 +964,11 @@ extern "C" void c_driver_td(void)
 {
 	richiesta *p;
 
-	if(p_sospesi != 0)
-	{
+	if (p_sospesi != 0) {
 		p_sospesi->d_attesa--;
 	}
 
-	while(p_sospesi != 0 && p_sospesi->d_attesa == 0) {
+	while (p_sospesi != 0 && p_sospesi->d_attesa == 0) {
 		inserimento_lista(pronti, p_sospesi->pp);
 		p = p_sospesi;
 		p_sospesi = p_sospesi->p_rich;

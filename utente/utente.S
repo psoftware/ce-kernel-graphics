@@ -16,12 +16,6 @@ terminate_p:
 	int $TIPO_T
 	ret
 
-
-	.global end_program
-end_program:
-	int $TIPO_EP
-	ret
-
 	.global sem_ini
 sem_ini:
 	int $TIPO_SI
