@@ -28,7 +28,7 @@ process_body pms(int a)
 	char *ptr;
 	for (int i = 0; i < NMESG; i++) {
 		ptr = copy("Messaggio numero ", buf);
-		convint(i, ptr);
+		int_conv(i, ptr);
 		sem_wait(mailbox_vuota);
 		mailbox.mittente = a;
 		copy(buf, mailbox.corpo);
@@ -36,7 +36,7 @@ process_body pms(int a)
 		delay(20);
 	}
 	ptr = copy("fine scrittore", buf);
-	convint(a, ptr);
+	int_conv(a, ptr);
 	writeconsole(buf);
 }
 
@@ -51,7 +51,7 @@ process_body pml(int a)
 		copy(mailbox.corpo, corpo);
 		sem_signal(mailbox_vuota);
 		ptr = copy("mittente=", buf);
-		ptr = convint(mittente, ptr);
+		ptr = int_conv(mittente, ptr);
 		ptr = copy(" corpo=", ptr);
 		copy(corpo, ptr);
 		writeconsole(buf);
