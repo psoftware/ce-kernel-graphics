@@ -823,7 +823,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
 		pdes_proc->cpl = LIV_UTENTE;
 		// (
-		//    il campo iomap_base contiene l'offset (nel TSS) dell'inizio
+		//    il campo iomap_base contiene l'offset (nel TSS) dell'inizio 
 		//    della "I/O bitmap". Questa bitmap contiene un bit per ogni
 		//    possibile indirizzo di I/O. Le istruzioni in e out eseguite
 		//    da livello utente verranno permesse se il bit corrispondente
@@ -1489,7 +1489,7 @@ extern "C" void cmain()
 	esecuzione = &init;
 	// *)
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.0");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.1");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata");
 
