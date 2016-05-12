@@ -792,10 +792,10 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// ( inizializziamo la pila sistema.
 		natq* pl = static_cast<natq*>(pila_sistema);
 
-		pl[-5] = (natq)f;		// EIP (codice utente)
+		pl[-5] = (natq)f;		// RIP (codice utente)
 		pl[-4] = SEL_CODICE_UTENTE;	// CS (codice utente)
-		pl[-3] = (IF? BIT_IF : 0);	// EFLAG
-		pl[-2] = (natq)fin_utn_p - sizeof(natq);
+		pl[-3] = (IF? BIT_IF : 0);	// RFLAGS
+		pl[-2] = (natq)fin_utn_p - sizeof(natq);	// RSP
 		pl[-1] = SEL_DATI_UTENTE;	// SS (pila utente)
 		//   eseguendo una IRET da questa situazione, il processo
 		//   passera' ad eseguire la prima istruzione della funzione f,
@@ -807,7 +807,6 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		// )
 
 		// ( infine, inizializziamo il descrittore di processo
-		//   (punto 3 in)
 		//   indirizzo del bottom della pila sistema, che verra' usato
 		//   dal meccanismo delle interruzioni
 		pdes_proc->punt_nucleo = fin_sis_p;
