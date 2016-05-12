@@ -14,7 +14,8 @@
 #define MiB			(1024*KiB)
 #define GiB			(1024*MiB)
 
-#define DIM_DESP                236     // descrittore di processo
+// dimensione in byte della parte hardware del descrittore di processo
+#define DIM_DESP                104
 #define MAX_SEM			4096
 #define DIM_PAGINA		4096UL
 #define MAX_PRD			16

@@ -48,7 +48,7 @@ start:
 .endm
 
 // offset dei vari registri all'interno di des_proc
-.set CR3,100
+.set CR3,104
 .set RAX,CR3+8
 .set RCX,CR3+16
 .set RDX,CR3+24
@@ -175,6 +175,7 @@ iter_tss:
 	jmp end_tss
 set_entry_tss:
 	movw $DIM_DESP, (%rdx) 	//[15:0] = limit[15:0]
+	decw (%rdx)
 	movq %rdi, %rax
 	movw %ax, 2(%rdx)	//[31:16] = base[15:0]
 	shrq $16,%rax

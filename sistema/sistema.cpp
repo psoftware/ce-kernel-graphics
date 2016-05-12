@@ -22,6 +22,8 @@ struct des_proc {
 	//entry della IST, non usata
 	natq disp2[7];
 	natq riservato3;
+	natw riservato4;
+	natw iomap_base; // si veda crea_processo()
 	//finiti i campi obbligatori
 	addr cr3;
 	natq contesto[N_REG];
@@ -820,29 +822,43 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
 		pdes_proc->cpl = LIV_UTENTE;
+		// (
+		//    il campo iomap_base contiene l'offset (nel TSS) dell'inizio
+		//    della "I/O bitmap". Questa bitmap contiene un bit per ogni
+		//    possibile indirizzo di I/O. Le istruzioni in e out eseguite
+		//    da livello utente verranno permesse se il bit corrispondente
+		//    all'indirizzo di I/O a cui si riferiscono vale 1.
+		//    Per disattivare questo meccanismo dobbiamo inizializzare
+		//    il campo iomap_base con un offset maggiore o uguale
+		//    della dimensione del segmento TSS (come scritta nel
+		//    descrittore di segmento TSS nella GDT, vedere 'set_entry_tss'
+		//    in sistema.S)
+		// )
+
+		pdes_proc->iomap_base = DIM_DESP;
 		//   tutti gli altri campi valgono 0
 		// )
 	} else {
 		// ( inizializzazione delle pila sistema
 		natq* pl = static_cast<natq*>(pila_sistema);
-		pl[-5] = (natq)f;	  	// EIP (codice sistema)
-		pl[-4] = SEL_CODICE_SISTEMA;   // CS (codice sistema)
-		pl[-3] = (IF? BIT_IF : 0);  	// EFLAG
-		pl[-2] = (natq)fin_sis_p - sizeof(natq);
-		pl[-1] = 0;	// SS
+		pl[-5] = (natq)f;	  	// RIP (codice sistema)
+		pl[-4] = SEL_CODICE_SISTEMA;    // CS (codice sistema)
+		pl[-3] = (IF? BIT_IF : 0);  	// RFLAGS
+		pl[-2] = (natq)fin_sis_p - sizeof(natq);	// RSP
+		pl[-1] = 0;			// SS
 		//   i processi esterni lavorano esclusivamente a livello
 		//   sistema. Per questo motivo, prepariamo una sola pila (la
 		//   pila sistema)
 		// )
 
 		// ( inizializziamo il descrittore di processo
-		//   (punto 3 in)
 		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
 		pdes_proc->contesto[I_RDI] = a;
 
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
 		//pdes_proc->contesto[I_FPU_TR] = 0xffff;
 		pdes_proc->cpl = LIV_SISTEMA;
+
 		//   tutti gli altri campi valgono 0
 		// )
 	}
