@@ -14,21 +14,24 @@ const int N_REG = 16;	//
 
 // descrittore di processo
 struct des_proc {
-	natl riservato1;
-	addr punt_nucleo;
-	// due quad  a disposizione (puntatori alle pile ring 1 e 2)
-	natq disp1[2];
-	natq riservato2;
-	//entry della IST, non usata
-	natq disp2[7];
-	natq riservato3;
-	natw riservato4;
-	natw iomap_base; // si veda crea_processo()
+	// parte richiesta dall'hardware
+	struct __attribute__ ((packed)) {
+		natl riservato1;
+		addr punt_nucleo;
+		// due quad  a disposizione (puntatori alle pile ring 1 e 2)
+		natq disp1[2];
+		natq riservato2;
+		//entry della IST, non usata
+		natq disp2[7];
+		natq riservato3;
+		natw riservato4;
+		natw iomap_base; // si veda crea_processo()
+	};
 	//finiti i campi obbligatori
 	addr cr3;
 	natq contesto[N_REG];
 	natl cpl;
-} __attribute__((packed));
+};
 
 volatile natl processi;
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv); //
