@@ -297,6 +297,7 @@ struct pf_error {
 extern "C" addr fine_codice_sistema;
 // *)
 void c_routine_pf();
+bool in_pf = false;
 extern "C" void c_pre_routine_pf(	//
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -304,7 +305,6 @@ extern "C" void c_pre_routine_pf(	//
 	// *)
 	)
 {
-	static bool in_pf = false;
 
 	if (in_pf) {
 		panic("page fault ricorsivo: STOP");
@@ -1085,6 +1085,7 @@ void swap(int liv, addr ind_virt)
 		flog(LOG_WARN, "indirizzo %p fuori dallo spazio virtuale allocato",
 				ind_virt);
 		rilascia_pagina_fisica(nuovo_dpf);
+		in_pf = false;
 		abort_p();
 	}
 	// *)
