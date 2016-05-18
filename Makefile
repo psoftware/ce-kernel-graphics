@@ -1,4 +1,4 @@
-START_SISTEMA=   0x0000000000200100
+START_SISTEMA=   0x0000000000200200
 SWAP=		 swap.img
 -include util/start.mk
 

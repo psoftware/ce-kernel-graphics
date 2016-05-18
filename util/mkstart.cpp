@@ -12,8 +12,8 @@ static inline natq norm(natq a)
 
 int main()
 {
-	natq start_io = norm(((natq)I_MIO_C << 39UL) + 0x100);
-	natq start_utente = norm(((natq)I_UTN_C << 39UL) + 0x100);
+	natq start_io = norm(((natq)I_MIO_C << 39UL) + 0x200);
+	natq start_utente = norm(((natq)I_UTN_C << 39UL) + 0x200);
 
 	ofstream startmk("util/start.mk");
 	startmk << "MEM=" << MEM_TOT/MiB << endl;
