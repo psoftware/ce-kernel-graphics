@@ -57,14 +57,14 @@ start:
 .set RBP,CR3+48
 .set RSI,CR3+56
 .set RDI,CR3+64
-.set R8, CR3+80
-.set R9, CR3+88
-.set R10,CR3+96
-.set R11,CR3+104
-.set R12,CR3+112
-.set R13,CR3+120
-.set R14,CR3+128
-.set R15,CR3+136
+.set R8, CR3+72
+.set R9, CR3+80
+.set R10,CR3+88
+.set R11,CR3+96
+.set R12,CR3+104
+.set R13,CR3+112
+.set R14,CR3+120
+.set R15,CR3+128
 
 salva_stato:
 	pushq %rbx
