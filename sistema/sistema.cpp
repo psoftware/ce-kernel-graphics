@@ -329,9 +329,10 @@ extern "C" void c_pre_routine_pf(	//
 	//    tentato di accedere ad indirizzi proibiti (cioe', allo spazio
 	//    sistema)
 	if (errore.prot == 1) {
-		flog(LOG_WARN, "errore di protezione: eip=%x, ind=%x, %s, %s", rip, readCR2(),
+		flog(LOG_WARN, "errore di protezione: rip=%lx, ind=%lx, %s, %s", rip, readCR2(),
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema");
+		in_pf = false;
 		abort_p();
 	}
 	// *)
