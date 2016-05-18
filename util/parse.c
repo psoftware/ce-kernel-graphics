@@ -23,6 +23,8 @@ char ultima_riga[LUN_RIGA];
 
 const char* currfile;
 int line_needed = 0;
+const char* outname = "utente.cpp";
+int riga_out = 1;
 
 /*
  * Stampa di un messaggio di errore in presenza di un errore nel parsing
@@ -66,6 +68,7 @@ void errore(const char *msg)
  * Legge il carattere successivo dall' ingresso
  */
 void emetti_line();
+void emetti_line2();
 void emetti(const char *t);
 void leggi_car()
 {
@@ -208,6 +211,8 @@ void trova_nome(const char *n, int salta)
 void copia_car()
 {
 	fprintf(output, "%c", look);
+	if (look == '\n')
+		riga_out++;
 }
 
 /*
@@ -215,7 +220,7 @@ void copia_car()
  */
 void copia_nome()
 {
-	fprintf(output, "%s", nome);
+	emetti(nome);
 }
 
 /*
@@ -223,13 +228,23 @@ void copia_nome()
  */
 void emetti(const char *t)
 {
+	const char *w;
 	fprintf(output, "%s", t);
+	for (w = strchr(t, '\n'); w; w = strchr(w + 1, '\n'))
+		riga_out++;
 }
 
 void emetti_line()
 {
 	char linep[LUN_RIGA];
 	sprintf(linep, "#line %d \"%s\"\n", riga, currfile);
+	emetti(linep);
+}
+
+void emetti_line2()
+{
+	char linep[LUN_RIGA];
+	sprintf(linep, "#line %d \"%s\"\n", riga_out + 1, outname);
 	emetti(linep);
 }
 
@@ -309,16 +324,17 @@ void scrivi_utente()
 	int i;
 
 	for(i = 0; intest_utente[i]; ++i)
-		fprintf(output, "%s\n", intest_utente[i]);
+		emetti(intest_utente[i]);
 
 	for(ep = utente[0]; ep; ep = ep->succ)
-		fprintf(output, "%s", ep->testo);
+		emetti(ep->testo);
 
-	fprintf(output, "%s", MAIN_HEAD);
+	emetti_line2();
+	emetti(MAIN_HEAD);
 	for(ep = utente[1]; ep; ep = ep->succ)
-		fprintf(output, "%s", ep->testo);
+		emetti(ep->testo);
 
-	fprintf(output, "%s", MAIN_TAIL);
+	emetti(MAIN_TAIL);
 }
 
 #define GLOB_FMT "short %s;\n"
@@ -555,7 +571,6 @@ char oggetti[LUN_OGGETTI];
 int main(int argc, char* argv[])
 {
 	int i;
-	const char* outname = "utente.cpp";
 
 	if (argc < 2) {
 		fprintf(stderr, "Utilizzo: %s <file1.in> ...\n", argv[0]);
