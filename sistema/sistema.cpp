@@ -33,6 +33,7 @@ struct des_proc {
 volatile natl processi;
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv); //
 extern "C" void terminate_p();	//
+extern "C" des_proc *des_p(natl id);
 
 //indici nell'array contesto
 enum { I_RAX, I_RCX, I_RDX, I_RBX,
