@@ -8,6 +8,8 @@
 #include <libce.h>
 #include <costanti.h>
 
+extern "C" void log(log_sev sev, const char* buf, natl quanti);
+
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 extern "C" void terminate_p();
 extern "C" natl sem_ini(int val);
@@ -29,7 +31,6 @@ extern "C" void writehd_n(const natw vetto[], natl primo, natb quanti, natb &err
 extern "C" void dmareadhd_n(natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void dmawritehd_n(const natw vetto[], natl primo, natb quanti, natb& errore);
 
-extern "C" void log(log_sev sev, const char* buf, natl quanti);
 
 #endif
 
