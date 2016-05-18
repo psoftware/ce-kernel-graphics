@@ -224,6 +224,43 @@ invalida_entrata_TLB:
 	invlpg (%rdi)
 	ret
 
+.macro check_cavallo
+	movq %rax, %rdx
+	movabs $0xffff000000000000, %rax
+	testq %rdx, %rax
+	jnz 1f
+	movq $2, %rdi
+	movabs $param_err, %rax
+	movq %rax, %rsi
+	call flog
+	int $TIPO_AB
+1:
+
+.endm
+
+.macro cavallo_di_troia reg
+
+	movq \reg, %rax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia2 reg1 reg2
+
+	movq \reg1, %rax
+	addq \reg2, %rax
+	decq %rax
+	check_cavallo
+.endm
+
+.macro cavallo_di_troia3 reg1 reg2
+
+	movq \reg2, %rax
+	shlq $9, %rax
+	addq \reg1, %rax
+	decq %rax
+	check_cavallo
+.endm
+
 // Carica un gate della IDT
 // num: indice (a partire da 0) in IDT del gate da caricare
 // routine: indirizzo della routine da associare al gate
@@ -359,7 +396,7 @@ goto_user:
 ////////////////////////////////////////////////////////
         .extern c_activate_p
 a_activate_p:	// routine int $tipo_a
-	//cavallo_di_troia 0
+	cavallo_di_troia %rdi
         call c_activate_p
         iretq
 
@@ -403,7 +440,7 @@ a_delay:	// routine int $tipo_d
 
 	.extern c_activate_pe
 a_activate_pe:
-	//cavallo_di_troia 0
+	cavallo_di_troia %rdi
         call c_activate_pe
 	iretq
 
@@ -802,3 +839,6 @@ stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
+param_err:
+	.asciz "indirizzo non valido: %p"
+
