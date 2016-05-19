@@ -234,6 +234,10 @@ invalida_entrata_TLB:
 	movabs $0xffff000000000000, %rax
 	testq %r10, %rax
 	jnz 1f
+	movq $2, %rdi
+	movabs $param_err, %rsi
+	movq %r10, %rdx
+	call flog
 	int $TIPO_AB
 1:	
 
@@ -255,9 +259,9 @@ invalida_entrata_TLB:
 
 .macro cavallo_di_troia3 reg1 reg2
 
-	movq \reg2, %10
+	movq \reg2, %r10
 	shlq $9, %r10
-	addq \reg1, %10
+	addq \reg1, %r10
 	decq %r10
 	check_cavallo
 .endm
@@ -795,6 +799,8 @@ idt_pointer:
 triple_fault_idt:
 	.word 0
 	.quad 0
+param_err:
+	.asciz "indirizzo non valido: %p"
 
 .balign 8
 .global gdt
@@ -840,6 +846,3 @@ stack:
 terminate_stack:
 	.space STACK_SIZE, 0
 terminate_stack_end:
-param_err:
-	.asciz "indirizzo non valido: %p"
-

@@ -12,40 +12,45 @@ param_err:
 	call fill_gate
 .endm
 
+// controlla che l'indirizzo virtuale in %r10 sia accessibile dal
+// livello di privelegio del chiamante della INT. Abortisce il
+// processo in caso contrario.
 .macro check_cavallo
-	movq %rax, %rdx
+	movq 8(%rsp), %r11
+	cmpq $SEL_CODICE_SISTEMA, %r11
+	je 1f
 	movabs $0xffff000000000000, %rax
-	testq %rdx, %rax
+	testq %r10, %rax
 	jnz 1f
 	movq $2, %rdi
-	movabs $param_err, %rax
-	movq %rax, %rsi
+	movabs $param_err, %rsi
+	movq %r10, %rdx
 	call flog
 	int $TIPO_AB
-1:
+1:	
 
 .endm
 
 .macro cavallo_di_troia reg
 
-	movq \reg, %rax
+	movq \reg, %r10
 	check_cavallo
 .endm
 
 .macro cavallo_di_troia2 reg1 reg2
 
-	movq \reg1, %rax
-	addq \reg2, %rax
-	decq %rax
+	movq \reg1, %r10
+	addq \reg2, %r10
+	decq %r10
 	check_cavallo
 .endm
 
 .macro cavallo_di_troia3 reg1 reg2
 
-	movq \reg2, %rax
-	shlq $9, %rax
-	addq \reg1, %rax
-	decq %rax
+	movq \reg2, %r10
+	shlq $9, %r10
+	addq \reg1, %r10
+	decq %r10
 	check_cavallo
 .endm
 
