@@ -521,9 +521,7 @@ debug:
 	jmp comm_exc
 
 nmi:
-	pushq $0
-	pushq $2
-	jmp comm_exc
+	call c_nmi
 
 breakpoint:
 	pushq $0

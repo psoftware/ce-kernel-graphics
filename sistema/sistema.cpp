@@ -1439,7 +1439,23 @@ extern "C" void c_panic(const char *msg, natq rip, natl cpl, natq rflags, natq r
 		flog(LOG_ERR, "  > %lx", *((natq *)rbp + 1) - 5);
 		rbp = *(natq *)rbp;
 	}
+	flog(LOG_ERR, "  processi utente: %d", processi - 1);
+	for (natl id = MIN_PROC_ID; id < MAX_PROC_ID; id += 16) {
+		des_proc *p = des_p(id);
+		if (p && p->cpl == LIV_UTENTE) {
+			addr v_eip = (addr)((natq)fin_sis_p - 5 * sizeof(natq));
+			natq dp = get_des(id, 1, v_eip);
+			natq ind_fis_pag = (natq)extr_IND_FISICO(dp);
+			addr f_eip = (addr)(ind_fis_pag | ((natq)v_eip & 0xFFF));
+			flog(LOG_ERR, "    %d) proc=%d RIP=%x", id, *(natq*)f_eip);
+		}
+	}
 	end_program();
+}
+
+extern "C" void c_nmi()
+{
+	panic("INTERRUZIONE FORZATA");
 }
 
 extern "C" addr c_trasforma(addr ind_virt)

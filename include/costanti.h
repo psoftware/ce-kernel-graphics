@@ -7,6 +7,8 @@
 #define LIV_UTENTE		3
 #define LIV_SISTEMA		0
 #define NUM_TSS 		1024
+#define MIN_PROC_ID		32
+#define MAX_PROC_ID		(NUM_TSS*16)
 // )
 
 // ( varie dimensioni
