@@ -1414,7 +1414,7 @@ void process_dump(natl id, addr rsp, log_sev sev)
 	des_proc *p = des_p(id);
 	natq *pila = (natq*)rsp;
 
-	flog(sev, "  RIP=%lx (%s)", pila[0], pila[1] == SEL_CODICE_UTENTE ? "LIV_UTENTE" : "LIV_SISTEMA");
+	flog(sev, "  RIP=%lx CPL=%s", pila[0], pila[1] == SEL_CODICE_UTENTE ? "LIV_UTENTE" : "LIV_SISTEMA");
 	natq rflags = pila[2];
         flog(sev, "  RFLAGS=%lx [%s %s %s %s %s %s %s %s %s %s, IOPL=%s]",
 		rflags,
