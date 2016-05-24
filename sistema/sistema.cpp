@@ -932,7 +932,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 	// (* accorpiamo le parti comuni tra c_activate_p e c_activate_pe
 	// nella funzione ausiliare crea_processo
 	// (questa svolge, tra l'altro, i punti 1-3 in)
-	p = crea_processo(f, a, prio, liv, true);
+	p = crea_processo(f, a, prio, liv, (liv == LIV_UTENTE));
 	// *)
 
 	if (p != 0) {
