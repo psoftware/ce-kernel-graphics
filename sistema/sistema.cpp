@@ -259,12 +259,34 @@ int i_tab(addr, int lib);
 natq& get_entry(addr,natl);
 addr extr_IND_FISICO(natq);
 bool extr_P(natq);
+static const char *eccezioni[] = {
+	"errore di divisione", 		// 0
+	"debug",			// 1
+	"interrupt non mascherabile",	// 2
+	"breakpoint",			// 3
+	"overflow",			// 4
+	"bound check",			// 5
+	"codice operativo non valido",	// 6
+	"dispositivo non disponibile",	// 7
+	"doppio fault",			// 8
+	"coprocessor segment overrun",	// 9
+	"TSS non valido",		// 10
+	"segmento non presente",	// 11
+	"errore sul segmento stack",	// 12
+	"errore di protezione",		// 13
+	"page fault",			// 14
+	"riservato",			// 15
+	"errore su virgola mobile",	// 16
+	"errore di allineamento",	// 17
+	"errore interno",		// 18
+	"errore SIMD",			// 19
+};
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
 // sistema.S, tranne il gestore di page fault)
 extern "C" void gestore_eccezioni(int tipo, natq errore,
 					addr rip, natq cs, natq rflag)
 {
-	flog(LOG_WARN, "Eccezione %d, errore %x", tipo, errore);
+	flog(LOG_WARN, "Eccezione %d (%s), errore %x", tipo, eccezioni[tipo], errore);
 	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
 	abort_p();
 }
