@@ -1,5 +1,7 @@
 #!/bin/bash
 
+[ -f conf/conf.sh ] && source conf/conf.sh
+
 cmd=
 [ -n "$QEMU" ] || {
 	QEMU=qemu-system-x86_64
@@ -7,14 +9,15 @@ cmd=
 	[ -x "$CEQEMU" ] && QEMU=$CEQEMU
 }
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
-BOOT=${BOOT:-$HOME/CE/lib/ce/boot.bin}
+QEMU_BOOT=${QEMU_BOOT:-$HOME/CE/lib/ce/boot.bin}
 source util/start.mk
 
-cmd="$QEMU \
-	-kernel $BOOT \
+cmd="$QEMU_PRE_CMD $QEMU \
+	-kernel $QEMU_BOOT \
 	-initrd build/sistema \
 	-drive file=.swap,format=raw,cache=unsafe \
 	-no-reboot \
+	$QEMU_EXTRA_OPTIONS \
 	-m $MEM"
 
 if [ "$1" == -g ]; then
@@ -34,9 +37,10 @@ if [ -f "$CDEPATH" ]; then
 	cmd="$cmd -hdc \"$CDEPATH\""
 fi
 
-show_log="| util/show_log.pl"
 if [ -n "$CERAW" ]; then
 	show_log=
+else
+	show_log=${QEMU_POST_CMD:-"| util/show_log.pl"}
 fi
 
 echo Eseguo: $cmd
