@@ -259,6 +259,7 @@ int i_tab(addr, int lib);
 natq& get_entry(addr,natl);
 addr extr_IND_FISICO(natq);
 bool extr_P(natq);
+void process_dump(natl id, addr rsp, log_sev sev);
 static const char *eccezioni[] = {
 	"errore di divisione", 		// 0
 	"debug",			// 1
@@ -283,11 +284,10 @@ static const char *eccezioni[] = {
 };
 // gestore generico di eccezioni (chiamata da tutti i gestori di eccezioni in
 // sistema.S, tranne il gestore di page fault)
-extern "C" void gestore_eccezioni(int tipo, natq errore,
-					addr rip, natq cs, natq rflag)
+extern "C" void gestore_eccezioni(int tipo, natq errore, addr rsp)
 {
 	flog(LOG_WARN, "Eccezione %d (%s), errore %x", tipo, eccezioni[tipo], errore);
-	flog(LOG_WARN, "rflag = %x, rip = %p, cs = %x", rflag, rip, cs);
+	process_dump(esecuzione->id, rsp, LOG_WARN);
 	abort_p();
 }
 // (*il microprogramma di gestione delle eccezioni di page fault lascia in cima
@@ -1409,20 +1409,14 @@ bool init_pe()
 }
 // )
 
-extern "C" void c_panic(const char *msg, natq rip, natl cpl, natq rflags, natq rsp)
+void process_dump(natl id, addr rsp, log_sev sev)
 {
-	static int in_panic = 0;
-	struct des_proc *p = des_p(esecuzione->id);
+	des_proc *p = des_p(id);
+	natq *pila = (natq*)rsp;
 
-	if (in_panic) {
-		flog(LOG_ERR, "panic ricorsivo. STOP");
-		end_program();
-	}
-	in_panic = 1;
-
-	flog(LOG_ERR, "PANIC: %s", msg);
-	flog(LOG_ERR, "  RIP=%lx", *(natq *)rsp - 5);
-        flog(LOG_ERR, "  RFLAGS=%lx [%s %s %s %s %s %s %s %s %s %s, IOPL=%s]",
+	flog(sev, "  RIP=%lx (%s)", pila[0], pila[1] == SEL_CODICE_UTENTE ? "LIV_UTENTE" : "LIV_SISTEMA");
+	natq rflags = pila[2];
+        flog(sev, "  RFLAGS=%lx [%s %s %s %s %s %s %s %s %s %s, IOPL=%s]",
 		rflags,
 		(rflags & 1U << 14) ? "NT" : "nt",
 		(rflags & 1U << 11) ? "OF" : "of",
@@ -1435,32 +1429,46 @@ extern "C" void c_panic(const char *msg, natq rip, natl cpl, natq rflags, natq r
 		(rflags & 1U << 2)  ? "PF" : "pf",
 		(rflags & 1U << 0)  ? "CF" : "cf",
 		(rflags & 0x3000) == 3 ? "UTENTE" : "SISTEMA");
-	flog(LOG_ERR, "  RAX=%lx RBX=%lx RCX=%lx RDX=%lx",
+	flog(sev, "  RAX=%lx RBX=%lx RCX=%lx RDX=%lx",
 			p->contesto[I_RAX],
 			p->contesto[I_RBX],
 			p->contesto[I_RCX],
 			p->contesto[I_RDX]);
-	flog(LOG_ERR, "  RDI=%lx RSI=%lx RBP=%lx RSP=%lx",
+	flog(sev, "  RDI=%lx RSI=%lx RBP=%lx RSP=%lx",
 			p->contesto[I_RDI],
 			p->contesto[I_RSI],
 			p->contesto[I_RBP],
-			rsp + 8);
-	flog(LOG_ERR, "  R8 =%lx R9 =%lx R10=%lx R11=%lx",
+			pila[3] + 8);
+	flog(sev, "  R8 =%lx R9 =%lx R10=%lx R11=%lx",
 			p->contesto[I_R8],
 			p->contesto[I_R9],
 			p->contesto[I_R10],
 			p->contesto[I_R11]);
-	flog(LOG_ERR, "  R12=%lx R13=%lx R14=%lx R15=%lx",
+	flog(sev, "  R12=%lx R13=%lx R14=%lx R15=%lx",
 			p->contesto[I_R12],
 			p->contesto[I_R13],
 			p->contesto[I_R14],
 			p->contesto[I_R15]);
-	flog(LOG_ERR, "  backtrace:");
+	flog(sev, "  backtrace:");
 	natq rbp = p->contesto[I_RBP];
 	while (rbp) {
-		flog(LOG_ERR, "  > %lx", *((natq *)rbp + 1) - 5);
+		flog(sev, "  > %lx", *((natq *)rbp + 1) - 5);
 		rbp = *(natq *)rbp;
 	}
+}
+
+extern "C" void c_panic(const char *msg, addr rsp)
+{
+	static int in_panic = 0;
+
+	if (in_panic) {
+		flog(LOG_ERR, "panic ricorsivo. STOP");
+		end_program();
+	}
+	in_panic = 1;
+
+	flog(LOG_ERR, "PANIC: %s", msg);
+	process_dump(esecuzione->id, rsp, LOG_ERR);
 	flog(LOG_ERR, "  processi utente: %d", processi - 1);
 	for (natl id = MIN_PROC_ID; id < MAX_PROC_ID; id += 16) {
 		des_proc *p = des_p(id);

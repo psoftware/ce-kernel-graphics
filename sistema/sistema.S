@@ -465,10 +465,7 @@ a_fill_gate:
 a_panic:	// routine int $tipo_p
 	call salva_stato
 	//cavallo_di_troia 1
-	movq (%rsp), %rsi	// rip
-	movq 8(%rsp), %rcx	// cpl
-	movq 16(%rsp), %rdx	// rflags
-	movq 24(%rsp), %r8	// rsp
+	movq %rsp, %rsi
 	call c_panic
 1:	nop
 	jmp 1b
@@ -622,9 +619,7 @@ simd_exc:
 comm_exc:
 	movq (%rsp), %rdi //tipo
 	movq 8(%rsp), %rsi //errore
-	movq 16(%rsp), %rdx //rip
-	movq 24(%rsp), %rcx //cs
-	movq 32(%rsp), %r8  //rflag
+	leaq 16(%rsp), %rdx
 	call gestore_eccezioni
 	jmp a_abort_p
 
