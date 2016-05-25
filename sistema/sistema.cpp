@@ -1490,7 +1490,13 @@ extern "C" void c_nmi()
 
 extern "C" addr c_trasforma(addr ind_virt)
 {
-	return 0;
+	natq d;
+	for (int liv = 4; liv > 0; liv--) {
+		d = get_des(esecuzione->id, liv, ind_virt);
+		if (!extr_P(d))
+			return 0;
+	}
+	return (addr)((natq)extr_IND_FISICO(d) | ((natq)ind_virt & 0xfff));
 }
 
 // ( [P_IOAPIC]
