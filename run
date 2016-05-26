@@ -12,6 +12,13 @@ CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 QEMU_BOOT=${QEMU_BOOT:-$HOME/CE/lib/ce/boot.bin}
 source util/start.mk
 
+if [ -n "$QEMU_FIFOS" ]; then
+	for f in $QEMU_FIFOS; do
+		rm -f $f.in $f.out
+		mkfifo $f.in $f.out
+	done
+fi
+
 cmd="$QEMU_PRE_CMD $QEMU \
 	-kernel $QEMU_BOOT \
 	-initrd build/sistema \
