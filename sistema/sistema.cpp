@@ -1429,6 +1429,12 @@ void process_dump(natl id, addr rsp, log_sev sev)
 		(rflags & 1U << 2)  ? "PF" : "pf",
 		(rflags & 1U << 0)  ? "CF" : "cf",
 		(rflags & 0x3000) == 3 ? "UTENTE" : "SISTEMA");
+	if (!id)
+		return;
+	if (!p) {
+		flog(sev, "  processo %d non trovato", id);
+		return;
+	}
 	flog(sev, "  RAX=%lx RBX=%lx RCX=%lx RDX=%lx",
 			p->contesto[I_RAX],
 			p->contesto[I_RBX],
