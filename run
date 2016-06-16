@@ -44,6 +44,8 @@ if [ -f "$CDEPATH" ]; then
 	cmd="$cmd -hdc \"$CDEPATH\""
 fi
 
+cmd="$cmd $@"
+
 if [ -n "$CERAW" ]; then
 	show_log=
 else
