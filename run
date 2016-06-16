@@ -2,12 +2,22 @@
 
 [ -f conf/conf.sh ] && source conf/conf.sh
 
-cmd=
-[ -n "$QEMU" ] || {
-	QEMU=qemu-system-x86_64
-	CEQEMU=$HOME/CE/bin/qemu-system-x86_64
-	[ -x "$CEQEMU" ] && QEMU=$CEQEMU
+find_qemu() {
+	[ -n "$QEMU" ] && return
+
+	local b=qemu-system-x86_64
+
+	QEMU=$HOME/CE/bin/$b
+	[ -x "$QEMU" ] && return
+
+	QEMU=/usr/local/CE/bin/$b
+	[ -x "$QEMU" ] && return
+
+	QEMU=$b
 }
+
+cmd=
+find_qemu
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
 QEMU_BOOT=${QEMU_BOOT:-$HOME/CE/lib/ce/boot.bin}
 source util/start.mk
