@@ -541,7 +541,7 @@ const natq BIT_PCD  = 1U << 4; // il bit Page Cache Disable
 const natq BIT_A    = 1U << 5; // il bit di accesso
 const natq BIT_D    = 1U << 6; // il bit "dirty"
 const natq BIT_PS   = 1U << 7; // il bit "page size"
-const natq BIT_ZERO = 1U << 7; // (* nuova pagina, da azzerare *)
+const natq BIT_ZERO = 1U << 9; // (* nuova pagina, da azzerare *)
 
 const natq ACCB_MASK  = 0x00000000000000FF; // maschera per il byte di accesso
 const natq ADDR_MASK  = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo
