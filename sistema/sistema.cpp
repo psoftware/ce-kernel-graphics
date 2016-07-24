@@ -540,6 +540,7 @@ const natq BIT_PWT  = 1U << 3; // il bit Page Wright Through
 const natq BIT_PCD  = 1U << 4; // il bit Page Cache Disable
 const natq BIT_A    = 1U << 5; // il bit di accesso
 const natq BIT_D    = 1U << 6; // il bit "dirty"
+const natq BIT_PS   = 1U << 7; // il bit "page size"
 const natq BIT_ZERO = 1U << 7; // (* nuova pagina, da azzerare *)
 
 const natq ACCB_MASK  = 0x00000000000000FF; // maschera per il byte di accesso
@@ -617,6 +618,11 @@ void set_D(natq& descrittore, bool bitD) //
 		descrittore |= BIT_D;
 	else
 		descrittore &= ~BIT_D; // )
+}
+
+bool  extr_PS(natq descrittore)
+{ // (
+	return (descrittore & BIT_PS); // )
 }
 
 // dato un indirizzo virtuale 'ind_virt' ne restituisce
@@ -1499,8 +1505,16 @@ extern "C" addr c_trasforma(addr ind_virt)
 	natq d;
 	for (int liv = 4; liv > 0; liv--) {
 		d = get_des(esecuzione->id, liv, ind_virt);
-		if (!extr_P(d))
+		if (!extr_P(d)) {
+			flog(LOG_WARN, "impossibile trasformare %lx: non presente a livello %d",
+				ind_virt, liv);
 			return 0;
+		}
+		if (extr_PS(d)) {
+			// pagina di grandi dimensioni
+			natq mask = (1UL << ((liv - 1) * 9 + 12)) - 1;
+			return norm((addr)((d & ~mask) | ((natq)ind_virt & mask)));
+		}
 	}
 	return (addr)((natq)extr_IND_FISICO(d) | ((natq)ind_virt & 0xfff));
 }
