@@ -1463,7 +1463,10 @@ void process_dump(natl id, addr rsp, log_sev sev)
 			p->contesto[I_R15]);
 	flog(sev, "  backtrace:");
 	natq rbp = p->contesto[I_RBP];
-	while (rbp) {
+	for (;;) {
+		natq csite = *((natq *)rbp + 1) - 5;
+		if (csite < start || (addr)csite >= fine_codice_sistema)
+			break;
 		flog(sev, "  > %lx", *((natq *)rbp + 1) - 5);
 		rbp = *(natq *)rbp;
 	}
