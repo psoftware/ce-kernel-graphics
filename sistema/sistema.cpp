@@ -873,20 +873,21 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 		//   tutti gli altri campi valgono 0
 		// )
 	} else {
-		// ( inizializzazione delle pila sistema
+		// ( inizializzazione della pila sistema
 		natq* pl = static_cast<natq*>(pila_sistema);
-		pl[-5] = (natq)f;	  	// RIP (codice sistema)
-		pl[-4] = SEL_CODICE_SISTEMA;    // CS (codice sistema)
-		pl[-3] = (IF? BIT_IF : 0);  	// RFLAGS
-		pl[-2] = (natq)fin_sis_p - sizeof(natq);	// RSP
-		pl[-1] = 0;			// SS
+		pl[-6] = (natq)f;	  	// RIP (codice sistema)
+		pl[-5] = SEL_CODICE_SISTEMA;    // CS (codice sistema)
+		pl[-4] = (IF? BIT_IF : 0);  	// RFLAGS
+		pl[-3] = (natq)fin_sis_p - sizeof(natq);	// RSP
+		pl[-2] = 0;			// SS
+		pl[-1] = 0;			// ind. rit. (non significativo)
 		//   i processi esterni lavorano esclusivamente a livello
 		//   sistema. Per questo motivo, prepariamo una sola pila (la
 		//   pila sistema)
 		// )
 
 		// ( inizializziamo il descrittore di processo
-		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 5 * sizeof(natq);
+		pdes_proc->contesto[I_RSP] = (natq)fin_sis_p - 6 * sizeof(natq);
 		pdes_proc->contesto[I_RDI] = a;
 
 		//pdes_proc->contesto[I_FPU_CR] = 0x037f;
