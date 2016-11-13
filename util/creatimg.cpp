@@ -320,6 +320,54 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 }
 
 
+void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
+	TabCache c;
+	for (uint64_t addr = start_addr; addr < start_addr + dim; addr += sizeof(pagina)) {
+		entrata *e[5];
+		block_t b;
+		log << "    addr " << std::hex << addr << std::dec << "\n";
+
+		for (int l = 4; l > 1; l--) {
+			block_t b;
+			int i = i_tabella(addr, l);
+			e[l] = &tab[l].e[i];
+			log << "       T" << l << "[" << i << "] ->";
+			if (e[l]->a.block == 0) {
+				b = c.nuova(l - 1);
+				log << " NEW";
+				e[l]->a.block = b;
+				e[l]->a.PWT   = 0;
+				e[l]->a.PCD   = 0;
+				e[l]->a.RW    = 1;
+				e[l]->a.US    = 1;
+				e[l]->a.P     = 0;
+			} else {
+				c.leggi(l - 1, e[l]->a.block);
+			}
+			log << " T" << (l - 1) << " at " << e[l]->a.block << "\n";
+		}
+
+		int i = i_tabella(addr, 1);
+		e[1] = &tab[1].e[i];
+		log << "       T1[" << i << "] ->";
+		if (e[1]->a.block == 0) {
+			if (! bm_alloc(&blocks, b) ) {
+				std::cerr << name << ": spazio insufficiente nello swap\n";
+				exit(EXIT_FAILURE);
+			}
+			e[1]->a.block = b;
+			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
+			log << " NEW zero";
+		}
+		log << " page at " << e[1]->a.block << "\n";
+		e[1]->a.PWT = 0;
+		e[1]->a.PCD = 0;
+		e[1]->a.RW |= 1;
+		e[1]->a.US |= 1;
+		c.scrivi(1);
+
+	}
+}
 
 
 int main(int argc, char* argv[])
@@ -370,6 +418,11 @@ int main(int argc, char* argv[])
 	do_map(argv[2], 0, superblock.io_entry, last_address);
 	superblock.io_end = last_address;
 
+	// le tabelle condivise per lo heap:
+	log << "==> I/O HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
+			last_address << "\n";
+	do_heap(argv[2], last_address, DIM_IO_HEAP);
+
 	log << "Loading " << argv[3] << "\n";
 	do_map(argv[3], 1, superblock.user_entry, last_address);
 	superblock.user_end = last_address;
@@ -377,52 +430,7 @@ int main(int argc, char* argv[])
 	// le tabelle condivise per lo heap:
 	log << "==> HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
 			last_address << "\n";
-	TabCache c;
-	for (uint64_t addr = last_address; addr < last_address + DIM_USR_HEAP; addr += sizeof(pagina)) {
-		entrata *e[5];
-		block_t b;
-		log << "    addr " << std::hex << addr << std::dec << "\n";
-
-		for (int l = 4; l > 1; l--) {
-			block_t b;
-			int i = i_tabella(addr, l);
-			e[l] = &tab[l].e[i];
-			log << "       T" << l << "[" << i << "] ->";
-			if (e[l]->a.block == 0) {
-				b = c.nuova(l - 1);
-				log << " NEW";
-				e[l]->a.block = b;
-				e[l]->a.PWT   = 0;
-				e[l]->a.PCD   = 0;
-				e[l]->a.RW    = 1;
-				e[l]->a.US    = 1;
-				e[l]->a.P     = 0;
-			} else {
-				c.leggi(l - 1, e[l]->a.block);
-			}
-			log << " T" << (l - 1) << " at " << e[l]->a.block << "\n";
-		}
-
-		int i = i_tabella(addr, 1);
-		e[1] = &tab[1].e[i];
-		log << "       T1[" << i << "] ->";
-		if (e[1]->a.block == 0) {
-			if (! bm_alloc(&blocks, b) ) {
-				std::cerr << argv[1] << ": spazio insufficiente nello swap\n";
-				exit(EXIT_FAILURE);
-			}
-			e[1]->a.block = b;
-			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
-			log << " NEW zero";
-		}
-		log << " page at " << e[1]->a.block << "\n";
-		e[1]->a.PWT = 0;
-		e[1]->a.PCD = 0;
-		e[1]->a.RW |= 1;
-		e[1]->a.US |= 1;
-		c.scrivi(1);
-
-	}
+	do_heap(argv[1], last_address, DIM_USR_HEAP);
 
 	superblock.magic[0] = 'C';
 	superblock.magic[1] = 'E';

@@ -915,12 +915,14 @@ extern "C" void do_log(log_sev sev, const char* buf, natl l)
 //
 extern "C" void fill_io_gates(void);
 
+extern "C" natl end;
 // eseguita in fase di inizializzazione
 //
 extern "C" void cmain(int sem_io)
 {
 
 	fill_io_gates();
+	heap_init(&end, DIM_IO_HEAP);
 	if (!console_init())
 		abort_p();
 	if (!com_init())
