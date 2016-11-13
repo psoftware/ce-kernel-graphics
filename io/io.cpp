@@ -907,6 +907,27 @@ extern "C" void do_log(log_sev sev, const char* buf, natl l)
 	log(sev, buf, l);
 }
 
+natl mem_mutex;
+
+void* mem_alloc(natl dim)
+{
+	void *p;
+
+	sem_wait(mem_mutex);
+	p = alloca(dim);
+	sem_signal(mem_mutex);
+
+	return p;
+}
+
+
+void mem_free(void* p)
+{
+	sem_wait(mem_mutex);
+	dealloca(p);
+	sem_signal(mem_mutex);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                 INIZIALIZZAZIONE DEL SOTTOSISTEMA DI I/O                   //
 ////////////////////////////////////////////////////////////////////////////////
