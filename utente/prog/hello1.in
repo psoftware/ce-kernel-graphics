@@ -1,13 +1,98 @@
 #include <sys.h>
 #include <lib.h>
 
+extern "C" void __cxa_pure_virtual()
+{
+	flog(LOG_INFO, "Pure Virtual function called, aborting.");
+}
+
+void * operator new(long unsigned int n)
+{
+	return alloca(n);
+}
+
+const natb W_ID_LABEL=0;
+const natb W_ID_BUTTON=1;
+
+class u_windowObject
+{
+	public:
+	natb TYPE;
+	unsigned short size_x;
+	unsigned short size_y;
+	short pos_x;
+	short pos_y;
+	short z_index;
+
+	natb backColor;
+};
+
+class u_button : public u_windowObject
+{
+	public:
+	char text[20];
+	natb borderColor;
+	u_button()
+	{
+		flog(LOG_INFO, "COSTRUTTORE U_BUTTON, id %d", W_ID_BUTTON);
+		TYPE=W_ID_BUTTON;
+	}
+};
+
+class u_label : public u_windowObject
+{
+	public:
+	char text[100];
+	u_label()
+	{
+		flog(LOG_INFO, "COSTRUTTORE U_LABEL");
+		TYPE=W_ID_LABEL;
+	}
+};
+
+
 process hello1 body hello_body1(0), 22, LIV_UTENTE;
 
 long int wait1=139999999;
+
 process_body hello_body1(int a)
 {
+	int finestra = crea_finestra(128,160,20,20);
+
+	u_label * label1 = new u_label();
+	label1->size_x=120;
+	label1->size_y=120;
+	label1->pos_x=4;
+	label1->pos_y=4;
+	label1->z_index=0;
+	label1->backColor=0x1F;
+	copy("", label1->text);
+	int oggetto = crea_oggetto(finestra, label1);
+
+	
+	u_button * button1 = new u_button();
+	button1->size_x=40;
+	button1->size_y=20;
+	button1->pos_x=(128 - button1->size_x)/2;
+	button1->pos_y=128;
+	button1->z_index=0;
+	button1->backColor=0x32;
+	button1->borderColor=0x0D;
+	copy("Chiudi", button1->text);
+	int button_id = crea_oggetto(finestra, button1);
+
+	visualizza_finestra(finestra, true);
+
+	aggiorna_oggetto(finestra, button_id, button1, true);	
+	aggiorna_oggetto(finestra, oggetto, label1, true);
+
+	//aggiorna_testo(finestra, "Inizio processo 1!", true);
+	copy("Inizio processo 1!", label1->text);
+	aggiorna_oggetto(finestra, oggetto, label1, true);
 	writeconsole("Inizio Processo1");
 	while(--wait1);
-	writeconsole("Fine Processo1");
+	copy("Inizio processo 1!\nBLABLABLA    BLABLABLA", label1->text);
+	aggiorna_oggetto(finestra, oggetto, label1, true);
+	/*aggiorna_testo(finestra, "Inizio processo 1!\nBLABLABLA    BLABLABLA", true);*/
 }
 

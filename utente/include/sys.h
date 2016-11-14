@@ -26,6 +26,12 @@ extern "C" void iniconsole(natb cc);
 extern "C" void readconsole(char* buff, natl& quanti);
 extern "C" void writeconsole(const char* buff);
 
+extern "C" int crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y);
+extern "C" void visualizza_finestra(int id, bool sync);
+extern "C" void aggiorna_testo(int id, const char * str, bool sync);
+extern "C" int crea_oggetto(int w_id, void * obj);
+extern "C" void aggiorna_oggetto(int w_id, int o_id, void * u_obj, bool sync);
+
 extern "C" void readhd_n(natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void writehd_n(const natw vetto[], natl primo, natb quanti, natb &errore);
 extern "C" void dmareadhd_n(natw vetti[], natl primo, natb quanti, natb &errore);

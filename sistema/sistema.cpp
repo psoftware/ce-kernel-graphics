@@ -153,6 +153,7 @@ extern "C" void schedulatore(void)
 
 	if(old_esecuzione != esecuzione)
 	{
+		time+=2;
 		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id); // New GRAPH c++
 		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id); //old GRAPH bash
 		/*flog(LOG_INFO, "-- Debug Lista PRONTI");

@@ -2,6 +2,8 @@
 //
 #include "costanti.h"
 #include "libce.h"
+#include "windows/font.h"
+#include "windows/gui_objects.h"
 //#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
 //    COSTANTI                                                                //
@@ -16,6 +18,7 @@ const natl LIV = LIV_SISTEMA;
 //                        CHIAMATE DI SISTEMA USATE                           //
 ////////////////////////////////////////////////////////////////////////////////
 
+extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 extern "C" natl activate_pe(void f(int), int a, natl prio, natl liv, natb type);
 extern "C" void terminate_p();
 extern "C" void sem_wait(natl sem);
@@ -309,6 +312,7 @@ bool com_init()
 	return true;
 }
 // )
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //                         GESTIONE DELLA CONSOLE                       //
@@ -614,6 +618,633 @@ bool console_init()
 
 // *)
 
+////////////////////////////////////////////////////////////////////////////////
+//                         GESTIONE FINESTRE                                  //
+////////////////////////////////////////////////////////////////////////////////
+
+const int MAX_SCREENX = 1280;
+const int MAX_SCREENY = 1024;
+natb* framebuffer = (natb*)0xfd000000;
+
+void inline put_pixel(int x, int y, natb col)
+{
+	framebuffer[MAX_SCREENX*y+x] = col;
+}
+
+void inline set_background()
+{
+	memset(framebuffer,0x36, MAX_SCREENX*MAX_SCREENY);
+}
+
+void print_palette(int x, int y)
+{
+	int row=0;
+	for(natb i=0; i<0xFF; i++)
+	{
+		for(int k=0; k<10; k++)
+			for(int j=0; j<10; j++)
+				put_pixel(x+(i%16)*10+j, y+row*10+k, i);
+		if(i%16==0 && i!=0)
+			row++;
+	}
+}
+
+int set_fontchar(int x, int y, int nchar, natb backColor)
+{
+	int row_off = nchar / 16;
+	int col_off = nchar % 16;
+
+	natb start = (16 - font_width[nchar])/2;
+	natb end = start + font_width[nchar];
+
+	for(int i=0; i<16; i++)
+		for(int j=start; j<end; j++)
+			if(font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
+				put_pixel(x+j-start, y+i, backColor);
+			else
+				put_pixel(x+j-start, y+i, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
+
+	return font_width[nchar];
+}
+
+void set_fontstring(int x, int y, int bound_x, int bound_y, const char * str, natb backColor)
+{
+	int slength = (int)strlen(str);
+	//int x_eff = ((i*16) % bound_x);
+	//int y_eff = (i*16 / bound_x)*16;
+	int x_eff = 0;
+	int y_eff = 0;
+	for(int i=0; i<slength; i++)
+	{	
+		if(str[i] != '\n')
+			x_eff += set_fontchar(x+x_eff, y+(y_eff*16), str[i], backColor);
+		if((x_eff + 16) > bound_x || str[i] == '\n')
+		{
+			x_eff = 0;
+			y_eff++;
+		}
+		
+	}
+}
+
+const int MAX_WINDOWS_OBJECTS = 10;
+struct des_window
+{
+	natb id;
+	natb p_id;
+	int size_x;
+	int size_y;
+	int pos_x;
+	int pos_y;
+	natb backColor;
+	natb obj_count;
+	windowObject * objects[MAX_WINDOWS_OBJECTS];
+};
+
+const natb PRIM_SHOW=0;
+const natb PRIM_UPDATE_TEXT=1;
+const natb PRIM_UPDATE_OBJECT=2;
+struct des_window_req
+{
+	natb w_id;
+	natb p_id;
+
+	//Sincronizzazione primitiva se richiesta
+	bool to_sync;
+	natb if_sync;
+
+	natb act;
+	union {
+		char str[60];
+		windowObject * obj;
+	};
+
+	des_window_req()
+	{
+		to_sync = false;
+		if_sync = sem_ini(0);
+	}
+};
+
+const natb MAX_REQ_QUEUE=3;
+struct des_windows_man
+{
+	//Finestre
+	static const int MAX_WINDOWS = 5;
+	static const int TOPBAR_HEIGHT = 20;
+	natb windows_count;
+	des_window windows_arr[MAX_WINDOWS];		//Finestre create
+
+	//Coda richieste primitive
+	des_window_req req_queue[MAX_REQ_QUEUE];
+	natb top;
+	natb rear;
+	
+	//Semafori di sincronizzazione
+	natb mutex;
+	natb sync_notempty;
+	natb sync_notfull;
+};
+
+des_windows_man win_man;
+
+int windows_queue_insert(des_windows_man& win_cont, natb w_id, natb p_id, natb act, bool sync)
+{
+	//Controllo Coda piena
+	if (win_cont.top == ((win_cont.rear - 1 + MAX_REQ_QUEUE) % MAX_REQ_QUEUE))
+		return -1;
+
+	natb resindex = win_cont.top;
+	win_cont.req_queue[win_cont.top].w_id = w_id;
+	win_cont.req_queue[win_cont.top].p_id = p_id;
+	win_cont.req_queue[win_cont.top].act = act;
+	win_cont.req_queue[win_cont.top].to_sync = sync;
+	win_cont.top = (win_cont.top + 1) % MAX_REQ_QUEUE;
+
+	return resindex; // No errors
+}
+
+bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
+{
+	if (win_cont.top == win_cont.rear)
+		return false;
+
+	req = win_cont.req_queue[win_cont.rear];
+	win_cont.rear = (win_cont.rear + 1) % MAX_REQ_QUEUE;
+
+	return true;
+}
+
+//Primitive
+extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
+{
+	sem_wait(win_man.mutex);
+
+	if(win_man.windows_count >= win_man.MAX_WINDOWS)
+	{
+		sem_signal(win_man.mutex);
+		return -1;
+	}
+	natb res_id = win_man.windows_count;
+	win_man.windows_arr[win_man.windows_count].size_x = size_x;
+	win_man.windows_arr[win_man.windows_count].size_y = size_y;
+	win_man.windows_arr[win_man.windows_count].pos_x = pos_x;
+	win_man.windows_arr[win_man.windows_count].pos_y = pos_y;
+	win_man.windows_arr[win_man.windows_count].backColor = 0x01;
+	win_man.windows_arr[win_man.windows_count].obj_count = 0;
+	win_man.windows_count++;
+
+	sem_signal(win_man.mutex);
+
+	return res_id;
+}
+
+const int TOPBAR_HEIGHT = 20;
+extern "C" void c_visualizza_finestra(int id, bool sync)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	int new_index;
+
+	if(id >= win_man.MAX_WINDOWS || id<0)
+		goto err;
+	flog(LOG_INFO, "Inserimento richiesta di renderizzazione finestra");
+
+	new_index = windows_queue_insert(win_man, id, 100, PRIM_SHOW, sync);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		goto err;
+	}
+
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+	if(sync)
+		sem_wait(win_man.req_queue[new_index].if_sync);
+
+	return;
+
+//Gestione errori (sblocco mutex e sync su array)
+err:	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
+}
+
+extern "C" void c_aggiorna_testo(int id, const char * str, bool sync)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	int new_index;
+
+	if(id >= win_man.MAX_WINDOWS || id<0)
+		goto err;	
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento testo");
+	new_index = windows_queue_insert(win_man, id, 100, PRIM_UPDATE_TEXT, sync);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		goto err;
+	}
+
+	copy(str, win_man.req_queue[new_index].str);
+
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+	if(sync)
+		sem_wait(win_man.req_queue[new_index].if_sync);
+
+	return;
+
+//Gestione errori (sblocco mutex e sync su array)
+err:	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
+}
+
+extern "C" int c_crea_oggetto(int w_id, u_windowObject * u_obj)
+{
+	sem_wait(win_man.mutex);
+
+	des_window * wind;
+
+	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
+		goto err;
+	
+	wind = &win_man.windows_arr[w_id];
+	if(wind->obj_count >= MAX_WINDOWS_OBJECTS)
+		goto err;
+
+	switch(u_obj->TYPE)
+	{
+		case W_ID_LABEL:
+			wind->objects[wind->obj_count] = new label(static_cast<u_label*>(u_obj));
+		break;
+		case W_ID_BUTTON:
+			wind->objects[wind->obj_count] = new button(static_cast<u_button*>(u_obj));
+		break;
+		default:
+			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
+			goto err;
+	}
+
+	flog(LOG_INFO, "c_crea_oggetto: oggetto %d di tipo %d creato su finestra %d", wind->obj_count, u_obj->TYPE, w_id);
+
+	sem_signal(win_man.mutex);
+	return wind->obj_count++;
+
+err:	sem_signal(win_man.mutex);
+	return -1;
+}
+
+extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, bool sync)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	int new_index;
+
+	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
+		goto err;
+	if(o_id >= win_man.windows_arr[w_id].obj_count || o_id<0)
+		goto err;
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento oggetto");
+
+	//Copio prima il nuovo contenuto di u_windowObject nell'oggetto windowObject già creato
+	switch(u_obj->TYPE)
+	{
+		case W_ID_LABEL:
+			dealloca(win_man.windows_arr[w_id].objects[o_id]);
+			win_man.windows_arr[w_id].objects[o_id] = new label(static_cast<u_label*>(u_obj));
+		break;
+		case W_ID_BUTTON:
+			dealloca(win_man.windows_arr[w_id].objects[o_id]);
+			win_man.windows_arr[w_id].objects[o_id] = new button(static_cast<u_button*>(u_obj));
+		break;
+	}
+
+	new_index = windows_queue_insert(win_man, w_id, 100, PRIM_UPDATE_OBJECT, sync);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		goto err;
+	}
+
+	win_man.req_queue[new_index].obj = win_man.windows_arr[w_id].objects[o_id];
+
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+	if(sync)
+		sem_wait(win_man.req_queue[new_index].if_sync);
+
+	return;
+
+//Gestione errori (sblocco mutex e sync su array)
+err:	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
+}
+
+const natb WIN_X_COLOR = 0x28;
+const natb WIN_BACKGROUND_COLOR = 0x03;
+
+void graphic_visualizza_finestra(int id)
+{
+	des_window * wind = &win_man.windows_arr[id];
+
+	for(int i=0; i<wind->size_x; i++)
+		for(int j=0; j<wind->size_y + TOPBAR_HEIGHT; j++)
+			if(j < TOPBAR_HEIGHT)
+			{
+				if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
+					put_pixel(wind->pos_x + i, wind->pos_y + j, WIN_X_COLOR);
+				else
+					put_pixel(wind->pos_x + i, wind->pos_y + j, WIN_BACKGROUND_COLOR);
+			}
+			else
+				put_pixel(wind->pos_x + i, wind->pos_y + j, wind->backColor);
+	
+	set_fontchar(wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
+}
+
+void graphic_aggiorna_testo(int id, const char * str)
+{
+	des_window * wind = &win_man.windows_arr[id];
+	set_fontstring(wind->pos_x,wind->pos_y+20,wind->size_x,wind->pos_y-TOPBAR_HEIGHT,str,0x01);
+}
+
+void renderobject_onwindow(int w_id, windowObject * w_obj)
+{
+	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
+		return;
+
+	flog(LOG_INFO, "renderobject_onwindow: renderizzo oggetto...");
+
+	des_window * wind = &win_man.windows_arr[w_id];
+
+	w_obj->render();
+
+	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
+	int max_x = (w_obj->pos_x + w_obj->size_x > wind->size_x) ? wind->size_x - w_obj->pos_x : w_obj->size_x;
+	int max_y = (w_obj->pos_y + w_obj->size_y > wind->size_y) ? wind->size_y - w_obj->pos_y - TOPBAR_HEIGHT : w_obj->size_y;
+	for(int i=0; i<max_x; i++)
+		for(int j=0; j<max_y; j++)
+			put_pixel(wind->pos_x+w_obj->pos_x+i, wind->pos_y+w_obj->pos_y+TOPBAR_HEIGHT+j, w_obj->render_buff[j*w_obj->size_x+i]);
+}
+
+void main_windows_manager(int n)
+{
+	set_background();
+	print_palette(900,450);
+
+	while(true)
+	{
+		sem_wait(win_man.sync_notempty);
+		sem_wait(win_man.mutex);
+
+		flog(LOG_INFO, "main_windows_manager: risvegliato");
+		des_window_req newreq;
+		if(!windows_queue_extract(win_man, newreq))
+		{
+			flog(LOG_ERR, "main_windows_manager: Errore nell'estrazione delle richieste.");
+			abort_p();
+		}
+
+		switch(newreq.act)
+		{
+			case PRIM_SHOW:
+				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.w_id);
+				graphic_visualizza_finestra(newreq.w_id);
+				if(newreq.to_sync)
+					sem_signal(newreq.if_sync);
+			break;
+			case PRIM_UPDATE_TEXT:
+				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento testo per finestra %d", newreq.act, newreq.w_id);
+				graphic_aggiorna_testo(newreq.w_id, newreq.str);
+				if(newreq.to_sync)
+					sem_signal(newreq.if_sync);
+			break;
+			case PRIM_UPDATE_OBJECT:
+				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.w_id);
+				renderobject_onwindow(newreq.w_id, newreq.obj);
+				if(newreq.to_sync)
+					sem_signal(newreq.if_sync);
+			break;
+		}
+
+		sem_signal(win_man.mutex);
+		sem_signal(win_man.sync_notfull);
+	}
+		
+}
+
+bool windows_init()
+{
+	//creare un processo che si occupi della stampa delle finestre
+	win_man.mutex = sem_ini(1);
+	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
+	win_man.sync_notempty = sem_ini(0);
+
+	win_man.windows_count = 0;
+	win_man.top = 0;
+	win_man.rear = 0;
+	
+	if(win_man.sync_notfull==-1 || win_man.sync_notempty==-1)
+	{
+		flog(LOG_ERR, "attivazione del gestore delle finestre fallita.");
+		return false;
+	}
+
+	flog(LOG_INFO, "attivo gestore delle finestre...");
+	activate_p(main_windows_manager, 0, 200, LIV_SISTEMA);
+
+	return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                             GESTIONE MOUSE                                 //
+////////////////////////////////////////////////////////////////////////////////
+
+void inline wait_kdb_read()
+{
+	natb res;
+	do
+	{
+		inputb(console.kbd.indreg.iSTR, res);
+		flog(LOG_INFO, "read_wait: Status Register: %d", res);
+	}
+	while(!(res & 0x01)); //attendo di poter leggere iCMR
+}
+
+void inline wait_kdb_write()
+{
+	natb res;
+	do
+	{
+		inputb(console.kbd.indreg.iSTR, res);
+		flog(LOG_INFO, "write_wait: Status Register: %d", res);
+	}
+	while(res & 0x02); //attendo di poter leggere iCMR
+}
+
+void inline mouse_send(natb data)
+{
+	natb mouseresp;
+	wait_kdb_write();
+	outputb(0xD4, console.kbd.indreg.iCMR);
+	wait_kdb_write();
+	outputb(data, console.kbd.indreg.iTBR);
+	wait_kdb_read();
+	inputb(console.kbd.indreg.iRBR, mouseresp);
+	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);
+}
+
+int inline bytetosignedshort(natb a, bool s)
+{
+	return ( (s ) ?0xFFFFFF00:0x00000000) | a;
+}
+
+bool isIntelliMouse=false;
+natb status_cancellami;
+
+void mouse_handler(int i)
+{
+	int mouse_count=0;
+	int mouse_y=300*100, mouse_x=300*100;
+	natb mouse_bytes[4]; 	//65 -> 01000001 -> 0x41
+				//56 -> 00111000
+				//8  -> 00001000
+	natb newbyte;
+	bool first = true;
+	while(true)
+	{
+		if(first)
+		{
+			first = false;
+			wfi();
+		}
+
+		inputb(console.kbd.indreg.iRBR, newbyte);
+		mouse_bytes[mouse_count]= newbyte;
+		mouse_count++;
+
+		/*//Disabilito interruzioni su registro di controllo
+		wait_kdb_write();
+		outputb(0x60, console.kbd.indreg.iCMR);
+		wait_kdb_write();
+		outputb(status_cancellami & ~0x02, console.kbd.indreg.iTBR);
+		
+		//faccio polling
+		flog(LOG_INFO, "provo polling");
+		natb polres;
+		inputb(console.kbd.indreg.iSTR, polres);
+		while(polres & 0x01);
+		{
+			inputb(console.kbd.indreg.iRBR, newbyte);
+			inputb(console.kbd.indreg.iSTR, polres);
+			flog(LOG_INFO, "C'è ancora roba: %d", newbyte);
+		}*/
+		
+
+		if ((mouse_count == 4 && isIntelliMouse) || (mouse_count==3 && !isIntelliMouse))
+		{
+			flog(LOG_INFO, "RAW DATA status=%d x=%d y=%d", mouse_bytes[0], mouse_bytes[1], mouse_bytes[2]);
+			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
+				flog(LOG_INFO, "Invalid Alignment");
+
+			mouse_count = 0; // reset the counter
+			int x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
+			int y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
+
+			// do what you wish with the bytes, this is just a sample
+			if ((mouse_bytes[0] & 0x80) || (mouse_bytes[0] & 0x40))
+			{
+				flog(LOG_INFO, "Mouse Overflow!");
+				goto fine; // the mouse only sends information about overflowing, do not care about it and return
+			}
+			if (mouse_bytes[0] & 0x4)
+			{
+				flog(LOG_INFO, "Middle button is pressed!");
+			}
+			if (mouse_bytes[0] & 0x2)
+			{
+				flog(LOG_INFO, "Right button is pressed!");
+			}
+			if (mouse_bytes[0] & 0x1)
+			{
+				flog(LOG_INFO, "Left button is pressed!");
+			}
+			
+			mouse_x += x;
+			mouse_y -= y;
+			
+			flog(LOG_INFO, "x: %d y: %d dx: %d dy: %d xneg: %d yneg: %d", mouse_x/100, mouse_y/100, x, y, (mouse_bytes[0] & 0x10) >> 4, (mouse_bytes[0] & 0x20) >>5);
+			fine: put_pixel(mouse_x/100, mouse_y/100, 0x05);
+		}
+		else
+			flog(LOG_INFO, "Dati parziali, count %d", mouse_count);
+		/*
+		//Abilito interruzioni su registro di controllo
+		//wait_kdb_write();
+		outputb(0x60, console.kbd.indreg.iCMR);
+		//wait_kdb_write();
+		outputb(status_cancellami | 0x02, console.kbd.indreg.iTBR);
+		flog(LOG_INFO, "fine interruzione");*/
+		wfi();
+	}
+}
+
+bool mouse_init()
+{
+		/*
+	0x60,	// iRBR
+	0x60,	// iTBR
+	0x64,	// iCMR
+	0x64,	// iSTR 250->01000001
+	*/
+
+	//Abilito seconda porta ps/2
+	outputb(0xA8, console.kbd.indreg.iCMR);
+
+	//Leggo registro di controllo
+	//wait_kdb_write();
+	outputb(0x20, console.kbd.indreg.iCMR);
+	wait_kdb_read();
+	natb resp;
+	inputb(console.kbd.indreg.iRBR, resp);
+	flog(LOG_INFO, "Resp: %d", resp);
+	status_cancellami = resp;
+
+	//Abilito interruzioni su registro di controllo
+	wait_kdb_write();
+	outputb(0x60, console.kbd.indreg.iCMR);
+	wait_kdb_write();
+	outputb(resp | 0x02, console.kbd.indreg.iTBR);
+
+	//Abilito mouse
+	mouse_send(0xF6);
+	mouse_send(0xF4);
+
+	//Abilito IntelliMouse
+	/*isIntelliMouse=true;
+	mouse_send(0xF3);
+	mouse_send(200);
+	mouse_send(0xF3);
+	mouse_send(100);
+	mouse_send(0xF3);
+	mouse_send(80);
+	mouse_send(0xF2);
+	wait_kdb_read();
+	natb mouseresp;
+	inputb(console.kbd.indreg.iRBR, mouseresp);
+	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);*/
+
+	//Setto handler
+	activate_pe(mouse_handler, 0, 2, 0, 12);
+
+	return true;
+}
 // inerfacce ATA
 
 enum hd_cmd { WRITE_SECT = 0x30, READ_SECT = 0x20, WRITE_DMA = 0xCA, READ_DMA = 0xC8 };
@@ -944,7 +1575,12 @@ extern "C" void cmain(int sem_io)
 
 	fill_io_gates();
 	heap_init(&end, DIM_IO_HEAP);
-	if (!console_init())
+
+	/*if (!console_init())
+		abort_p();*/
+	if(!windows_init())
+		abort_p();
+	if(!mouse_init())
 		abort_p();
 	if (!com_init())
 		abort_p();

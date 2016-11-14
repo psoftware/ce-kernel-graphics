@@ -86,6 +86,12 @@
 #define IO_TIPO_RCON		0x76	// readconsole
 #define IO_TIPO_WCON		0x77	// writeconsole
 #define IO_TIPO_INIC		0x78	// iniconsole
+
+#define IO_TIPO_WINDC		0x79	// crea_finestra
+#define IO_TIPO_WINDV		0x80	// visualizza_finestra
+#define IO_TIPO_WINDT		0x81	// aggiorna_testo
+#define IO_TIPO_WINDOC		0x82	// crea_oggetto
+#define IO_TIPO_WINDUC		0x83	// aggiorna_oggetto
 // * in piu' rispetto al libro
 // )
 

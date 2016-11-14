@@ -6,12 +6,14 @@ process hello3 body hello_body3(0), 20, LIV_UTENTE;
 long int wait3=39999999;
 process_body hello_body3(int a)
 {
-	writeconsole("Inizio Processo3");
+	int finestra = crea_finestra(128,128,320,30);
+	visualizza_finestra(finestra, true);
+	aggiorna_testo(finestra, "Inizio processo 3!", true);
 	while(--wait3);
-	writeconsole("Fine1 Processo3");
+	aggiorna_testo(finestra, "Inizio processo 3!\nFine 1!", true);
 	delay(50);
 	wait3=9999999;
 	while(--wait3);
-	writeconsole("Fine2 Processo3");
+	aggiorna_testo(finestra, "Inizio processo 3!\nFine 1!\nFine 2!", true);
 }
 

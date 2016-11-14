@@ -19,7 +19,7 @@ find_qemu() {
 cmd=
 find_qemu
 CEHDPATH=${CEHDPATH:-$HOME/CE/share/hd.img}
-QEMU_BOOT=${QEMU_BOOT:-$HOME/CE/lib/ce/boot.bin}
+QEMU_BOOT=${QEMU_BOOT:-$HOME/CE/lib/ce/boot-graphic.bin}
 source util/start.mk
 
 if [ -n "$QEMU_FIFOS" ]; then
