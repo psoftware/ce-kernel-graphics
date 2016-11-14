@@ -1072,7 +1072,6 @@ void inline wait_kdb_read()
 	do
 	{
 		inputb(console.kbd.indreg.iSTR, res);
-		flog(LOG_INFO, "read_wait: Status Register: %d", res);
 	}
 	while(!(res & 0x01)); //attendo di poter leggere iCMR
 }
@@ -1083,7 +1082,6 @@ void inline wait_kdb_write()
 	do
 	{
 		inputb(console.kbd.indreg.iSTR, res);
-		flog(LOG_INFO, "write_wait: Status Register: %d", res);
 	}
 	while(res & 0x02); //attendo di poter leggere iCMR
 }
@@ -1097,7 +1095,6 @@ void inline mouse_send(natb data)
 	outputb(data, console.kbd.indreg.iTBR);
 	wait_kdb_read();
 	inputb(console.kbd.indreg.iRBR, mouseresp);
-	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);
 }
 
 int inline bytetosignedshort(natb a, bool s)
@@ -1112,13 +1109,15 @@ void mouse_handler(int i)
 {
 	int mouse_count=0;
 	int mouse_y=300*100, mouse_x=300*100;
-	natb mouse_bytes[4]; 	//65 -> 01000001 -> 0x41
-				//56 -> 00111000
-				//8  -> 00001000
+	natb mouse_bytes[4];
+
 	natb newbyte;
 	bool first = true;
 	while(true)
 	{
+		// la prima richiesta di interruzione che mi arriva non è relativa ad un byte di stato
+		// ma probabilmente ad un ack di risposta a qualche comando che invio, quindi devo cestinarlo
+		// altrimenti non trovo l'allineamento
 		if(first)
 		{
 			first = false;
@@ -1129,7 +1128,8 @@ void mouse_handler(int i)
 		mouse_bytes[mouse_count]= newbyte;
 		mouse_count++;
 
-		/*//Disabilito interruzioni su registro di controllo
+		/* PROVA POLLING FALLITA
+		//Disabilito interruzioni su registro di controllo
 		wait_kdb_write();
 		outputb(0x60, console.kbd.indreg.iCMR);
 		wait_kdb_write();
@@ -1149,41 +1149,40 @@ void mouse_handler(int i)
 
 		if ((mouse_count == 4 && isIntelliMouse) || (mouse_count==3 && !isIntelliMouse))
 		{
-			flog(LOG_INFO, "RAW DATA status=%d x=%d y=%d", mouse_bytes[0], mouse_bytes[1], mouse_bytes[2]);
 			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
-				flog(LOG_INFO, "Invalid Alignment");
+				flog(LOG_INFO, "mouse_driver: invalid packets alignment");
 
 			mouse_count = 0; // reset the counter
 			int x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
 			int y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
 
-			// do what you wish with the bytes, this is just a sample
+			// condizione di overflow (cestino il dato)
 			if ((mouse_bytes[0] & 0x80) || (mouse_bytes[0] & 0x40))
 			{
-				flog(LOG_INFO, "Mouse Overflow!");
-				goto fine; // the mouse only sends information about overflowing, do not care about it and return
+				flog(LOG_INFO, "mouse_driver: Mouse Overflow!");
+				goto fine;
 			}
 			if (mouse_bytes[0] & 0x4)
 			{
-				flog(LOG_INFO, "Middle button is pressed!");
+				flog(LOG_INFO, "mouse_driver: Middle button is pressed!");
 			}
 			if (mouse_bytes[0] & 0x2)
 			{
-				flog(LOG_INFO, "Right button is pressed!");
+				flog(LOG_INFO, "mouse_driver: Right button is pressed!");
 			}
 			if (mouse_bytes[0] & 0x1)
 			{
-				flog(LOG_INFO, "Left button is pressed!");
+				flog(LOG_INFO, "mouse_driver: Left button is pressed!");
 			}
 			
 			mouse_x += x;
 			mouse_y -= y;
 			
-			flog(LOG_INFO, "x: %d y: %d dx: %d dy: %d xneg: %d yneg: %d", mouse_x/100, mouse_y/100, x, y, (mouse_bytes[0] & 0x10) >> 4, (mouse_bytes[0] & 0x20) >>5);
+			flog(LOG_INFO, "mouse_driver: x: %d y: %d dx: %d dy: %d xneg: %d yneg: %d",
+					mouse_x/100, mouse_y/100, x, y, (mouse_bytes[0] & 0x10) >> 4, (mouse_bytes[0] & 0x20) >>5);
 			fine: put_pixel(mouse_x/100, mouse_y/100, 0x05);
 		}
-		else
-			flog(LOG_INFO, "Dati parziali, count %d", mouse_count);
+
 		/*
 		//Abilito interruzioni su registro di controllo
 		//wait_kdb_write();
@@ -1197,11 +1196,11 @@ void mouse_handler(int i)
 
 bool mouse_init()
 {
-		/*
+	/*
 	0x60,	// iRBR
 	0x60,	// iTBR
 	0x64,	// iCMR
-	0x64,	// iSTR 250->01000001
+	0x64,	// iSTR
 	*/
 
 	//Abilito seconda porta ps/2
@@ -1242,6 +1241,8 @@ bool mouse_init()
 
 	//Setto handler
 	activate_pe(mouse_handler, 0, 2, 0, 12);
+
+	flog(LOG_INFO, "mouse inizializzato");
 
 	return true;
 }
