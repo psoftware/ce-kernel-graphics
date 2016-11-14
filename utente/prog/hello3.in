@@ -1,0 +1,17 @@
+#include <sys.h>
+#include <lib.h>
+
+process hello3 body hello_body3(0), 20, LIV_UTENTE;
+
+long int wait3=39999999;
+process_body hello_body3(int a)
+{
+	writeconsole("Inizio Processo3");
+	while(--wait3);
+	writeconsole("Fine1 Processo3");
+	delay(50);
+	wait3=9999999;
+	while(--wait3);
+	writeconsole("Fine2 Processo3");
+}
+

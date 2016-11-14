@@ -7,7 +7,6 @@ utente/utente.cpp
 decode
 showb
 tags
-utente/prog
 start.mk
 start.gdb
 util/start.pl

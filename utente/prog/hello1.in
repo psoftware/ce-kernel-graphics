@@ -1,0 +1,13 @@
+#include <sys.h>
+#include <lib.h>
+
+process hello1 body hello_body1(0), 22, LIV_UTENTE;
+
+long int wait1=139999999;
+process_body hello_body1(int a)
+{
+	writeconsole("Inizio Processo1");
+	while(--wait1);
+	writeconsole("Fine Processo1");
+}
+

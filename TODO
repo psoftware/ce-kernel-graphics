@@ -1,5 +1,2 @@
-- usare libreria di esempiIO
-- copiare i messaggi di log in un buffer di sistema
-  (per intercettare i page fault)
-- aggiungere un parametro 'quanti' a panic
-  (per controllare cavallo di troia)
+- rimuovere supporto per graph_old.sh
+- pulire output flog

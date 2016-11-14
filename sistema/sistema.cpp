@@ -53,6 +53,14 @@ struct proc_elem {
 proc_elem *esecuzione;
 proc_elem *pronti;
 
+proc_elem *sospesi;
+proc_elem *old_esecuzione=0;
+proc_elem *dummy_punt;
+const int MAX_WAIT = 8;
+int attesa=MAX_WAIT;
+
+unsigned long int time = 0;
+
 void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
 {
 // ( inserimento in una lista semplice ordinata
@@ -90,6 +98,41 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 // )
 }
 
+//Gestione coda processi (sospesi)
+void inserimento_testa(proc_elem *&p_lista, proc_elem *&p_elem)
+{
+	if(p_elem == 0)
+		return;
+
+	p_elem->puntatore = p_lista;
+	p_lista=p_elem;
+}
+
+void estrazione_coda(proc_elem *&p_lista, proc_elem *&p_elem)
+{
+	if(p_lista==0)
+	{
+		p_elem=0;
+		return;
+	}
+
+	proc_elem * p, *q;
+	for(p = p_lista; p!=0 && p->puntatore!=0; p=p->puntatore) q=p;
+
+	p_elem = p;
+	if(p==p_lista)
+		p_lista = 0;
+	else
+		q->puntatore = 0;
+	
+}
+
+void debug_lista(proc_elem *p_lista)
+{
+	for(proc_elem * p = p_lista; p!=0; p=p->puntatore)
+		flog(LOG_INFO, "Lista: %d", p->id);
+}
+
 extern "C" void inspronti()
 {
 // (
@@ -98,11 +141,29 @@ extern "C" void inspronti()
 }
 
 //
+
 extern "C" void schedulatore(void)
 {
-// ( poiche' la lista e' gia' ordinata in base alla priorita',
-//   e' sufficiente estrarre l'elemento in testa
-	rimozione_lista(pronti, esecuzione);
+	if( pronti!=dummy_punt || sospesi == 0)
+		rimozione_lista(pronti, esecuzione);
+	else
+	{
+		estrazione_coda(sospesi, esecuzione);
+	}
+
+	if(old_esecuzione != esecuzione)
+	{
+		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id); // New GRAPH c++
+		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id); //old GRAPH bash
+		/*flog(LOG_INFO, "-- Debug Lista PRONTI");
+		debug_lista(pronti);
+		flog(LOG_INFO, "-- Debug Lista SOSPESI");
+		debug_lista(sospesi);
+		flog(LOG_INFO, "----------------------");*/
+		attesa = MAX_WAIT;
+		old_esecuzione = esecuzione;
+	}
+	
 // )
 }
 
@@ -948,6 +1009,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		id = p->id;			// id del processo creato
 						// (allocato da crea_processo)
 		flog(LOG_INFO, "proc=%d entry=%p(%d) prio=%d liv=%d", id, f, a, prio, liv);
+		flog(LOG_INFO, "%dP%d GRAPH", time, p->id);	//NEW GRAPH c++
 	}
 
 	return id;
@@ -1002,6 +1064,8 @@ extern "C" void c_terminate_p()
 	distruggi_processo(p);
 	processi--;			//
 	flog(LOG_INFO, "Processo %d terminato", p->id);
+	flog(LOG_INFO, "%dT%d GRAPH", time, p->id);	//NEW GRAPH c++
+	flog(LOG_INFO, "[%d]GRAPH-T*%d*", time, p->id); //OLD GRAPH bash
 	dealloca(p);
 	schedulatore();			//
 }
@@ -1022,6 +1086,7 @@ extern "C" void c_abort_p()
 // driver del timer
 extern "C" void c_driver_td(void)
 {
+	//-- Rimozione eventuale dei processi dalla lista p_sospesi
 	richiesta *p;
 
 	if (p_sospesi != 0) {
@@ -1035,7 +1100,23 @@ extern "C" void c_driver_td(void)
 		dealloca(p);
 	}
 
-	inspronti();
+	//flog(LOG_INFO, "-- Debug attesa=%d", attesa);
+	if(attesa > 0)
+		attesa--;
+
+	//-- Inserimento dei processi in sospesi (real-time)
+	if(attesa == 0 && esecuzione!=dummy_punt)
+	{
+		flog(LOG_INFO, "timer: attesa = 0; esecuzione=%d", esecuzione->id);
+		//rimozione del processo in esecuzione
+		inserimento_testa(sospesi, esecuzione);
+		attesa = MAX_WAIT;
+	}
+	else
+		inspronti();
+
+	time++;
+
 	schedulatore();
 }
 
@@ -1319,6 +1400,7 @@ natl crea_dummy()
 		return 0xFFFFFFFF;
 	}
 	inserimento_lista(pronti, di);
+	dummy_punt = di;
 	processi++;
 	return di->id;
 }
