@@ -3,15 +3,11 @@
 
 process hello3 body hello_body3(0), 20, LIV_UTENTE;
 
-long int wait3=39999999;
+long int wait3=49999999;
 process_body hello_body3(int a)
 {
-	writeconsole("Inizio Processo3");
+	writeconsole("proc3: inizio cpubound");
 	while(--wait3);
-	writeconsole("Fine1 Processo3");
-	delay(50);
-	wait3=9999999;
-	while(--wait3);
-	writeconsole("Fine2 Processo3");
+	writeconsole("proc3: fine");
 }
 

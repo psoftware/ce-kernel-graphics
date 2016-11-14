@@ -3,14 +3,22 @@
 
 process hello2 body hello_body2(0), 21, LIV_UTENTE;
 
-long int wait2=89999999;
+long int wait2=28000000;
 process_body hello_body2(int a)
 {
-	writeconsole("Inizio Processo2");
+	writeconsole("proc2: inizio cpubound");
 	while(--wait2);
-	writeconsole("Fine Processo2");
-	delay(50);
-	wait2=3000000;
+
+	writeconsole("proc2: inizio iobound");
+	for(int i=0; i<5; i++)
+	{
+		delay(20);
+		wait2=5000000;
+		while(--wait2);
+		writeconsole("proc2: messaggo");
+	}
+	wait2=1000;
 	while(--wait2);
+	writeconsole("proc2: fine");
 }
 

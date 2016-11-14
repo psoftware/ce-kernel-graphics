@@ -45,20 +45,48 @@ enum { I_RAX, I_RCX, I_RDX, I_RBX,
 // )
 
 // elemento di una coda di processi
+natl proc_id_prog = 1000;	//Gli id dei proc_elem tendono ad essere facilmente riciclati e sono molto scomodi per il logging, con questa variabile
+				//aggiorno il campo id_prog con un id progressivo
 struct proc_elem {
 	natl id;
-	natl precedenza;
+	natl id_prog;
+	natl precedenza;	//SERVE ANCORA? Con MFQ puro no.
+	natl sched_level;	//Conserva l'indice della lista sched_level_lists da cui viene estratto o inserito
+	natl promotion_attempts;//Ogni volta che il processo si blocca prima che scada il quanto di tempo della lista superiore, questa variabile viene incrementata
 	proc_elem *puntatore;
 };
 proc_elem *esecuzione;
-proc_elem *pronti;
 
-proc_elem *sospesi;
-proc_elem *old_esecuzione=0;
-proc_elem *dummy_punt;
-const int MAX_WAIT = 8;
-int attesa=MAX_WAIT;
+proc_elem *old_esecuzione=0;	//Puntatore al proc_elem per rilevare se lo schedulatore ha effettuato preemption o meno
+proc_elem *dummy_punt;		//Puntatore a proc_elem del processo dummy
 
+/*
+sched_level_list si compone di tre puntatori a liste di proc_elem:
+	- sched_level_list[0] coda RR con Q=3
+	- sched_level_list[1] coda RR con Q=10
+	- sched_level_list[2] coda FCFS
+
+running_level è l'indice della lista attualmente in esecuzione
+*/
+
+proc_elem * sched_level_lists[3] = {0,0,0};
+unsigned int running_level=0;
+
+/*
+sched_level_q è un array di costanti naturale che rappresenta quanto deve essere q
+per ogni livello (per le liste Round Robin, la terza è FCFS)
+*/
+const unsigned int sched_level_q[] = {3, 10};
+
+unsigned int attesa=0;
+
+/* Non attivo da subito la schedulazione time-sharing, l'attivo solo a sistema avviato */
+bool timesharing_attivo = false;
+
+/*
+Dichiaro un unsigned int time che mi serve per scopi di debug/log. E' fondamentale
+per la stampa del grafico
+*/
 unsigned long int time = 0;
 
 void inserimento_lista(proc_elem *&p_lista, proc_elem *p_elem)
@@ -98,7 +126,7 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 // )
 }
 
-//Gestione coda processi (sospesi)
+//Gestione coda FIFO processi
 void inserimento_testa(proc_elem *&p_lista, proc_elem *&p_elem)
 {
 	if(p_elem == 0)
@@ -106,6 +134,20 @@ void inserimento_testa(proc_elem *&p_lista, proc_elem *&p_elem)
 
 	p_elem->puntatore = p_lista;
 	p_lista=p_elem;
+}
+
+void inserimento_coda(proc_elem *&p_lista, proc_elem * p_elem)
+{
+	if(p_lista == 0)
+	{
+		p_lista=p_elem;
+		return;
+	}
+
+	proc_elem * p;
+	for(p = p_lista; p!=0 && p->puntatore!=0; p=p->puntatore);
+
+	p->puntatore = p_elem;
 }
 
 void estrazione_coda(proc_elem *&p_lista, proc_elem *&p_elem)
@@ -127,44 +169,138 @@ void estrazione_coda(proc_elem *&p_lista, proc_elem *&p_elem)
 	
 }
 
-void debug_lista(proc_elem *p_lista)
+void strcat(char * dst, const char * src)
 {
+	int lend = strlen(dst);
+	int lens = strlen(src);
+	for(int i=0; i<lens;i++)
+		dst[lend + i]=src[i];
+	dst[lens+lend] = '\0';
+}
+
+void debug_lista(const char * app, proc_elem *p_lista)
+{
+	char str[150];
+	str[0] = '\0';
+	strcat(str, app);
 	for(proc_elem * p = p_lista; p!=0; p=p->puntatore)
-		flog(LOG_INFO, "Lista: %d", p->id);
+	{
+		char pid_s[8];
+		snprintf((char*)pid_s, 8, "%d", p->id);
+		strcat(str, "->");
+		strcat(str, pid_s);
+	}
+	flog(LOG_INFO, "| %s", str);
+}
+
+inline void promuovi_processo(proc_elem * procprom)
+{
+	flog(LOG_INFO, "promuovi_processo: Chiamata su processo %d, running_level %d, attesa %d, sched_q(-1) %d", procprom->id, running_level, attesa,
+			(running_level == 0) ? -1 : sched_level_q[running_level-1]);
+	if(procprom->sched_level == 0 || running_level == 0)
+		return;
+
+	//Se il processo si è bloccato prima che scadesse il quanto della lista di livello superiore, allora incremento i suoi promotion_attempts
+	if(attesa < sched_level_q[running_level-1])
+	{
+		flog(LOG_INFO, "promuovi_processo: il processo %d si è bloccato prima che scadesse il quanto della lista superiore. Ne tengo conto", procprom->id);
+		procprom->promotion_attempts++;
+	}
+	else	//altrimenti la variabile promotion_attemps viene azzerata
+		procprom->promotion_attempts=0;
+
+	if(procprom->promotion_attempts >= 2) //se i promotion_attemps del processo sono maggiori di una costante, allora lo promuovo alla lista superiore
+	{
+		procprom->promotion_attempts=0;
+		procprom->sched_level--;
+		flog(LOG_INFO, "promuovi_processo: il processo %d è stato promosso alla sched_level %d", procprom->id, procprom->sched_level);
+	}
+}
+
+inline void processo_pronto(proc_elem * procpronto)
+{
+	if(procpronto==dummy_punt)
+	{
+		flog(LOG_INFO, "Processo DUMMY(%d) inserito in Coda %d: SCARTO", procpronto->id, procpronto->sched_level);		
+		return;
+	}
+	else
+		flog(LOG_INFO, "Processo %d inserito in Coda %d", procpronto->id, procpronto->sched_level);
+
+	inserimento_testa(sched_level_lists[procpronto->sched_level], procpronto);
+
+	debug_lista("Lista FF 1: ", sched_level_lists[0]);
+	debug_lista("Lista FF 2: ", sched_level_lists[1]);
+	debug_lista("Lista FCFS: ", sched_level_lists[2]);
 }
 
 extern "C" void inspronti()
 {
-// (
-	inserimento_lista(pronti, esecuzione);
-// )
+	processo_pronto(esecuzione);
 }
 
 //
 
 extern "C" void schedulatore(void)
 {
-	if( pronti!=dummy_punt || sospesi == 0)
-		rimozione_lista(pronti, esecuzione);
-	else
+	//Aggiorno running_level con l'indice della prima lista non vuota
+	for(running_level=0; running_level<2 && sched_level_lists[running_level] == 0; running_level++);
+
+	if(sched_level_lists[running_level] == 0) //Se tutte le liste sono vuote, metto in esecuzione il dummy
 	{
-		estrazione_coda(sospesi, esecuzione);
+		esecuzione = dummy_punt;
+		flog(LOG_INFO, "Chiamato lo schedulatore, metto DUMMY in esecuzione");
+	}
+	else	//Altrimenti metto in esecuzione il processo in coda alla lista con indice running_level
+	{
+		estrazione_coda(sched_level_lists[running_level], esecuzione);
+		flog(LOG_INFO, "Chiamato lo schedulatore, estraggo da lista %d procid %d", running_level, esecuzione->id);
 	}
 
+	//Se lo schedulatore non ha rimesso in esecuzione il processo precedente allora:
+	// - incremento il tempo globale (per visualizzare meglio il cambio di contesto sul grafico)
+	// - aggiorno il quanto di tempo rimamente con quello relativo alla lista di indice running_level
 	if(old_esecuzione != esecuzione)
 	{
-		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id); // New GRAPH c++
-		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id); //old GRAPH bash
-		/*flog(LOG_INFO, "-- Debug Lista PRONTI");
-		debug_lista(pronti);
-		flog(LOG_INFO, "-- Debug Lista SOSPESI");
-		debug_lista(sospesi);
-		flog(LOG_INFO, "----------------------");*/
-		attesa = MAX_WAIT;
+		time += 1;
+		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id_prog); // New GRAPH c++
+		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id_prog); //old GRAPH bash
+
+		debug_lista("Lista FF 1: ", sched_level_lists[0]);
+		debug_lista("Lista FF 2: ", sched_level_lists[1]);
+		debug_lista("Lista FCFS: ", sched_level_lists[2]);
+
+		attesa = 0;
 		old_esecuzione = esecuzione;
 	}
-	
 // )
+}
+
+// Questa funzione è chiamata quando un processo torna nello stato pronto:
+// per quanto non si preveda, generalmente, preemption per le code RR,
+// questa si rende necessaria nel caso in cui c'è in esecuzione la lista FCFS.
+// La preemption è causata, quindi, solo dal livello FOREGROUND (2 liste RR) sul BACKGROUND (FCFS)
+inline void sched_pronto_preempt(natb min_level)
+{
+	//sched_pronto_preempt: min_level 0, running_level 1, dummy? 0
+	flog(LOG_INFO, "sched_pronto_preempt: min_level %d, running_level %d, dummy? %d", min_level, running_level, (esecuzione==dummy_punt)?1:0);
+	//Mi assicuro che lo schedulatore sia solo chiamato quando sto eseguendo il livello BACKGROUND
+	//e il processo che si è risvegliato fa parte del FOREGROUND.
+	//Un caso che, però, non devo escludere è quando c'è il dummy in esecuzione e torna pronto
+	//un processo in background
+	//if(running_level != 2 || min_level == 2)
+	if(!(esecuzione == dummy_punt || (running_level == 2 && min_level!=2)))
+	//if((esecuzione != dummy_punt) && (running_level != 2 || min_level==2))
+	//if(!((running_level == 2 && min_level !=2) || (esecuzione == dummy_punt)))
+	{
+		flog(LOG_INFO, "sched_pronto_preempt: decido di restare con la FCFS");
+		return;
+	}
+	flog(LOG_INFO, "sched_pronto_preempt: processo risvegliato mentre era attiva la lista FCFS, preemption");
+
+	inspronti();
+	schedulatore();
+	
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +341,7 @@ extern "C" void c_sem_wait(natl sem)
 	(s->counter)--;
 
 	if ((s->counter) < 0) {
+		promuovi_processo(esecuzione);
 		inserimento_lista(s->pointer, esecuzione);
 		schedulatore();
 	}
@@ -228,9 +365,8 @@ extern "C" void c_sem_signal(natl sem)
 
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
-		inserimento_lista(pronti, lavoro);
-		inspronti();	// preemption
-		schedulatore();	// preemption
+		processo_pronto(lavoro);
+		sched_pronto_preempt(lavoro->sched_level); // preemption se sono su background
 	}
 }
 
@@ -262,6 +398,7 @@ extern "C" void c_delay(natl n)
 	p->d_attesa = n;
 	p->pp = esecuzione;
 
+	promuovi_processo(esecuzione);
 	inserimento_lista_attesa(p);
 	schedulatore();
 }
@@ -865,6 +1002,9 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
         p->id = identifier;
         p->precedenza = prio;
 	p->puntatore = 0;
+	p->sched_level = 0;
+
+	p->id_prog = proc_id_prog++;
 	// )
 
 	// ( creazione della tab4 del processo (vedi
@@ -1004,12 +1144,12 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 	// *)
 
 	if (p != 0) {
-		inserimento_lista(pronti, p);
+		processo_pronto(p);
 		processi++;
 		id = p->id;			// id del processo creato
 						// (allocato da crea_processo)
 		flog(LOG_INFO, "proc=%d entry=%p(%d) prio=%d liv=%d", id, f, a, prio, liv);
-		flog(LOG_INFO, "%dP%d GRAPH", time, p->id);	//NEW GRAPH c++
+		flog(LOG_INFO, "%dP%d GRAPH", time, p->id_prog);	//NEW GRAPH c++
 	}
 
 	return id;
@@ -1064,8 +1204,8 @@ extern "C" void c_terminate_p()
 	distruggi_processo(p);
 	processi--;			//
 	flog(LOG_INFO, "Processo %d terminato", p->id);
-	flog(LOG_INFO, "%dT%d GRAPH", time, p->id);	//NEW GRAPH c++
-	flog(LOG_INFO, "[%d]GRAPH-T*%d*", time, p->id); //OLD GRAPH bash
+	flog(LOG_INFO, "%dT%d GRAPH", time, p->id_prog);	//NEW GRAPH c++
+	flog(LOG_INFO, "[%d]GRAPH-T*%d*", time, p->id_prog); //OLD GRAPH bash
 	dealloca(p);
 	schedulatore();			//
 }
@@ -1086,38 +1226,59 @@ extern "C" void c_abort_p()
 // driver del timer
 extern "C" void c_driver_td(void)
 {
-	//-- Rimozione eventuale dei processi dalla lista p_sospesi
-	richiesta *p;
+	// Aggiorno la variabile che mantiene il tempo globale (per il log)
+	time++;
 
+	// -- Rimozione eventuale dei processi dalla lista p_sospesi --
+	// richiesta_proc_pronta mi serve per capire, in seguito, se chiamare lo schedulatore
+	// per la preemption su livello background oppure no
+	natb minlevel_proc_pronto = 3;	//Il livello 3 non esiste, lo imposto solo per
+					//capire se non ci sono stati processi sbloccati
+	richiesta *p;
 	if (p_sospesi != 0) {
 		p_sospesi->d_attesa--;
 	}
 
 	while (p_sospesi != 0 && p_sospesi->d_attesa == 0) {
-		inserimento_lista(pronti, p_sospesi->pp);
+		processo_pronto(p_sospesi->pp);
+		if(p_sospesi->pp->sched_level < minlevel_proc_pronto)
+			minlevel_proc_pronto = p_sospesi->pp->sched_level;
 		p = p_sospesi;
 		p_sospesi = p_sospesi->p_rich;
 		dealloca(p);
 	}
 
-	//flog(LOG_INFO, "-- Debug attesa=%d", attesa);
-	if(attesa > 0)
-		attesa--;
+//---- PREEMPTION TIME SCHEDULED ----
 
-	//-- Inserimento dei processi in sospesi (real-time)
-	if(attesa == 0 && esecuzione!=dummy_punt)
+	if(attesa < sched_level_q[running_level])
+		attesa++;
+
+	if(attesa >= sched_level_q[running_level] && running_level < 2 && esecuzione != dummy_punt && timesharing_attivo)
 	{
-		flog(LOG_INFO, "timer: attesa = 0; esecuzione=%d", esecuzione->id);
+		flog(LOG_INFO, "timer_preemption: esecuzione=%d", esecuzione->id);
+
+		if(esecuzione->sched_level < 2)
+		{
+			esecuzione->sched_level++;		//Il processo in esecuzione viene declassato ed inserito nella lista di livello inferiore
+								//da processo_pronto.
+			esecuzione->promotion_attempts=0;	//Inoltre viene azzerata la variabile che tiene conto di quante volte si è bloccato prima
+								//che scadesse il quanto di tempo.
+			processo_pronto(esecuzione);
+		}
+
 		//rimozione del processo in esecuzione
-		inserimento_testa(sospesi, esecuzione);
-		attesa = MAX_WAIT;
+		attesa = 0;
+		schedulatore();
 	}
-	else
-		inspronti();
+	else if(minlevel_proc_pronto < 3)
+	{	// Se non è ancora scaduto il quanto di tempo, ma un processo si è sbloccato dopo una delay
+		// allora chiamo lo schedulatore per effettuare, eventualmente, preemption su livello BACKGROUND
+		flog(LOG_INFO, "timer: processo risvegliato da una delay", attesa);
+		sched_pronto_preempt(minlevel_proc_pronto);
+	}
+	//else flog(LOG_INFO, "timer: attesa=%d", attesa);
 
-	time++;
-
-	schedulatore();
+//-----------------------------------	
 }
 
 void scrivi_swap(addr src, natl blocco);
@@ -1384,11 +1545,19 @@ proc_elem init;
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 extern "C" void end_program();	//
+//
+extern "C" void dummy_sched();
+extern "C" void halt();
 // corpo del processo dummy	//
 void dd(int i)
 {
 	while (processi != 1)
-		;
+	{
+		//while(sched_level_lists[0]==0 && sched_level_lists[1]==0 && sched_level_lists[2]==0)
+			halt();
+		//flog(LOG_INFO, "Dummy_proc: not empty level list, calling scheduler");
+		//dummy_sched();
+	}
 	end_program();
 }
 
@@ -1399,7 +1568,9 @@ natl crea_dummy()
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return 0xFFFFFFFF;
 	}
-	inserimento_lista(pronti, di);
+	//processo_pronto(di);
+	//Lo aggiungo direttamente alla lista FIFO
+
 	dummy_punt = di;
 	processi++;
 	return di->id;
@@ -1411,7 +1582,7 @@ bool crea_main_sistema(natl dummy_proc)
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
-	inserimento_lista(pronti, m);
+	processo_pronto(m);
 	processi++;
 	return true;
 }
@@ -1703,7 +1874,7 @@ extern "C" void cmain()
 	dummy_proc = crea_dummy();
 	if (dummy_proc == 0xFFFFFFFF)
 		goto error;
-	flog(LOG_INFO, "Creato il processo dummy");
+	flog(LOG_INFO, "Creato il processo dummy con id=%d", dummy_proc);
 	// )
 
 	// (* processi esterni generici
@@ -1772,6 +1943,8 @@ void main_sistema(int n)
 	flog(LOG_INFO, "attivato timer (DELAY=%d)", DELAY);
 	// *)
 	// ( terminazione
+	flog(LOG_INFO, "attivo preemption timesharing (timer)...");
+	timesharing_attivo = true;
 	flog(LOG_INFO, "passo il controllo al processo utente...");
 	terminate_p();
 	// )

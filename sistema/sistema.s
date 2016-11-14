@@ -345,6 +345,7 @@ init_idt:
 	carica_gate	TIPO_D		a_delay		LIV_UTENTE
 	carica_gate	TIPO_L		a_log		LIV_UTENTE
 	carica_gate	TIPO_EP		a_end_program	LIV_SISTEMA
+	carica_gate	TIPO_DS		a_dummy_sched	LIV_SISTEMA
 
 	// primitive per il livello I/O
 	carica_gate	TIPO_APE	a_activate_pe	LIV_SISTEMA
@@ -396,6 +397,7 @@ goto_user:
 	call carica_stato
 	iretq
 
+
 ////////////////////////////////////////////////////////
 // a_primitive                                        //
 ////////////////////////////////////////////////////////
@@ -435,6 +437,13 @@ a_sem_signal:	// routine int $tipo_s
 a_delay:	// routine int $tipo_d
 	call salva_stato
 	call c_delay
+	call carica_stato
+	iretq
+
+//PROVA
+a_dummy_sched:
+	call salva_stato
+	call schedulatore
 	call carica_stato
 	iretq
 
@@ -764,10 +773,20 @@ wfi:
 	int $TIPO_WFI
 	ret
 
+	.global dummy_sched
+dummy_sched:
+	int $TIPO_DS
+	ret
+
 	.global end_program
 end_program:
 	int $TIPO_EP
 	ret
+
+	.global halt
+halt:
+	HLT
+	retq
 
 	.global salta_a_main
 salta_a_main:
