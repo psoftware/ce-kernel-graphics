@@ -27,6 +27,9 @@ extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
 extern "C" void panic(const char *msg);
 
+void *mem_alloc(natl dim);
+void mem_free(void *p);
+
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI                 //
 ////////////////////////////////////////////////////////////////////////////////
