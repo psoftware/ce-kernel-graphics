@@ -943,6 +943,11 @@ extern "C" void cmain(int sem_io)
 {
 
 	fill_io_gates();
+	mem_mutex = sem_ini(1);
+	if (mem_mutex == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossible creare semaforo mem_mutex");
+		abort_p();
+	}
 	heap_init(&end, DIM_IO_HEAP);
 	if (!console_init())
 		abort_p();
