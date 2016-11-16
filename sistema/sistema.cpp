@@ -221,11 +221,11 @@ inline void processo_pronto(proc_elem * procpronto)
 {
 	if(procpronto==dummy_punt)
 	{
-		flog(LOG_INFO, "Processo DUMMY(%d) inserito in Coda %d: SCARTO", procpronto->id, procpronto->sched_level);		
+		flog(LOG_INFO, "processo_pronto: Processo DUMMY(%d) inserito in Coda %d: SCARTO", procpronto->id, procpronto->sched_level);		
 		return;
 	}
 	else
-		flog(LOG_INFO, "Processo %d inserito in Coda %d", procpronto->id, procpronto->sched_level);
+		flog(LOG_INFO, "processo_pronto: Processo %d inserito in Coda %d", procpronto->id, procpronto->sched_level);
 
 	inserimento_testa(sched_level_lists[procpronto->sched_level], procpronto);
 
@@ -234,9 +234,29 @@ inline void processo_pronto(proc_elem * procpronto)
 	debug_lista("Lista FCFS: ", sched_level_lists[2]);
 }
 
+// Funzione chiamata per mettere da parte un processo (nella sua lista) e far sì che venga risvegliato alla successiva chiamata dello schedulatore,
+// sempre che non vengano svegliati altri processi nel mentre
+inline void sospendi_pronto(proc_elem * procsosp)
+{
+	if(procsosp==dummy_punt)
+	{
+		flog(LOG_INFO, "sospendi_pronto: Processo DUMMY(%d) inserito in Coda %d: SCARTO", procsosp->id, procsosp->sched_level);		
+		return;
+	}
+	else
+		flog(LOG_INFO, "sospendi_pronto: Processo %d inserito in Coda %d", procsosp->id, procsosp->sched_level);
+
+	inserimento_coda(sched_level_lists[procsosp->sched_level], procsosp);
+
+	debug_lista("Lista FF 1: ", sched_level_lists[0]);
+	debug_lista("Lista FF 2: ", sched_level_lists[1]);
+	debug_lista("Lista FCFS: ", sched_level_lists[2]);
+}
+
+// Funzione usata dagli handler per revocare temporaneamente la cpu al processo in esecuzione e schedularlo alla sospensione del processo esterno richiamato
 extern "C" void inspronti()
 {
-	processo_pronto(esecuzione);
+	sospendi_pronto(esecuzione);
 }
 
 //
