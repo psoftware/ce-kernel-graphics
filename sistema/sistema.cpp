@@ -45,8 +45,16 @@ enum { I_RAX, I_RCX, I_RDX, I_RBX,
 // )
 
 // elemento di una coda di processi
+const natl PROCID_MAIN=0;
+const natl PROCID_PEINIT=1;
+const natl PROCID_DUMMY=9999;
+
 natl proc_id_prog = 1000;	//Gli id dei proc_elem tendono ad essere facilmente riciclati e sono molto scomodi per il logging, con questa variabile
 				//aggiorno il campo id_prog con un id progressivo
+natl proc_id_extern = 100;
+const natl PROCID_LIMIT = 9998;
+const natl PROCID_EXTERN_LIMIT = 999;
+
 struct proc_elem {
 	natl id;
 	natl id_prog;
@@ -994,7 +1002,7 @@ void crea_tab4(addr dest)
 }
 
 void rilascia_tutto(addr tab4, natl i, natl n);
-proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
+proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF, natl id_prog)
 {
 	proc_elem	*p;			// proc_elem per il nuovo processo
 	natl		identifier;		// indice del tss nella gdt
@@ -1025,7 +1033,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	p->sched_level = 0;
 	p->attesa = 0;
 
-	p->id_prog = proc_id_prog++;
+	p->id_prog = id_prog;
 	// )
 
 	// ( creazione della tab4 del processo (vedi
@@ -1161,7 +1169,9 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 	// (* accorpiamo le parti comuni tra c_activate_p e c_activate_pe
 	// nella funzione ausiliare crea_processo
 	// (questa svolge, tra l'altro, i punti 1-3 in)
-	p = crea_processo(f, a, prio, liv, (liv == LIV_UTENTE));
+	if(proc_id_prog == PROCID_LIMIT)
+		abort_p();
+	p = crea_processo(f, a, prio, liv, (liv == LIV_UTENTE), proc_id_prog++);
 	// *)
 
 	if (p != 0) {
@@ -1584,7 +1594,7 @@ void dd(int i)
 
 natl crea_dummy()
 {
-	proc_elem* di = crea_processo(dd, 0, DUMMY_PRIORITY, LIV_SISTEMA, true);
+	proc_elem* di = crea_processo(dd, 0, DUMMY_PRIORITY, LIV_SISTEMA, true, PROCID_DUMMY);
 	if (di == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo dummy");
 		return 0xFFFFFFFF;
@@ -1599,7 +1609,7 @@ natl crea_dummy()
 void main_sistema(int n);
 bool crea_main_sistema(natl dummy_proc)
 {
-	proc_elem* m = crea_processo(main_sistema, (int)dummy_proc, MAX_PRIORITY, LIV_SISTEMA, false);
+	proc_elem* m = crea_processo(main_sistema, (int)dummy_proc, MAX_PRIORITY, LIV_SISTEMA, false, PROCID_MAIN);
 	if (m == 0) {
 		flog(LOG_ERR, "Impossibile creare il processo main_sistema");
 	}
@@ -1656,7 +1666,9 @@ extern "C" natl c_activate_pe(void f(int), int a, natl prio, natl liv, natb type
 		abort_p();
 	}
 
-	p = crea_processo(f, a, prio, liv, true);
+	if(proc_id_extern == PROCID_EXTERN_LIMIT)
+		goto error1;
+	p = crea_processo(f, a, prio, liv, true, proc_id_extern++);
 	if (p == 0)
 		goto error1;
 
@@ -1678,7 +1690,7 @@ error1:
 bool init_pe()
 {
 	for (natl i = 0; i < MAX_IRQ; i++) {
-		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA, true);
+		proc_elem* p = crea_processo(estern_generico, i, 1, LIV_SISTEMA, true, PROCID_PEINIT);
 		if (p == 0) {
 			flog(LOG_ERR, "Impossibile creare i processi esterni generici");
 			return false;
