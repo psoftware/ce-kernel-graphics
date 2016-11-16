@@ -458,9 +458,11 @@ a_activate_pe:
         call c_activate_pe
 	iretq
 
-
+	.extern c_before_wfi
 a_wfi:		// routine int $tipo_wfi
 	call salva_stato
+	movq esecuzione, %rdi
+	call c_before_wfi
 	call apic_send_EOI
 	call schedulatore
 	call carica_stato
@@ -649,14 +651,17 @@ driver_td:
 
 	iretq
 
+	.extern c_before_handler
 .macro handler n
 handler_\n:
 	call salva_stato
-	call inspronti
-
+	
 	movq $\n, %rcx
-	movq a_p(, %rcx, 8), %rax
-	movq %rax, esecuzione
+	movq a_p(, %rcx, 8), %rdi
+	pushq %rdi
+	call c_before_handler
+	popq %rdi
+	movq %rdi, esecuzione
 
 	call carica_stato
 	iretq
