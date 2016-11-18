@@ -30,6 +30,9 @@ extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
 extern "C" void panic(const char *msg);
 
+void *mem_alloc(natl dim);
+void mem_free(void *p);
+
 ////////////////////////////////////////////////////////////////////////////////
 //                    GESTIONE DELLE INTERFACCE SERIALI                 //
 ////////////////////////////////////////////////////////////////////////////////
@@ -1617,6 +1620,11 @@ extern "C" void cmain(int sem_io)
 {
 
 	fill_io_gates();
+	mem_mutex = sem_ini(1);
+	if (mem_mutex == 0xFFFFFFFF) {
+		flog(LOG_ERR, "impossible creare semaforo mem_mutex");
+		abort_p();
+	}
 	heap_init(&end, DIM_IO_HEAP);
 
 	/*if (!console_init())
