@@ -1858,7 +1858,7 @@ extern "C" void cmain()
 	esecuzione = &init;
 	// *)
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.3");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.3 - branch Le Caldare");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata");
 
