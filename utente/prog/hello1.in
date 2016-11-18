@@ -74,7 +74,7 @@ process_body hello_body1(int a)
 	button1->size_x=40;
 	button1->size_y=20;
 	button1->pos_x=(128 - button1->size_x)/2;
-	button1->pos_y=128;
+	button1->pos_y=20;
 	button1->z_index=0;
 	button1->backColor=0x32;
 	button1->borderColor=0x0D;
@@ -93,6 +93,9 @@ process_body hello_body1(int a)
 	while(--wait1);
 	copy("Inizio processo 1!\nBLABLABLA    BLABLABLA", label1->text);
 	aggiorna_oggetto(finestra, oggetto, label1, true);
-	/*aggiorna_testo(finestra, "Inizio processo 1!\nBLABLABLA    BLABLABLA", true);*/
+
+	button1->pos_x+=10;
+	button1->pos_y+=5;
+	aggiorna_oggetto(finestra, button_id, button1, true);
 }
 

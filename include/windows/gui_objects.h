@@ -8,6 +8,11 @@ void * operator new(long unsigned int n)
 	return alloca(n);
 }
 
+void* operator new[](long unsigned int n)
+{	
+	return alloca(n);
+}
+
 const natb W_ID_LABEL=0;
 const natb W_ID_BUTTON=1;
 
@@ -61,6 +66,7 @@ class windowObject
 	natb backColor;
 
 	public:
+	bool is_rendered;
 	natb * render_buff;
 
 	windowObject(unsigned short size_x, unsigned short size_y, short pos_x, short pos_y, short z_index, natb backColor)
@@ -71,6 +77,7 @@ class windowObject
 		this->pos_y=pos_y;
 		this->z_index=z_index;
 		this->backColor=backColor;
+		this->is_rendered=false;
 		this->render_buff=static_cast<natb*>(alloca(sizeof(natb)*size_x*size_y));
 	}
 
@@ -187,6 +194,8 @@ class button : public windowObject
 			this->set_pixel(size_x-1, y, borderColor);
 		}
 		memset(render_buff+size_x*(size_y-1), borderColor, size_x);
+
+		this->is_rendered=true;
 	}
 };
 
@@ -211,5 +220,6 @@ class label : public windowObject
 		flog(LOG_INFO, "Rendering label...");
 		memset(render_buff, backColor, size_x*size_y);
 		this->set_fontstring(0, 0, this->size_x, this->size_y, this->text, this->backColor);
+		this->is_rendered=true;
 	}
 };
