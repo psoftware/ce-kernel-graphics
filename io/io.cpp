@@ -635,11 +635,6 @@ void inline put_pixel(natb * buffer, int x, int y, int MAX_X, natb col)
 	buffer[MAX_X*y+x] = col;
 }
 
-void inline set_background()
-{
-	memset(framebuffer,0x36, MAX_SCREENX*MAX_SCREENY);
-}
-
 void print_palette(int x, int y)
 {
 	int row=0;
@@ -952,8 +947,14 @@ err:	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notfull);
 }
 
+const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
+
+void inline set_background()
+{
+	memset(framebuffer, WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+}
 
 void inline clean_window_buffer(des_window * wind)
 {
@@ -983,6 +984,13 @@ void inline render_window_onframebuffer(des_window * wind)
 	/*for(int i=0; i<wind->size_x; i++)
 		for(int j=0; j<wind->size_y; j++)
 			put_pixel(framebuffer, i+wind->pos_x, j+wind->pos_y+TOPBAR_HEIGHT, MAX_SCREENX, wind->render_buff[wind->size_x*j+i]);*/
+}
+
+void inline clean_window_onframebuffer(des_window * wind)
+{
+	// pulisco corpo della finestra e topbar
+	for(int j=0; j<wind->size_y+TOPBAR_HEIGHT; j++)
+		memset(framebuffer + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, wind->size_x);
 }
 
 void graphic_visualizza_finestra(int id)
@@ -1037,6 +1045,33 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 	render_window_onframebuffer(wind);
 	
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
+}
+
+void move_window(int w_id, int to_x, int to_y)
+{
+	des_window * wind = &win_man.windows_arr[w_id];
+
+	// devo pulire l'area di framebuffer in cui era presente la finestra
+	clean_window_onframebuffer(wind);
+
+	// devo renderizzare nuovamente le finestre su cui quella da spostare é sovrapposta
+	for(int i; i<win_man.windows_count; i++)
+	{
+		if(w_id==i)
+			continue;
+
+		des_window * otherw = &win_man.windows_arr[i];
+		// condizione per individuare se la finestra condivide parti di framebuffer con altre finestre
+		if((wind->pos_x + wind->size_x > otherw->pos_x) && (wind->pos_x < otherw->pos_x + otherw->size_x) &&
+			(wind->pos_y + wind->size_y > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y))
+			render_window_onframebuffer(otherw);	//renderizzo nuovamente la finestra su framebuffer
+	}
+
+	// devo renderizzare la finestra da spostare sulla nuova area
+	wind->pos_x = to_x;
+	wind->pos_y = to_y;
+	render_topbar_onframebuffer(wind);
+	render_window_onframebuffer(wind);
 }
 
 void main_windows_manager(int n)
