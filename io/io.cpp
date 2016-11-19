@@ -2,6 +2,7 @@
 //
 #include "costanti.h"
 #include "libce.h"
+#include "newdelete.h"
 #include "windows/font.h"
 #include "windows/gui_objects.h"
 //#define BOCHS
@@ -920,11 +921,11 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 	switch(u_obj->TYPE)
 	{
 		case W_ID_LABEL:
-			dealloca(win_man.windows_arr[w_id].objects[o_id]);
+			delete win_man.windows_arr[w_id].objects[o_id];
 			win_man.windows_arr[w_id].objects[o_id] = new label(static_cast<u_label*>(u_obj));
 		break;
 		case W_ID_BUTTON:
-			dealloca(win_man.windows_arr[w_id].objects[o_id]);
+			delete win_man.windows_arr[w_id].objects[o_id];
 			win_man.windows_arr[w_id].objects[o_id] = new button(static_cast<u_button*>(u_obj));
 		break;
 	}

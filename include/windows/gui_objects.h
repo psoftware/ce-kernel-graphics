@@ -3,16 +3,6 @@ extern "C" void __cxa_pure_virtual()
 	flog(LOG_INFO, "Pure Virtual function called, aborting.");
 }
 
-void * operator new(long unsigned int n)
-{
-	return alloca(n);
-}
-
-void* operator new[](long unsigned int n)
-{	
-	return alloca(n);
-}
-
 const natb W_ID_LABEL=0;
 const natb W_ID_BUTTON=1;
 
@@ -78,12 +68,12 @@ class windowObject
 		this->z_index=z_index;
 		this->backColor=backColor;
 		this->is_rendered=false;
-		this->render_buff=static_cast<natb*>(alloca(sizeof(natb)*size_x*size_y));
+		this->render_buff = new natb[size_x*size_y];
 	}
 
-	void destruct()
+	virtual ~windowObject()
 	{
-		dealloca(render_buff);
+		delete[] render_buff;
 	}
 
 	void set_pixel(int x, int y, natb col)
