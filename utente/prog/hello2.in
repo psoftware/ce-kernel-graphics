@@ -7,14 +7,31 @@ long int wait2=89999999;
 process_body hello_body2(int a)
 {
 	int finestra = crea_finestra(128,128,160,40);
-	visualizza_finestra(finestra, true);
-	aggiorna_testo(finestra, "Inizio processo 2!", true);
 
+	u_label * label1 = new u_label();
+	label1->size_x=128;
+	label1->size_y=128;
+	label1->pos_x=0;
+	label1->pos_y=0;
+	label1->z_index=0;
+	label1->backColor=0x1F;
+	copy("", label1->text);
+	int label_id = crea_oggetto(finestra, label1);
+
+	visualizza_finestra(finestra, true);
+	aggiorna_oggetto(finestra, label_id, label1, true);
+
+	copy("Inizio processo 2!", label1->text);
+	aggiorna_oggetto(finestra, label_id, label1, true);
 	while(--wait2);
-	aggiorna_testo(finestra, "Inizio processo 2!\nFine 1!", true);
+
+	copy("Inizio processo 2!\nFine 1!", label1->text);
+	aggiorna_oggetto(finestra, label_id, label1, true);
 	delay(50);
 	wait2=3000000;
 	while(true);
-	aggiorna_testo(finestra, "Inizio processo 2!\nFine 1!\nFine 2!", true);
+
+	copy("Inizio processo 2!\nFine 1!\nFine 2!", label1->text);
+	aggiorna_oggetto(finestra, label_id, label1, true);
 }
 

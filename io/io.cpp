@@ -702,7 +702,6 @@ struct des_window
 };
 
 const natb PRIM_SHOW=0;
-const natb PRIM_UPDATE_TEXT=1;
 const natb PRIM_UPDATE_OBJECT=2;
 struct des_window_req
 {
@@ -819,38 +818,6 @@ extern "C" void c_visualizza_finestra(int id, bool sync)
 		flog(LOG_INFO, "Inserimento richiesta fallito");
 		goto err;
 	}
-
-	sem_signal(win_man.mutex);
-	sem_signal(win_man.sync_notempty);
-	if(sync)
-		sem_wait(win_man.req_queue[new_index].if_sync);
-
-	return;
-
-//Gestione errori (sblocco mutex e sync su array)
-err:	sem_signal(win_man.mutex);
-	sem_signal(win_man.sync_notfull);
-}
-
-extern "C" void c_aggiorna_testo(int id, const char * str, bool sync)
-{
-	sem_wait(win_man.sync_notfull);
-	sem_wait(win_man.mutex);
-
-	int new_index;
-
-	if(id >= win_man.MAX_WINDOWS || id<0)
-		goto err;	
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento testo");
-	new_index = windows_queue_insert(win_man, id, 100, PRIM_UPDATE_TEXT, sync);
-	if(new_index == -1)
-	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
-		//errore solo per rendere più robusto il codice
-		flog(LOG_INFO, "Inserimento richiesta fallito");
-		goto err;
-	}
-
-	copy(str, win_man.req_queue[new_index].str);
 
 	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notempty);
@@ -1007,12 +974,6 @@ void graphic_visualizza_finestra(int id)
 	render_window_onframebuffer(wind);
 }
 
-void graphic_aggiorna_testo(int id, const char * str)
-{
-	des_window * wind = &win_man.windows_arr[id];
-	set_fontstring(wind->pos_x,wind->pos_y+20,wind->size_x,wind->pos_y-TOPBAR_HEIGHT,str,0x01);
-}
-
 void renderobject_onwindow(int w_id, windowObject * w_obj)
 {
 	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
@@ -1097,12 +1058,6 @@ void main_windows_manager(int n)
 			case PRIM_SHOW:
 				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.w_id);
 				graphic_visualizza_finestra(newreq.w_id);
-				if(newreq.to_sync)
-					sem_signal(newreq.if_sync);
-			break;
-			case PRIM_UPDATE_TEXT:
-				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento testo per finestra %d", newreq.act, newreq.w_id);
-				graphic_aggiorna_testo(newreq.w_id, newreq.str);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;

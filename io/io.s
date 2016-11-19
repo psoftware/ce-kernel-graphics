@@ -338,7 +338,6 @@ fill_io_gates:
 	fill_io_gate	IO_TIPO_INIC	a_iniconsole
 	fill_io_gate	IO_TIPO_WINDC	a_crea_finestra
 	fill_io_gate	IO_TIPO_WINDV	a_visualizza_finestra
-	fill_io_gate	IO_TIPO_WINDT	a_aggiorna_testo
 	fill_io_gate	IO_TIPO_WINDOC	a_crea_oggetto
 	fill_io_gate	IO_TIPO_WINDUC	a_aggiorna_oggetto
 	fill_io_gate	IO_TIPO_HDR	a_readhd_n
@@ -417,11 +416,6 @@ a_crea_finestra:
 	.extern c_visualizza_finestra
 a_visualizza_finestra:
 	call c_visualizza_finestra
-	iretq
-
-	.extern c_aggiorna_testo
-a_aggiorna_testo:
-	call c_aggiorna_testo
 	iretq
 
 	.extern c_crea_oggetto

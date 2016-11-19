@@ -81,11 +81,6 @@ visualizza_finestra:
 	int $IO_TIPO_WINDV
 	ret
 
-	.global aggiorna_testo
-aggiorna_testo:
-	int $IO_TIPO_WINDT
-	ret
-
 	.global crea_oggetto
 crea_oggetto:
 	int $IO_TIPO_WINDOC
