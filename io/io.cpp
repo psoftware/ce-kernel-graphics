@@ -628,25 +628,17 @@ bool console_init()
 
 const int MAX_SCREENX = 1280;
 const int MAX_SCREENY = 1024;
+
 natb* framebuffer = (natb*)0xfd000000;
-natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];
+natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];	// Terzo buffer (triple buffering)
+int column_changed_first = 0;
+int column_changed_last = 0;
+int line_changed_first = 0;				// quando devo copiare il doubled_framebuffer nel framebuffer voglio ottimizzare al massimo l'operazione di copia,
+int line_changed_last = 0;			// quindi cerco di copiare solo quello che ho effettivamente modificato.
 
 void inline put_pixel(natb * buffer, int x, int y, int MAX_X, natb col)
 {
 	buffer[MAX_X*y+x] = col;
-}
-
-void print_palette(natb* buff, int x, int y)
-{
-	int row=0;
-	for(natb i=0; i<0xFF; i++)
-	{
-		for(int k=0; k<10; k++)
-			for(int j=0; j<10; j++)
-				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, i);
-		if(i%16==0 && i!=0)
-			row++;
-	}
 }
 
 int set_fontchar(natb* buff, int x, int y, int nchar, natb backColor)
@@ -919,9 +911,49 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
+void inline update_framebuffer_linechanged(int column_first, int column_last, int line_first, int line_last)
+{
+	if(line_first < line_changed_first)
+		line_changed_first=line_first;
+	if(line_last > line_changed_last)
+		line_changed_last=line_last;
+
+	if(column_first < column_changed_first)
+		column_changed_first=column_first;
+	if(column_last > column_changed_last)
+		column_changed_last=column_last;
+}
+
+void inline update_framebuffer()
+{
+	for(int j=line_changed_first; j<line_changed_first+line_changed_last; j++)
+		memcpy(framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
+
+	line_changed_first=0;
+	line_changed_last=0;
+	column_changed_first=0;
+	column_changed_last=0;
+}
+
 void inline set_background(natb* buff)
 {
 	memset(buff, WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	update_framebuffer_linechanged(0, MAX_SCREENX, 0, MAX_SCREENY);
+}
+
+void print_palette(natb* buff, int x, int y)
+{
+	int row=0;
+	for(natb i=0; i<0xFF; i++)
+	{
+		for(int k=0; k<10; k++)
+			for(int j=0; j<10; j++)
+				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, i);
+		if(i%16==0 && i!=0)
+			row++;
+	}
+
+	update_framebuffer_linechanged(x, x+16, y, y+16);
 }
 
 void inline clean_window_buffer(des_window * wind)
@@ -941,6 +973,8 @@ void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 
 	//renderizzo lettera X
 	set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
+
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + TOPBAR_HEIGHT);
 }
 
 void inline render_window_onvideobuffer(natb* buff, des_window * wind)
@@ -952,6 +986,7 @@ void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 	/*for(int i=0; i<wind->size_x; i++)
 		for(int j=0; j<wind->size_y; j++)
 			put_pixel(buff, i+wind->pos_x, j+wind->pos_y+TOPBAR_HEIGHT, MAX_SCREENX, wind->render_buff[wind->size_x*j+i]);*/
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y + TOPBAR_HEIGHT, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
 }
 
 void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
@@ -959,11 +994,7 @@ void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
 	// pulisco corpo della finestra e topbar
 	for(int j=0; j<wind->size_y+TOPBAR_HEIGHT; j++)
 		memset(buff + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, wind->size_x);
-}
-
-void update_framebuffer()
-{
-	memcpy(framebuffer, doubled_framebuffer, MAX_SCREENX*MAX_SCREENY);
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
 }
 
 void graphic_visualizza_finestra(int id)
@@ -1008,6 +1039,8 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 
 	// copio il buffer della finestra su quello video
 	render_window_onvideobuffer(doubled_framebuffer, wind);
+
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
 	
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
 }
