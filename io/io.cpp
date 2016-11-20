@@ -629,26 +629,27 @@ bool console_init()
 const int MAX_SCREENX = 1280;
 const int MAX_SCREENY = 1024;
 natb* framebuffer = (natb*)0xfd000000;
+natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];
 
 void inline put_pixel(natb * buffer, int x, int y, int MAX_X, natb col)
 {
 	buffer[MAX_X*y+x] = col;
 }
 
-void print_palette(int x, int y)
+void print_palette(natb* buff, int x, int y)
 {
 	int row=0;
 	for(natb i=0; i<0xFF; i++)
 	{
 		for(int k=0; k<10; k++)
 			for(int j=0; j<10; j++)
-				put_pixel(framebuffer, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, i);
+				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, i);
 		if(i%16==0 && i!=0)
 			row++;
 	}
 }
 
-int set_fontchar(int x, int y, int nchar, natb backColor)
+int set_fontchar(natb* buff, int x, int y, int nchar, natb backColor)
 {
 	int row_off = nchar / 16;
 	int col_off = nchar % 16;
@@ -659,14 +660,14 @@ int set_fontchar(int x, int y, int nchar, natb backColor)
 	for(int i=0; i<16; i++)
 		for(int j=start; j<end; j++)
 			if(font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
-				put_pixel(framebuffer, x+j-start, y+i, MAX_SCREENX, backColor);
+				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, backColor);
 			else
-				put_pixel(framebuffer, x+j-start, y+i, MAX_SCREENX, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
+				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
 
 	return font_width[nchar];
 }
 
-void set_fontstring(int x, int y, int bound_x, int bound_y, const char * str, natb backColor)
+void set_fontstring(natb* buff, int x, int y, int bound_x, int bound_y, const char * str, natb backColor)
 {
 	int slength = (int)strlen(str);
 	//int x_eff = ((i*16) % bound_x);
@@ -676,7 +677,7 @@ void set_fontstring(int x, int y, int bound_x, int bound_y, const char * str, na
 	for(int i=0; i<slength; i++)
 	{	
 		if(str[i] != '\n')
-			x_eff += set_fontchar(x+x_eff, y+(y_eff*16), str[i], backColor);
+			x_eff += set_fontchar(buff, x+x_eff, y+(y_eff*16), str[i], backColor);
 		if((x_eff + 16) > bound_x || str[i] == '\n')
 		{
 			x_eff = 0;
@@ -918,9 +919,9 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
-void inline set_background()
+void inline set_background(natb* buff)
 {
-	memset(framebuffer, WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	memset(buff, WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 }
 
 void inline clean_window_buffer(des_window * wind)
@@ -928,36 +929,41 @@ void inline clean_window_buffer(des_window * wind)
 	memset(wind->render_buff, wind->backColor, wind->size_x*wind->size_y);
 }
 
-void inline render_topbar_onframebuffer(des_window * wind)
+void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 {
 	//renderizzo sfondo TOPBAR
 	for(int i=0; i<wind->size_x; i++)
 		for(int j=0; j<TOPBAR_HEIGHT; j++)
 			if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
-				put_pixel(framebuffer, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_X_COLOR);
+				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_X_COLOR);
 			else
-				put_pixel(framebuffer, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_TOPBAR_COLOR);
+				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_TOPBAR_COLOR);
 
 	//renderizzo lettera X
-	set_fontchar(wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
+	set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
 }
 
-void inline render_window_onframebuffer(des_window * wind)
+void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 {
 	// copio il buffer della finestra su quello video
 	for(int j=0; j<wind->size_y; j++)
-		memcpy(framebuffer + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, wind->size_x);
+		memcpy(buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, wind->size_x);
 	
 	/*for(int i=0; i<wind->size_x; i++)
 		for(int j=0; j<wind->size_y; j++)
-			put_pixel(framebuffer, i+wind->pos_x, j+wind->pos_y+TOPBAR_HEIGHT, MAX_SCREENX, wind->render_buff[wind->size_x*j+i]);*/
+			put_pixel(buff, i+wind->pos_x, j+wind->pos_y+TOPBAR_HEIGHT, MAX_SCREENX, wind->render_buff[wind->size_x*j+i]);*/
 }
 
-void inline clean_window_onframebuffer(des_window * wind)
+void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
 {
 	// pulisco corpo della finestra e topbar
 	for(int j=0; j<wind->size_y+TOPBAR_HEIGHT; j++)
-		memset(framebuffer + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, wind->size_x);
+		memset(buff + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, wind->size_x);
+}
+
+void update_framebuffer()
+{
+	memcpy(framebuffer, doubled_framebuffer, MAX_SCREENX*MAX_SCREENY);
 }
 
 void graphic_visualizza_finestra(int id)
@@ -967,11 +973,9 @@ void graphic_visualizza_finestra(int id)
 	//inizializzo buffer video della finestra
 	clean_window_buffer(wind);
 
-	//renderizzo topbar su framebuffer
-	render_topbar_onframebuffer(wind);
-
-	//lo copio su framebuffer
-	render_window_onframebuffer(wind);
+	//renderizzo topbar su secondo buffer
+	render_topbar_onvideobuffer(doubled_framebuffer, wind);
+	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
 
 void renderobject_onwindow(int w_id, windowObject * w_obj)
@@ -1003,7 +1007,7 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 	}
 
 	// copio il buffer della finestra su quello video
-	render_window_onframebuffer(wind);
+	render_window_onvideobuffer(doubled_framebuffer, wind);
 	
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
 }
@@ -1013,7 +1017,7 @@ void move_window(int w_id, int to_x, int to_y)
 	des_window * wind = &win_man.windows_arr[w_id];
 
 	// devo pulire l'area di framebuffer in cui era presente la finestra
-	clean_window_onframebuffer(wind);
+	clean_window_onvideobuffer(doubled_framebuffer, wind);
 
 	// devo renderizzare nuovamente le finestre su cui quella da spostare é sovrapposta
 	for(int i=0; i<win_man.windows_count; i++)
@@ -1026,22 +1030,23 @@ void move_window(int w_id, int to_x, int to_y)
 		if((wind->pos_x + wind->size_x > otherw->pos_x) && (wind->pos_x < otherw->pos_x + otherw->size_x) &&
 			(wind->pos_y + wind->size_y > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y))
 		{
-			render_topbar_onframebuffer(otherw);
-			render_window_onframebuffer(otherw);	//renderizzo nuovamente la finestra su framebuffer
+			render_topbar_onvideobuffer(doubled_framebuffer, otherw);
+			render_window_onvideobuffer(doubled_framebuffer, otherw);	//copio nuovamente il bitmap della finestra sul buffer video secondario
 		}
 	}
 
 	// devo renderizzare la finestra da spostare sulla nuova area
 	wind->pos_x = to_x;
 	wind->pos_y = to_y;
-	render_topbar_onframebuffer(wind);
-	render_window_onframebuffer(wind);
+	render_topbar_onvideobuffer(doubled_framebuffer, wind);
+	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
 
 void main_windows_manager(int n)
 {
-	set_background();
-	print_palette(900,450);
+	set_background(doubled_framebuffer);
+	print_palette(doubled_framebuffer, 900,450);
+	update_framebuffer();
 
 	while(true)
 	{
@@ -1071,6 +1076,9 @@ void main_windows_manager(int n)
 					sem_signal(newreq.if_sync);
 			break;
 		}
+
+		//copio il buffer secondario sulla memoria video
+		update_framebuffer();
 
 		sem_signal(win_man.mutex);
 		sem_signal(win_man.sync_notfull);
