@@ -1016,7 +1016,7 @@ void move_window(int w_id, int to_x, int to_y)
 	clean_window_onframebuffer(wind);
 
 	// devo renderizzare nuovamente le finestre su cui quella da spostare é sovrapposta
-	for(int i; i<win_man.windows_count; i++)
+	for(int i=0; i<win_man.windows_count; i++)
 	{
 		if(w_id==i)
 			continue;
@@ -1025,7 +1025,10 @@ void move_window(int w_id, int to_x, int to_y)
 		// condizione per individuare se la finestra condivide parti di framebuffer con altre finestre
 		if((wind->pos_x + wind->size_x > otherw->pos_x) && (wind->pos_x < otherw->pos_x + otherw->size_x) &&
 			(wind->pos_y + wind->size_y > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y))
+		{
+			render_topbar_onframebuffer(otherw);
 			render_window_onframebuffer(otherw);	//renderizzo nuovamente la finestra su framebuffer
+		}
 	}
 
 	// devo renderizzare la finestra da spostare sulla nuova area
