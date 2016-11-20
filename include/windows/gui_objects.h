@@ -178,7 +178,7 @@ class button : public windowObject
 		this->set_fontstring((this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y,this->text, this->backColor);
 
 		memset(render_buff, borderColor, size_x);
-		for(natw y=1; y < this->size_x-1; y++)
+		for(natw y=1; y < this->size_y-1; y++)
 		{
 			this->set_pixel(0, y, borderColor);
 			this->set_pixel(size_x-1, y, borderColor);

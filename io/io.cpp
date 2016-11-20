@@ -1038,6 +1038,7 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 	}
 
 	// copio il buffer della finestra su quello video
+	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 
 	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
@@ -1061,7 +1062,7 @@ void move_window(int w_id, int to_x, int to_y)
 		des_window * otherw = &win_man.windows_arr[i];
 		// condizione per individuare se la finestra condivide parti di framebuffer con altre finestre
 		if((wind->pos_x + wind->size_x > otherw->pos_x) && (wind->pos_x < otherw->pos_x + otherw->size_x) &&
-			(wind->pos_y + wind->size_y > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y))
+			(wind->pos_y + wind->size_y + TOPBAR_HEIGHT > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y + TOPBAR_HEIGHT))
 		{
 			render_topbar_onvideobuffer(doubled_framebuffer, otherw);
 			render_window_onvideobuffer(doubled_framebuffer, otherw);	//copio nuovamente il bitmap della finestra sul buffer video secondario
