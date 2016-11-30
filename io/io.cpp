@@ -638,9 +638,10 @@ int column_changed_last = 0;
 int line_changed_first = 0;				// quando devo copiare il doubled_framebuffer nel framebuffer voglio ottimizzare al massimo l'operazione di copia,
 int line_changed_last = 0;			// quindi cerco di copiare solo quello che ho effettivamente modificato.
 
-void inline put_pixel(natb * buffer, int x, int y, int MAX_X, natb col)
+void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
 {
-	buffer[MAX_X*y+x] = col;
+	if(x<MAX_X && y<MAX_Y)
+		buffer[MAX_X*y+x] = col;
 }
 
 int set_fontchar(natb* buff, int x, int y, int nchar, natb backColor)
@@ -654,9 +655,9 @@ int set_fontchar(natb* buff, int x, int y, int nchar, natb backColor)
 	for(int i=0; i<16; i++)
 		for(int j=start; j<end; j++)
 			if(font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
-				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, backColor);
+				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, MAX_SCREENY, backColor);
 			else
-				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
+				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, MAX_SCREENY, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
 
 	return font_width[nchar];
 }
@@ -970,7 +971,7 @@ void print_palette(natb* buff, int x, int y)
 	{
 		for(int k=0; k<10; k++)
 			for(int j=0; j<10; j++)
-				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, i);
+				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, MAX_SCREENY, i);
 		if(i%16==0 && i!=0)
 			row++;
 	}
@@ -988,19 +989,21 @@ void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 	//non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : TOPBAR_HEIGHT;
+	if(max_x<=0 || max_y<=0)
+		return;
 
 	//renderizzo sfondo TOPBAR
 	for(int i=0; i<max_x; i++)
 		for(int j=0; j<max_y; j++)
 			if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
-				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_X_COLOR);
+				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_X_COLOR);
 			else
-				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_TOPBAR_COLOR);
+				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_TOPBAR_COLOR);
 
 	//renderizzo lettera X
 	set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
 
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + TOPBAR_HEIGHT);
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y, wind->pos_y+max_y);
 }
 
 void inline render_window_onvideobuffer(natb* buff, des_window * wind)
@@ -1008,6 +1011,8 @@ void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 	// non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-(wind->pos_y+TOPBAR_HEIGHT) : wind->size_y;
+	if(max_x<=0 || max_y<=0)
+		return;
 
 	// copio il buffer della finestra su quello video
 	for(int j=0; j<max_y; j++)
@@ -1021,6 +1026,8 @@ void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
 	// non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : wind->size_y+TOPBAR_HEIGHT;
+	if(max_x<=0 || max_y<=0)
+		return;
 
 	// pulisco corpo della finestra e topbar
 	for(int j=0; j<max_y; j++)
@@ -1061,11 +1068,15 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 		windowObject * obj = wind->objects[i];
 		if(!(obj->is_rendered))
 			continue;
+
 		int max_x = (obj->pos_x + obj->size_x > wind->size_x) ? wind->size_x - obj->pos_x : obj->size_x;
 		int max_y = (obj->pos_y + obj->size_y > wind->size_y) ? wind->size_y - obj->pos_y : obj->size_y;
+		if(max_x<=0 || max_y<=0)
+			continue;
+
 		for(int i=0; i<max_x; i++)
 			for(int j=0; j<max_y; j++)
-				put_pixel(wind->render_buff, obj->pos_x+i, obj->pos_y+j, wind->size_x, obj->render_buff[j*obj->size_x+i]);
+				put_pixel(wind->render_buff, obj->pos_x+i, obj->pos_y+j, wind->size_x, wind->size_y, obj->render_buff[j*obj->size_x+i]);
 	}
 
 	// copio il buffer della finestra su quello video
@@ -1128,7 +1139,7 @@ void render_mousecursor_onbuffer(natb* buff, des_mouse* mouse)
 	int bound_y=(mouse->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->old_y : 32;
 	for(int i=0; i<bound_x; i++)
 		for(int j=0; j<bound_y; j++)
-			put_pixel(buff, mouse->old_x+i, mouse->old_y+j, MAX_SCREENX, WIN_BACKGROUND_COLOR);
+			put_pixel(buff, mouse->old_x+i, mouse->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
 			//buff[(i+mouse->old_y)*MAX_SCREENX+(j+mouse->old_x)]=WIN_BACKGROUND_COLOR;
 
 	update_framebuffer_linechanged(mouse->old_x, mouse->old_x+bound_x, mouse->old_y, mouse->old_y+bound_y);
@@ -1139,7 +1150,7 @@ void render_mousecursor_onbuffer(natb* buff, des_mouse* mouse)
 	for(int i=0; i<bound_x; i++)
 		for(int j=0; j<bound_y; j++)
 			if(main_cursor[j*32+i]!=COLOR_TRASP)
-				put_pixel(buff, mouse->x+i, mouse->y+j, MAX_SCREENX, main_cursor[j*32+i]);
+				put_pixel(buff, mouse->x+i, mouse->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
 				//buff[(i+mouse->y)*MAX_SCREENX+(j+mouse->x)]=main_cursor[i*32+j];
 
 	update_framebuffer_linechanged(mouse->x, mouse->x+bound_x, mouse->y, mouse->y+bound_y);
@@ -1344,11 +1355,13 @@ void mouse_handler(int i)
 			
 			flog(LOG_INFO, "mouse_driver: x: %d y: %d dx: %d dy: %d old_x %d old_y %d",
 					ps2_mouse.x, ps2_mouse.y, x, y, ps2_mouse.old_x, ps2_mouse.old_y);
-			
+
+			sem_wait(win_man.mutex);
 			render_mousecursor_onbuffer(doubled_framebuffer, &ps2_mouse);
 			update_framebuffer();
+			sem_signal(win_man.mutex);
 
-			fine: put_pixel(framebuffer, 0, 0, MAX_SCREENX, 0x05);
+			fine: put_pixel(framebuffer, 0, 0, MAX_SCREENX, MAX_SCREENY, 0x05);
 		}
 
 		wfi();

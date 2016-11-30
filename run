@@ -34,6 +34,7 @@ cmd="$QEMU_PRE_CMD $QEMU \
 	-initrd build/sistema \
 	-drive file=.swap,format=raw,cache=unsafe \
 	-no-reboot \
+	-ctrl-grab \
 	$QEMU_EXTRA_OPTIONS \
 	-m $MEM"
 
