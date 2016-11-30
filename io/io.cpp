@@ -914,8 +914,14 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
-void *gr_memcpy(void *__restrict dest, const void *__restrict src, unsigned long int n)
+void *gr_memcpy_safe_onvideobuffer(natb * base_buff, void *__restrict dest, const void *__restrict src, unsigned long int n)
 {
+	if((static_cast<natb*>(dest)+n) > base_buff+(MAX_SCREENX*MAX_SCREENY) || static_cast<natb*>(dest) < base_buff)
+	{
+		flog(LOG_INFO, "gr_memcpy_safe_framebuffer: anticipato buffer overflow, salto scrittura", dest, src, n);
+		return 0;
+	}
+
 	char *s1 = static_cast<char*>(dest);
 	const char *s2 = static_cast<const char*>(src);
 	for(; 0<n; --n)*s1++ = *s2++;
@@ -950,7 +956,7 @@ void inline update_framebuffer()
 	flog(LOG_INFO, "update_framebuffer: column_first %d column_last %d line_first %d line_last %d", column_changed_first, column_changed_last, line_changed_first, line_changed_last);
 
 	for(int j=line_changed_first; j<line_changed_last; j++)
-		memcpy(framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
+		gr_memcpy_safe_onvideobuffer(framebuffer, framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
 
 	line_changed_first=MAX_SCREENY-1;
 	line_changed_last=0;
@@ -1016,7 +1022,7 @@ void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 
 	// copio il buffer della finestra su quello video
 	for(int j=0; j<max_y; j++)
-		memcpy(buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, max_x);
+		gr_memcpy_safe_onvideobuffer(buff, buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, max_x);
 
 	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y + TOPBAR_HEIGHT, wind->pos_y + max_y + TOPBAR_HEIGHT);
 }
@@ -1114,6 +1120,7 @@ void move_window(int w_id, int to_x, int to_y)
 	// devo renderizzare la finestra da spostare sulla nuova area
 	wind->pos_x = to_x;
 	wind->pos_y = to_y;
+
 	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
