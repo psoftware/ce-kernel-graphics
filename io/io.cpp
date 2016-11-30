@@ -632,7 +632,7 @@ const int MAX_SCREENX = 1280;
 const int MAX_SCREENY = 1024;
 
 natb* framebuffer = (natb*)0xfd000000;
-natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];	// Terzo buffer (triple buffering)
+natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];	// Secondo buffer (quadruple buffering)
 int column_changed_first = 0;
 int column_changed_last = 0;
 int line_changed_first = 0;				// quando devo copiare il doubled_framebuffer nel framebuffer voglio ottimizzare al massimo l'operazione di copia,
@@ -913,12 +913,12 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
-extern "C" void *MemCpy(void *__restrict b, const void *__restrict a, unsigned long int n)
+void *gr_memcpy(void *__restrict dest, const void *__restrict src, unsigned long int n)
 {
-    char *s1 = static_cast<char*>(b);
-    const char *s2 = static_cast<const char*>(a);
-    for(; 0<n; --n)*s1++ = *s2++;
-    return b;
+	char *s1 = static_cast<char*>(dest);
+	const char *s2 = static_cast<const char*>(src);
+	for(; 0<n; --n)*s1++ = *s2++;
+	return dest;
 }
 
 void inline update_framebuffer_linechanged(int column_first, int column_last, int line_first, int line_last)
@@ -932,7 +932,10 @@ void inline update_framebuffer_linechanged(int column_first, int column_last, in
 		column_changed_first=column_first;
 	if(column_last > column_changed_last)
 		column_changed_last=column_last;
+}
 
+void inline update_framebuffer()
+{
 	// le variabili non devono sforare i margini dello schermo, altrimentri avremmo un pesante buffer overflow
 	if(line_changed_first < 0)
 		line_changed_first=0;
@@ -943,11 +946,8 @@ void inline update_framebuffer_linechanged(int column_first, int column_last, in
 	if(column_changed_last >= MAX_SCREENX)
 		column_changed_last=MAX_SCREENX-1;
 
-	flog(LOG_INFO, "new column_first %d column_last %d line_first %d line_last %d", column_changed_first, column_changed_last, line_changed_first, line_changed_last);
-}
+	flog(LOG_INFO, "update_framebuffer: column_first %d column_last %d line_first %d line_last %d", column_changed_first, column_changed_last, line_changed_first, line_changed_last);
 
-void inline update_framebuffer()
-{
 	for(int j=line_changed_first; j<line_changed_last; j++)
 		memcpy(framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
 
@@ -985,9 +985,13 @@ void inline clean_window_buffer(des_window * wind)
 
 void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 {
+	//non devo sforare i bound dello schermo
+	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
+	int max_y=(wind->pos_y+TOPBAR_HEIGHT>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : TOPBAR_HEIGHT;
+
 	//renderizzo sfondo TOPBAR
-	for(int i=0; i<wind->size_x; i++)
-		for(int j=0; j<TOPBAR_HEIGHT; j++)
+	for(int i=0; i<max_x; i++)
+		for(int j=0; j<max_y; j++)
 			if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
 				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, WIN_X_COLOR);
 			else
@@ -1001,22 +1005,27 @@ void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 
 void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 {
+	// non devo sforare i bound dello schermo
+	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
+	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-(wind->pos_y+TOPBAR_HEIGHT) : wind->size_y;
+
 	// copio il buffer della finestra su quello video
-	for(int j=0; j<wind->size_y; j++)
-		memcpy(buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, wind->size_x);
-	
-	/*for(int i=0; i<wind->size_x; i++)
-		for(int j=0; j<wind->size_y; j++)
-			put_pixel(buff, i+wind->pos_x, j+wind->pos_y+TOPBAR_HEIGHT, MAX_SCREENX, wind->render_buff[wind->size_x*j+i]);*/
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y + TOPBAR_HEIGHT, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
+	for(int j=0; j<max_y; j++)
+		memcpy(buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, max_x);
+
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y + TOPBAR_HEIGHT, wind->pos_y + max_y + TOPBAR_HEIGHT);
 }
 
 void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
 {
+	// non devo sforare i bound dello schermo
+	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
+	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : wind->size_y+TOPBAR_HEIGHT;
+
 	// pulisco corpo della finestra e topbar
-	for(int j=0; j<wind->size_y+TOPBAR_HEIGHT; j++)
-		memset(buff + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, wind->size_x);
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
+	for(int j=0; j<max_y; j++)
+		memset(buff + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, max_x);
+	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y, wind->pos_y + max_y);
 }
 
 void graphic_visualizza_finestra(int id)
