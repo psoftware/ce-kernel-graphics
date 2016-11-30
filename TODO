@@ -1,2 +1,6 @@
 - rimuovere supporto per graph_old.sh
 - pulire output flog
+- fontchar/fontstring sono ridondanti (sistema.cpp e classe windowObjects)
+- vanno sistemate tutte le costante in un file a parte
+- va sistemata la classe u_windowObject perchè ridondante (include/gui_objects.h e utente/lib/..)
+- URGENTE: molte funzioni di rendering non controllano lo sforamento dei bound dello schermo e causano buffer overflow, abbastanza brutti da debuggare

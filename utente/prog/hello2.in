@@ -29,7 +29,7 @@ process_body hello_body2(int a)
 	aggiorna_oggetto(finestra, label_id, label1, true);
 	delay(50);
 	wait2=3000000;
-	while(true);
+	//while(true);
 
 	copy("Inizio processo 2!\nFine 1!\nFine 2!", label1->text);
 	aggiorna_oggetto(finestra, label_id, label1, true);

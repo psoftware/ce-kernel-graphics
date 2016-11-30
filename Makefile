@@ -17,6 +17,7 @@ COMM_CFLAGS=$(CFLAGS) \
 	-Iinclude		\
 	-I$(LIBCE)/include/ce	\
 	-mno-red-zone		\
+	-O2			\
 	-gdwarf-2
 
 COMM_LDFLAGS=\

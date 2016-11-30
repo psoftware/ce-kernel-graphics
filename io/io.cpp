@@ -5,6 +5,8 @@
 #include "newdelete.h"
 #include "windows/font.h"
 #include "windows/gui_objects.h"
+#include "windows/cursor.h"
+
 //#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
 //    COSTANTI                                                                //
@@ -911,6 +913,14 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
+extern "C" void *MemCpy(void *__restrict b, const void *__restrict a, unsigned long int n)
+{
+    char *s1 = static_cast<char*>(b);
+    const char *s2 = static_cast<const char*>(a);
+    for(; 0<n; --n)*s1++ = *s2++;
+    return b;
+}
+
 void inline update_framebuffer_linechanged(int column_first, int column_last, int line_first, int line_last)
 {
 	if(line_first < line_changed_first)
@@ -922,16 +932,28 @@ void inline update_framebuffer_linechanged(int column_first, int column_last, in
 		column_changed_first=column_first;
 	if(column_last > column_changed_last)
 		column_changed_last=column_last;
+
+	// le variabili non devono sforare i margini dello schermo, altrimentri avremmo un pesante buffer overflow
+	if(line_changed_first < 0)
+		line_changed_first=0;
+	if(line_changed_last >= MAX_SCREENY)
+		line_changed_last=MAX_SCREENY-1;
+	if(column_changed_first < 0)
+		column_changed_first=0;
+	if(column_changed_last >= MAX_SCREENX)
+		column_changed_last=MAX_SCREENX-1;
+
+	flog(LOG_INFO, "new column_first %d column_last %d line_first %d line_last %d", column_changed_first, column_changed_last, line_changed_first, line_changed_last);
 }
 
 void inline update_framebuffer()
 {
-	for(int j=line_changed_first; j<line_changed_first+line_changed_last; j++)
+	for(int j=line_changed_first; j<line_changed_last; j++)
 		memcpy(framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
 
-	line_changed_first=0;
+	line_changed_first=MAX_SCREENY-1;
 	line_changed_last=0;
-	column_changed_first=0;
+	column_changed_first=MAX_SCREENX-1;
 	column_changed_last=0;
 }
 
@@ -1076,11 +1098,53 @@ void move_window(int w_id, int to_x, int to_y)
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
 
+struct des_mouse
+{
+	natl iRBR;
+	natl iTBR;
+	natl iCMR;
+	natl iSTR;
+
+	int x;
+	int y;
+	int old_x;
+	int old_y;
+
+	bool is_intellimouse;
+};
+
+void render_mousecursor_onbuffer(natb* buff, des_mouse* mouse)
+{
+	int bound_x=(mouse->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-mouse->old_x : 32;
+	int bound_y=(mouse->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->old_y : 32;
+	for(int i=0; i<bound_x; i++)
+		for(int j=0; j<bound_y; j++)
+			put_pixel(buff, mouse->old_x+i, mouse->old_y+j, MAX_SCREENX, WIN_BACKGROUND_COLOR);
+			//buff[(i+mouse->old_y)*MAX_SCREENX+(j+mouse->old_x)]=WIN_BACKGROUND_COLOR;
+
+	update_framebuffer_linechanged(mouse->old_x, mouse->old_x+bound_x, mouse->old_y, mouse->old_y+bound_y);
+
+	bound_x=(mouse->x+32>=MAX_SCREENX) ? MAX_SCREENX-mouse->x : 32;
+	bound_y=(mouse->y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->y : 32;
+	flog(LOG_INFO, "bound_x %d bound_y %d", bound_x, bound_y);
+	for(int i=0; i<bound_x; i++)
+		for(int j=0; j<bound_y; j++)
+			if(main_cursor[j*32+i]!=COLOR_TRASP)
+				put_pixel(buff, mouse->x+i, mouse->y+j, MAX_SCREENX, main_cursor[j*32+i]);
+				//buff[(i+mouse->y)*MAX_SCREENX+(j+mouse->x)]=main_cursor[i*32+j];
+
+	update_framebuffer_linechanged(mouse->x, mouse->x+bound_x, mouse->y, mouse->y+bound_y);
+	//update_framebuffer_linechanged(0,1000,0,1000);
+}
+
 void main_windows_manager(int n)
 {
 	set_background(doubled_framebuffer);
 	print_palette(doubled_framebuffer, 900,450);
 	update_framebuffer();
+
+	//patina di debug
+	memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
 
 	while(true)
 	{
@@ -1147,12 +1211,14 @@ bool windows_init()
 //                             GESTIONE MOUSE                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
+des_mouse ps2_mouse = {0x60,0x60,0x64,0x64, 0,0,0,0, false};
+
 void inline wait_kdb_read()
 {
 	natb res;
 	do
 	{
-		inputb(console.kbd.indreg.iSTR, res);
+		inputb(ps2_mouse.iSTR, res);
 	}
 	while(!(res & 0x01)); //attendo di poter leggere iCMR
 }
@@ -1162,7 +1228,7 @@ void inline wait_kdb_write()
 	natb res;
 	do
 	{
-		inputb(console.kbd.indreg.iSTR, res);
+		inputb(ps2_mouse.iSTR, res);
 	}
 	while(res & 0x02); //attendo di poter leggere iCMR
 }
@@ -1171,11 +1237,11 @@ void inline mouse_send(natb data)
 {
 	natb mouseresp;
 	wait_kdb_write();
-	outputb(0xD4, console.kbd.indreg.iCMR);
+	outputb(0xD4, ps2_mouse.iCMR);
 	wait_kdb_write();
-	outputb(data, console.kbd.indreg.iTBR);
+	outputb(data, ps2_mouse.iTBR);
 	wait_kdb_read();
-	inputb(console.kbd.indreg.iRBR, mouseresp);
+	inputb(ps2_mouse.iRBR, mouseresp);
 }
 
 int inline bytetosignedshort(natb a, bool s)
@@ -1183,59 +1249,42 @@ int inline bytetosignedshort(natb a, bool s)
 	return ( (s ) ?0xFFFFFF00:0x00000000) | a;
 }
 
+const int MOUSE_DELTAX_DIVIDER=2;
+const int MOUSE_DELTAY_DIVIDER=2;
 bool isIntelliMouse=false;
-natb status_cancellami;
 
 void mouse_handler(int i)
 {
 	int mouse_count=0;
-	int mouse_y=300*100, mouse_x=300*100;
+	bool discard_one_packet=false;
 	natb mouse_bytes[4];
 
-	natb newbyte;
-	bool first = true;
 	while(true)
 	{
-		// la prima richiesta di interruzione che mi arriva non è relativa ad un byte di stato
-		// ma probabilmente ad un ack di risposta a qualche comando che invio, quindi devo cestinarlo
-		// altrimenti non trovo l'allineamento
-		if(first)
+		//scarto un pacchetto se è settata questa variabile booleana. Mi serve per gestire i disallineamenti
+		if(discard_one_packet)
 		{
-			first = false;
+			natb discarded;
+			inputb(ps2_mouse.iRBR, discarded);
+			discard_one_packet=false;
 			wfi();
 		}
 
-		inputb(console.kbd.indreg.iRBR, newbyte);
-		mouse_bytes[mouse_count]= newbyte;
-		mouse_count++;
-
-		/* PROVA POLLING FALLITA
-		//Disabilito interruzioni su registro di controllo
-		wait_kdb_write();
-		outputb(0x60, console.kbd.indreg.iCMR);
-		wait_kdb_write();
-		outputb(status_cancellami & ~0x02, console.kbd.indreg.iTBR);
-		
-		//faccio polling
-		flog(LOG_INFO, "provo polling");
-		natb polres;
-		inputb(console.kbd.indreg.iSTR, polres);
-		while(polres & 0x01);
-		{
-			inputb(console.kbd.indreg.iRBR, newbyte);
-			inputb(console.kbd.indreg.iSTR, polres);
-			flog(LOG_INFO, "C'è ancora roba: %d", newbyte);
-		}*/
-		
+		inputb(ps2_mouse.iRBR, mouse_bytes[mouse_count++]);
 
 		if ((mouse_count == 4 && isIntelliMouse) || (mouse_count==3 && !isIntelliMouse))
 		{
+			int x,y, new_x,new_y;
 			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
+			{
 				flog(LOG_INFO, "mouse_driver: invalid packets alignment");
+				discard_one_packet=true;
+				goto fine;
+			}
 
 			mouse_count = 0; // reset the counter
-			int x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
-			int y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
+			x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
+			y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
 
 			// condizione di overflow (cestino il dato)
 			if ((mouse_bytes[0] & 0x80) || (mouse_bytes[0] & 0x40))
@@ -1243,6 +1292,29 @@ void mouse_handler(int i)
 				flog(LOG_INFO, "mouse_driver: Mouse Overflow!");
 				goto fine;
 			}
+
+			// Calcolo le nuove coordinate e mi assicuro che non sforino i margini dello schermo
+			ps2_mouse.old_x=ps2_mouse.x;
+			ps2_mouse.old_y=ps2_mouse.y;
+			
+			new_x=ps2_mouse.x+(x/MOUSE_DELTAX_DIVIDER);
+			new_y=ps2_mouse.y-(y/MOUSE_DELTAY_DIVIDER);
+			
+			if(new_x<0)
+				ps2_mouse.x=0;
+			else if(new_x>=MAX_SCREENX)
+				ps2_mouse.x=MAX_SCREENX-1;
+			else
+				ps2_mouse.x=new_x;
+
+			if(new_y<0)
+				ps2_mouse.y=0;
+			else if(new_y>=MAX_SCREENY)
+				ps2_mouse.y=MAX_SCREENY-1;
+			else
+				ps2_mouse.y=new_y;
+
+
 			if (mouse_bytes[0] & 0x4)
 			{
 				flog(LOG_INFO, "mouse_driver: Middle button is pressed!");
@@ -1254,53 +1326,43 @@ void mouse_handler(int i)
 			if (mouse_bytes[0] & 0x1)
 			{
 				flog(LOG_INFO, "mouse_driver: Left button is pressed!");
+			/*	sem_wait(win_man.mutex);
+				des_window * wind = &win_man.windows_arr[0];
+				move_window(0, (wind->pos_x + x/2 < 0) ? 0 : wind->pos_x + x/2, (wind->pos_y - y/2 < 0) ? 0 : wind->pos_y - y/2);
+				sem_signal(win_man.mutex);
+			*/
 			}
 			
-			mouse_x += x;
-			mouse_y -= y;
+			flog(LOG_INFO, "mouse_driver: x: %d y: %d dx: %d dy: %d old_x %d old_y %d",
+					ps2_mouse.x, ps2_mouse.y, x, y, ps2_mouse.old_x, ps2_mouse.old_y);
 			
-			flog(LOG_INFO, "mouse_driver: x: %d y: %d dx: %d dy: %d xneg: %d yneg: %d",
-					mouse_x/100, mouse_y/100, x, y, (mouse_bytes[0] & 0x10) >> 4, (mouse_bytes[0] & 0x20) >>5);
-			fine: put_pixel(framebuffer, mouse_x/100, mouse_y/100, MAX_SCREENX, 0x05);
+			render_mousecursor_onbuffer(doubled_framebuffer, &ps2_mouse);
+			update_framebuffer();
+
+			fine: put_pixel(framebuffer, 0, 0, MAX_SCREENX, 0x05);
 		}
 
-		/*
-		//Abilito interruzioni su registro di controllo
-		//wait_kdb_write();
-		outputb(0x60, console.kbd.indreg.iCMR);
-		//wait_kdb_write();
-		outputb(status_cancellami | 0x02, console.kbd.indreg.iTBR);
-		flog(LOG_INFO, "fine interruzione");*/
 		wfi();
 	}
 }
 
 bool mouse_init()
 {
-	/*
-	0x60,	// iRBR
-	0x60,	// iTBR
-	0x64,	// iCMR
-	0x64,	// iSTR
-	*/
-
 	//Abilito seconda porta ps/2
-	outputb(0xA8, console.kbd.indreg.iCMR);
+	outputb(0xA8, ps2_mouse.iCMR);
 
 	//Leggo registro di controllo
 	//wait_kdb_write();
-	outputb(0x20, console.kbd.indreg.iCMR);
+	outputb(0x20, ps2_mouse.iCMR);
 	wait_kdb_read();
 	natb resp;
-	inputb(console.kbd.indreg.iRBR, resp);
-	flog(LOG_INFO, "Resp: %d", resp);
-	status_cancellami = resp;
+	inputb(ps2_mouse.iRBR, resp);
 
 	//Abilito interruzioni su registro di controllo
 	wait_kdb_write();
-	outputb(0x60, console.kbd.indreg.iCMR);
+	outputb(0x60, ps2_mouse.iCMR);
 	wait_kdb_write();
-	outputb(resp | 0x02, console.kbd.indreg.iTBR);
+	outputb(resp | 0x02, ps2_mouse.iTBR);
 
 	//Abilito mouse
 	mouse_send(0xF6);
@@ -1317,7 +1379,7 @@ bool mouse_init()
 	mouse_send(0xF2);
 	wait_kdb_read();
 	natb mouseresp;
-	inputb(console.kbd.indreg.iRBR, mouseresp);
+	inputb(ps2_mouse.iRBR, mouseresp);
 	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);*/
 
 	//Setto handler
