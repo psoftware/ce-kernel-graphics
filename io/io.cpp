@@ -640,7 +640,7 @@ int line_changed_last = 0;			// quindi cerco di copiare solo quello che ho effet
 
 void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
 {
-	if(x<MAX_X && y<MAX_Y)
+	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
 		buffer[MAX_X*y+x] = col;
 }
 
@@ -1146,7 +1146,6 @@ void render_mousecursor_onbuffer(natb* buff, des_mouse* mouse)
 
 	bound_x=(mouse->x+32>=MAX_SCREENX) ? MAX_SCREENX-mouse->x : 32;
 	bound_y=(mouse->y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->y : 32;
-	flog(LOG_INFO, "bound_x %d bound_y %d", bound_x, bound_y);
 	for(int i=0; i<bound_x; i++)
 		for(int j=0; j<bound_y; j++)
 			if(main_cursor[j*32+i]!=COLOR_TRASP)
@@ -1281,6 +1280,7 @@ void mouse_handler(int i)
 
 	while(true)
 	{
+		flog(LOG_INFO, "mouse_count %d",mouse_count);
 		//scarto un pacchetto se è settata questa variabile booleana. Mi serve per gestire i disallineamenti
 		if(discard_one_packet)
 		{
@@ -1298,6 +1298,7 @@ void mouse_handler(int i)
 			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
 			{
 				flog(LOG_INFO, "mouse_driver: invalid packets alignment");
+				mouse_count=0;
 				discard_one_packet=true;
 				goto fine;
 			}
