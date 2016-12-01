@@ -741,6 +741,8 @@ struct des_windows_man
 	static const int TOPBAR_HEIGHT = 20;
 	natb windows_count;
 	des_window windows_arr[MAX_WINDOWS];		//Finestre create
+	int focus_wind;								//Finestra selezionata con mouse
+	bool is_dragging;
 
 	//Coda richieste primitive
 	des_window_req req_queue[MAX_REQ_QUEUE];
@@ -1177,6 +1179,28 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 
 	update_framebuffer_linechanged(cursor->old_x, cursor->old_x+bound_x, cursor->old_y, cursor->old_y+bound_y);
 
+	//devo rigenerare le finestre sottostanti alla vecchia posizione del cursore
+	for(int i=0; i<win_man.windows_count; i++)
+	{
+		if(i==win_man.focus_wind)
+			continue;
+		des_window * wind = &win_man.windows_arr[i];
+		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
+			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
+		{	// condizione per individuare se il cursore condivide parti di framebuffer con altre finestre
+			render_topbar_onvideobuffer(doubled_framebuffer, wind);
+			render_window_onvideobuffer(doubled_framebuffer, wind);	//copio nuovamente il bitmap della finestra sul buffer video secondario
+		}
+	}
+
+	//devo rigenerare sempre per ultima, la finestra con focus
+	if(win_man.focus_wind!=-1)
+	{
+		des_window * wind = &win_man.windows_arr[win_man.focus_wind];
+		render_topbar_onvideobuffer(doubled_framebuffer, wind);
+		render_window_onvideobuffer(doubled_framebuffer, wind);
+	}
+
 	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
 	bound_y=(cursor->y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->y : 32;
 	for(int i=0; i<bound_x; i++)
@@ -1266,8 +1290,8 @@ void main_windows_manager(int n)
 	memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
 
 	des_cursor main_cursor = {0,0,0,0};
-	int focus_wind=-1;
-	bool is_moving=false;
+	win_man.focus_wind=-1;
+	win_man.is_dragging=false;
 
 	while(true)
 	{
@@ -1302,22 +1326,28 @@ void main_windows_manager(int n)
 				main_cursor.old_y=main_cursor.y;
 				main_cursor.x+=newreq.delta_x;
 				main_cursor.y+=newreq.delta_y;
-				render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
 
-				if(is_moving && focus_wind!=-1)
+				//se si è già verificato il mouse_up, significa che ora devo trascinare la finestra
+				if(win_man.is_dragging && win_man.focus_wind!=-1)
 				{
-					des_window * f_wind = &win_man.windows_arr[focus_wind];
-					move_window(focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
+					des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
+					move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
 				}
+				//sposto il cursore sulla posizione nuova
+				render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
 			break;
 			case MOUSE_MOUSEDOWN_EVENT:
-				focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
-				is_moving=true;
+				if(newreq.button==LEFT)
+				{	
+					win_man.focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
+					win_man.is_dragging=true;
+				}
 			break;
 			case MOUSE_MOUSEUP_EVENT:
-				is_moving=false;
+				if(newreq.button==LEFT)
+					win_man.is_dragging=false;
 			break;
 		}
 
