@@ -1106,6 +1106,17 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
 }
 
+int check_topbar_oncoords(int curs_x, int curs_y)
+{
+	for(int i=0; i<win_man.windows_count; i++)
+	{
+		des_window * wind = &win_man.windows_arr[i];
+		if(curs_x>wind->pos_x && curs_x<wind->pos_x+wind->size_x && curs_y>wind->pos_y && curs_y<wind->pos_y+TOPBAR_HEIGHT)
+			return i;
+	}
+	return -1;
+}
+
 void move_window(int w_id, int to_x, int to_y)
 {
 	des_window * wind = &win_man.windows_arr[w_id];
@@ -1255,6 +1266,8 @@ void main_windows_manager(int n)
 	memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
 
 	des_cursor main_cursor = {0,0,0,0};
+	int focus_wind=-1;
+	bool is_moving=false;
 
 	while(true)
 	{
@@ -1291,14 +1304,20 @@ void main_windows_manager(int n)
 				main_cursor.y+=newreq.delta_y;
 				render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
 
-				/*des_window * wind = &win_man.windows_arr[0];
-				move_window(0, wind->pos_x + newreq.mouse->x - newreq.mouse->old_x, wind->pos_y - (newreq.mouse->y - newreq.mouse->old_y));*/
+				if(is_moving && focus_wind!=-1)
+				{
+					des_window * f_wind = &win_man.windows_arr[focus_wind];
+					move_window(focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
+				}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
 			break;
 			case MOUSE_MOUSEDOWN_EVENT:
+				focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
+				is_moving=true;
 			break;
 			case MOUSE_MOUSEUP_EVENT:
+				is_moving=false;
 			break;
 		}
 
