@@ -1197,8 +1197,12 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 	if(win_man.focus_wind!=-1)
 	{
 		des_window * wind = &win_man.windows_arr[win_man.focus_wind];
-		render_topbar_onvideobuffer(doubled_framebuffer, wind);
-		render_window_onvideobuffer(doubled_framebuffer, wind);
+		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
+			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
+		{	//la finestra con focus va renderizzata solo se il cursore si sovrappone ad essa
+			render_topbar_onvideobuffer(doubled_framebuffer, wind);
+			render_window_onvideobuffer(doubled_framebuffer, wind);
+		}
 	}
 
 	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
