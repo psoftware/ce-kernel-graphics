@@ -699,6 +699,12 @@ struct des_window
 
 const natb PRIM_SHOW=0;
 const natb PRIM_UPDATE_OBJECT=2;
+const natb MOUSE_UPDATE_EVENT=10;
+const natb MOUSE_Z_UPDATE_EVENT=11;
+const natb MOUSE_MOUSEUP_EVENT=12;
+const natb MOUSE_MOUSEDOWN_EVENT=13;
+enum mouse_button {LEFT,MIDDLE,RIGHT};
+
 struct des_window_req
 {
 	natb w_id;
@@ -710,8 +716,14 @@ struct des_window_req
 
 	natb act;
 	union {
-		char str[60];
 		windowObject * obj;
+		int delta_x;
+		int delta_z;
+		mouse_button button;
+	};
+
+	union {
+		int delta_y;
 	};
 
 	des_window_req()
@@ -1135,42 +1147,102 @@ void move_window(int w_id, int to_x, int to_y)
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
 
-struct des_mouse
+struct des_cursor
 {
-	natl iRBR;
-	natl iTBR;
-	natl iCMR;
-	natl iSTR;
-
-	int x;
-	int y;
 	int old_x;
 	int old_y;
-
-	bool is_intellimouse;
+	int x;
+	int y;
 };
 
-void render_mousecursor_onbuffer(natb* buff, des_mouse* mouse)
+void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 {
-	int bound_x=(mouse->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-mouse->old_x : 32;
-	int bound_y=(mouse->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->old_y : 32;
+	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
+	int bound_y=(cursor->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->old_y : 32;
 	for(int i=0; i<bound_x; i++)
 		for(int j=0; j<bound_y; j++)
-			put_pixel(buff, mouse->old_x+i, mouse->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
-			//buff[(i+mouse->old_y)*MAX_SCREENX+(j+mouse->old_x)]=WIN_BACKGROUND_COLOR;
+			put_pixel(buff, cursor->old_x+i, cursor->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
+			//buff[(i+cursor->old_y)*MAX_SCREENX+(j+cursor->old_x)]=WIN_BACKGROUND_COLOR;
 
-	update_framebuffer_linechanged(mouse->old_x, mouse->old_x+bound_x, mouse->old_y, mouse->old_y+bound_y);
+	update_framebuffer_linechanged(cursor->old_x, cursor->old_x+bound_x, cursor->old_y, cursor->old_y+bound_y);
 
-	bound_x=(mouse->x+32>=MAX_SCREENX) ? MAX_SCREENX-mouse->x : 32;
-	bound_y=(mouse->y+32>=MAX_SCREENY) ? MAX_SCREENY-mouse->y : 32;
+	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
+	bound_y=(cursor->y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->y : 32;
 	for(int i=0; i<bound_x; i++)
 		for(int j=0; j<bound_y; j++)
 			if(main_cursor[j*32+i]!=COLOR_TRASP)
-				put_pixel(buff, mouse->x+i, mouse->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
-				//buff[(i+mouse->y)*MAX_SCREENX+(j+mouse->x)]=main_cursor[i*32+j];
+				put_pixel(buff, cursor->x+i, cursor->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
+				//buff[(i+cursor->y)*MAX_SCREENX+(j+cursor->x)]=main_cursor[i*32+j];
 
-	update_framebuffer_linechanged(mouse->x, mouse->x+bound_x, mouse->y, mouse->y+bound_y);
+	update_framebuffer_linechanged(cursor->x, cursor->x+bound_x, cursor->y, cursor->y+bound_y);
 	//update_framebuffer_linechanged(0,1000,0,1000);
+}
+
+void mouse_notify_move(int delta_x, int delta_y)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento posizione mouse (x,y)");
+
+	int new_index = windows_queue_insert(win_man, 0, 100, MOUSE_UPDATE_EVENT, false);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		sem_signal(win_man.mutex);
+		sem_signal(win_man.sync_notfull);
+		return;
+	}
+
+	win_man.req_queue[new_index].delta_x = delta_x;
+	win_man.req_queue[new_index].delta_y = delta_y;
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+}
+
+void mouse_notify_z_move(int delta_z)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento coordinata z mouse");
+
+	int new_index = windows_queue_insert(win_man, 0, 100, MOUSE_Z_UPDATE_EVENT, false);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		sem_signal(win_man.mutex);
+		sem_signal(win_man.sync_notfull);
+		return;
+	}
+
+	win_man.req_queue[new_index].delta_z = delta_z;
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+}
+
+void mouse_notify_mousebutton_event(int EVENT, mouse_button who)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento stato button mouse");
+
+	int new_index = windows_queue_insert(win_man, 0, 100, EVENT, false);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		sem_signal(win_man.mutex);
+		sem_signal(win_man.sync_notfull);
+		return;
+	}
+
+	win_man.req_queue[new_index].button = who;
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
 }
 
 void main_windows_manager(int n)
@@ -1181,6 +1253,8 @@ void main_windows_manager(int n)
 
 	//patina di debug
 	memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
+
+	des_cursor main_cursor = {0,0,0,0};
 
 	while(true)
 	{
@@ -1208,6 +1282,23 @@ void main_windows_manager(int n)
 				renderobject_onwindow(newreq.w_id, newreq.obj);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
+			break;
+			case MOUSE_UPDATE_EVENT:
+				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
+				main_cursor.old_x=main_cursor.x;
+				main_cursor.old_y=main_cursor.y;
+				main_cursor.x+=newreq.delta_x;
+				main_cursor.y+=newreq.delta_y;
+				render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
+
+				/*des_window * wind = &win_man.windows_arr[0];
+				move_window(0, wind->pos_x + newreq.mouse->x - newreq.mouse->old_x, wind->pos_y - (newreq.mouse->y - newreq.mouse->old_y));*/
+			break;
+			case MOUSE_Z_UPDATE_EVENT:
+			break;
+			case MOUSE_MOUSEDOWN_EVENT:
+			break;
+			case MOUSE_MOUSEUP_EVENT:
 			break;
 		}
 
@@ -1247,7 +1338,28 @@ bool windows_init()
 //                             GESTIONE MOUSE                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-des_mouse ps2_mouse = {0x60,0x60,0x64,0x64, 0,0,0,0, false};
+struct des_mouse
+{
+	natl iRBR;
+	natl iTBR;
+	natl iCMR;
+	natl iSTR;
+
+	int x;
+	int y;
+	int z;
+	int old_x;
+	int old_y;
+	int old_z;
+
+	bool left_click;
+	bool middle_click;
+	bool right_click;
+
+	bool is_intellimouse;
+};
+
+des_mouse ps2_mouse = {0x60,0x60,0x64,0x64, 0,0,0,0,0,0, false};
 
 void inline wait_kdb_read()
 {
@@ -1285,9 +1397,13 @@ int inline bytetosignedshort(natb a, bool s)
 	return ( (s ) ?0xFFFFFF00:0x00000000) | a;
 }
 
+int inline bytetosignedshort_z(natb a)
+{
+	return (a>127)? a-256 : a;
+}
+
 const int MOUSE_DELTAX_DIVIDER=2;
 const int MOUSE_DELTAY_DIVIDER=2;
-bool isIntelliMouse=false;
 
 void mouse_handler(int i)
 {
@@ -1309,20 +1425,15 @@ void mouse_handler(int i)
 
 		inputb(ps2_mouse.iRBR, mouse_bytes[mouse_count++]);
 
-		if ((mouse_count == 4 && isIntelliMouse) || (mouse_count==3 && !isIntelliMouse))
+		if ((mouse_count == 4 && ps2_mouse.is_intellimouse) || (mouse_count==3 && !ps2_mouse.is_intellimouse))
 		{
-			int x,y, new_x,new_y;
+			int x,y, new_x,new_y,new_z;
 			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
 			{
 				flog(LOG_INFO, "mouse_driver: invalid packets alignment");
-				mouse_count=0;
 				discard_one_packet=true;
 				goto fine;
 			}
-
-			mouse_count = 0; // reset the counter
-			x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
-			y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
 
 			// condizione di overflow (cestino il dato)
 			if ((mouse_bytes[0] & 0x80) || (mouse_bytes[0] & 0x40))
@@ -1330,6 +1441,9 @@ void mouse_handler(int i)
 				flog(LOG_INFO, "mouse_driver: Mouse Overflow!");
 				goto fine;
 			}
+
+			x = bytetosignedshort(mouse_bytes[1], (mouse_bytes[0] & 0x10) >> 4);
+			y = bytetosignedshort(mouse_bytes[2], (mouse_bytes[0] & 0x20) >> 5);
 
 			// Calcolo le nuove coordinate e mi assicuro che non sforino i margini dello schermo
 			ps2_mouse.old_x=ps2_mouse.x;
@@ -1352,34 +1466,61 @@ void mouse_handler(int i)
 			else
 				ps2_mouse.y=new_y;
 
+			//della z mi tengo da parte solo il nuovo e il vecchio delta
+			new_z=bytetosignedshort_z(mouse_bytes[3]);
+			ps2_mouse.old_z=ps2_mouse.z;
+			ps2_mouse.z=new_z;
 
-			if (mouse_bytes[0] & 0x4)
+
+			if (mouse_bytes[0] & 0x4 && !ps2_mouse.middle_click)
 			{
 				flog(LOG_INFO, "mouse_driver: Middle button is pressed!");
+				ps2_mouse.middle_click=true;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, MIDDLE);
 			}
-			if (mouse_bytes[0] & 0x2)
+			else if (!(mouse_bytes[0] & 0x4) && ps2_mouse.middle_click)
+			{
+				flog(LOG_INFO, "mouse_driver: Middle button is released!");
+				ps2_mouse.middle_click=false;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, MIDDLE);
+			}
+
+			if (mouse_bytes[0] & 0x2 && !ps2_mouse.right_click)
 			{
 				flog(LOG_INFO, "mouse_driver: Right button is pressed!");
+				ps2_mouse.right_click=true;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, RIGHT);
 			}
-			if (mouse_bytes[0] & 0x1)
+			else if (!(mouse_bytes[0] & 0x2) && ps2_mouse.right_click)
+			{
+				flog(LOG_INFO, "mouse_driver: Right button is released!");
+				ps2_mouse.right_click=false;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, RIGHT);
+			}
+
+			if (mouse_bytes[0] & 0x1 && !ps2_mouse.left_click)
 			{
 				flog(LOG_INFO, "mouse_driver: Left button is pressed!");
-			/*	sem_wait(win_man.mutex);
-				des_window * wind = &win_man.windows_arr[0];
-				move_window(0, (wind->pos_x + x/2 < 0) ? 0 : wind->pos_x + x/2, (wind->pos_y - y/2 < 0) ? 0 : wind->pos_y - y/2);
-				sem_signal(win_man.mutex);
-			*/
+				ps2_mouse.left_click=true;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, LEFT);
+			}
+			else if (!(mouse_bytes[0] & 0x1) && ps2_mouse.left_click)
+			{
+				flog(LOG_INFO, "mouse_driver: Left button is released!");
+				ps2_mouse.left_click=false;
+				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, LEFT);
 			}
 			
-			flog(LOG_INFO, "mouse_driver: x: %d y: %d dx: %d dy: %d old_x %d old_y %d",
-					ps2_mouse.x, ps2_mouse.y, x, y, ps2_mouse.old_x, ps2_mouse.old_y);
+			// notifico al windows manager che il mouse ha mandato nuove coordinate
+			if(ps2_mouse.x!=ps2_mouse.old_x || ps2_mouse.y!=ps2_mouse.old_y)
+				mouse_notify_move(ps2_mouse.x-ps2_mouse.old_x, ps2_mouse.y-ps2_mouse.old_y);
 
-			sem_wait(win_man.mutex);
-			render_mousecursor_onbuffer(doubled_framebuffer, &ps2_mouse);
-			update_framebuffer();
-			sem_signal(win_man.mutex);
+			if(ps2_mouse.z!=ps2_mouse.old_z)
+				mouse_notify_z_move(ps2_mouse.z);
 
-			fine: put_pixel(framebuffer, 0, 0, MAX_SCREENX, MAX_SCREENY, 0x05);
+			//flog(LOG_INFO, "mouse_driver: x: %d y: %d z: %d dx: %d dy: %d old_x %d old_y %d", ps2_mouse.x, ps2_mouse.y, ps2_mouse.z,x, y, ps2_mouse.old_x, ps2_mouse.old_y);
+
+			fine: mouse_count = 0; // reset the counter
 		}
 
 		wfi();
@@ -1409,7 +1550,7 @@ bool mouse_init()
 	mouse_send(0xF4);
 
 	//Abilito IntelliMouse
-	/*isIntelliMouse=true;
+	ps2_mouse.is_intellimouse=true;
 	mouse_send(0xF3);
 	mouse_send(200);
 	mouse_send(0xF3);
@@ -1420,7 +1561,7 @@ bool mouse_init()
 	wait_kdb_read();
 	natb mouseresp;
 	inputb(ps2_mouse.iRBR, mouseresp);
-	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);*/
+	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);
 
 	//Setto handler
 	activate_pe(mouse_handler, 0, 2, 0, 12);

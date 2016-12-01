@@ -4,3 +4,4 @@
 - vanno sistemate tutte le costante in un file a parte
 - va sistemata la classe u_windowObject perchè ridondante (include/gui_objects.h e utente/lib/..)
 - URGENTE: molte funzioni di rendering non controllano lo sforamento dei bound dello schermo e causano buffer overflow, abbastanza brutti da debuggare
+- i bound delle cordinate del cursore sono gestite a livello di des_mouse e non di des_cursor, bisognerebbe capire se è corretto o meno
