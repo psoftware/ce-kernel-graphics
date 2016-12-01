@@ -1117,9 +1117,19 @@ void move_window(int w_id, int to_x, int to_y)
 		}
 	}
 
-	// devo renderizzare la finestra da spostare sulla nuova area
-	wind->pos_x = to_x;
-	wind->pos_y = to_y;
+	// faccio in modo che la finestra non vada mai oltre i bound dello schermo
+	if(to_x<0)
+		wind->pos_x=0;
+	else if(to_x+wind->size_x>=MAX_SCREENX)
+		wind->pos_x=MAX_SCREENX-1-wind->size_x;
+	else
+		wind->pos_x = to_x;
+	if(to_y<0)
+		wind->pos_y=0;
+	else if(to_y+wind->size_y+TOPBAR_HEIGHT>=MAX_SCREENY)
+		wind->pos_y=MAX_SCREENY-1-wind->size_y-TOPBAR_HEIGHT;
+	else
+		wind->pos_y = to_y;
 
 	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
