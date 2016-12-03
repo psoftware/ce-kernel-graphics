@@ -91,6 +91,11 @@ aggiorna_oggetto:
 	int $IO_TIPO_WINDUC
 	ret
 
+	.global preleva_evento
+preleva_evento:
+	int $IO_TIPO_WINDPE
+	ret
+
 	.global readhd_n
 readhd_n:
 	int $IO_TIPO_HDR

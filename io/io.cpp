@@ -682,6 +682,55 @@ void set_fontstring(natb* buff, int x, int y, int bound_x, int bound_y, const ch
 	}
 }
 
+// ----- user event
+struct des_user_event
+{
+	user_event_type type;
+	union
+	{
+		mouse_button button;
+		int delta_z;
+	};
+	union
+	{
+		int rel_x;
+	};
+	union
+	{
+		int rel_y;
+	};
+
+	des_user_event * next;
+};
+
+// l'inserimento evento è fatto in testa
+void event_push(des_user_event *& head, des_user_event * elem)
+{
+	if(elem==0)
+		return;
+	elem->next=head;
+	head=elem;
+}
+
+// la rimozione è fatta in coda
+void event_pop(des_user_event *& head, des_user_event *& elem)
+{
+	if(head==0)
+		return;
+
+	des_user_event *p=head, *q;
+	for(q=head; q->next!=0; q=q->next)
+		p=q;
+
+	if(p==head)
+		head=0;
+	else
+		p->next=0;
+
+	elem=q;
+}
+
+// ----- des_window
 const int MAX_WINDOWS_OBJECTS = 10;
 struct des_window
 {
@@ -695,6 +744,7 @@ struct des_window
 	natb backColor;
 	natb obj_count;
 	windowObject * objects[MAX_WINDOWS_OBJECTS];
+	des_user_event * event_list;
 };
 
 const natb PRIM_SHOW=0;
@@ -703,7 +753,6 @@ const natb MOUSE_UPDATE_EVENT=10;
 const natb MOUSE_Z_UPDATE_EVENT=11;
 const natb MOUSE_MOUSEUP_EVENT=12;
 const natb MOUSE_MOUSEDOWN_EVENT=13;
-enum mouse_button {LEFT,MIDDLE,RIGHT};
 
 struct des_window_req
 {
@@ -802,6 +851,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	win_man.windows_arr[win_man.windows_count].pos_y = pos_y;
 	win_man.windows_arr[win_man.windows_count].backColor = 0x01;
 	win_man.windows_arr[win_man.windows_count].obj_count = 0;
+	win_man.windows_arr[win_man.windows_count].event_list = 0;
 	win_man.windows_count++;
 
 	sem_signal(win_man.mutex);
@@ -922,6 +972,31 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 //Gestione errori (sblocco mutex e sync su array)
 err:	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notfull);
+}
+
+extern "C" des_user_event c_preleva_evento(int w_id)
+{
+	sem_wait(win_man.mutex);
+
+	des_user_event event;
+	event.type=NOEVENT;
+
+	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
+		goto err;
+	//flog(LOG_INFO, "c_preleva_evento: chiamata su finestra %d", w_id);
+
+	if(win_man.windows_arr[w_id].event_list==0)
+		goto err;
+
+	des_user_event * popped_event;
+	event_pop(win_man.windows_arr[w_id].event_list, popped_event);
+	event=*popped_event;
+	flog(LOG_INFO, "c_preleva_evento: ho trovato un evento di tipo %d", popped_event->type);
+	delete popped_event;
+
+err:
+	sem_signal(win_man.mutex);
+	return event;
 }
 
 const natb WIN_BACKGROUND_COLOR = 0x36;
@@ -1119,6 +1194,17 @@ int check_topbar_oncoords(int curs_x, int curs_y)
 	return -1;
 }
 
+int check_window_oncoords(int curs_x, int curs_y)
+{
+	for(int i=0; i<win_man.windows_count; i++)
+	{
+		des_window * wind = &win_man.windows_arr[i];
+		if(curs_x>wind->pos_x && curs_x<wind->pos_x+wind->size_x && curs_y>wind->pos_y && curs_y<wind->pos_y+wind->size_y+TOPBAR_HEIGHT)
+			return i;
+	}
+	return -1;
+}
+
 void move_window(int w_id, int to_x, int to_y)
 {
 	des_window * wind = &win_man.windows_arr[w_id];
@@ -1284,6 +1370,54 @@ void mouse_notify_mousebutton_event(int EVENT, mouse_button who)
 	sem_signal(win_man.sync_notempty);
 }
 
+inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
+{
+	if(abs_x > wind->pos_x && abs_x < wind->pos_x + wind->size_x &&
+			abs_y > wind->pos_y + TOPBAR_HEIGHT && abs_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT)
+		return true;
+	return false;
+}
+
+void user_add_mousemovez_event_onfocused(int delta_z, int abs_x, int abs_y)
+{
+	if(win_man.focus_wind==-1)
+	{
+		flog(LOG_INFO, "user_add_mousemovez_event_onfocused: nessuna finestra in focus");
+		return;
+	}
+
+	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
+	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
+	if(!coords_on_window(wind_ev, abs_x, abs_y))
+	{
+		flog(LOG_INFO, "user_add_mousemovez_event_onfocused: coordinata fuori da finestra");
+		return;
+	}
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_MOUSEZ;
+	event->delta_z=delta_z;
+	event->rel_x = abs_x - wind_ev->pos_x;
+	event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
+	event_push(wind_ev->event_list, event);
+}
+
+void user_add_mousebutton_event_onfocused(user_event_type event_type, mouse_button butt, int abs_x, int abs_y)
+{
+	if(win_man.focus_wind==-1)
+		return;
+
+	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
+	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
+	if(!coords_on_window(wind_ev, abs_x, abs_y))
+		return;
+	des_user_event * event = new des_user_event();
+	event->type=event_type;
+	event->button=butt;
+	event->rel_x = abs_x - wind_ev->pos_x;
+	event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
+	event_push(wind_ev->event_list, event);
+}
+
 void main_windows_manager(int n)
 {
 	set_background(doubled_framebuffer);
@@ -1325,33 +1459,45 @@ void main_windows_manager(int n)
 					sem_signal(newreq.if_sync);
 			break;
 			case MOUSE_UPDATE_EVENT:
-				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
-				main_cursor.old_x=main_cursor.x;
-				main_cursor.old_y=main_cursor.y;
-				main_cursor.x+=newreq.delta_x;
-				main_cursor.y+=newreq.delta_y;
-
-				//se si è già verificato il mouse_up, significa che ora devo trascinare la finestra
-				if(win_man.is_dragging && win_man.focus_wind!=-1)
-				{
-					des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
-					move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
-				}
-				//sposto il cursore sulla posizione nuova
-				render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
+			{
+					flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
+					main_cursor.old_x=main_cursor.x;
+					main_cursor.old_y=main_cursor.y;
+					main_cursor.x+=newreq.delta_x;
+					main_cursor.y+=newreq.delta_y;
+	
+					//se si è già verificato il mouse_up, significa che ora devo trascinare la finestra
+					if(win_man.is_dragging && win_man.focus_wind!=-1)
+					{
+						des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
+						move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
+					}
+					//sposto il cursore sulla posizione nuova
+					render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
+			}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
+				user_add_mousemovez_event_onfocused(newreq.delta_z, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
 				{	
+					//se ho cliccato su una topbar, allora significa che devo iniziare a trascinare
 					win_man.focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
-					win_man.is_dragging=true;
+					if(win_man.focus_wind!=-1)
+						win_man.is_dragging=true;
+					else //altrimenti controllo se ho cliccato sul corpo di una finestra e aggiorno il focus
+						win_man.focus_wind = check_window_oncoords(main_cursor.x, main_cursor.y);
 				}
+				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEUP_EVENT:
+			{
 				if(newreq.button==LEFT)
 					win_man.is_dragging=false;
+
+				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
+			}
 			break;
 		}
 

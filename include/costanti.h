@@ -91,6 +91,7 @@
 #define IO_TIPO_WINDV		0x80	// visualizza_finestra
 #define IO_TIPO_WINDOC		0x81	// crea_oggetto
 #define IO_TIPO_WINDUC		0x82	// aggiorna_oggetto
+#define IO_TIPO_WINDPE		0x83	// preleva_evento
 // * in piu' rispetto al libro
 // )
 

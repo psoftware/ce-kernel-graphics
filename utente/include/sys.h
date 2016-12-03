@@ -26,10 +26,32 @@ extern "C" void iniconsole(natb cc);
 extern "C" void readconsole(char* buff, natl& quanti);
 extern "C" void writeconsole(const char* buff);
 
+enum mouse_button {LEFT,MIDDLE,RIGHT};
+enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN};
+struct des_user_event
+{
+	user_event_type type;
+	union
+	{
+		mouse_button button;
+		int delta_z;
+	};
+	union
+	{
+		int rel_x;
+	};
+	union
+	{
+		int rel_y;
+	};
+
+	des_user_event * next;
+};
 extern "C" int crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y);
 extern "C" void visualizza_finestra(int id, bool sync);
 extern "C" int crea_oggetto(int w_id, void * obj);
 extern "C" void aggiorna_oggetto(int w_id, int o_id, void * u_obj, bool sync);
+extern "C" des_user_event preleva_evento(int w_id);
 
 extern "C" void readhd_n(natw vetti[], natl primo, natb quanti, natb &errore);
 extern "C" void writehd_n(const natw vetto[], natl primo, natb quanti, natb &errore);

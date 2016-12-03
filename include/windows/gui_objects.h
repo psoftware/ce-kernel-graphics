@@ -8,6 +8,8 @@ const natb W_ID_BUTTON=1;
 
 //-----	UTENTE (Il codice di questa gerarchia di classi è replicato anche
 //		nel file hello1.in, andrebbe fatto un file header comune)
+enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN};
+enum mouse_button {LEFT,MIDDLE,RIGHT};
 class u_windowObject
 {
 	public:
@@ -19,6 +21,8 @@ class u_windowObject
 	short z_index;
 
 	natb backColor;
+
+	virtual void process_event(user_event_type type)=0;
 };
 
 class u_button : public u_windowObject
@@ -30,6 +34,11 @@ class u_button : public u_windowObject
 	{
 		TYPE=W_ID_BUTTON;
 	}
+
+	void process_event(user_event_type type)
+	{
+
+	}
 };
 
 class u_label : public u_windowObject
@@ -39,6 +48,11 @@ class u_label : public u_windowObject
 	u_label()
 	{
 		TYPE=W_ID_LABEL;
+	}
+
+	void process_event(user_event_type type)
+	{
+		
 	}
 };
 

@@ -50,8 +50,7 @@ process_body hello_body1(int a)
 	//event receive cycle
 	while(true)
 	{
-		//get event
-		//process it
+		uwind.process_event();
 		delay(5);
 	}
 }

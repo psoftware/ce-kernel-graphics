@@ -22,6 +22,8 @@ class u_windowObject
 	short z_index;
 
 	natb backColor;
+
+	virtual void process_event(user_event_type type)=0;
 };
 
 class u_button : public u_windowObject
@@ -33,6 +35,11 @@ class u_button : public u_windowObject
 	{
 		TYPE=W_ID_BUTTON;
 	}
+
+	void process_event(user_event_type type)
+	{
+
+	}
 };
 
 class u_label : public u_windowObject
@@ -42,6 +49,11 @@ class u_label : public u_windowObject
 	u_label()
 	{
 		TYPE=W_ID_LABEL;
+	}
+
+	void process_event(user_event_type type)
+	{
+
 	}
 };
 
@@ -97,5 +109,20 @@ public:
 				return true;
 			}
 		return false;
+	}
+
+	void process_event()
+	{
+		des_user_event new_event = preleva_evento(w_id);
+		if(new_event.type==NOEVENT)
+			return;
+		flog(LOG_INFO, "process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
+		for(int i=0; i<this->objs_count; i++)
+			if(new_event.rel_x > objs[i]->pos_x && new_event.rel_x < objs[i]->pos_x + objs[i]->size_x &&
+				new_event.rel_y > objs[i]->pos_y && new_event.rel_y < objs[i]->pos_y + objs[i]->size_y)
+			{
+				objs[i]->process_event(new_event.type);
+				flog(LOG_INFO, "process_event: BECCATO %d", LOG_INFO);
+			}
 	}
 };
