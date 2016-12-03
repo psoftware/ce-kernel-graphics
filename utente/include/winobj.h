@@ -31,14 +31,19 @@ class u_button : public u_windowObject
 	public:
 	char text[20];
 	natb borderColor;
+	bool clicked;
 	u_button()
 	{
 		TYPE=W_ID_BUTTON;
+		clicked=false;
 	}
 
 	void process_event(user_event_type type)
 	{
-
+		if(type==USER_EVENT_MOUSEUP)
+			clicked=false;
+		else if(type==USER_EVENT_MOUSEDOWN)
+			clicked=true;
 	}
 };
 
@@ -122,6 +127,7 @@ public:
 				new_event.rel_y > objs[i]->pos_y && new_event.rel_y < objs[i]->pos_y + objs[i]->size_y)
 			{
 				objs[i]->process_event(new_event.type);
+				update_object(objs[i]);
 				flog(LOG_INFO, "process_event: BECCATO %d", LOG_INFO);
 			}
 	}

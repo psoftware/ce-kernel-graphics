@@ -30,14 +30,19 @@ class u_button : public u_windowObject
 	public:
 	char text[20];
 	natb borderColor;
+	bool clicked;
 	u_button()
 	{
 		TYPE=W_ID_BUTTON;
+		clicked=false;
 	}
 
 	void process_event(user_event_type type)
 	{
-
+		if(type==USER_EVENT_MOUSEUP)
+			clicked=false;
+		else if(type==USER_EVENT_MOUSEDOWN)
+			clicked=true;
 	}
 };
 
@@ -186,26 +191,30 @@ class button : public windowObject
 	public:
 	char text[20];
 	natb borderColor;
+	bool clicked;
 
 	button(unsigned short size_x, unsigned short size_y, short pos_x, short pos_y, short z_index, natb backColor, natb borderColor, const char * text)
 	 : windowObject(size_x, size_y, pos_x, pos_y, z_index, backColor)
 	{
 		copy(text, this->text);
 		this->borderColor=borderColor;
+		this->clicked=false;
 	}
 
 	button(u_button * u_b) : windowObject(u_b->size_x, u_b->size_y, u_b->pos_x, u_b->pos_y, u_b->z_index, u_b->backColor)
 	{
 		copy(u_b->text, this->text);
 		this->borderColor=u_b->borderColor;
+		this->clicked=u_b->clicked;
 	}
 
 	void render()
 	{
 		flog(LOG_INFO, "Rendering button...");
-		gr_memset_safe_onobject(render_buff, backColor, size_x*size_y);
+		int color_background = (clicked) ? 0x02 : backColor;
+		gr_memset_safe_onobject(render_buff, color_background, size_x*size_y);
 		int text_width = get_fontstring_width(this->text);
-		this->set_fontstring((this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y,this->text, this->backColor);
+		this->set_fontstring((this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y,this->text, color_background);
 
 		gr_memset_safe_onobject(render_buff, borderColor, size_x);
 		for(natw y=1; y < this->size_y-1; y++)
