@@ -51,7 +51,7 @@ process_body hello_body1(int a)
 	while(true)
 	{
 		uwind.process_event();
-		delay(5);
+		delay(1);
 	}
 }
 

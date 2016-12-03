@@ -1142,7 +1142,64 @@ void graphic_visualizza_finestra(int id)
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 }
 
-void renderobject_onwindow(int w_id, windowObject * w_obj)
+struct des_cursor
+{
+	int old_x;
+	int old_y;
+	int x;
+	int y;
+};
+
+void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
+{
+	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
+	int bound_y=(cursor->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->old_y : 32;
+	for(int i=0; i<bound_x; i++)
+		for(int j=0; j<bound_y; j++)
+			put_pixel(buff, cursor->old_x+i, cursor->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
+			//buff[(i+cursor->old_y)*MAX_SCREENX+(j+cursor->old_x)]=WIN_BACKGROUND_COLOR;
+
+	update_framebuffer_linechanged(cursor->old_x, cursor->old_x+bound_x, cursor->old_y, cursor->old_y+bound_y);
+
+	//devo rigenerare le finestre sottostanti alla vecchia posizione del cursore
+	for(int i=0; i<win_man.windows_count; i++)
+	{
+		if(i==win_man.focus_wind)
+			continue;
+		des_window * wind = &win_man.windows_arr[i];
+		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
+			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
+		{	// condizione per individuare se il cursore condivide parti di framebuffer con altre finestre
+			render_topbar_onvideobuffer(doubled_framebuffer, wind);
+			render_window_onvideobuffer(doubled_framebuffer, wind);	//copio nuovamente il bitmap della finestra sul buffer video secondario
+		}
+	}
+
+	//devo rigenerare sempre per ultima, la finestra con focus
+	if(win_man.focus_wind!=-1)
+	{
+		des_window * wind = &win_man.windows_arr[win_man.focus_wind];
+		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
+			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
+		{	//la finestra con focus va renderizzata solo se il cursore si sovrappone ad essa
+			render_topbar_onvideobuffer(doubled_framebuffer, wind);
+			render_window_onvideobuffer(doubled_framebuffer, wind);
+		}
+	}
+
+	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
+	bound_y=(cursor->y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->y : 32;
+	for(int i=0; i<bound_x; i++)
+		for(int j=0; j<bound_y; j++)
+			if(main_cursor[j*32+i]!=COLOR_TRASP)
+				put_pixel(buff, cursor->x+i, cursor->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
+				//buff[(i+cursor->y)*MAX_SCREENX+(j+cursor->x)]=main_cursor[i*32+j];
+
+	update_framebuffer_linechanged(cursor->x, cursor->x+bound_x, cursor->y, cursor->y+bound_y);
+	//update_framebuffer_linechanged(0,1000,0,1000);
+}
+
+void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_cursor)
 {
 	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
 		return;
@@ -1179,6 +1236,9 @@ void renderobject_onwindow(int w_id, windowObject * w_obj)
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 
 	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
+
+	// renderizzo anche il mouse
+	render_mousecursor_onbuffer(doubled_framebuffer, main_cursor);
 	
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
 }
@@ -1244,63 +1304,6 @@ void move_window(int w_id, int to_x, int to_y)
 
 	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
-}
-
-struct des_cursor
-{
-	int old_x;
-	int old_y;
-	int x;
-	int y;
-};
-
-void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
-{
-	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
-	int bound_y=(cursor->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->old_y : 32;
-	for(int i=0; i<bound_x; i++)
-		for(int j=0; j<bound_y; j++)
-			put_pixel(buff, cursor->old_x+i, cursor->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
-			//buff[(i+cursor->old_y)*MAX_SCREENX+(j+cursor->old_x)]=WIN_BACKGROUND_COLOR;
-
-	update_framebuffer_linechanged(cursor->old_x, cursor->old_x+bound_x, cursor->old_y, cursor->old_y+bound_y);
-
-	//devo rigenerare le finestre sottostanti alla vecchia posizione del cursore
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		if(i==win_man.focus_wind)
-			continue;
-		des_window * wind = &win_man.windows_arr[i];
-		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
-			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
-		{	// condizione per individuare se il cursore condivide parti di framebuffer con altre finestre
-			render_topbar_onvideobuffer(doubled_framebuffer, wind);
-			render_window_onvideobuffer(doubled_framebuffer, wind);	//copio nuovamente il bitmap della finestra sul buffer video secondario
-		}
-	}
-
-	//devo rigenerare sempre per ultima, la finestra con focus
-	if(win_man.focus_wind!=-1)
-	{
-		des_window * wind = &win_man.windows_arr[win_man.focus_wind];
-		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
-			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
-		{	//la finestra con focus va renderizzata solo se il cursore si sovrappone ad essa
-			render_topbar_onvideobuffer(doubled_framebuffer, wind);
-			render_window_onvideobuffer(doubled_framebuffer, wind);
-		}
-	}
-
-	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
-	bound_y=(cursor->y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->y : 32;
-	for(int i=0; i<bound_x; i++)
-		for(int j=0; j<bound_y; j++)
-			if(main_cursor[j*32+i]!=COLOR_TRASP)
-				put_pixel(buff, cursor->x+i, cursor->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
-				//buff[(i+cursor->y)*MAX_SCREENX+(j+cursor->x)]=main_cursor[i*32+j];
-
-	update_framebuffer_linechanged(cursor->x, cursor->x+bound_x, cursor->y, cursor->y+bound_y);
-	//update_framebuffer_linechanged(0,1000,0,1000);
 }
 
 void mouse_notify_move(int delta_x, int delta_y)
@@ -1454,7 +1457,7 @@ void main_windows_manager(int n)
 			break;
 			case PRIM_UPDATE_OBJECT:
 				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.w_id);
-				renderobject_onwindow(newreq.w_id, newreq.obj);
+				renderobject_onwindow(newreq.w_id, newreq.obj, &main_cursor);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;
