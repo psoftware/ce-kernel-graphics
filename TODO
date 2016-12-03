@@ -8,3 +8,5 @@
 - bisogna sistemare l'ordine di rendering delle finestre, come è fatto ora non va bene. Bisognerebbe realizzare una lista di finestre ordinata in un modo consono,
   inoltre non devo renderizzare solo le finestre che si sovrappongono all'oggetto che ha subito la modifica, ma tutte le finestre che si sovrappongono a quelle
   che si sovrappongono all'oggetto, e così via, ricorsivamente (e non so come fare).
+- l'array che contiene il font bitmap non è basato sui colori della palette SVGA, dovrebbe essere convertito
+- manca la quasi totalità dei controlli sui cavalli di troia e sui parametri delle primitive (es. un processo potrebbe manipolare le finestre di altri processi)
