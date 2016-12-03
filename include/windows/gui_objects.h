@@ -78,7 +78,23 @@ class windowObject
 
 	void set_pixel(int x, int y, natb col)
 	{
-		this->render_buff[size_x*y+x] = col;
+		if(x<this->size_x && y<this->size_y && x>=0 && y>=0)
+			this->render_buff[size_x*y+x] = col;
+		else
+			flog(LOG_INFO, "windowObject set_pixel: buffer overflow detected!");
+	}
+
+	void *gr_memset_safe_onobject(void *__restrict dest, const natb b, unsigned long int n)
+	{
+		if((static_cast<natb*>(dest)+n) > this->render_buff+(this->size_x*this->size_y) || static_cast<natb*>(dest) < this->render_buff)
+		{
+			flog(LOG_INFO, "gr_memcpy_safe_onobject: anticipato buffer overflow, salto scrittura");
+			return 0;
+		}
+
+		char *s1 = static_cast<char*>(dest);
+		for(; 0<n; --n)*s1++ = b;
+		return dest;
 	}
 
 	int set_fontchar(int x, int y, int nchar, natb backColor)
@@ -173,17 +189,17 @@ class button : public windowObject
 	void render()
 	{
 		flog(LOG_INFO, "Rendering button...");
-		memset(render_buff, backColor, size_x*size_y);
+		gr_memset_safe_onobject(render_buff, backColor, size_x*size_y);
 		int text_width = get_fontstring_width(this->text);
 		this->set_fontstring((this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y,this->text, this->backColor);
 
-		memset(render_buff, borderColor, size_x);
+		gr_memset_safe_onobject(render_buff, borderColor, size_x);
 		for(natw y=1; y < this->size_y-1; y++)
 		{
 			this->set_pixel(0, y, borderColor);
 			this->set_pixel(size_x-1, y, borderColor);
 		}
-		memset(render_buff+size_x*(size_y-1), borderColor, size_x);
+		gr_memset_safe_onobject(render_buff+size_x*(size_y-1), borderColor, size_x);
 
 		this->is_rendered=true;
 	}
@@ -208,7 +224,7 @@ class label : public windowObject
 	void render()
 	{
 		flog(LOG_INFO, "Rendering label...");
-		memset(render_buff, backColor, size_x*size_y);
+		gr_memset_safe_onobject(render_buff, backColor, size_x*size_y);
 		this->set_fontstring(0, 0, this->size_x, this->size_y, this->text, this->backColor);
 		this->is_rendered=true;
 	}

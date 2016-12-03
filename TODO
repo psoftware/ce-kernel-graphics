@@ -1,7 +1,10 @@
 - rimuovere supporto per graph_old.sh
 - pulire output flog
 - fontchar/fontstring sono ridondanti (sistema.cpp e classe windowObjects)
-- vanno sistemate tutte le costante in un file a parte
+- vanno sistemate tutte le costanti in un file a parte
 - va sistemata la classe u_windowObject perchè ridondante (include/gui_objects.h e utente/lib/..)
 - URGENTE: molte funzioni di rendering non controllano lo sforamento dei bound dello schermo e causano buffer overflow, abbastanza brutti da debuggare
 - i bound delle cordinate del cursore sono gestite a livello di des_mouse e non di des_cursor, bisognerebbe capire se è corretto o meno
+- bisogna sistemare l'ordine di rendering delle finestre, come è fatto ora non va bene. Bisognerebbe realizzare una lista di finestre ordinata in un modo consono,
+  inoltre non devo renderizzare solo le finestre che si sovrappongono all'oggetto che ha subito la modifica, ma tutte le finestre che si sovrappongono a quelle
+  che si sovrappongono all'oggetto, e così via, ricorsivamente (e non so come fare).
