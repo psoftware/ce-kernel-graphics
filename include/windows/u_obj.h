@@ -42,7 +42,7 @@ class u_windowObject
 
 	natb backColor;
 
-	virtual void process_event(user_event_type type)=0;
+	virtual void process_event(des_user_event event)=0;
 };
 
 class u_button : public u_windowObject
@@ -57,11 +57,11 @@ class u_button : public u_windowObject
 		clicked=false;
 	}
 
-	void process_event(user_event_type type)
+	void process_event(des_user_event event)
 	{
-		if(type==USER_EVENT_MOUSEUP)
+		if(event.type==USER_EVENT_MOUSEUP)
 			clicked=false;
-		else if(type==USER_EVENT_MOUSEDOWN)
+		else if(event.type==USER_EVENT_MOUSEDOWN)
 			clicked=true;
 	}
 };
@@ -75,7 +75,7 @@ class u_label : public u_windowObject
 		TYPE=W_ID_LABEL;
 	}
 
-	void process_event(user_event_type type)
+	void process_event(des_user_event event)
 	{
 
 	}
@@ -90,7 +90,7 @@ class u_textbox : public u_windowObject
 		TYPE=W_ID_TEXTBOX;
 	}
 
-	void process_event(user_event_type type)
+	void process_event(des_user_event event)
 	{
 
 	}
