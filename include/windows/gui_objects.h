@@ -192,3 +192,37 @@ class label : public windowObject
 		this->is_rendered=true;
 	}
 };
+
+class textbox : public windowObject
+{
+	public:
+	char text[100];
+
+	textbox(unsigned short size_x, unsigned short size_y, short pos_x, short pos_y, short z_index, natb backColor, const char * text)
+	 : windowObject(size_x, size_y, pos_x, pos_y, z_index, backColor)
+	{
+		copy(text, this->text);
+	}
+
+	textbox(u_textbox * u_t) : windowObject(u_t->size_x, u_t->size_y, u_t->pos_x, u_t->pos_y, u_t->z_index, u_t->backColor)
+	{
+		copy(u_t->text, this->text);
+	}
+
+	void render()
+	{
+		flog(LOG_INFO, "Rendering textbox...");
+		gr_memset_safe_onobject(render_buff, backColor, size_x*size_y);
+		this->set_fontstring(2, 2, this->size_x-2,this->size_y-2, this->text, backColor);
+
+		gr_memset_safe_onobject(render_buff, 0x00, size_x);
+		for(natw y=1; y < this->size_y-1; y++)
+		{
+			this->set_pixel(0, y, 0x00);
+			this->set_pixel(size_x-1, y, 0x00);
+		}
+		gr_memset_safe_onobject(render_buff+size_x*(size_y-1), 0x00, size_x);
+
+		this->is_rendered=true;
+	}
+};

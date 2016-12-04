@@ -26,6 +26,7 @@ struct des_user_event
 
 const natb W_ID_LABEL=0;
 const natb W_ID_BUTTON=1;
+const natb W_ID_TEXTBOX=2;
 
 class u_windowObject
 {
@@ -70,6 +71,21 @@ class u_label : public u_windowObject
 	u_label()
 	{
 		TYPE=W_ID_LABEL;
+	}
+
+	void process_event(user_event_type type)
+	{
+
+	}
+};
+
+class u_textbox : public u_windowObject
+{
+	public:
+	char text[100];
+	u_textbox()
+	{
+		TYPE=W_ID_TEXTBOX;
 	}
 
 	void process_event(user_event_type type)

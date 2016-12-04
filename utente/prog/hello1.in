@@ -38,6 +38,18 @@ process_body hello_body1(int a)
 	uwind.add_object(button1);
 	uwind.update_object(button1);
 
+	u_textbox * textbox1 = new u_textbox();
+	textbox1->size_x=40;
+	textbox1->size_y=20;
+	textbox1->pos_x=20;
+	textbox1->pos_y=50;
+	textbox1->z_index=0;
+	textbox1->backColor=0x1F;
+	copy("AAA", textbox1->text);
+
+	uwind.add_object(textbox1);
+	uwind.update_object(textbox1);
+
 	copy("Inizio processo 1!", label1->text);
 	uwind.update_object(label1);
 

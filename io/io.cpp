@@ -893,6 +893,9 @@ extern "C" int c_crea_oggetto(int w_id, u_windowObject * u_obj)
 		case W_ID_BUTTON:
 			wind->objects[wind->obj_count] = new button(static_cast<u_button*>(u_obj));
 		break;
+		case W_ID_TEXTBOX:
+			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
+		break;
 		default:
 			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			goto err;
@@ -930,6 +933,10 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 		case W_ID_BUTTON:
 			delete win_man.windows_arr[w_id].objects[o_id];
 			win_man.windows_arr[w_id].objects[o_id] = new button(static_cast<u_button*>(u_obj));
+		break;
+		case W_ID_TEXTBOX:
+			delete win_man.windows_arr[w_id].objects[o_id];
+			win_man.windows_arr[w_id].objects[o_id] = new textbox(static_cast<u_textbox*>(u_obj));
 		break;
 	}
 
