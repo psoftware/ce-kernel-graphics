@@ -56,21 +56,6 @@ writese_0:
 	int $IO_TIPO_WSE0
 	ret
 
-	.global readconsole
-readconsole:
-	int $IO_TIPO_RCON
-	ret
-
-	.global writeconsole
-writeconsole:
-	int $IO_TIPO_WCON
-	ret
-
-	.global iniconsole
-iniconsole:
-	int $IO_TIPO_INIC
-	ret
-
 	.global crea_finestra
 crea_finestra:
 	int $IO_TIPO_WINDC

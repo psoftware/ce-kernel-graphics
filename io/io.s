@@ -132,11 +132,6 @@ log:
 	int $TIPO_L
 	ret
 
-	.global writevid
-writevid:
-	int $IO_TIPO_WCON
-	ret
-
 ////////////////////////////////////////////////////////////////////////////////
 //                         FUNZIONI DI SUPPORTO                               //
 ////////////////////////////////////////////////////////////////////////////////
@@ -333,9 +328,6 @@ fill_io_gates:
 	fill_io_gate	IO_TIPO_RSELN	a_readse_ln
 	fill_io_gate	IO_TIPO_WSEN	a_writese_n
 	fill_io_gate	IO_TIPO_WSE0	a_writese_0
-	fill_io_gate	IO_TIPO_RCON	a_readconsole
-	fill_io_gate	IO_TIPO_WCON	a_writeconsole
-	fill_io_gate	IO_TIPO_INIC	a_iniconsole
 	fill_io_gate	IO_TIPO_WINDC	a_crea_finestra
 	fill_io_gate	IO_TIPO_WINDV	a_visualizza_finestra
 	fill_io_gate	IO_TIPO_WINDOC	a_crea_oggetto
@@ -385,26 +377,6 @@ a_writese_0:
 	cavallo_di_troia2 %rdx $4
 	cavallo_di_troia2 %rsi (%rdx)
 	call c_writese_0
-	iretq
-
-	.extern c_readconsole
-a_readconsole:
-	cavallo_di_troia %rdi
-	cavallo_di_troia %rsi
-	cavallo_di_troia2 %rsi $4
-	cavallo_di_troia2 %rdi (%rsi)
-	call c_readconsole
-	iretq
-
-	.extern c_writeconsole
-a_writeconsole:
-	cavallo_di_troia %rdi
-	call c_writeconsole
-	iretq
-
-	.extern c_iniconsole
-a_iniconsole:
-	call c_iniconsole
 	iretq
 
 //////////////////// Finestre ////////////////////

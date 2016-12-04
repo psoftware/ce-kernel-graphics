@@ -1,21 +1,6 @@
 #include <lib.h>
 #include <sys.h>
 
-int printf(const char *fmt, ...)
-{
-	va_list ap;
-	char buf[1024];
-	int l;
-
-	va_start(ap, fmt);
-	l = vsnprintf(buf, 1024, fmt, ap);
-	va_end(ap);
-
-	writeconsole(buf);
-
-	return l;
-}
-
 int sprintf(char *buf, natq size, const char *fmt, ...)
 {
 	va_list ap;
@@ -33,8 +18,7 @@ natl pause_len = 1;
 void pause()
 {
 #ifndef AUTOCORR
-	writeconsole("Premere INVIO per continuare");
-	readconsole(pause_buf, pause_len);
+	//writeconsole/readconsole sono state eliminate.
 #endif
 }
 

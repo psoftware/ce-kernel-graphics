@@ -83,9 +83,6 @@
 #define IO_TIPO_RSELN		0x73	// readse_ln
 #define IO_TIPO_WSEN		0x74	// writese_n
 #define IO_TIPO_WSE0		0x75	// writese_0
-#define IO_TIPO_RCON		0x76	// readconsole
-#define IO_TIPO_WCON		0x77	// writeconsole
-#define IO_TIPO_INIC		0x78	// iniconsole
 
 #define IO_TIPO_WINDC		0x79	// crea_finestra
 #define IO_TIPO_WINDV		0x80	// visualizza_finestra

@@ -321,310 +321,6 @@ bool com_init()
 
 
 ////////////////////////////////////////////////////////////////////////////////
-//                         GESTIONE DELLA CONSOLE                       //
-////////////////////////////////////////////////////////////////////////////////
-
-const natl COLS = 80; 	//
-const natl ROWS = 25;	//
-const natl VIDEO_SIZE = COLS * ROWS;	//
-
-struct interfvid_reg {	//
-	ioaddr iIND, iDAT;
-};
-
-struct des_vid {	//
-	interfvid_reg indreg;
-	natw* video;
-	natl x, y;
-	natw attr;
-};
-
-const natl MAX_CODE = 40; //
-struct interfkbd_reg {	//
-	ioaddr iRBR, iTBR, iCMR, iSTR;
-};
-
-struct des_kbd { //
-	interfkbd_reg indreg;
-	addr punt;
-	natl cont;
-	bool shift;
-	natb tab[MAX_CODE];
-	natb tabmin[MAX_CODE];
-	natb tabmai[MAX_CODE];
-};
-
-struct des_console { //
-	natl mutex;
-	natl sincr;
-	des_kbd kbd;
-	des_vid vid;
-};
-
-des_console console = {
-	0,	// mutex (da inizializzare)
-	0,	// sync  (da inizializzare)
-	{	// kbd
-		{	// indreg
-			0x60,	// iRBR
-			0x60,	// iTBR
-			0x64,	// iCMR
-			0x64,	// iSTR
-		},
-		0,	// punt
-		0,	// cont
-		0,	// shift
-		{	// tab
-			0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
-			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
-			0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
-			0x26, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32,
-			0x39, 0x1C, 0x0e, 0x01
-		},
-		{	// tamin
-			'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-			'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
-			'a', 's', 'd', 'f', 'g', 'h', 'j', 'k',
-			'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm',
-			' ', '\n', '\b', 0x1B
-		},
-		{	// tabmai
-			'!', '"', '@', '$', '%', '&', '/', '(', ')', '=',
-			'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',
-			'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K',
-			'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M',
-			' ', '\r', '\b', 0x1B
-		}
-	},
-	{	// vid
-		{	// indreg
-			0x03d4,	// iIND
-			0x03d5,	// iDAT
-		},
-		(natw*)0xb8000,	// video
-		0,		// x
-		0,		// y
-		0x4b00,		// attr
-	}
-};
-
-extern "C" void cursore(ioaddr iIND, ioaddr iDAT, int x, int y); //
-
-void scroll(des_vid *p_des)	//
-{
-	for (natl i = 0; i < VIDEO_SIZE - COLS; i++)
-		p_des->video[i] = p_des->video[i + COLS];
-	for (natl i = 0; i < COLS; i++)
-		p_des->video[VIDEO_SIZE - COLS + i] = p_des->attr | ' ';
-	p_des->y--;
-}
-
-void writeelem(natb c) {	//
-	des_vid* p_des = &console.vid;
-	switch (c) {
-	case 0:
-		break;
-	case '\r':
-		p_des->x = 0;
-		break;
-	case '\n':
-		p_des->x = 0;
-		p_des->y++;
-		if (p_des->y >= ROWS)
-			scroll(p_des);
-		break;
-	case '\b':
-		if (p_des->x > 0 || p_des->y > 0) {
-			if (p_des->x == 0) {
-				p_des->x = COLS - 1;
-				p_des->y--;
-			} else
-				p_des->x--;
-		}
-		break;
-	default:
-		p_des->video[p_des->y * COLS + p_des->x] = p_des->attr | c;
-		p_des->x++;
-		if (p_des->x >= COLS) {
-			p_des->x = 0;
-			p_des->y++;
-		}
-		if (p_des->y >= ROWS)
-			scroll(p_des);
-		break;
-	}
-	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
-		p_des->x, p_des->y);
-}
-
-void writeseq(cstr seq)	//
-{
-	const natb* pn = static_cast<const natb*>(seq);
-	while (*pn != 0) {
-		writeelem(*pn);
-		pn++;
-	}
-}
-
-extern "C" void c_writeconsole(cstr buff) //
-{
-	des_console *p_des = &console;
-	sem_wait(p_des->mutex);
-#ifndef AUTOCORR
-	writeseq(buff);
-	writeelem('\n');
-#else /* AUTOCORR */
-	flog(LOG_USR, "%s", buff);
-#endif /* AUTOCORR */
-	sem_signal(p_des->mutex);
-}
-
-extern "C" void go_inputkbd(interfkbd_reg* indreg); //
-extern "C" void halt_inputkbd(interfkbd_reg* indreg); //
-
-void startkbd_in(des_kbd* p_des, str buff) //
-{
-	p_des->punt = buff;
-	p_des->cont = 80;
-	go_inputkbd(&p_des->indreg);
-}
-
-extern "C" void c_readconsole(str buff, natl& quanti) //
-{
-	des_console *p_des;
-
-	p_des = &console;
-	sem_wait(p_des->mutex);
-	startkbd_in(&p_des->kbd, buff);
-	sem_wait(p_des->sincr);
-	quanti = p_des->kbd.cont;
-	sem_signal(p_des->mutex);
-}
-
-natb converti(des_kbd* p_des, natb c) { //
-	natb cc;
-	natl pos = 0;
-	while (pos < MAX_CODE && p_des->tab[pos] != c)
-		pos++;
-	if (pos == MAX_CODE)
-		return 0;
-	if (p_des->shift)
-		cc = p_des->tabmai[pos];
-	else
-		cc = p_des->tabmin[pos];
-	return cc;
-}
-
-void estern_kbd(int h) //
-{
-	des_console *p_des = &console;
-	natb a, c;
-	bool fine;
-
-	for(;;) {
-		halt_inputkbd(&p_des->kbd.indreg);
-
-		inputb(p_des->kbd.indreg.iRBR, c);
-
-		fine = false;
-		switch (c) {
-		case 0x2a: // left shift make code
-			p_des->kbd.shift = true;
-			break;
-		case 0xaa: // left shift break code
-			p_des->kbd.shift = false;
-			break;
-		default:
-			if (c < 0x80) {
-				a = converti(&p_des->kbd, c);
-				if (a == 0)
-					break;
-				if (a == '\b') {
-					if (p_des->kbd.cont < 80) {
-						p_des->kbd.punt = static_cast<natb*>(p_des->kbd.punt) - 1;
-						p_des->kbd.cont++;
-						writeseq("\b \b");
-					}
-				} else if (a == '\r' || a == '\n') {
-					fine = true;
-					p_des->kbd.cont = 80 - p_des->kbd.cont;
-					*static_cast<natb*>(p_des->kbd.punt) = 0;
-					writeseq("\r\n");
-				} else {
-					*static_cast<natb*>(p_des->kbd.punt) = a;
-					p_des->kbd.punt = static_cast<natb*>(p_des->kbd.punt) + 1;
-					p_des->kbd.cont--;
-					writeelem(a);
-					if (p_des->kbd.cont == 0) {
-						fine = true;
-						p_des->kbd.cont = 80;
-					}
-				}
-			}
-			break;
-		}
-		if (fine == true)
-			sem_signal(p_des->sincr);
-		else
-			go_inputkbd(&p_des->kbd.indreg);
-		wfi();
-	}
-}
-
-// (* inizializzazioni
-extern "C" void abilita_tastiera(void);
-bool vid_init();
-
-extern "C" void c_iniconsole(natb cc)
-{
-	des_vid *p_des = &console.vid;
-	p_des->attr = static_cast<natw>(cc) << 8;
-	vid_init();
-}
-
-// Interruzione hardware della tastiera
-const int KBD_IRQ = 1;
-
-bool kbd_init()
-{
-	if (activate_pe(estern_kbd, 0, PRIO, LIV, KBD_IRQ) == 0xFFFFFFFF) {
-		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
-		return false;
-	}
-	return true;
-}
-
-extern "C" des_vid vid;
-
-bool vid_init()
-{
-	des_vid *p_des = &console.vid;
-	for (natl i = 0; i < VIDEO_SIZE; i++)
-		p_des->video[i] = p_des->attr | ' ';
-	cursore(p_des->indreg.iIND, p_des->indreg.iDAT,
-		p_des->x, p_des->y);
-	flog(LOG_INFO, "vid: video inizializzato");
-	return true;
-}
-
-bool console_init()
-{
-	des_console *p_des = &console;
-
-	if ( (p_des->mutex = sem_ini(1)) == 0xFFFFFFFF) {
-		flog(LOG_ERR, "kbd: impossibile creare mutex");
-		return false;
-	}
-	if ( (p_des->sincr = sem_ini(0)) == 0xFFFFFFFF) {
-		flog(LOG_ERR, "kbd: impossibile creare sincr");
-		return false;
-	}
-	return kbd_init() && vid_init();
-}
-
-// *)
-
-////////////////////////////////////////////////////////////////////////////////
 //                         GESTIONE FINESTRE                                  //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1525,6 +1221,126 @@ bool windows_init()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+//                         GESTIONE DELLA TASTIERA                            //
+////////////////////////////////////////////////////////////////////////////////
+
+const natl MAX_CODE = 40; //
+struct interfkbd_reg {	//
+	ioaddr iRBR, iTBR, iCMR, iSTR;
+};
+
+struct des_kbd { //
+	interfkbd_reg indreg;
+	bool shift;
+	natb tab[MAX_CODE];
+	natb tabmin[MAX_CODE];
+	natb tabmai[MAX_CODE];
+};
+
+des_kbd kdb = {
+	{	// indreg
+		0x60,	// iRBR
+		0x60,	// iTBR
+		0x64,	// iCMR
+		0x64,	// iSTR
+	},
+	0,	// shift
+	{	// tab
+		0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+		0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
+		0x26, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32,
+		0x39, 0x1C, 0x0e, 0x01
+	},
+	{	// tamin
+		'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+		'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
+		'a', 's', 'd', 'f', 'g', 'h', 'j', 'k',
+		'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm',
+		' ', '\n', '\b', 0x1B
+	},
+	{	// tabmai
+		'!', '"', '@', '$', '%', '&', '/', '(', ')', '=',
+		'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',
+		'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K',
+		'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M',
+		' ', '\r', '\b', 0x1B
+	}
+};
+
+extern "C" void go_inputkbd(interfkbd_reg* indreg); //
+extern "C" void halt_inputkbd(interfkbd_reg* indreg); //
+
+natb converti(des_kbd* p_des, natb c) { //
+	natb cc;
+	natl pos = 0;
+	while (pos < MAX_CODE && p_des->tab[pos] != c)
+		pos++;
+	if (pos == MAX_CODE)
+		return 0;
+	if (p_des->shift)
+		cc = p_des->tabmai[pos];
+	else
+		cc = p_des->tabmin[pos];
+	return cc;
+}
+
+void estern_kbd(int h) //
+{
+	des_kbd *k_des = &kdb;
+	natb a, c;
+
+	for(;;) {
+		//halt_inputkbd(&k_des->indreg);
+
+		inputb(k_des->indreg.iRBR, c);
+
+		switch (c) {
+		case 0x2a: // left shift make code
+			k_des->shift = true;
+			break;
+		case 0xaa: // left shift break code
+			k_des->shift = false;
+			break;
+		default:
+			if (c < 0x80) {
+				a = converti(k_des, c);
+				if (a == 0)
+					break;
+				if (a == '\b') {
+					//write "\b \b"
+				} else if (a == '\r' || a == '\n') {
+					//write "\r\n"
+				} else {
+					//write a
+				}
+			}
+			break;
+		}
+
+		/*else
+			go_inputkbd(&k_des->indreg);*/
+		wfi();
+	}
+}
+
+// (* inizializzazioni
+extern "C" void abilita_tastiera(void);
+
+// Interruzione hardware della tastiera
+const int KBD_IRQ = 1;
+
+bool kbd_init()
+{
+	if (activate_pe(estern_kbd, 0, PRIO, LIV, KBD_IRQ) == 0xFFFFFFFF) {
+		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
+		return false;
+	}
+	return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 //                             GESTIONE MOUSE                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -2096,9 +1912,9 @@ extern "C" void cmain(int sem_io)
 	}
 	heap_init(&end, DIM_IO_HEAP);
 
-	/*if (!console_init())
-		abort_p();*/
 	if(!windows_init())
+		abort_p();
+	if (!kbd_init())
 		abort_p();
 	if(!mouse_init())
 		abort_p();
