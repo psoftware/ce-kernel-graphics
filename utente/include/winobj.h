@@ -76,12 +76,14 @@ public:
 					internal_focus=i;
 					objs[i]->process_event(new_event.type);
 					update_object(objs[i]);
-					flog(LOG_INFO, "process_event: BECCATO %d", LOG_INFO);
+					flog(LOG_INFO, "process_event: new focus on %d", LOG_INFO);
 				}
 
 		//se l'evento con coordinate non ha centrato oggetti, allora devo togliere il focus
 		if(i==this->objs_count)
 			internal_focus=-1;
+		else
+			return;
 
 		//eventi senza target x,y, quindi applicati su internal_focus
 		//if(new_event.type==USER_EVENT_KEYBOARDPRESS)
