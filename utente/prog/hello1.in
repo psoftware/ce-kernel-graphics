@@ -1,5 +1,7 @@
 #include <sys.h>
 #include <lib.h>
+#include <newdelete.h>
+#include <windows/u_obj.h>
 #include <winobj.h>
 
 process hello1 body hello_body1(0), 22, LIV_UTENTE;

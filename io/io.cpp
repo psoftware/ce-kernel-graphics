@@ -683,25 +683,6 @@ void set_fontstring(natb* buff, int x, int y, int bound_x, int bound_y, const ch
 }
 
 // ----- user event
-struct des_user_event
-{
-	user_event_type type;
-	union
-	{
-		mouse_button button;
-		int delta_z;
-	};
-	union
-	{
-		int rel_x;
-	};
-	union
-	{
-		int rel_y;
-	};
-
-	des_user_event * next;
-};
 
 // l'inserimento evento è fatto in testa
 void event_push(des_user_event *& head, des_user_event * elem)
