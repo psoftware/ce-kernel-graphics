@@ -1,7 +1,7 @@
 #ifndef U_OBJ_
 #define U_OBJ_
 
-enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN};
+enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN, USER_EVENT_KEYBOARDPRESS};
 enum mouse_button {LEFT,MIDDLE,RIGHT};
 
 struct des_user_event
@@ -9,16 +9,18 @@ struct des_user_event
 	user_event_type type;
 	union
 	{
-		mouse_button button;
-		int delta_z;
+		mouse_button button;	//mousebutton
+		int delta_z;			//mousez
+		natb k_char;			//tastiera
 	};
 	union
 	{
-		int rel_x;
+		int rel_x;				//mousebutton
+		natb k_flag;			//tastiera
 	};
 	union
 	{
-		int rel_y;
+		int rel_y;				//mousebutton
 	};
 
 	des_user_event * next;

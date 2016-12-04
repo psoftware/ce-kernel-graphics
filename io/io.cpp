@@ -430,6 +430,7 @@ const natb MOUSE_UPDATE_EVENT=10;
 const natb MOUSE_Z_UPDATE_EVENT=11;
 const natb MOUSE_MOUSEUP_EVENT=12;
 const natb MOUSE_MOUSEDOWN_EVENT=13;
+const natb KEYBOARD_KEYPRESS_EVENT=14;
 
 struct des_window_req
 {
@@ -443,13 +444,14 @@ struct des_window_req
 	natb act;
 	union {
 		windowObject * obj;
-		int delta_x;
-		int delta_z;
-		mouse_button button;
+		int delta_x;			//mousebutton
+		int delta_z;			//mousez
+		mouse_button button;	//mousebutton
+		char key;				//tastiera
 	};
 
 	union {
-		int delta_y;
+		int delta_y;			//mousebuton
 	};
 
 	des_window_req()
@@ -1057,6 +1059,28 @@ void mouse_notify_mousebutton_event(int EVENT, mouse_button who)
 	sem_signal(win_man.sync_notempty);
 }
 
+void keyboard_notify_keypress_event(char key)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	flog(LOG_INFO, "Inserimento richiesta di inserimento tasto");
+
+	int new_index = windows_queue_insert(win_man, 0, 100, KEYBOARD_KEYPRESS_EVENT, false);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		sem_signal(win_man.mutex);
+		sem_signal(win_man.sync_notfull);
+		return;
+	}
+
+	win_man.req_queue[new_index].key = key;
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+}
+
 inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
 {
 	if(abs_x > wind->pos_x && abs_x < wind->pos_x + wind->size_x &&
@@ -1102,6 +1126,19 @@ void user_add_mousebutton_event_onfocused(user_event_type event_type, mouse_butt
 	event->button=butt;
 	event->rel_x = abs_x - wind_ev->pos_x;
 	event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
+	event_push(wind_ev->event_list, event);
+}
+
+void user_add_keypress_event_onfocused(char key)
+{
+	if(win_man.focus_wind==-1)
+		return;
+
+	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
+	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_KEYBOARDPRESS;
+	event->k_char=key;
 	event_push(wind_ev->event_list, event);
 }
 
@@ -1184,6 +1221,11 @@ void main_windows_manager(int n)
 					win_man.is_dragging=false;
 
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
+			}
+			break;
+			case KEYBOARD_KEYPRESS_EVENT:
+			{
+				user_add_keypress_event_onfocused(newreq.button);
 			}
 			break;
 		}
@@ -1312,8 +1354,9 @@ void estern_kbd(int h) //
 				} else if (a == '\r' || a == '\n') {
 					//write "\r\n"
 				} else {
-					//write a
+
 				}
+				keyboard_notify_keypress_event(a);
 			}
 			break;
 		}
