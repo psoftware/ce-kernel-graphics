@@ -92,7 +92,18 @@ class u_textbox : public u_windowObject
 
 	void process_event(des_user_event event)
 	{
+		if(event.type==USER_EVENT_KEYBOARDPRESS)
+		{
+			int eos = strlen(text);
 
+			if(event.k_char=='\b' && eos !=0)
+				text[eos-1]='\0';
+			else
+			{
+				text[eos]=event.k_char;
+				text[eos+1]='\0';
+			}
+		}
 	}
 };
 

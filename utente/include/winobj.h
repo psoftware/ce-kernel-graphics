@@ -69,8 +69,8 @@ public:
 		//eventi con target x,y
 		if(new_event.type==USER_EVENT_MOUSEZ || new_event.type==USER_EVENT_MOUSEUP || new_event.type==USER_EVENT_MOUSEDOWN)
 		{
-			int i;
-			for(i=0; i<this->objs_count; i++)
+			bool found=false;
+			for(int i=0; i<this->objs_count; i++)
 				if(new_event.rel_x > objs[i]->pos_x && new_event.rel_x < objs[i]->pos_x + objs[i]->size_x &&
 					new_event.rel_y > objs[i]->pos_y && new_event.rel_y < objs[i]->pos_y + objs[i]->size_y)
 				{
@@ -78,14 +78,16 @@ public:
 					objs[i]->process_event(new_event);
 					update_object(objs[i]);
 					flog(LOG_INFO, "process_event: new focus on %d", internal_focus);
+					found=true;
 				}
 
 			//se l'evento con coordinate non ha centrato oggetti, allora devo togliere il focus
-			if(i==this->objs_count)
+			if(!found)
 				internal_focus=-1;
 		}
 		else if(internal_focus!=-1)
 		{
+			flog(LOG_INFO, "process_event: non-targetting event on %d", internal_focus);
 			//eventi senza target x,y, quindi applicati su internal_focus
 			objs[internal_focus]->process_event(new_event);
 			update_object(objs[internal_focus]);
