@@ -51,7 +51,7 @@ else
 fi
 
 if [ -f "$CEHDPATH" ]; then
-	cmd="$cmd -hdc \"$CEHDPATH\""
+	cmd="$cmd -drive file=\"$CEHDPATH\",format=raw"
 fi
 
 cmd="$cmd $@"
