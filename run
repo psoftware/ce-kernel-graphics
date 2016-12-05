@@ -50,8 +50,8 @@ else
 	cmd="$cmd -serial stdio"
 fi
 
-if [ -f "$CDEPATH" ]; then
-	cmd="$cmd -hdc \"$CDEPATH\""
+if [ -f "$CEHDPATH" ]; then
+	cmd="$cmd -hdc \"$CEHDPATH\""
 fi
 
 cmd="$cmd $@"
