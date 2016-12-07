@@ -98,7 +98,7 @@ class u_textbox : public u_windowObject
 
 			if(event.k_char=='\b' && eos !=0)
 				text[eos-1]='\0';
-			else
+			else if(event.k_char!='\b' && eos<100)
 			{
 				text[eos]=event.k_char;
 				text[eos+1]='\0';

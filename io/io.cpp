@@ -1149,7 +1149,7 @@ void main_windows_manager(int n)
 	update_framebuffer();
 
 	//patina di debug
-	memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
+	//memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
 
 	des_cursor main_cursor = {0,0,0,0};
 	win_man.focus_wind=-1;
