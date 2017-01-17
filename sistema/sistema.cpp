@@ -336,14 +336,14 @@ extern "C" void c_pre_routine_pf(	//
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
-	if (rip < fine_codice_sistema || errore.res == 1) {
+	if (errore.user == 0 || errore.res == 1) {
 		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema");
+		panic("errore di sistema");
 	}
 	// *)
 
