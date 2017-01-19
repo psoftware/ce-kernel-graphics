@@ -90,10 +90,12 @@ void rimozione_lista(proc_elem *&p_lista, proc_elem *&p_elem)
 // )
 }
 
+// inserisce esecuzione in testa alla lista pronti
 extern "C" void inspronti()
 {
 // (
-	inserimento_lista(pronti, esecuzione);
+	esecuzione->puntatore = pronti;
+	pronti = esecuzione;
 // )
 }
 
