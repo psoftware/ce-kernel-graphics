@@ -1574,7 +1574,7 @@ extern "C" void cmain()
 	esecuzione = &init;
 	// *)
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.4");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.5");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata");
 
