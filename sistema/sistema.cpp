@@ -1104,6 +1104,13 @@ void swap(int liv, addr ind_virt)
 	if (nuovo_dpf == 0) {
 		des_pf* dpf_vittima =
 			scegli_vittima(esecuzione->id, liv, ind_virt);
+		// (* scegli_vittima potrebbe fallire
+		if (dpf_vittima == 0) {
+			flog(LOG_WARN, "memoria esaurita");
+			in_pf = false;
+			abort_p();
+		}
+		// *)
 		bool occorre_salvare = scollega(dpf_vittima);
 		if (occorre_salvare)
 			scarica(dpf_vittima);
