@@ -317,11 +317,13 @@ struct pf_error {
 };
 // *)
 
-// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-extern "C" addr fine_codice_sistema;
-// *)
 void c_routine_pf();
-bool in_pf = false;
+// (* c_pre_routine_pf() e' la routine che viene chiamata in caso di page
+//    fault. Effettua dei controlli aggiuntivi prima di chiamare la
+//    routine c_routine_pf() che provvede a caricare le tabelle e pagine
+//    mancanti
+// *)
+bool in_pf = false;	//* true mentre stiamo gestendo un page fault
 extern "C" void c_pre_routine_pf(	//
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -330,11 +332,14 @@ extern "C" void c_pre_routine_pf(	//
 	)
 {
 
+	// (* se durante la gestione di un page fault si verifica un altro page fault
+	//    c'e' un bug nel modulo sistema.
 	if (in_pf) {
 		panic("page fault ricorsivo: STOP");
 	}
+	// *)
 
-	in_pf = true;
+	in_pf = true;	//* inizia la gestione del page fault
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
@@ -364,7 +369,7 @@ extern "C" void c_pre_routine_pf(	//
 
 	c_routine_pf();
 
-	in_pf = false;
+	in_pf = false;	//* fine della gestione del page fault
 }
 
 
@@ -372,6 +377,11 @@ extern "C" void c_pre_routine_pf(	//
 //                         PAGINE FISICHE                                      //
 /////////////////////////////////////////////////////////////////////////////////
 
+// avremo un descrittore di pagina fisica per ogni pagina fisica della parte
+// M2.  Lo scopo del descrittore e' di contenere alcune informazioni relative
+// al contenuto della pagina fisica descritta. Tali informazioni servono
+// principalmente a facilitare o rendere possibile il rimpiazzamento del
+// contenuto stesso.
 struct des_pf {
 	int	livello;	// 0=pagina, -1=libera
 	bool	residente;	// pagina residente o meno
@@ -385,6 +395,7 @@ struct des_pf {
 };
 
 des_pf* dpf;		// vettore di descrittori di pagine fisiche
+			// (allocato in M1, si veda init_dpf())
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera
 
@@ -406,6 +417,8 @@ addr indirizzo_pf(des_pf* ppf)
 	return (addr)((natq)prima_pf_utile + indice * DIM_PAGINA);
 }
 
+// restituisce il piu' piccolo indirizzo maggiore o uguale ad a
+// e multiplo di m
 addr allinea(addr a, natq m)
 {
 	return (addr) (((natq)a + m - 1) & ~(m - 1));
@@ -414,7 +427,7 @@ addr allinea(addr a, natq m)
 // ( [P_MEM_PHYS]
 // init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
 // memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
-// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
+// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica
 // e di inizializzarli in modo che tutte le pagine fisiche risultino libere
 natq N_DPF;
 // &end e' l'indirizzo del primo byte non occupato dal modulo sistema
@@ -434,6 +447,8 @@ bool init_dpf()
 	// prima_pf_utile e' la prima pagina che inizia dopo la fine di M1
 	prima_pf_utile = allinea(fine_M1, DIM_PAGINA);
 
+	// creiamo la lista delle pagine libere, che inizialmente contiene
+	// tutte le pagine fisiche di M2
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
 		dpf[i].livello = -1;
@@ -444,6 +459,7 @@ bool init_dpf()
 	return true;
 }
 
+// estrea una pagina libera dalla lista, se non vuota
 des_pf* alloca_pagina_fisica_libera()
 {
 	des_pf* p = pagine_libere;
@@ -452,18 +468,20 @@ des_pf* alloca_pagina_fisica_libera()
 	return p;
 }
 
-// (* rende di nuovo libera la pagina fisica il cui descrittore di pagina fisica
-//    ha per indice "i"
+// (* rende di nuovo libera la pagina fisica descritta da ppf
 void rilascia_pagina_fisica(des_pf* ppf)
 {
 	ppf->livello = -1;
 	ppf->prossima_libera = pagine_libere;
 	pagine_libere = ppf;
 }
+// *)
 
-des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); //
-bool scollega(des_pf* ppf);	//
-void scarica(des_pf* ppf); //
+// (* funzione di comodo che alloca una pagina fisica con eventuale
+//    rimpiazzamento di un'altra
+des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // piu' avanti
+bool scollega(des_pf* ppf);	// piu' avanti
+void scarica(des_pf* ppf); // piu' avanti
 des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 {
 	des_pf *ppf = alloca_pagina_fisica_libera();
@@ -641,12 +659,6 @@ natq& get_entry(addr tab, natl index)
 {
 	natq *pd = static_cast<natq*>(tab);
 	return  pd[index];
-}
-
-void set_entry(addr tab, natl index, natq entry)
-{
-	natq *pd = static_cast<natq*>(tab);
-	pd[index] = entry;
 }
 
 extern "C" des_proc* des_p(natl id);
@@ -1213,6 +1225,7 @@ des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
 	return ppf;
 }
 
+// funzione di supporto per carica_tutto()
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
 	natq dp = dim_pag(liv);
@@ -1227,12 +1240,16 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
 		}
+		ppf->residente = true;
 		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
 	}
 	return true;
 }
 
+// carica e rende residenti tutte le pagine e tabelle allocate nello swap e
+// relative alle entrate della tab4 del processo proc che vanno da i (inclusa)
+// a i+n (esclusa)
 bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
@@ -1262,6 +1279,8 @@ struct des_swap {
 } swap_dev; 	// c'e' un unico oggetto swap
 bool swap_init();
 
+// chiamata in fase di inizializzazione, carica in memoria fisica
+// tutte le parti condivise di livello IO e utente.
 bool crea_spazio_condiviso(natl dummy_proc)
 {
 
@@ -1436,6 +1455,8 @@ bool is_accessible(addr a)
 	return true;
 }
 
+// indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.s")
+extern "C" addr fine_codice_sistema;
 void process_dump(natl id, addr rsp, log_sev sev)
 {
 	des_proc *p = des_p(id);
@@ -1524,11 +1545,14 @@ extern "C" void c_panic(const char *msg, addr rsp)
 	end_program();
 }
 
+// se riceviamo un non-maskerable-interrupt, fermiamo il sistema
 extern "C" void c_nmi()
 {
 	panic("INTERRUZIONE FORZATA");
 }
 
+// restituisce l'indirizzo fisico che corrisponde a ind_virt nello
+// spazio di indirizzamento del processo corrente.
 extern "C" addr c_trasforma(addr ind_virt)
 {
 	natq d;
