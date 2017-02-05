@@ -1418,6 +1418,17 @@ bool init_pe()
 }
 // )
 
+bool is_accessible(addr a)
+{
+	for (int i = 3; i >= 0; i--) {
+		natq d = get_des(esecuzione->id, i + 1, a);
+		bool bitP = extr_P(d);
+		if (!bitP)
+			return false;
+	}
+	return true;
+}
+
 void process_dump(natl id, addr rsp, log_sev sev)
 {
 	des_proc *p = des_p(id);
@@ -1467,7 +1478,12 @@ void process_dump(natl id, addr rsp, log_sev sev)
 	flog(sev, "  backtrace:");
 	natq rbp = p->contesto[I_RBP];
 	for (;;) {
-		natq csite = *((natq *)rbp + 1) - 5;
+		natq* acsite = ((natq *)rbp + 1);
+		if (((natq)acsite & 0x7) || !is_accessible(acsite)) {
+			flog(sev, "  ! %lx", rbp);
+			break;
+		}
+		natq csite = *acsite - 5;
 		if (csite < start || (addr)csite >= fine_codice_sistema)
 			break;
 		flog(sev, "  > %lx", *((natq *)rbp + 1) - 5);
