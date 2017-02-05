@@ -1001,15 +1001,18 @@ void rilascia_ric(addr tab, int liv, natl i, natl n)
 {
 	for (natl j = i; j < i + n && j < 512; j++) {
 		natq dt = get_entry(tab, j);
+		natl blocco;
 		if (extr_P(dt)) {
 			addr sub = extr_IND_FISICO(dt);
 			if (liv > 1)
 				rilascia_ric(sub, liv - 1, 0, 512);
-			rilascia_pagina_fisica(descrittore_pf(sub));
+			des_pf *ppf = descrittore_pf(sub);
+			blocco = ppf->ind_massa;
+			rilascia_pagina_fisica(ppf);
 		} else {
-			natl blocco = extr_IND_MASSA(dt);
-			dealloca_blocco(blocco);
+			blocco = extr_IND_MASSA(dt);
 		}
+		dealloca_blocco(blocco);
 	}
 }
 
