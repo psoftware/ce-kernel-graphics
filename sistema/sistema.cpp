@@ -707,7 +707,7 @@ proc_elem *a_p[MAX_IRQ];  //
 // )
 
 natq alloca_blocco();
-des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente);
+des_pf* swap2(natl proc, int livello, addr ind_virt);
 bool crea(natl proc, addr ind_virt, int liv, natl priv)
 {
 	natq& dt = get_des(proc, liv + 1, ind_virt);
@@ -724,8 +724,15 @@ bool crea(natl proc, addr ind_virt, int liv, natl priv)
 			dt = dt | BIT_RW;
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
-		if (liv > 0)
-			swap2(proc, liv, ind_virt, (priv == LIV_SISTEMA));
+		if (liv > 0) {
+			des_pf *ppf = swap2(proc, liv, ind_virt);
+			if (!ppf) {
+				flog(LOG_ERR, "swap2(%d, %d, %p) fallita",
+					proc, liv, ind_virt);
+				return false;
+			}
+			ppf->residente = (priv == LIV_SISTEMA);
+		}
 	}
 	return true;
 }
@@ -749,11 +756,16 @@ bool crea_pila(natl proc, natb *bottom, natq size, natl priv)
 	return true;
 }
 
-addr carica_pila(natl proc, natb *bottom, natq size)
+addr carica_pila_sistema(natl proc, natb *bottom, natq size)
 {
 	des_pf *dp = 0;
-	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
-		dp = swap2(proc, 0, ind, true);
+	natb *ind;
+	for (ind = bottom - size; ind != bottom; ind += DIM_PAGINA) {
+		dp = swap2(proc, 0, ind);
+		if (!dp)
+			return 0;
+		dp->residente = true;
+	}
 	return (addr)((natq)indirizzo_pf(dp) + DIM_PAGINA);
 }
 
@@ -832,7 +844,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	// ( creazione della pila sistema .
 	if (!crea_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK, LIV_SISTEMA))
 		goto errore5;
-	pila_sistema = carica_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK);
+	pila_sistema = carica_pila_sistema(p->id, (natb*)fin_sis_p, DIM_SYS_STACK);
 	if (pila_sistema == 0)
 		goto errore6;
 	// )
@@ -1207,15 +1219,23 @@ void stat()
 	invalida_TLB();
 }
 
-des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
+// rispetto a swap(), swap2() restituisce un puntatore al descrittore
+// di pagina fisica in cui ha caricato la tabella o pagina mancante.
+// Inoltre, invece di abortire il processo chiamante in caso di errori,
+// si limita a restituire un puntatore nullo. swap2() e' utile nei
+// casi in cui il caricamento e' parte di un'altra operazione piu'
+// complicata.
+des_pf* swap2(natl proc, int livello, addr ind_virt)
 {
 	des_pf* ppf = alloca_pagina_fisica(proc, livello, ind_virt);
 	if (!ppf)
 		return 0;
 	natq e = get_des(proc, livello + 1, ind_virt);
 	natq m = extr_IND_MASSA(e);
+	if (!m)
+		return 0;
 	ppf->livello = livello;
-	ppf->residente = residente;
+	ppf->residente = 0;
 	ppf->processo = proc;
 	ppf->ind_virtuale = ind_virt;
 	ppf->ind_massa = m;
@@ -1235,7 +1255,7 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 		natq e = get_entry(tab, j);
 		if (!extr_IND_MASSA(e))
 			continue;
-		des_pf *ppf = swap2(proc, liv - 1, ind, true);
+		des_pf *ppf = swap2(proc, liv - 1, ind);
 		if (!ppf) {
 			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
@@ -1446,8 +1466,8 @@ bool init_pe()
 
 bool is_accessible(addr a)
 {
-	for (int i = 3; i >= 0; i--) {
-		natq d = get_des(esecuzione->id, i + 1, a);
+	for (int i = 4; i > 0; i--) {
+		natq d = get_des(esecuzione->id, i, a);
 		bool bitP = extr_P(d);
 		if (!bitP)
 			return false;
