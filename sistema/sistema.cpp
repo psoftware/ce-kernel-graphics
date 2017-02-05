@@ -1511,7 +1511,7 @@ extern "C" void c_panic(const char *msg, addr rsp)
 			natq dp = get_des(id, 1, v_eip);
 			natq ind_fis_pag = (natq)extr_IND_FISICO(dp);
 			addr f_eip = (addr)(ind_fis_pag | ((natq)v_eip & 0xFFF));
-			flog(LOG_ERR, "    *) proc=%d RIP=%x", id, *(natq*)f_eip);
+			flog(LOG_ERR, "    *) proc=%d RIP=%p", id, *(natq*)f_eip);
 		}
 	}
 	end_program();
