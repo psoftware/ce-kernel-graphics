@@ -1232,8 +1232,10 @@ des_pf* swap2(natl proc, int livello, addr ind_virt)
 		return 0;
 	natq e = get_des(proc, livello + 1, ind_virt);
 	natq m = extr_IND_MASSA(e);
-	if (!m)
+	if (!m) {
+		rilascia_pagina_fisica(ppf);
 		return 0;
+	}
 	ppf->livello = livello;
 	ppf->residente = 0;
 	ppf->processo = proc;
