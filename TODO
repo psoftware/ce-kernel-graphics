@@ -10,3 +10,7 @@
   che si sovrappongono all'oggetto, e così via, ricorsivamente (e non so come fare).
 - l'array che contiene il font bitmap non è basato sui colori della palette SVGA, dovrebbe essere convertito
 - manca la quasi totalità dei controlli sui cavalli di troia e sui parametri delle primitive (es. un processo potrebbe manipolare le finestre di altri processi)
+- abilitare modalità colore a 32 bit
+	natw *bar2 = (natw*)(0xfebf0000 + 0x0500);
+       	bar2[3]=0x20;
+  in BAR2 della scheda video è presente l'indirizzo di un array linearizzato di registri a 16 bit per settare alcuni parametri video (risoluzione, prof. colore, schermi virtuali)
