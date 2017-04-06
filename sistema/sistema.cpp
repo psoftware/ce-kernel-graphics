@@ -170,7 +170,7 @@ extern "C" void c_sem_signal(natl sem)
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
 		inserimento_lista(pronti, lavoro);
-		inspronti();	// preemption
+		inserimento_lista(pronti, esecuzione);	// preemption
 		schedulatore();	// preemption
 	}
 }
@@ -1064,7 +1064,7 @@ extern "C" void c_driver_td(void)
 		dealloca(p);
 	}
 
-	inspronti();
+	inserimento_lista(pronti, esecuzione);
 	schedulatore();
 }
 
