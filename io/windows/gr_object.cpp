@@ -94,13 +94,13 @@ void gr_object::focus_child(gr_object *focuschild)
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
-	for(gr_object *c=child_list_last; c!=0; c=c->previous_brother)
+	for(gr_object *c=child_list; c!=0; c=c->next_brother)
 	{
 		//controllo bound
 		//memcopy...
 		for(int y=0; y<size_y; y++)
 			for(int x=0; x<size_x; x++)
 				this->buffer[(x + c->pos_x) + (y + c->pos_y)*this->size_x] = c->buffer[x + y*c->size_x];
-		cout << "[ inverso ] Renderizzo oggetto dalla lista con z-index " << c->z_index << " e x=" << c->pos_x<< endl;
+		cout << "Renderizzo oggetto dalla lista con z-index " << c->z_index << " e x=" << c->pos_x<< endl;
 	}
 }
