@@ -4,7 +4,7 @@ using namespace std;
 #include "gr_object.h"
 #include "consts.h"
 
-gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer=0)
+gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 : pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index)
 {
 	child_list=0;
@@ -51,7 +51,7 @@ bool gr_object::remove_child(gr_object *child)
 	}
 }
 
-virtual void gr_object::render()
+void gr_object::render()
 {
 	//renderizza su buffer tutti i figli nella lista child_tree
 	for(gr_object *c=child_list; c!=0; c=c->next_brother)

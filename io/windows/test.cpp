@@ -4,7 +4,7 @@
 
 int main()
 {
-	gr_object *container = new gr_object(0,0,0,0,0);/*
+	gr_object *container = new gr_object(0,0,0,0,0);
 	gr_button *button1 = new gr_button(0,0,0,0,0);
 	gr_button *button2 = new gr_button(0,0,0,0,0);
 	gr_button *button3 = new gr_button(0,0,0,0,0);
@@ -15,5 +15,4 @@ int main()
 	container->render();
 
 	button2->render();
-	*/
 }
