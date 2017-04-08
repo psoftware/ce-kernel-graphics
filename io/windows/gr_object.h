@@ -18,9 +18,9 @@ private:
 	gr_object *overlapping_child_list;
 	gr_object *overlapping_next_brother;
 
-	PIXEL_UNIT *buffer;
-
 protected:
+	PIXEL_UNIT *buffer;
+	
 	unsigned int pos_x;
 	unsigned int pos_y;
 	unsigned int size_x;
