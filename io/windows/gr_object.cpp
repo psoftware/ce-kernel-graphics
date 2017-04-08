@@ -27,7 +27,7 @@ void gr_object::add_child(gr_object *newchild)
 	// *c si ferma sull'oggetto con z-index maggiore oppure su NULL, se a fine lista
 	// *p è l'elemento precedente
 	gr_object *c,*p=child_list;
-	for(c=child_list; c!=0 && c->z_index <= newchild->z_index; c=c->next_brother)
+	for(c=child_list; c!=0 && c->z_index < newchild->z_index; c=c->next_brother)
 		p=c;
 
 	
@@ -82,7 +82,7 @@ bool gr_object::remove_child(gr_object *removechild)
 
 // serve per dare focus ad un elemento nel suo z-index
 // O(1)
-void gr_object::give_focus(gr_object *focuschild)
+void gr_object::focus_child(gr_object *focuschild)
 {
 	//lo rimuovo dalla lista
 	remove_child(focuschild);
@@ -98,13 +98,13 @@ void gr_object::render()
 	{
 		//controllo bound
 		//memcopy...
-		cout << "Renderizzo oggetto dalla lista con z-index" << c->z_index << endl;
+		cout << "Renderizzo oggetto dalla lista con z-index " << c->z_index << " e x=" << c->pos_x<< endl;
 	}
 
 	for(gr_object *c=child_list_last; c!=0; c=c->previous_brother)
 	{
 		//controllo bound
 		//memcopy...
-		cout << "[ inverso ] Renderizzo oggetto dalla lista con z-index" << c->z_index << endl;
+		cout << "[ inverso ] Renderizzo oggetto dalla lista con z-index " << c->z_index << " e x=" << c->pos_x<< endl;
 	}
 }

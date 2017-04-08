@@ -32,7 +32,7 @@ public:
 
 	void add_child(gr_object *child);
 	bool remove_child(gr_object *child);
-	void give_focus(gr_object *child);
+	void focus_child(gr_object *child);
 
 
 	virtual void render();
