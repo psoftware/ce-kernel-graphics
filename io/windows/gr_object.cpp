@@ -1,12 +1,15 @@
-#include <iostream>
-using namespace std;
-
 #include "gr_object.h"
 #include "consts.h"
 
+void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
+{
+	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
+		buffer[MAX_X*y+x] = col;
+}
+
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
-	: pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index),
-		child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0)
+	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
+		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index)
 {
 	if(predefined_buffer==0)
 		buffer = new PIXEL_UNIT[size_x*size_y];
@@ -94,13 +97,25 @@ void gr_object::focus_child(gr_object *focuschild)
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
-	for(gr_object *c=child_list; c!=0; c=c->next_brother)
+	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
+		//if(!(obj->is_rendered))
+			//continue;
+
+		int max_x = (obj->pos_x + obj->size_x > this->size_x) ? this->size_x - obj->pos_x : obj->size_x;
+		int max_y = (obj->pos_y + obj->size_y > this->size_y) ? this->size_y - obj->pos_y : obj->size_y;
+		if(max_x<=0 || max_y<=0)
+			continue;
+
+		for(int i=0; i<max_x; i++)
+			for(int j=0; j<max_y; j++)
+				put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
+
 		//controllo bound
 		//memcopy...
-		for(int y=0; y<size_y; y++)
+		/*for(int y=0; y<size_y; y++)
 			for(int x=0; x<size_x; x++)
-				this->buffer[(x + c->pos_x) + (y + c->pos_y)*this->size_x] = c->buffer[x + y*c->size_x];
-		cout << "Renderizzo oggetto dalla lista con z-index " << c->z_index << " e x=" << c->pos_x<< endl;
+				this->buffer[(x + c->pos_x) + (y + c->pos_y)*this->size_x] = c->buffer[x + y*c->size_x];*/
+		//cout << "Renderizzo oggetto dalla lista con z-index " << obj->z_index << " e x=" << obj->pos_x<< endl;
 	}
 }

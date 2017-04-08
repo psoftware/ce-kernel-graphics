@@ -1,8 +1,8 @@
 #ifndef GROBJECT_H
 #define GROBJECT_H
 
-#include <iostream>
-using namespace std;
+#include "costanti.h"
+#include "libce.h"
 
 #include "consts.h"
 
@@ -20,7 +20,7 @@ private:
 
 protected:
 	PIXEL_UNIT *buffer;
-	
+
 	unsigned int pos_x;
 	unsigned int pos_y;
 	unsigned int size_x;

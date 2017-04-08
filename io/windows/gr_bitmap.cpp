@@ -1,6 +1,3 @@
-#include <iostream>
-using namespace std;
-
 #include "gr_bitmap.h"
 #include "consts.h"
 
@@ -13,7 +10,7 @@ gr_bitmap::gr_bitmap(unsigned int pos_x, unsigned int pos_y, unsigned int size_x
 void gr_bitmap::render()
 {
 	//disegna bottone su buffer
-	cout << "Renderizzo bitmap " << z_index << endl;
+	//cout << "Renderizzo bitmap " << z_index << endl;
 }
 
 PIXEL_UNIT * gr_bitmap::get_buffer()
