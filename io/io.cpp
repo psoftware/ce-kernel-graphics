@@ -1947,6 +1947,7 @@ extern "C" natl end;
 
 #include "windows/gr_object.h"
 #include "windows/gr_bitmap.h"
+#include "windows/gr_button.h"
 gr_object *main_container;
 
 extern "C" void cmain(int sem_io)
@@ -1962,15 +1963,35 @@ extern "C" void cmain(int sem_io)
 
 	main_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
 
-	gr_bitmap * bitmap = new gr_bitmap(0,0,1024,640,0);
+	gr_bitmap * bitmap = new gr_bitmap(0,0,600,400,0);
 	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
-	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 1024*640);
+	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 600*400);
 	main_container->add_child(bitmap);
 
-	//gr_bitmap * bitmap2 = new gr_bitmap(0,0,1024,640,0);
-	char *asss = new char[109*200];
+	//TOPBAR_HEIGHT
+	int window_size_x = 100;
+	int window_size_y = 100;
+	gr_object * window = new gr_object(20,20,window_size_x,window_size_y,0);
+	gr_bitmap * window_topbar = new gr_bitmap(0,0,window_size_x,TOPBAR_HEIGHT,0);
+	memset(window_topbar->get_buffer(), 0x06, window_size_x*TOPBAR_HEIGHT);
+	window->add_child(window_topbar);
 
+	gr_object * window_container = new gr_object(0,TOPBAR_HEIGHT,window_size_x,window_size_x-TOPBAR_HEIGHT,0);
+	gr_bitmap * window_background = new gr_bitmap(0,0,window_size_x,window_size_x-TOPBAR_HEIGHT,0);
+	memset(window_background->get_buffer(), 0x08, window_size_x*(window_size_x-TOPBAR_HEIGHT));
+	window_container->add_child(window_background);
+
+	gr_button * button1 = new gr_button(10,20,20,10,1,0x03);
+	button1->render();
+	window_container->add_child(button1);
+	window_container->render();
+
+	window->add_child(window_container);
+	window->render();
+
+	main_container->add_child(window);
 	main_container->render();
+
 	//if(!windows_init())
 		//abort_p();
 	if (!kbd_init())

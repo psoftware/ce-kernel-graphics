@@ -10,7 +10,7 @@ class gr_button : public gr_object
 	PIXEL_UNIT color;
 
 public:
-	gr_button(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index);
+	gr_button(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT color);
 
 	void render();
 	void set_text(char * text);

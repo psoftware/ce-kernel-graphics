@@ -35,7 +35,7 @@ void gr_object::add_child(gr_object *newchild)
 	// *c si ferma sull'oggetto con z-index maggiore oppure su NULL, se a fine lista
 	// *p è l'elemento precedente
 	gr_object *c,*p=child_list;
-	for(c=child_list; c!=0 && c->z_index < newchild->z_index; c=c->next_brother)
+	for(c=child_list; c!=0 && c->z_index <= newchild->z_index; c=c->next_brother)
 		p=c;
 
 	
