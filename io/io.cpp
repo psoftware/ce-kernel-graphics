@@ -1944,6 +1944,11 @@ extern "C" void fill_io_gates(void);
 extern "C" natl end;
 // eseguita in fase di inizializzazione
 //
+
+#include "windows/gr_object.h"
+#include "windows/gr_bitmap.h"
+gr_object *main_container;
+
 extern "C" void cmain(int sem_io)
 {
 
@@ -1955,8 +1960,19 @@ extern "C" void cmain(int sem_io)
 	}
 	heap_init(&end, DIM_IO_HEAP);
 
-	if(!windows_init())
-		abort_p();
+	main_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
+
+	gr_bitmap * bitmap = new gr_bitmap(0,0,1024,640,0);
+	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
+	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 1024*640);
+	main_container->add_child(bitmap);
+
+	//gr_bitmap * bitmap2 = new gr_bitmap(0,0,1024,640,0);
+	char *asss = new char[109*200];
+
+	main_container->render();
+	//if(!windows_init())
+		//abort_p();
 	if (!kbd_init())
 		abort_p();
 	if(!mouse_init())

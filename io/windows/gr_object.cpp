@@ -7,6 +7,9 @@ void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb co
 		buffer[MAX_X*y+x] = col;
 }
 
+enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR, LOG_USR };
+extern "C" void flog(log_sev sev, const char* fmt, ...);
+
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index)
@@ -15,6 +18,8 @@ gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x
 		buffer = new PIXEL_UNIT[size_x*size_y];
 	else
 		buffer=predefined_buffer;
+
+	flog(LOG_INFO, "Nuovo gr_object o derivato con size_x %d e this->size_x %d", size_x, this->size_x);
 }
 
 //O(n)
@@ -101,7 +106,7 @@ void gr_object::render()
 	{
 		//if(!(obj->is_rendered))
 			//continue;
-
+		flog(LOG_INFO, "## Renderizzo oggetto dalla lista con z-index %d, main container size_x %d", obj->z_index, this->size_x);
 		int max_x = (obj->pos_x + obj->size_x > this->size_x) ? this->size_x - obj->pos_x : obj->size_x;
 		int max_y = (obj->pos_y + obj->size_y > this->size_y) ? this->size_y - obj->pos_y : obj->size_y;
 		if(max_x<=0 || max_y<=0)
@@ -116,6 +121,7 @@ void gr_object::render()
 		/*for(int y=0; y<size_y; y++)
 			for(int x=0; x<size_x; x++)
 				this->buffer[(x + c->pos_x) + (y + c->pos_y)*this->size_x] = c->buffer[x + y*c->size_x];*/
-		//cout << "Renderizzo oggetto dalla lista con z-index " << obj->z_index << " e x=" << obj->pos_x<< endl;
+
+		flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
 	}
 }

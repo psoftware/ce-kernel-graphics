@@ -1,9 +1,6 @@
 #ifndef GROBJECT_H
 #define GROBJECT_H
 
-#include "costanti.h"
-#include "libce.h"
-
 #include "consts.h"
 
 // di default la classe rappresenta un container, differisce da altri oggetti per la funzione render()

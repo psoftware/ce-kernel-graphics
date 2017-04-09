@@ -3,12 +3,18 @@ void mem_free(void* p);
 
 void * operator new(long unsigned int n)
 {
-	return mem_alloc(n);
+	void * res = mem_alloc(n);
+	if(res == 0)
+		flog(LOG_ERR, "HEAP: allocazione fallita");
+	return res;
 }
 
 void* operator new[](long unsigned int n)
-{	
-	return mem_alloc(n);
+{
+	void * res = mem_alloc(n);
+        if(res == 0)
+                flog(LOG_ERR, "HEAP: allocazione fallita");
+	return res;
 }
 
 void operator delete(void* obj)
