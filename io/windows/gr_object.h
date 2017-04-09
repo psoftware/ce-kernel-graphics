@@ -31,6 +31,14 @@ public:
 	bool remove_child(gr_object *child);
 	void focus_child(gr_object *child);
 
+	unsigned int get_pos_x();
+	unsigned int get_pos_y();
+	unsigned int get_size_x();
+	unsigned int get_size_y();
+	void set_pos_x(unsigned int newval);
+	void set_pos_y(unsigned int newval);
+	void set_size_x(unsigned int newval);
+	void set_size_y(unsigned int newval);
 
 	virtual void render();
 };

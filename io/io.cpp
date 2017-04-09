@@ -1948,7 +1948,8 @@ extern "C" natl end;
 #include "windows/gr_object.h"
 #include "windows/gr_bitmap.h"
 #include "windows/gr_button.h"
-gr_object *main_container;
+gr_object *framebuffer_container;
+gr_object *doubled_framebuffer_container;
 
 extern "C" void cmain(int sem_io)
 {
@@ -1961,12 +1962,23 @@ extern "C" void cmain(int sem_io)
 	}
 	heap_init(&end, DIM_IO_HEAP);
 
-	main_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
+	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
+	doubled_framebuffer_container = new gr_object(0,0, 300, 300,0);
+	framebuffer_container->add_child(doubled_framebuffer_container);
 
-	gr_bitmap * bitmap = new gr_bitmap(0,0,600,400,0);
+	gr_bitmap * bitmap = new gr_bitmap(0,0,300,300,0);
 	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
-	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 600*400);
-	main_container->add_child(bitmap);
+	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 300*300);
+	int row=0;
+	for(natb i=0; i<0xFF; i++)
+	{
+		for(int k=0; k<10; k++)
+			for(int j=0; j<10; j++)
+				put_pixel(bitmap->get_buffer(), 10+(i%16)*10+j, 5+row*10+k, 300, 300, i);
+		if(i%16==0 && i!=0)
+			row++;
+	}
+	doubled_framebuffer_container->add_child(bitmap);
 
 	//TOPBAR_HEIGHT
 	int window_size_x = 100;
@@ -1989,8 +2001,18 @@ extern "C" void cmain(int sem_io)
 	window->add_child(window_container);
 	window->render();
 
-	main_container->add_child(window);
-	main_container->render();
+	doubled_framebuffer_container->add_child(window);
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+
+	//test spostamento
+	for(int i=0; i<40; i++)
+	{
+		window->set_pos_x(i*2);
+		window->set_pos_y(i*2);
+		doubled_framebuffer_container->render();
+		framebuffer_container->render();
+	}
 
 	//if(!windows_init())
 		//abort_p();

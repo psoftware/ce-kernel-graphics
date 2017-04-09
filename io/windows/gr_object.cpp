@@ -99,6 +99,31 @@ void gr_object::focus_child(gr_object *focuschild)
 	add_child(focuschild);
 }
 
+unsigned int gr_object::get_pos_x(){
+	return this->pos_x;
+}
+unsigned int gr_object::get_pos_y(){
+	return this->pos_y;
+}
+unsigned int gr_object::get_size_x(){
+	return this->size_x;
+}
+unsigned int gr_object::get_size_y(){
+	return this->size_y;
+}
+void gr_object::set_pos_x(unsigned int newval){
+	this->pos_x=newval;
+}
+void gr_object::set_pos_y(unsigned int newval){
+	this->pos_y=newval;
+}
+void gr_object::set_size_x(unsigned int newval){
+	this->size_x=newval;
+}
+void gr_object::set_size_y(unsigned int newval){
+	this->size_y=newval;
+}
+
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
