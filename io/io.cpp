@@ -1980,6 +1980,12 @@ extern "C" void cmain(int sem_io)
 	}
 	doubled_framebuffer_container->add_child(bitmap);
 
+	//mouse
+	gr_bitmap * mouse_bitmap = new gr_bitmap(0,0,32,32,777);
+	memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
+	mouse_bitmap->set_trasparency(true);
+	doubled_framebuffer_container->add_child(mouse_bitmap);
+
 	//TOPBAR_HEIGHT
 	int window_size_x = 100;
 	int window_size_y = 100;

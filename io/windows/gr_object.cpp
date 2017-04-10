@@ -12,7 +12,7 @@ extern "C" void flog(log_sev sev, const char* fmt, ...);
 
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
-		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index)
+		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false)
 {
 	if(predefined_buffer==0)
 		buffer = new PIXEL_UNIT[size_x*size_y];
@@ -137,10 +137,15 @@ void gr_object::render()
 		if(max_x<=0 || max_y<=0)
 			continue;
 
-		for(int i=0; i<max_x; i++)
-			for(int j=0; j<max_y; j++)
-				put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
-
+		if(!obj->trasparency)
+			for(int i=0; i<max_x; i++)
+				for(int j=0; j<max_y; j++)
+					put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
+		else
+			for(int i=0; i<max_x; i++)
+				for(int j=0; j<max_y; j++)
+					if(obj->buffer[j*obj->size_x+i] != 0x03)
+						put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
 		//controllo bound
 		//memcopy...
 		/*for(int y=0; y<size_y; y++)
@@ -149,4 +154,9 @@ void gr_object::render()
 
 		flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
 	}
+}
+
+void gr_object::set_trasparency(bool newval)
+{
+	this->trasparency=newval;
 }

@@ -23,6 +23,7 @@ protected:
 	unsigned int size_x;
 	unsigned int size_y;
 	unsigned int z_index;
+	bool trasparency;
 
 public:
 	gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer=0);
@@ -39,6 +40,7 @@ public:
 	void set_pos_y(unsigned int newval);
 	void set_size_x(unsigned int newval);
 	void set_size_y(unsigned int newval);
+	void set_trasparency(bool newval);
 
 	virtual void render();
 };
