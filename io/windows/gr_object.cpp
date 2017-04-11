@@ -1,3 +1,4 @@
+#include "libce.h"
 #include "gr_object.h"
 #include "consts.h"
 
@@ -6,9 +7,6 @@ void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb co
 	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
 		buffer[MAX_X*y+x] = col;
 }
-
-enum log_sev { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR, LOG_USR };
-extern "C" void flog(log_sev sev, const char* fmt, ...);
 
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
@@ -137,10 +135,12 @@ void gr_object::render()
 		if(max_x<=0 || max_y<=0)
 			continue;
 
+		//la trasparenza non è renderizzabile usando memcpy, quindi è molto più lenta. Se non ce n'è bisogno, renderizziamo con memcpy
 		if(!obj->trasparency)
-			for(int i=0; i<max_x; i++)
+			//for(int i=0; i<max_x; i++)
 				for(int j=0; j<max_y; j++)
-					put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
+					memcpy(this->buffer + obj->pos_x + (j+obj->pos_y)*this->size_x, obj->buffer + j*obj->size_x, max_x);
+					//put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
 		else
 			for(int i=0; i<max_x; i++)
 				for(int j=0; j<max_y; j++)
