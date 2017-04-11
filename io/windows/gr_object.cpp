@@ -10,7 +10,7 @@ void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb co
 
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
-		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false)
+		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
 	if(predefined_buffer==0)
 		buffer = new PIXEL_UNIT[size_x*size_y];
@@ -121,14 +121,21 @@ void gr_object::set_size_x(unsigned int newval){
 void gr_object::set_size_y(unsigned int newval){
 	this->size_y=newval;
 }
+void gr_object::set_trasparency(bool newval){
+	this->trasparency=newval;
+}
+void gr_object::set_visibility(bool newval){
+	this->visible=newval;
+}
 
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		//if(!(obj->is_rendered))
-			//continue;
+		if(!(obj->visible))
+			continue;
+
 		flog(LOG_INFO, "## Renderizzo oggetto dalla lista con z-index %d, main container size_x %d", obj->z_index, this->size_x);
 		int max_x = (obj->pos_x + obj->size_x > this->size_x) ? this->size_x - obj->pos_x : obj->size_x;
 		int max_y = (obj->pos_y + obj->size_y > this->size_y) ? this->size_y - obj->pos_y : obj->size_y;
@@ -154,9 +161,4 @@ void gr_object::render()
 
 		flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
 	}
-}
-
-void gr_object::set_trasparency(bool newval)
-{
-	this->trasparency=newval;
 }

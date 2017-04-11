@@ -561,11 +561,8 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->inner_container->add_child(newwindow->background_bitmap);
 
 	newwindow->main_container->add_child(newwindow->inner_container);
-	newwindow->main_container->render();
-
+	newwindow->main_container->set_visibility(false);
 	doubled_framebuffer_container->add_child(newwindow->main_container);
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -862,8 +859,8 @@ void graphic_visualizza_finestra(int id)
 	render_window_onvideobuffer(doubled_framebuffer, wind);
 */
 
-	//#### TEST CODE
-	flog(LOG_INFO, "## (finestra %d) inner_container %p", id, wind->inner_container);
+	wind->main_container->set_visibility(true);
+
 	wind->inner_container->render();
 	wind->main_container->render();
 	doubled_framebuffer_container->render();
