@@ -407,6 +407,13 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 	elem=q;
 }
 
+#include "windows/gr_object.h"
+#include "windows/gr_bitmap.h"
+#include "windows/gr_button.h"
+gr_object *framebuffer_container;
+gr_object *doubled_framebuffer_container;
+gr_bitmap * mouse_bitmap;
+
 // ----- des_window
 const int MAX_WINDOWS_OBJECTS = 10;
 struct des_window
@@ -422,6 +429,12 @@ struct des_window
 	natb obj_count;
 	windowObject * objects[MAX_WINDOWS_OBJECTS];
 	des_user_event * event_list;
+
+	//variazioni con astrazione
+	gr_object * main_container;
+	gr_bitmap * topbar_bitmap;
+	gr_object * inner_container;
+	gr_bitmap * background_bitmap;
 };
 
 const natb PRIM_SHOW=0;
@@ -513,6 +526,7 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 }
 
 //Primitive
+const int TOPBAR_HEIGHT = 20;
 extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
 {
 	sem_wait(win_man.mutex);
@@ -531,14 +545,34 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	win_man.windows_arr[win_man.windows_count].backColor = 0x01;
 	win_man.windows_arr[win_man.windows_count].obj_count = 0;
 	win_man.windows_arr[win_man.windows_count].event_list = 0;
-	win_man.windows_count++;
 
+
+	des_window * newwindow = &win_man.windows_arr[win_man.windows_count];
+
+	newwindow->main_container = new gr_object(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
+	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
+	memset(newwindow->topbar_bitmap->get_buffer(), 0x06, newwindow->size_x*TOPBAR_HEIGHT);
+	newwindow->main_container->add_child(newwindow->topbar_bitmap);
+
+	newwindow->inner_container = new gr_object(0,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
+	flog(LOG_INFO, "## (finestra %d) inner_container %p", res_id, newwindow->inner_container);
+	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
+	memset(newwindow->background_bitmap->get_buffer(), 0x01, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
+	newwindow->inner_container->add_child(newwindow->background_bitmap);
+
+	newwindow->main_container->add_child(newwindow->inner_container);
+	newwindow->main_container->render();
+
+	doubled_framebuffer_container->add_child(newwindow->main_container);
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+
+	win_man.windows_count++;
 	sem_signal(win_man.mutex);
 
 	return res_id;
 }
 
-const int TOPBAR_HEIGHT = 20;
 extern "C" void c_visualizza_finestra(int id, bool sync)
 {
 	sem_wait(win_man.sync_notfull);
@@ -819,13 +853,21 @@ void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
 void graphic_visualizza_finestra(int id)
 {
 	des_window * wind = &win_man.windows_arr[id];
-
+/*
 	//inizializzo buffer video della finestra
 	clean_window_buffer(wind);
 
 	//renderizzo topbar su secondo buffer
 	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
+*/
+
+	//#### TEST CODE
+	flog(LOG_INFO, "## (finestra %d) inner_container %p", id, wind->inner_container);
+	wind->inner_container->render();
+	wind->main_container->render();
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
 }
 
 struct des_cursor
@@ -838,6 +880,12 @@ struct des_cursor
 
 void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 {
+	mouse_bitmap->set_pos_x(cursor->x);
+	mouse_bitmap->set_pos_y(cursor->y);
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+	return;
+	/*
 	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
 	int bound_y=(cursor->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->old_y : 32;
 	for(int i=0; i<bound_x; i++)
@@ -882,11 +930,13 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 				//buff[(i+cursor->y)*MAX_SCREENX+(j+cursor->x)]=main_cursor[i*32+j];
 
 	update_framebuffer_linechanged(cursor->x, cursor->x+bound_x, cursor->y, cursor->y+bound_y);
-	//update_framebuffer_linechanged(0,1000,0,1000);
+	//update_framebuffer_linechanged(0,1000,0,1000);*/
 }
 
 void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_cursor)
 {
+	return;
+
 	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
 		return;
 
@@ -1241,6 +1291,24 @@ void main_windows_manager(int n)
 
 bool windows_init()
 {
+	//framebuffer e doubledbuffer
+	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
+	doubled_framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0);
+	framebuffer_container->add_child(doubled_framebuffer_container);
+
+	//sfondo
+	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
+	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
+	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	print_palette(bitmap->get_buffer(), 0,0);
+	doubled_framebuffer_container->add_child(bitmap);
+
+	//cursore
+	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
+	memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
+	mouse_bitmap->set_trasparency(true);
+	doubled_framebuffer_container->add_child(mouse_bitmap);
+
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);
 	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
@@ -1945,12 +2013,6 @@ extern "C" natl end;
 // eseguita in fase di inizializzazione
 //
 
-#include "windows/gr_object.h"
-#include "windows/gr_bitmap.h"
-#include "windows/gr_button.h"
-gr_object *framebuffer_container;
-gr_object *doubled_framebuffer_container;
-
 extern "C" void cmain(int sem_io)
 {
 
@@ -1962,66 +2024,26 @@ extern "C" void cmain(int sem_io)
 	}
 	heap_init(&end, DIM_IO_HEAP);
 
-	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, framebuffer);
-	doubled_framebuffer_container = new gr_object(0,0, 300, 300,0);
-	framebuffer_container->add_child(doubled_framebuffer_container);
-
-	gr_bitmap * bitmap = new gr_bitmap(0,0,300,300,0);
-	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
-	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, 300*300);
-	int row=0;
-	for(natb i=0; i<0xFF; i++)
-	{
-		for(int k=0; k<10; k++)
-			for(int j=0; j<10; j++)
-				put_pixel(bitmap->get_buffer(), 10+(i%16)*10+j, 5+row*10+k, 300, 300, i);
-		if(i%16==0 && i!=0)
-			row++;
-	}
-	doubled_framebuffer_container->add_child(bitmap);
-
-	//mouse
-	gr_bitmap * mouse_bitmap = new gr_bitmap(0,0,32,32,777);
-	memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
-	mouse_bitmap->set_trasparency(true);
-	doubled_framebuffer_container->add_child(mouse_bitmap);
-
-	//TOPBAR_HEIGHT
-	int window_size_x = 100;
-	int window_size_y = 100;
-	gr_object * window = new gr_object(20,20,window_size_x,window_size_y,0);
-	gr_bitmap * window_topbar = new gr_bitmap(0,0,window_size_x,TOPBAR_HEIGHT,0);
-	memset(window_topbar->get_buffer(), 0x06, window_size_x*TOPBAR_HEIGHT);
-	window->add_child(window_topbar);
-
-	gr_object * window_container = new gr_object(0,TOPBAR_HEIGHT,window_size_x,window_size_x-TOPBAR_HEIGHT,0);
-	gr_bitmap * window_background = new gr_bitmap(0,0,window_size_x,window_size_x-TOPBAR_HEIGHT,0);
-	memset(window_background->get_buffer(), 0x08, window_size_x*(window_size_x-TOPBAR_HEIGHT));
-	window_container->add_child(window_background);
-
-	gr_button * button1 = new gr_button(10,20,20,10,1,0x03);
+	//bottone finestra
+	/*gr_button * button1 = new gr_button(10,20,20,10,1,0x03);
 	button1->render();
 	window_container->add_child(button1);
 	window_container->render();
 
 	window->add_child(window_container);
-	window->render();
-
-	doubled_framebuffer_container->add_child(window);
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
+	window->render();*/
 
 	//test spostamento
-	for(int i=0; i<40; i++)
+	/*for(int i=0; i<40; i++)
 	{
 		window->set_pos_x(i*2);
 		window->set_pos_y(i*2);
 		doubled_framebuffer_container->render();
 		framebuffer_container->render();
-	}
+	}*/
 
-	//if(!windows_init())
-		//abort_p();
+	if(!windows_init())
+		abort_p();
 	if (!kbd_init())
 		abort_p();
 	if(!mouse_init())
