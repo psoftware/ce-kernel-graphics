@@ -434,9 +434,13 @@ struct des_window
 
 	//variazioni con astrazione
 	gr_object * main_container;
+	gr_object * topbar_container;
 	gr_bitmap * topbar_bitmap;
 	gr_object * inner_container;
 	gr_bitmap * background_bitmap;
+
+	gr_button * close_button;
+	gr_label * title_label;
 };
 
 const natb PRIM_SHOW=0;
@@ -529,6 +533,9 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 
 //Primitive
 const int TOPBAR_HEIGHT = 20;
+const int DEFAULT_WIN_BACKCOLOR = 0x1e;
+const int TOPBAR_WIN_BACKCOLOR = 0x35;
+const int CLOSEBUTTON_WIN_BACKCOLOR = 0x04;
 extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
 {
 	sem_wait(win_man.mutex);
@@ -544,39 +551,51 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	win_man.windows_arr[win_man.windows_count].size_y = size_y;
 	win_man.windows_arr[win_man.windows_count].pos_x = pos_x;
 	win_man.windows_arr[win_man.windows_count].pos_y = pos_y;
-	win_man.windows_arr[win_man.windows_count].backColor = 0x01;
+	win_man.windows_arr[win_man.windows_count].backColor = DEFAULT_WIN_BACKCOLOR;
 	win_man.windows_arr[win_man.windows_count].obj_count = 0;
 	win_man.windows_arr[win_man.windows_count].event_list = 0;
 
 
 	des_window * newwindow = &win_man.windows_arr[win_man.windows_count];
 
-	newwindow->main_container = new gr_object(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
-	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
-	memset(newwindow->topbar_bitmap->get_buffer(), 0x06, newwindow->size_x*TOPBAR_HEIGHT);
-	newwindow->main_container->add_child(newwindow->topbar_bitmap);
+	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
+	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
 
+	// main/topbar container:
+	newwindow->main_container = new gr_object(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
+	newwindow->topbar_container = new gr_object(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
+	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
+	memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*TOPBAR_HEIGHT);
+	newwindow->topbar_container->add_child(newwindow->topbar_bitmap);
+	newwindow->main_container->add_child(newwindow->topbar_container);
+
+	// pulsante chiusura
+	const int BUTTON_PADDING_X = 1;
+	const int BUTTON_PADDING_Y = 1;
+	const int LABEL_PADDING_X = 2;
+	const int LABEL_PADDING_Y = 2;
+	newwindow->close_button = new gr_button(newwindow->size_x-TOPBAR_HEIGHT-BUTTON_PADDING_X,BUTTON_PADDING_Y,18,18,1,CLOSEBUTTON_WIN_BACKCOLOR);
+	newwindow->close_button->set_text("x");
+	newwindow->close_button->render();
+	newwindow->topbar_container->add_child(newwindow->close_button);
+
+	// titolo finestra
+	newwindow->title_label = new gr_label(LABEL_PADDING_X,LABEL_PADDING_Y,newwindow->close_button->get_pos_x()-LABEL_PADDING_X,
+		TOPBAR_HEIGHT-LABEL_PADDING_Y,1, TOPBAR_WIN_BACKCOLOR);
+	newwindow->title_label->set_text("Titolo Finestra");
+	newwindow->title_label->render();
+	newwindow->topbar_container->add_child(newwindow->title_label);
+
+	// contenitore oggetti finestra + background
 	newwindow->inner_container = new gr_object(0,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
-	flog(LOG_INFO, "## (finestra %d) inner_container %p", res_id, newwindow->inner_container);
 	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
-	memset(newwindow->background_bitmap->get_buffer(), 0x01, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
+	memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
 	newwindow->inner_container->add_child(newwindow->background_bitmap);
 
 	newwindow->main_container->add_child(newwindow->inner_container);
 	newwindow->main_container->set_visibility(false);
 	doubled_framebuffer_container->add_child(newwindow->main_container);
 
-	//====TEST
-	gr_button * button1 = new gr_button(15,20,50,20,1,0x03);
-	button1->set_text("ok");
-	button1->render();
-	newwindow->inner_container->add_child(button1);
-
-	gr_label * label1 = new gr_label(2,2,50,16,1,0x09);
-	label1->set_text("prova");
-	label1->render();
-	newwindow->inner_container->add_child(label1);
-	//========
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -875,6 +894,7 @@ void graphic_visualizza_finestra(int id)
 
 	wind->main_container->set_visibility(true);
 
+	wind->topbar_container->render();
 	wind->inner_container->render();
 	wind->main_container->render();
 	doubled_framebuffer_container->render();
