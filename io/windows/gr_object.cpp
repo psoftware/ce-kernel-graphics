@@ -1,15 +1,11 @@
 #include "libce.h"
+#include "libgr.h"
 #include "gr_object.h"
 #include "consts.h"
 
-void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
-{
-	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
-		buffer[MAX_X*y+x] = col;
-}
-
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
+		modified(true), old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
 	if(predefined_buffer==0)
@@ -131,6 +127,74 @@ void gr_object::set_visibility(bool newval){
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
+	/*struct render_target
+	{
+		gr_object *target;
+		render_target *next;
+
+		render_target(gr_object * newobj)
+		{
+			target=newobj;
+		}
+	};
+	struct render_subset_unit
+	{
+		unsigned pos_x;
+		unsigned pos_y;
+		unsigned size_x;
+		unsigned size_y;
+		bool first_modified_encountered;
+		render_target * copy_list;
+
+		render_subset_unit * next;
+
+		render_subset_unit()
+		{
+			pos_x=0;
+			pos_y=0;
+			size_x=0;
+			size_y=0;
+			copy_list=0;
+			first_modified_encountered=false;
+		}
+	};
+
+	render_subset_unit *unit_list=0;
+
+	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
+	{
+		render_target *newtarget = new render_target(obj);
+
+		for(render_subset_unit *subsetunit=unit_list; subsetunit!=0; subsetunit=subsetunit->next)
+		{
+			if((subsetunit->pos_x + subsetunit->size_x > obj->pos_x) && (subsetunit->pos_x < obj->pos_x + obj->size_x) &&
+			(subsetunit->pos_y + subsetunit->size_y > obj->pos_y) && (subsetunit->pos_y < obj->pos_y + obj->size_y))
+			{
+				//aggiungo l'elemento in testa alla copy_list della subsetunit
+				newtarget->next = unit_list->copy_list;
+				unit_list->copy_list = newtarget;
+
+				//aggiorno le coordinate del render subset solo se modificato
+				if(obj->modified)
+				{
+					subsetunit->first_modified_encountered=true;
+					//subsetunit->...
+				}
+				
+				break;
+			}
+
+			//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
+			render_subset_unit *newunit = new render_subset_unit;
+			newunit->next = unit_list;
+			unit_list= newunit;
+
+			//aggiungo l'elemento in testa alla copy_list della nuova subsetunit
+			newtarget->next = newunit->copy_list;
+			newunit->copy_list = newtarget;
+		}	
+	}*/
+	
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
 		if(!(obj->visible))
@@ -147,12 +211,12 @@ void gr_object::render()
 			//for(int i=0; i<max_x; i++)
 				for(int j=0; j<max_y; j++)
 					memcpy(this->buffer + obj->pos_x + (j+obj->pos_y)*this->size_x, obj->buffer + j*obj->size_x, max_x);
-					//put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
+					//set_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
 		else
 			for(int i=0; i<max_x; i++)
 				for(int j=0; j<max_y; j++)
 					if(obj->buffer[j*obj->size_x+i] != 0x03)
-						put_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
+						set_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
 		//controllo bound
 		//memcopy...
 		/*for(int y=0; y<size_y; y++)

@@ -17,6 +17,15 @@ private:
 
 protected:
 	PIXEL_UNIT *buffer;
+	bool modified;
+	unsigned int old_pos_x;
+	unsigned int old_pos_y;
+	unsigned int old_size_x;
+	unsigned int old_size_y;
+	unsigned int modified_pos_x;
+	unsigned int modified_pos_y;
+	unsigned int modified_size_x;
+	unsigned int modified_size_y;
 
 	unsigned int pos_x;
 	unsigned int pos_y;

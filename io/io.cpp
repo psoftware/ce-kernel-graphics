@@ -3,7 +3,6 @@
 #include "costanti.h"
 #include "libce.h"
 #include "newdelete.h"
-#include "windows/font.h"
 #include "windows/gui_objects.h"
 #include "windows/cursor.h"
 
@@ -333,7 +332,7 @@ int column_changed_first = 0;
 int column_changed_last = 0;
 int line_changed_first = 0;				// quando devo copiare il doubled_framebuffer nel framebuffer voglio ottimizzare al massimo l'operazione di copia,
 int line_changed_last = 0;			// quindi cerco di copiare solo quello che ho effettivamente modificato.
-
+/*
 void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
 {
 	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
@@ -377,7 +376,7 @@ void set_fontstring(natb* buff, int x, int y, int bound_x, int bound_y, const ch
 		
 	}
 }
-
+*/
 // ----- user event
 
 // l'inserimento evento è fatto in testa
@@ -407,9 +406,12 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 	elem=q;
 }
 
+#include "windows/libgr.h"
+#include "windows/libfont.h"
 #include "windows/gr_object.h"
 #include "windows/gr_bitmap.h"
 #include "windows/gr_button.h"
+#include "windows/gr_label.h"
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
 gr_bitmap * mouse_bitmap;
@@ -563,6 +565,18 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->main_container->add_child(newwindow->inner_container);
 	newwindow->main_container->set_visibility(false);
 	doubled_framebuffer_container->add_child(newwindow->main_container);
+
+	//====TEST
+	gr_button * button1 = new gr_button(15,20,50,20,1,0x03);
+	button1->set_text("ok");
+	button1->render();
+	newwindow->inner_container->add_child(button1);
+
+	gr_label * label1 = new gr_label(2,2,50,16,1,0x09);
+	label1->set_text("prova");
+	label1->render();
+	newwindow->inner_container->add_child(label1);
+	//========
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -783,7 +797,7 @@ void print_palette(natb* buff, int x, int y)
 	{
 		for(int k=0; k<10; k++)
 			for(int j=0; j<10; j++)
-				put_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, MAX_SCREENY, i);
+				set_pixel(buff, x+(i%16)*10+j, y+row*10+k, MAX_SCREENX, MAX_SCREENY, i);
 		if(i%16==0 && i!=0)
 			row++;
 	}
@@ -808,12 +822,12 @@ void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 	for(int i=0; i<max_x; i++)
 		for(int j=0; j<max_y; j++)
 			if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
-				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_X_COLOR);
+				set_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_X_COLOR);
 			else
-				put_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_TOPBAR_COLOR);
+				set_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_TOPBAR_COLOR);
 
 	//renderizzo lettera X
-	set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
+	//set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
 
 	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y, wind->pos_y+max_y);
 }
@@ -961,7 +975,7 @@ void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_curs
 
 		for(int i=0; i<max_x; i++)
 			for(int j=0; j<max_y; j++)
-				put_pixel(wind->render_buff, obj->pos_x+i, obj->pos_y+j, wind->size_x, wind->size_y, obj->render_buff[j*obj->size_x+i]);
+				set_pixel(wind->render_buff, obj->pos_x+i, obj->pos_y+j, wind->size_x, wind->size_y, obj->render_buff[j*obj->size_x+i]);
 	}
 
 	// copio il buffer della finestra su quello video
