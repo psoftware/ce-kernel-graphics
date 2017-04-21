@@ -769,48 +769,6 @@ void *gr_memcpy_safe_onvideobuffer(natb * base_buff, void *__restrict dest, cons
 	return dest;
 }
 
-void inline update_framebuffer_linechanged(int column_first, int column_last, int line_first, int line_last)
-{return;
-	if(line_first < line_changed_first)
-		line_changed_first=line_first;
-	if(line_last > line_changed_last)
-		line_changed_last=line_last;
-
-	if(column_first < column_changed_first)
-		column_changed_first=column_first;
-	if(column_last > column_changed_last)
-		column_changed_last=column_last;
-}
-
-void inline update_framebuffer()
-{return;
-	// le variabili non devono sforare i margini dello schermo, altrimentri avremmo un pesante buffer overflow
-	if(line_changed_first < 0)
-		line_changed_first=0;
-	if(line_changed_last >= MAX_SCREENY)
-		line_changed_last=MAX_SCREENY-1;
-	if(column_changed_first < 0)
-		column_changed_first=0;
-	if(column_changed_last >= MAX_SCREENX)
-		column_changed_last=MAX_SCREENX-1;
-
-	flog(LOG_INFO, "update_framebuffer: column_first %d column_last %d line_first %d line_last %d", column_changed_first, column_changed_last, line_changed_first, line_changed_last);
-
-	for(int j=line_changed_first; j<line_changed_last; j++)
-		gr_memcpy_safe_onvideobuffer(framebuffer, framebuffer + j*MAX_SCREENX + column_changed_first, doubled_framebuffer + j*MAX_SCREENX + column_changed_first, column_changed_last-column_changed_first);
-
-	line_changed_first=MAX_SCREENY-1;
-	line_changed_last=0;
-	column_changed_first=MAX_SCREENX-1;
-	column_changed_last=0;
-}
-
-void inline set_background(natb* buff)
-{
-	memset(buff, WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
-	update_framebuffer_linechanged(0, MAX_SCREENX, 0, MAX_SCREENY);
-}
-
 void print_palette(natb* buff, int x, int y)
 {
 	int row=0;
@@ -823,77 +781,12 @@ void print_palette(natb* buff, int x, int y)
 			row++;
 	}
 
-	update_framebuffer_linechanged(x, x+16, y, y+16);
-}
-
-void inline clean_window_buffer(des_window * wind)
-{
-	memset(wind->render_buff, wind->backColor, wind->size_x*wind->size_y);
-}
-
-void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
-{return;
-	//non devo sforare i bound dello schermo
-	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
-	int max_y=(wind->pos_y+TOPBAR_HEIGHT>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : TOPBAR_HEIGHT;
-	if(max_x<=0 || max_y<=0)
-		return;
-
-	//renderizzo sfondo TOPBAR
-	for(int i=0; i<max_x; i++)
-		for(int j=0; j<max_y; j++)
-			if(i <= wind->size_x-4 && i>=wind->size_x-20 && j>=2 && j<=17)
-				set_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_X_COLOR);
-			else
-				set_pixel(buff, wind->pos_x + i, wind->pos_y + j, MAX_SCREENX, MAX_SCREENY, WIN_TOPBAR_COLOR);
-
-	//renderizzo lettera X
-	//set_fontchar(buff,wind->pos_x + wind->size_x-15, wind->pos_y + 2, 'x', WIN_X_COLOR);
-
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y, wind->pos_y+max_y);
-}
-
-void inline render_window_onvideobuffer(natb* buff, des_window * wind)
-{return;
-	// non devo sforare i bound dello schermo
-	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
-	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-(wind->pos_y+TOPBAR_HEIGHT) : wind->size_y;
-	if(max_x<=0 || max_y<=0)
-		return;
-
-	// copio il buffer della finestra su quello video
-	for(int j=0; j<max_y; j++)
-		gr_memcpy_safe_onvideobuffer(buff, buff + wind->pos_x + (j+wind->pos_y+TOPBAR_HEIGHT)*MAX_SCREENX, wind->render_buff + j*wind->size_x, max_x);
-
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y + TOPBAR_HEIGHT, wind->pos_y + max_y + TOPBAR_HEIGHT);
-}
-
-void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
-{return;
-	// non devo sforare i bound dello schermo
-	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
-	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : wind->size_y+TOPBAR_HEIGHT;
-	if(max_x<=0 || max_y<=0)
-		return;
-
-	// pulisco corpo della finestra e topbar
-	for(int j=0; j<max_y; j++)
-		memset(buff + wind->pos_x + (j+wind->pos_y)*MAX_SCREENX, WIN_BACKGROUND_COLOR, max_x);
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+max_x, wind->pos_y, wind->pos_y + max_y);
+	//update_framebuffer_linechanged(x, x+16, y, y+16);
 }
 
 void graphic_visualizza_finestra(int id)
 {
 	des_window * wind = &win_man.windows_arr[id];
-/*
-	//inizializzo buffer video della finestra
-	clean_window_buffer(wind);
-
-	//renderizzo topbar su secondo buffer
-	render_topbar_onvideobuffer(doubled_framebuffer, wind);
-	render_window_onvideobuffer(doubled_framebuffer, wind);
-*/
-
 	wind->main_container->set_visibility(true);
 
 	wind->topbar_container->render();
@@ -920,59 +813,12 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
 	framebuffer_container->clear_render_units();
-	return;
-	/*
-	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
-	int bound_y=(cursor->old_y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->old_y : 32;
-	for(int i=0; i<bound_x; i++)
-		for(int j=0; j<bound_y; j++)
-			put_pixel(buff, cursor->old_x+i, cursor->old_y+j, MAX_SCREENX, MAX_SCREENY, WIN_BACKGROUND_COLOR);
-			//buff[(i+cursor->old_y)*MAX_SCREENX+(j+cursor->old_x)]=WIN_BACKGROUND_COLOR;
-
-	update_framebuffer_linechanged(cursor->old_x, cursor->old_x+bound_x, cursor->old_y, cursor->old_y+bound_y);
-
-	//devo rigenerare le finestre sottostanti alla vecchia posizione del cursore
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		if(i==win_man.focus_wind)
-			continue;
-		des_window * wind = &win_man.windows_arr[i];
-		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
-			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
-		{	// condizione per individuare se il cursore condivide parti di framebuffer con altre finestre
-			render_topbar_onvideobuffer(doubled_framebuffer, wind);
-			render_window_onvideobuffer(doubled_framebuffer, wind);	//copio nuovamente il bitmap della finestra sul buffer video secondario
-		}
-	}
-
-	//devo rigenerare sempre per ultima, la finestra con focus
-	if(win_man.focus_wind!=-1)
-	{
-		des_window * wind = &win_man.windows_arr[win_man.focus_wind];
-		if((cursor->old_x + 32 > wind->pos_x) && (cursor->old_x < wind->pos_x + wind->size_x) &&
-			(cursor->old_y + 32 > wind->pos_y) && (cursor->old_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT))
-		{	//la finestra con focus va renderizzata solo se il cursore si sovrappone ad essa
-			render_topbar_onvideobuffer(doubled_framebuffer, wind);
-			render_window_onvideobuffer(doubled_framebuffer, wind);
-		}
-	}
-
-	bound_x=(cursor->x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->x : 32;
-	bound_y=(cursor->y+32>=MAX_SCREENY) ? MAX_SCREENY-cursor->y : 32;
-	for(int i=0; i<bound_x; i++)
-		for(int j=0; j<bound_y; j++)
-			if(main_cursor[j*32+i]!=COLOR_TRASP)
-				put_pixel(buff, cursor->x+i, cursor->y+j, MAX_SCREENX, MAX_SCREENY, main_cursor[j*32+i]);
-				//buff[(i+cursor->y)*MAX_SCREENX+(j+cursor->x)]=main_cursor[i*32+j];
-
-	update_framebuffer_linechanged(cursor->x, cursor->x+bound_x, cursor->y, cursor->y+bound_y);
-	//update_framebuffer_linechanged(0,1000,0,1000);*/
 }
 
 void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_cursor)
 {
 	return;
-
+/*
 	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
 		return;
 
@@ -1012,7 +858,7 @@ void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_curs
 	// renderizzo anche il mouse
 	render_mousecursor_onbuffer(doubled_framebuffer, main_cursor);
 	
-	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");
+	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");*/
 }
 
 int check_topbar_oncoords(int curs_x, int curs_y)
@@ -1038,7 +884,7 @@ int check_window_oncoords(int curs_x, int curs_y)
 }
 
 void move_window(int w_id, int to_x, int to_y)
-{
+{/*
 	des_window * wind = &win_man.windows_arr[w_id];
 
 	// devo pulire l'area di framebuffer in cui era presente la finestra
@@ -1076,6 +922,7 @@ void move_window(int w_id, int to_x, int to_y)
 
 	render_topbar_onvideobuffer(doubled_framebuffer, wind);
 	render_window_onvideobuffer(doubled_framebuffer, wind);
+	*/
 }
 
 void mouse_notify_move(int delta_x, int delta_y)
@@ -1083,7 +930,7 @@ void mouse_notify_move(int delta_x, int delta_y)
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento posizione mouse (x,y)");
+	//flog(LOG_INFO, "Inserimento richiesta di aggiornamento posizione mouse (x,y)");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, MOUSE_UPDATE_EVENT, false);
 	if(new_index == -1)
@@ -1246,7 +1093,7 @@ void main_windows_manager(int n)
 		sem_wait(win_man.sync_notempty);
 		sem_wait(win_man.mutex);
 
-		flog(LOG_INFO, "main_windows_manager: risvegliato");
+		//flog(LOG_INFO, "main_windows_manager: risvegliato");
 		des_window_req newreq;
 		if(!windows_queue_extract(win_man, newreq))
 		{
@@ -1270,7 +1117,7 @@ void main_windows_manager(int n)
 			break;
 			case MOUSE_UPDATE_EVENT:
 			{
-					flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
+					//flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
 					main_cursor.old_x=main_cursor.x;
 					main_cursor.old_y=main_cursor.y;
 					main_cursor.x+=newreq.delta_x;
@@ -1317,7 +1164,7 @@ void main_windows_manager(int n)
 		}
 
 		//copio il buffer secondario sulla memoria video
-		update_framebuffer();
+		//update_framebuffer();
 
 		sem_signal(win_man.mutex);
 		sem_signal(win_man.sync_notfull);
