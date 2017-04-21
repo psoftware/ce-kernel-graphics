@@ -869,7 +869,7 @@ void inline render_window_onvideobuffer(natb* buff, des_window * wind)
 }
 
 void inline clean_window_onvideobuffer(natb* buff, des_window * wind)
-{
+{return;
 	// non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : wind->size_y+TOPBAR_HEIGHT;

@@ -213,7 +213,7 @@ void gr_object::render()
 		}
 	}
 
-	// ============= TEST
+	// === Inizio fase di stampa ===
 	//flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
@@ -244,21 +244,26 @@ void gr_object::render()
 				continue;
 			}
 
-			//if(!obj->trasparency)
+			if(!obj->trasparency)
 				for(int y=0; y<(lmax_y-lmin_y); y++)
 					memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
 					//memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
 					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
+			else
+				for(int y=0; y<(lmax_y-lmin_y); y++)
+					for(int x=0; x<(lmax_x-lmin_x); x++)
+						if(*(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x) != 0x03)
+							set_pixel(this->buffer, x+lminpos_x, y+lminpos_y, this->size_x, this->size_y, *(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x));
 
 			debug_color+=3;
 		}
 	}
-	// ==================
 
 	//flog(LOG_INFO, "## --- fine render() sperimentale");
 	//flog(LOG_INFO, "#");
-	return;
-
+	
+/*
+	// ========= ALGORITMO VECCHIO (ALGORITMO DEL PITTORE)
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
 		if(!(obj->visible))
@@ -285,6 +290,7 @@ void gr_object::render()
 
 		//flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
 	}
+*/
 }
 
 // ==================================================================
@@ -325,7 +331,7 @@ void gr_object::render_subset_unit::expand(unsigned int pos_x, unsigned int pos_
 	//flog(LOG_INFO, "### nuove coordinate/dimensioni this: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
 	//flog(LOG_INFO, "### nuove coordinate/dimensioni param: x=%d, y=%d, w=%d, h=%d", pos_x, pos_y, size_x, size_y);
 	if(this->pos_x + this->size_x < pos_x + size_x)
-			this->size_x += pos_x + size_x - (this->pos_x + this->size_x);
+		this->size_x += pos_x + size_x - (this->pos_x + this->size_x);
 	if(this->pos_x > pos_x)
 	{
 		this->size_x += this->pos_x - pos_x;
