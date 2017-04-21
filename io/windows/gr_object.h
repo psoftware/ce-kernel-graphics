@@ -40,9 +40,7 @@ public:
 	bool remove_child(gr_object *child);
 	void focus_child(gr_object *child);
 
-	//metodi per la gestione della lista delle render_subset_unit (insiemi di render, algoritmo ottimizzato)
-	void push_render_unit(render_subset_unit *newunit);
-	render_subset_unit *pop_render_unit();
+	//metodo per la pulizia delle render units (serve per il framebuffer)
 	void clear_render_units();
 
 	unsigned int get_pos_x();
@@ -60,6 +58,13 @@ public:
 
 	// struct di utilità per l'algorimo del pittore ottimizzato
 protected:
+	// serve per allineare le coordinate old a quelle correnti
+	void align_old_coords();
+	
+	//metodi per la gestione della lista delle render_subset_unit (insiemi di render, algoritmo ottimizzato)
+	void push_render_unit(render_subset_unit *newunit);
+	render_subset_unit *pop_render_unit();
+
 	class render_target
 	{
 	public:

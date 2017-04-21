@@ -770,7 +770,7 @@ void *gr_memcpy_safe_onvideobuffer(natb * base_buff, void *__restrict dest, cons
 }
 
 void inline update_framebuffer_linechanged(int column_first, int column_last, int line_first, int line_last)
-{
+{return;
 	if(line_first < line_changed_first)
 		line_changed_first=line_first;
 	if(line_last > line_changed_last)
@@ -783,7 +783,7 @@ void inline update_framebuffer_linechanged(int column_first, int column_last, in
 }
 
 void inline update_framebuffer()
-{
+{return;
 	// le variabili non devono sforare i margini dello schermo, altrimentri avremmo un pesante buffer overflow
 	if(line_changed_first < 0)
 		line_changed_first=0;
@@ -832,7 +832,7 @@ void inline clean_window_buffer(des_window * wind)
 }
 
 void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
-{
+{return;
 	//non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT>=MAX_SCREENY) ? MAX_SCREENY-wind->pos_y : TOPBAR_HEIGHT;
@@ -854,7 +854,7 @@ void inline render_topbar_onvideobuffer(natb* buff, des_window * wind)
 }
 
 void inline render_window_onvideobuffer(natb* buff, des_window * wind)
-{
+{return;
 	// non devo sforare i bound dello schermo
 	int max_x=(wind->pos_x+wind->size_x>=MAX_SCREENX) ? MAX_SCREENX-wind->pos_x : wind->size_x;
 	int max_y=(wind->pos_y+TOPBAR_HEIGHT+wind->size_y>=MAX_SCREENY) ? MAX_SCREENY-(wind->pos_y+TOPBAR_HEIGHT) : wind->size_y;
@@ -1349,7 +1349,7 @@ bool windows_init()
 
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
-
+	flog(LOG_INFO, "### FINO QUIIIIIIIIIIIIIII");
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);
 	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
@@ -1571,7 +1571,7 @@ void mouse_handler(int i)
 
 	while(true)
 	{
-		flog(LOG_INFO, "mouse_count %d",mouse_count);
+		//flog(LOG_INFO, "mouse_count %d",mouse_count);
 		//scarto un pacchetto se è settata questa variabile booleana. Mi serve per gestire i disallineamenti
 		if(discard_one_packet)
 		{

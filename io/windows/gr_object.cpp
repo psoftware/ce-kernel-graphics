@@ -145,17 +145,34 @@ void gr_object::set_visibility(bool newval){
 	this->visible=newval;
 }
 
+void gr_object::align_old_coords(){
+	this->old_pos_x = this->pos_x;
+	this->old_pos_y = this->pos_y;
+	this->old_size_x = this->size_x;
+	this->old_size_y = this->size_y;
+}
+
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
-	static natb debug_color = 0x00;
-	flog(LOG_INFO, "## --- inizio render()");
+	static natb debug_color = 0x20;
+	//flog(LOG_INFO, "## --- inizio render()");
 
 	//per ogni oggetto (obj) del contenitore
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		flog(LOG_INFO, "## nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+		//flog(LOG_INFO, "## nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
 		//render_target *newtarget = new render_target(obj);
+
+		// controllo di intersezione della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
+		// creo una nuova render_unit e faccio finta che faccia parte di quelle di obj.
+		// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
+		// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
+		render_subset_unit *oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+		oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
+		// devo, ovviamente, resettare le coordinate old di obj, allineandole a quelle correnti
+		obj->align_old_coords();
+		obj->push_render_unit(oldareaunit);
 
 		// itero tutte le subset unit di obj, le tolgo anche dalla lista
 		for(render_subset_unit *objunit=obj->pop_render_unit(); objunit!=0; objunit=obj->pop_render_unit())
@@ -173,7 +190,7 @@ void gr_object::render()
 				// controllo di intersezione con una render_unit già creata
 				if(subsetunit->intersects(objunit))
 				{
-					flog(LOG_INFO, "## trovata render_unit %p", subsetunit);
+					//flog(LOG_INFO, "## trovata render_unit %p", subsetunit);
 
 					//aggiorno le coordinate della objunit perchè così posso confrontarla con altre unit che intersecano
 					//la objunit originale. In tal modo mi risparmio un ciclo aggiuntivo
@@ -191,57 +208,13 @@ void gr_object::render()
 
 				//delete temp;
 			}
-			flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
+			//flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
 			this->push_render_unit(objunit);
-
-			//se
-			/*if(found)
-				this->push_render_unit(objunit);
-			else
-			{
-				//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
-				flog(LOG_INFO, "## creo nuova render_unit");
-				render_subset_unit *newunit = new render_subset_unit(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
-				newunit->expand(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
-				this->push_render_unit(newunit);
-
-				//aggiungo l'elemento in testa alla copy_list della nuova subsetunit
-				newtarget->next = newunit->copy_list;
-				newunit->copy_list = newtarget;
-			}*/
-
-			// ---------------------------------------------------------------------------------------------------------------------------------
-			// controllo di intersezione della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA) con una render_unit già creata
-			// in questo caso non devo aggiungere alcun oggetto alle liste, perchè vanno renderizzati solo gli oggetti presenti sull'area sporca
-			/*bool found_old = false;
-			if(subsetunit->intersects(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y))
-			{
-				//aggiorno le coordinate della render unit
-				flog(LOG_INFO, "## trovata render_unit (OLD) %p", subsetunit);
-				subsetunit->expand(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
-				found_old=true;
-			}
-			else
-			{
-				//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
-				flog(LOG_INFO, "## creo nuova render_unit (OLD)");
-				render_subset_unit *newunit = new render_subset_unit(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
-				newunit->expand(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
-				this->push_render_unit(newunit);
-			}
-
-			
-
-			//manca creazione per found_old
-			if(!found_old)
-			{
-				flog(LOG_INFO, "## creo nuova render_unit old");
-			}*/
 		}
 	}
 
 	// ============= TEST
-	flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
+	//flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
 		//questo oggetto mi server solo per sfruttare il metodo intesect e nient'altro
@@ -249,19 +222,21 @@ void gr_object::render()
 
 		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)
 		{
-			int lmin_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x - obj->pos_x : obj->size_x;
-			int lmin_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y - obj->pos_y : obj->size_y;
-			int lmax_x = (obj->pos_x + obj->size_x > subsetunit->size_x + subsetunit->pos_x) ? subsetunit->size_x + subsetunit->pos_x - obj->pos_x: subsetunit->size_x;
-			int lmax_y = (obj->pos_y + obj->size_y > subsetunit->size_y + subsetunit->pos_y) ? subsetunit->size_y + subsetunit->pos_y - obj->pos_y: subsetunit->size_y;
-			int lminpos_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x : obj->pos_x;
-			int lminpos_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y : obj->pos_y;
+			int lmin_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x - obj->pos_x : 0;
+			int lmin_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y - obj->pos_y : 0;
+			int lmax_x = (obj->pos_x + obj->size_x > subsetunit->size_x + subsetunit->pos_x) ? subsetunit->size_x + subsetunit->pos_x - obj->pos_x: obj->size_x;
+			int lmax_y = (obj->pos_y + obj->size_y > subsetunit->size_y + subsetunit->pos_y) ? subsetunit->size_y + subsetunit->pos_y - obj->pos_y: obj->size_y;
+			//int lminpos_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x : obj->pos_x;	//RIDONDANTE
+			//int lminpos_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y : obj->pos_y;	//RIDONDANTE
+			int lminpos_x = obj->pos_x + lmin_x;
+			int lminpos_y = obj->pos_y + lmin_y;
 
-			flog(LOG_INFO, "## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
-			flog(LOG_INFO, "## (2) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
-			flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			//flog(LOG_INFO, "## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
+			//flog(LOG_INFO, "## (2) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+			//flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
 
-			if(!subsetunit->intersects(&objintersect))
-				flog(LOG_INFO, "# l'oggetto non interseca nulla");
+			//if(!subsetunit->intersects(&objintersect))
+				//flog(LOG_INFO, "# l'oggetto non interseca nulla");
 
 			if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
 			{
@@ -269,9 +244,10 @@ void gr_object::render()
 				continue;
 			}
 
-			for(int y=0; y<(lmax_y-lmin_y); y++)
-					//memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
-					memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
+			//if(!obj->trasparency)
+				for(int y=0; y<(lmax_y-lmin_y); y++)
+					memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
+					//memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
 					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
 
 			debug_color+=3;
@@ -279,8 +255,8 @@ void gr_object::render()
 	}
 	// ==================
 
-	flog(LOG_INFO, "## --- fine render() sperimentale");
-	flog(LOG_INFO, "#");
+	//flog(LOG_INFO, "## --- fine render() sperimentale");
+	//flog(LOG_INFO, "#");
 	return;
 
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
@@ -346,8 +322,8 @@ bool gr_object::render_subset_unit::intersects(render_subset_unit *param)
 
 void gr_object::render_subset_unit::expand(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
 {
-	flog(LOG_INFO, "### nuove coordinate/dimensioni this: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
-	flog(LOG_INFO, "### nuove coordinate/dimensioni param: x=%d, y=%d, w=%d, h=%d", pos_x, pos_y, size_x, size_y);
+	//flog(LOG_INFO, "### nuove coordinate/dimensioni this: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
+	//flog(LOG_INFO, "### nuove coordinate/dimensioni param: x=%d, y=%d, w=%d, h=%d", pos_x, pos_y, size_x, size_y);
 	if(this->pos_x + this->size_x < pos_x + size_x)
 			this->size_x += pos_x + size_x - (this->pos_x + this->size_x);
 	if(this->pos_x > pos_x)
@@ -364,7 +340,7 @@ void gr_object::render_subset_unit::expand(unsigned int pos_x, unsigned int pos_
 		this->pos_y = pos_y;
 	}
 
-	flog(LOG_INFO, "### nuove coordinate/dimensioni risultato render_unit: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
+	//flog(LOG_INFO, "### nuove coordinate/dimensioni risultato render_unit: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
 }
 
 void gr_object::render_subset_unit::expand(render_subset_unit *param)
