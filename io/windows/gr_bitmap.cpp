@@ -9,8 +9,9 @@ gr_bitmap::gr_bitmap(unsigned int pos_x, unsigned int pos_y, unsigned int size_x
 
 void gr_bitmap::render()
 {
-	//disegna bottone su buffer
-	//cout << "Renderizzo bitmap " << z_index << endl;
+	//indico l'area modificata
+	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
+	push_render_unit(newunit);
 }
 
 PIXEL_UNIT * gr_bitmap::get_buffer()

@@ -21,7 +21,6 @@ void gr_button::render()
 	memset(this->buffer, color, size_x*size_y);
 	int text_width = get_fontstring_width(this->text);
 	set_fontstring(this->buffer, this->size_x, this->size_y, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y, this->text, this->background_color);
-	flog(LOG_INFO, "### text_width=%d x=%d y=%d w=%d h=%d", text_width, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y);
 
 	memset(this->buffer, border_color, size_x);
 	for(natw y=1; y < this->size_y-1; y++)
@@ -30,6 +29,10 @@ void gr_button::render()
 		put_pixel(this->buffer, size_x-1, y, this->size_x, this->size_y, this->border_color);
 	}
 	memset(this->buffer+size_x*(size_y-1), border_color, size_x);
+
+	//indico l'area modificata
+	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
+	push_render_unit(newunit);
 }
 
 void gr_button::set_text(char * text)

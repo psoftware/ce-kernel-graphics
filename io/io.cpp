@@ -566,6 +566,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->topbar_container = new gr_object(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
 	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
 	memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*TOPBAR_HEIGHT);
+	newwindow->topbar_bitmap->render();
 	newwindow->topbar_container->add_child(newwindow->topbar_bitmap);
 	newwindow->main_container->add_child(newwindow->topbar_container);
 
@@ -590,6 +591,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->inner_container = new gr_object(0,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
 	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
 	memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
+	newwindow->background_bitmap->render();
 	newwindow->inner_container->add_child(newwindow->background_bitmap);
 
 	newwindow->main_container->add_child(newwindow->inner_container);
@@ -899,6 +901,7 @@ void graphic_visualizza_finestra(int id)
 	wind->main_container->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
 }
 
 struct des_cursor
@@ -913,8 +916,10 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 {
 	mouse_bitmap->set_pos_x(cursor->x);
 	mouse_bitmap->set_pos_y(cursor->y);
+	mouse_bitmap->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
 	return;
 	/*
 	int bound_x=(cursor->old_x+32>=MAX_SCREENX) ? MAX_SCREENX-cursor->old_x : 32;
@@ -1225,9 +1230,9 @@ void user_add_keypress_event_onfocused(char key)
 
 void main_windows_manager(int n)
 {
-	set_background(doubled_framebuffer);
-	print_palette(doubled_framebuffer, 900,450);
-	update_framebuffer();
+	//set_background(doubled_framebuffer);
+	//print_palette(doubled_framebuffer, 900,450);
+	//update_framebuffer();
 
 	//patina di debug
 	//memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
@@ -1332,13 +1337,18 @@ bool windows_init()
 	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
 	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 	print_palette(bitmap->get_buffer(), 0,0);
+	bitmap->render();
 	doubled_framebuffer_container->add_child(bitmap);
 
 	//cursore
 	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
 	memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
 	mouse_bitmap->set_trasparency(true);
+	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);
+
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
 
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);

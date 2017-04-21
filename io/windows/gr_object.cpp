@@ -4,8 +4,8 @@
 #include "consts.h"
 
 gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
-	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), overlapping_child_list(0), overlapping_next_brother(0),
-		modified(true), old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y),
+	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
+		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
 	if(predefined_buffer==0)
@@ -83,7 +83,7 @@ bool gr_object::remove_child(gr_object *removechild)
 }
 
 // serve per dare focus ad un elemento nel suo z-index
-// O(1)
+// O(n)
 void gr_object::focus_child(gr_object *focuschild)
 {
 	//lo rimuovo dalla lista
@@ -91,6 +91,27 @@ void gr_object::focus_child(gr_object *focuschild)
 
 	//lo riaggiungo (viene messo in cima agli altri di pari z-index)
 	add_child(focuschild);
+}
+
+void gr_object::push_render_unit(render_subset_unit *newunit)
+{
+	newunit->next = units;
+	units=newunit;
+}
+
+gr_object::render_subset_unit * gr_object::pop_render_unit()
+{
+	if(units==0)
+		return 0;
+
+	render_subset_unit * temp = units;
+	units=units->next;
+	return temp;
+}
+
+void gr_object::clear_render_units()
+{
+	units=0; //E' una bestemmia praticamente
 }
 
 unsigned int gr_object::get_pos_x(){
@@ -127,80 +148,147 @@ void gr_object::set_visibility(bool newval){
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
-	/*struct render_target
-	{
-		gr_object *target;
-		render_target *next;
+	static natb debug_color = 0x00;
+	flog(LOG_INFO, "## --- inizio render()");
 
-		render_target(gr_object * newobj)
-		{
-			target=newobj;
-		}
-	};
-	struct render_subset_unit
-	{
-		unsigned pos_x;
-		unsigned pos_y;
-		unsigned size_x;
-		unsigned size_y;
-		bool first_modified_encountered;
-		render_target * copy_list;
-
-		render_subset_unit * next;
-
-		render_subset_unit()
-		{
-			pos_x=0;
-			pos_y=0;
-			size_x=0;
-			size_y=0;
-			copy_list=0;
-			first_modified_encountered=false;
-		}
-	};
-
-	render_subset_unit *unit_list=0;
-
+	//per ogni oggetto (obj) del contenitore
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		render_target *newtarget = new render_target(obj);
+		flog(LOG_INFO, "## nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+		//render_target *newtarget = new render_target(obj);
 
-		for(render_subset_unit *subsetunit=unit_list; subsetunit!=0; subsetunit=subsetunit->next)
+		// itero tutte le subset unit di obj, le tolgo anche dalla lista
+		for(render_subset_unit *objunit=obj->pop_render_unit(); objunit!=0; objunit=obj->pop_render_unit())
 		{
-			if((subsetunit->pos_x + subsetunit->size_x > obj->pos_x) && (subsetunit->pos_x < obj->pos_x + obj->size_x) &&
-			(subsetunit->pos_y + subsetunit->size_y > obj->pos_y) && (subsetunit->pos_y < obj->pos_y + obj->size_y))
-			{
-				//aggiungo l'elemento in testa alla copy_list della subsetunit
-				newtarget->next = unit_list->copy_list;
-				unit_list->copy_list = newtarget;
+			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di this, devo sistemare
+			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
+			objunit->offset_position(obj->pos_x, obj->pos_y);
 
-				//aggiorno le coordinate del render subset solo se modificato
-				if(obj->modified)
+			// itero tutte le subset unit che ho già creato, cioè quelle del gr_object this,
+			// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
+			// una lista di render_unit non intersecate tra di loro.
+			render_subset_unit *subsetunit=this->units, *prec=this->units;
+			while(subsetunit!=0)
+			{
+				// controllo di intersezione con una render_unit già creata
+				if(subsetunit->intersects(objunit))
 				{
-					subsetunit->first_modified_encountered=true;
-					//subsetunit->...
+					flog(LOG_INFO, "## trovata render_unit %p", subsetunit);
+
+					//aggiorno le coordinate della objunit perchè così posso confrontarla con altre unit che intersecano
+					//la objunit originale. In tal modo mi risparmio un ciclo aggiuntivo
+					objunit->expand(subsetunit);
+					//INOLTRE DOVREI ELIMINARE LA subsetunit, CHE CULO, STO SCORRENDO LA LISTA QUINDI POSSO FARLA O(1)
+					if(subsetunit==units)
+						units=subsetunit->next;
+					else
+						prec->next=subsetunit->next;
 				}
-				
-				break;
+
+				//render_subset_unit *temp = subsetunit;
+				prec=subsetunit;
+				subsetunit=subsetunit->next;
+
+				//delete temp;
+			}
+			flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
+			this->push_render_unit(objunit);
+
+			//se
+			/*if(found)
+				this->push_render_unit(objunit);
+			else
+			{
+				//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
+				flog(LOG_INFO, "## creo nuova render_unit");
+				render_subset_unit *newunit = new render_subset_unit(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+				newunit->expand(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+				this->push_render_unit(newunit);
+
+				//aggiungo l'elemento in testa alla copy_list della nuova subsetunit
+				newtarget->next = newunit->copy_list;
+				newunit->copy_list = newtarget;
+			}*/
+
+			// ---------------------------------------------------------------------------------------------------------------------------------
+			// controllo di intersezione della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA) con una render_unit già creata
+			// in questo caso non devo aggiungere alcun oggetto alle liste, perchè vanno renderizzati solo gli oggetti presenti sull'area sporca
+			/*bool found_old = false;
+			if(subsetunit->intersects(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y))
+			{
+				//aggiorno le coordinate della render unit
+				flog(LOG_INFO, "## trovata render_unit (OLD) %p", subsetunit);
+				subsetunit->expand(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+				found_old=true;
+			}
+			else
+			{
+				//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
+				flog(LOG_INFO, "## creo nuova render_unit (OLD)");
+				render_subset_unit *newunit = new render_subset_unit(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+				newunit->expand(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+				this->push_render_unit(newunit);
 			}
 
-			//se non ho trovato unità, allora ne creo una nuova e la aggiungo alla lista di unità
-			render_subset_unit *newunit = new render_subset_unit;
-			newunit->next = unit_list;
-			unit_list= newunit;
+			
 
-			//aggiungo l'elemento in testa alla copy_list della nuova subsetunit
-			newtarget->next = newunit->copy_list;
-			newunit->copy_list = newtarget;
-		}	
-	}*/
-	
+			//manca creazione per found_old
+			if(!found_old)
+			{
+				flog(LOG_INFO, "## creo nuova render_unit old");
+			}*/
+		}
+	}
+
+	// ============= TEST
+	flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
+	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
+	{
+		//questo oggetto mi server solo per sfruttare il metodo intesect e nient'altro
+		render_subset_unit objintersect(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+
+		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)
+		{
+			int lmin_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x - obj->pos_x : obj->size_x;
+			int lmin_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y - obj->pos_y : obj->size_y;
+			int lmax_x = (obj->pos_x + obj->size_x > subsetunit->size_x + subsetunit->pos_x) ? subsetunit->size_x + subsetunit->pos_x - obj->pos_x: subsetunit->size_x;
+			int lmax_y = (obj->pos_y + obj->size_y > subsetunit->size_y + subsetunit->pos_y) ? subsetunit->size_y + subsetunit->pos_y - obj->pos_y: subsetunit->size_y;
+			int lminpos_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x : obj->pos_x;
+			int lminpos_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y : obj->pos_y;
+
+			flog(LOG_INFO, "## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
+			flog(LOG_INFO, "## (2) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+			flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+
+			if(!subsetunit->intersects(&objintersect))
+				flog(LOG_INFO, "# l'oggetto non interseca nulla");
+
+			if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
+			{
+				flog(LOG_INFO, "# oggetto non intersecante oppure max_x/max_y errate");
+				continue;
+			}
+
+			for(int y=0; y<(lmax_y-lmin_y); y++)
+					//memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
+					memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
+					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
+
+			debug_color+=3;
+		}
+	}
+	// ==================
+
+	flog(LOG_INFO, "## --- fine render() sperimentale");
+	flog(LOG_INFO, "#");
+	return;
+
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
 		if(!(obj->visible))
 			continue;
 
-		flog(LOG_INFO, "## Renderizzo oggetto dalla lista con z-index %d, main container size_x %d", obj->z_index, this->size_x);
+		//flog(LOG_INFO, "## Renderizzo oggetto dalla lista con z-index %d, main container size_x %d", obj->z_index, this->size_x);
 		int max_x = (obj->pos_x + obj->size_x > this->size_x) ? this->size_x - obj->pos_x : obj->size_x;
 		int max_y = (obj->pos_y + obj->size_y > this->size_y) ? this->size_y - obj->pos_y : obj->size_y;
 		if(max_x<=0 || max_y<=0)
@@ -217,12 +305,75 @@ void gr_object::render()
 				for(int j=0; j<max_y; j++)
 					if(obj->buffer[j*obj->size_x+i] != 0x03)
 						set_pixel(this->buffer, obj->pos_x+i, obj->pos_y+j, this->size_x, this->size_y, obj->buffer[j*obj->size_x+i]);
-		//controllo bound
-		//memcopy...
-		/*for(int y=0; y<size_y; y++)
-			for(int x=0; x<size_x; x++)
-				this->buffer[(x + c->pos_x) + (y + c->pos_y)*this->size_x] = c->buffer[x + y*c->size_x];*/
 
-		flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
+
+		//flog(LOG_INFO, "## Terminata renderizzazione oggetto dalla lista con z-index %d", obj->z_index);
 	}
+}
+
+// ==================================================================
+// struct di utilità per l'ottimizzazione dell'algoritmo di rendering
+// render_target
+gr_object::render_target::render_target(gr_object * newobj)
+{
+	target=newobj;
+}
+
+// render_subset_unit
+gr_object::render_subset_unit::render_subset_unit(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+{
+	this->pos_x = pos_x;
+	this->pos_y = pos_y;
+	this->size_x = size_x;
+	this->size_y = size_y;
+	this->copy_list=0;
+	this->first_modified_encountered=false;
+}
+
+bool gr_object::render_subset_unit::intersects(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+{
+	if((this->pos_x + this->size_x > pos_x) && (this->pos_x < pos_x + size_x) &&
+				(this->pos_y + this->size_y > pos_y) && (this->pos_y < pos_y + size_y))
+		return true;
+
+	return false;
+}
+
+bool gr_object::render_subset_unit::intersects(render_subset_unit *param)
+{
+	return intersects(param->pos_x, param->pos_y, param->size_x, param->size_y);
+}
+
+void gr_object::render_subset_unit::expand(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+{
+	flog(LOG_INFO, "### nuove coordinate/dimensioni this: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
+	flog(LOG_INFO, "### nuove coordinate/dimensioni param: x=%d, y=%d, w=%d, h=%d", pos_x, pos_y, size_x, size_y);
+	if(this->pos_x + this->size_x < pos_x + size_x)
+			this->size_x += pos_x + size_x - (this->pos_x + this->size_x);
+	if(this->pos_x > pos_x)
+	{
+		this->size_x += this->pos_x - pos_x;
+		this->pos_x = pos_x;
+	}
+
+	if(this->pos_y + this->size_y < pos_y + size_y)
+		this->size_y += pos_y + size_y - (this->pos_y + this->size_y);
+	if(this->pos_y > pos_y)
+	{
+		this->size_y += this->pos_y - pos_y;
+		this->pos_y = pos_y;
+	}
+
+	flog(LOG_INFO, "### nuove coordinate/dimensioni risultato render_unit: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
+}
+
+void gr_object::render_subset_unit::expand(render_subset_unit *param)
+{
+	expand(param->pos_x, param->pos_y, param->size_x, param->size_y);
+}
+
+void gr_object::render_subset_unit::offset_position(unsigned int parent_pos_x, unsigned int parent_pos_y)
+{
+	this->pos_x+=parent_pos_x;
+	this->pos_y+=parent_pos_y;
 }

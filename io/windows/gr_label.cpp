@@ -13,6 +13,10 @@ void gr_label::render()
 {
 	memset(this->buffer, this->back_color, this->size_x*this->size_y);
 	set_fontstring(this->buffer, this->size_x, this->size_y, 0, 0, this->size_x, this->size_y, this->text, this->back_color);
+
+	//indico l'area modificata
+	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
+	push_render_unit(newunit);
 }
 
 void gr_label::set_text(char * text)
