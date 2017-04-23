@@ -412,6 +412,7 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 #include "windows/gr_bitmap.h"
 #include "windows/gr_button.h"
 #include "windows/gr_label.h"
+#include "windows/gr_window.h"
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
 gr_bitmap * mouse_bitmap;
@@ -485,7 +486,7 @@ struct des_windows_man
 {
 	//Finestre
 	static const int MAX_WINDOWS = 5;
-	static const int TOPBAR_HEIGHT = 20;
+	//static const int TOPBAR_HEIGHT = 20;
 	natb windows_count;
 	des_window windows_arr[MAX_WINDOWS];		//Finestre create
 	int focus_wind;								//Finestra selezionata con mouse
@@ -532,10 +533,6 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 }
 
 //Primitive
-const int TOPBAR_HEIGHT = 20;
-const int DEFAULT_WIN_BACKCOLOR = 0x1e;
-const int TOPBAR_WIN_BACKCOLOR = 0x35;
-const int CLOSEBUTTON_WIN_BACKCOLOR = 0x04;
 extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
 {
 	sem_wait(win_man.mutex);
@@ -598,6 +595,9 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->main_container->set_visibility(false);
 	doubled_framebuffer_container->add_child(newwindow->main_container);
 
+	/*gr_window *asdasd = new gr_window(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
+	asdasd->render();
+	doubled_framebuffer_container->add_child(asdasd);*/
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -884,9 +884,17 @@ int check_window_oncoords(int curs_x, int curs_y)
 }
 
 void move_window(int w_id, int to_x, int to_y)
-{/*
+{
 	des_window * wind = &win_man.windows_arr[w_id];
+	wind->pos_x = to_x;
+	wind->pos_y = to_y;
+	wind->main_container->set_pos_x(wind->pos_x);
+	wind->main_container->set_pos_y(wind->pos_y);
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
 
+	/*
 	// devo pulire l'area di framebuffer in cui era presente la finestra
 	clean_window_onvideobuffer(doubled_framebuffer, wind);
 
@@ -1127,6 +1135,7 @@ void main_windows_manager(int n)
 					if(win_man.is_dragging && win_man.focus_wind!=-1)
 					{
 						des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
+						doubled_framebuffer_container->focus_child(f_wind->main_container);
 						move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
 					}
 					//sposto il cursore sulla posizione nuova
@@ -1194,9 +1203,16 @@ bool windows_init()
 	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);
 
+	//barra
+	/*gr_bitmap * screen_bar = new gr_bitmap(0,0, MAX_SCREENX, 40, 10);
+	memset(screen_bar->get_buffer(), 0x37, MAX_SCREENX*MAX_SCREENY);
+	screen_bar->render();
+	doubled_framebuffer_container->add_child(screen_bar);*/
+
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
-	flog(LOG_INFO, "### FINO QUIIIIIIIIIIIIIII");
+	framebuffer_container->clear_render_units();
+
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);
 	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
@@ -1911,24 +1927,6 @@ extern "C" void cmain(int sem_io)
 		abort_p();
 	}
 	heap_init(&end, DIM_IO_HEAP);
-
-	//bottone finestra
-	/*gr_button * button1 = new gr_button(10,20,20,10,1,0x03);
-	button1->render();
-	window_container->add_child(button1);
-	window_container->render();
-
-	window->add_child(window_container);
-	window->render();*/
-
-	//test spostamento
-	/*for(int i=0; i<40; i++)
-	{
-		window->set_pos_x(i*2);
-		window->set_pos_y(i*2);
-		doubled_framebuffer_container->render();
-		framebuffer_container->render();
-	}*/
 
 	if(!windows_init())
 		abort_p();
