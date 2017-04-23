@@ -17,23 +17,23 @@ protected:
 	render_subset_unit *units;
 
 	PIXEL_UNIT *buffer;
-	unsigned int old_pos_x;
-	unsigned int old_pos_y;
-	unsigned int old_size_x;
-	unsigned int old_size_y;
+	int old_pos_x;
+	int old_pos_y;
+	int old_size_x;
+	int old_size_y;
 
-	unsigned int pos_x;
-	unsigned int pos_y;
-	unsigned int size_x;
-	unsigned int size_y;
-	unsigned int z_index;
+	int pos_x;
+	int pos_y;
+	int size_x;
+	int size_y;
+	int z_index;
 
 	//la trasparenza va indicata esplicitamene, per questioni di ottimizzazione del rendering
 	bool trasparency;
 	bool visible;
 
 public:
-	gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer=0);
+	gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer=0);
 
 	//metodi per la gestione dei figli del gr_object
 	void add_child(gr_object *child);
@@ -43,14 +43,14 @@ public:
 	//metodo per la pulizia delle render units (serve per il framebuffer)
 	void clear_render_units();
 
-	unsigned int get_pos_x();
-	unsigned int get_pos_y();
-	unsigned int get_size_x();
-	unsigned int get_size_y();
-	void set_pos_x(unsigned int newval);
-	void set_pos_y(unsigned int newval);
-	void set_size_x(unsigned int newval);
-	void set_size_y(unsigned int newval);
+	int get_pos_x();
+	int get_pos_y();
+	int get_size_x();
+	int get_size_y();
+	void set_pos_x(int newval);
+	void set_pos_y(int newval);
+	void set_size_x(int newval);
+	void set_size_y(int newval);
 	void set_trasparency(bool newval);
 	void set_visibility(bool newval);
 
@@ -77,21 +77,22 @@ protected:
 	class render_subset_unit
 	{
 	public:
-		unsigned pos_x;
-		unsigned pos_y;
-		unsigned size_x;
-		unsigned size_y;
+		int pos_x;
+		int pos_y;
+		int size_x;
+		int size_y;
 		bool first_modified_encountered;
 		render_target * copy_list;
 
 		render_subset_unit * next;
 
-		render_subset_unit(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y);
-		bool intersects(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y);
+		render_subset_unit(int pos_x, int pos_y, int size_x, int size_y);
+		bool intersects(int pos_x, int pos_y, int size_x, int size_y);
 		bool intersects(render_subset_unit *param);
-		void expand(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y);
+		void expand(int pos_x, int pos_y, int size_x, int size_y);
 		void expand(render_subset_unit *param);
-		void offset_position(unsigned int parent_pos_x, unsigned int parent_pos_y);
+		void offset_position(int parent_pos_x, int parent_pos_y);
+		void apply_bounds(int size_x, int size_y);
 	};
 };
 

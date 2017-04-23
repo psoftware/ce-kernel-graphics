@@ -11,7 +11,7 @@ class gr_label : public gr_object
 	PIXEL_UNIT back_color;
 
 public:
-	gr_label(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT back_color);
+	gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT back_color);
 
 	void render();
 	void set_text(char *text);

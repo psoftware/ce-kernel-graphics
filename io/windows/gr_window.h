@@ -20,7 +20,7 @@ public:
 	gr_button * close_button;
 	gr_label * title_label;
 
-	gr_window(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index);
+	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index);
 	void set_title(char *str);
 };
 

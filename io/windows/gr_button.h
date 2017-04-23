@@ -15,7 +15,7 @@ class gr_button : public gr_object
 	bool clicked;
 
 public:
-	gr_button(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT color);
+	gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color);
 
 	void render();
 	void set_text(char * text);

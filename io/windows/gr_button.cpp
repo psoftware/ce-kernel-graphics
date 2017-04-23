@@ -9,7 +9,7 @@ void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb co
 		buffer[MAX_X*y+x] = col;
 }
 
-gr_button::gr_button(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT color)
+gr_button::gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color)
 : gr_object(pos_x, pos_y, size_x, size_y, z_index), background_color(color), border_color(color+1), clicked_color(color), text_color(color+1), clicked(false)
 {
 	copy("", this->text);

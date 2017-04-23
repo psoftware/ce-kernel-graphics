@@ -3,7 +3,7 @@
 #include "gr_object.h"
 #include "consts.h"
 
-gr_object::gr_object(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT *predefined_buffer)
+gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
 		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
@@ -114,28 +114,28 @@ void gr_object::clear_render_units()
 	units=0; //E' una bestemmia praticamente
 }
 
-unsigned int gr_object::get_pos_x(){
+int gr_object::get_pos_x(){
 	return this->pos_x;
 }
-unsigned int gr_object::get_pos_y(){
+int gr_object::get_pos_y(){
 	return this->pos_y;
 }
-unsigned int gr_object::get_size_x(){
+int gr_object::get_size_x(){
 	return this->size_x;
 }
-unsigned int gr_object::get_size_y(){
+int gr_object::get_size_y(){
 	return this->size_y;
 }
-void gr_object::set_pos_x(unsigned int newval){
+void gr_object::set_pos_x(int newval){
 	this->pos_x=newval;
 }
-void gr_object::set_pos_y(unsigned int newval){
+void gr_object::set_pos_y(int newval){
 	this->pos_y=newval;
 }
-void gr_object::set_size_x(unsigned int newval){
+void gr_object::set_size_x(int newval){
 	this->size_x=newval;
 }
-void gr_object::set_size_y(unsigned int newval){
+void gr_object::set_size_y(int newval){
 	this->size_y=newval;
 }
 void gr_object::set_trasparency(bool newval){
@@ -180,6 +180,9 @@ void gr_object::render()
 			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di this, devo sistemare
 			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
 			objunit->offset_position(obj->pos_x, obj->pos_y);
+
+			// la unit non deve sforare i bound dell'oggetto parente, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
+			objunit->apply_bounds(this->size_x, this->size_y);
 
 			// itero tutte le subset unit che ho già creato, cioè quelle del gr_object this,
 			// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
@@ -238,9 +241,10 @@ void gr_object::render()
 			//if(!subsetunit->intersects(&objintersect))
 				//flog(LOG_INFO, "# l'oggetto non interseca nulla");
 
+			//controllo se l'oggetto si interseca con questa render unit
 			if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
 			{
-				flog(LOG_INFO, "# oggetto non intersecante oppure max_x/max_y errate");
+				//flog(LOG_INFO, "# oggetto non intersecante oppure max_x/max_y errate");
 				continue;
 			}
 
@@ -302,7 +306,7 @@ gr_object::render_target::render_target(gr_object * newobj)
 }
 
 // render_subset_unit
-gr_object::render_subset_unit::render_subset_unit(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+gr_object::render_subset_unit::render_subset_unit(int pos_x, int pos_y, int size_x, int size_y)
 {
 	this->pos_x = pos_x;
 	this->pos_y = pos_y;
@@ -312,7 +316,7 @@ gr_object::render_subset_unit::render_subset_unit(unsigned int pos_x, unsigned i
 	this->first_modified_encountered=false;
 }
 
-bool gr_object::render_subset_unit::intersects(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+bool gr_object::render_subset_unit::intersects(int pos_x, int pos_y, int size_x, int size_y)
 {
 	if((this->pos_x + this->size_x > pos_x) && (this->pos_x < pos_x + size_x) &&
 				(this->pos_y + this->size_y > pos_y) && (this->pos_y < pos_y + size_y))
@@ -326,7 +330,7 @@ bool gr_object::render_subset_unit::intersects(render_subset_unit *param)
 	return intersects(param->pos_x, param->pos_y, param->size_x, param->size_y);
 }
 
-void gr_object::render_subset_unit::expand(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y)
+void gr_object::render_subset_unit::expand(int pos_x, int pos_y, int size_x, int size_y)
 {
 	//flog(LOG_INFO, "### nuove coordinate/dimensioni this: x=%d, y=%d, w=%d, h=%d", this->pos_x, this->pos_y, this->size_x, this->size_y);
 	//flog(LOG_INFO, "### nuove coordinate/dimensioni param: x=%d, y=%d, w=%d, h=%d", pos_x, pos_y, size_x, size_y);
@@ -354,8 +358,27 @@ void gr_object::render_subset_unit::expand(render_subset_unit *param)
 	expand(param->pos_x, param->pos_y, param->size_x, param->size_y);
 }
 
-void gr_object::render_subset_unit::offset_position(unsigned int parent_pos_x, unsigned int parent_pos_y)
+void gr_object::render_subset_unit::offset_position(int parent_pos_x, int parent_pos_y)
 {
 	this->pos_x+=parent_pos_x;
 	this->pos_y+=parent_pos_y;
+}
+
+void gr_object::render_subset_unit::apply_bounds(int size_x, int size_y)
+{
+	if(this->pos_x < 0)
+	{
+		this->pos_x = 0;
+		this->size_x -= this->pos_x;
+	}
+	if(this->pos_x + this->size_x > size_x)
+		this->size_x -= this->pos_x + this->size_x - size_x;
+
+	if(this->pos_y < 0)
+	{
+		this->pos_y = 0;
+		this->size_y -= this->pos_y;
+	}
+	if(this->pos_y + this->size_y > size_y)
+		this->size_y -= this->pos_y + this->size_y - size_y;
 }

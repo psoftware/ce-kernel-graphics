@@ -3,7 +3,7 @@
 #include "consts.h"
 #include "libfont.h"
 
-gr_label::gr_label(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index, PIXEL_UNIT back_color)
+gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT back_color)
 : gr_object(pos_x, pos_y, size_x, size_y, z_index), back_color(back_color)
 {
 	copy("", this->text);

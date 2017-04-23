@@ -5,7 +5,7 @@
 #include "gr_label.h"
 #include "consts.h"
 
-gr_window::gr_window(unsigned int pos_x, unsigned int pos_y, unsigned int size_x, unsigned int size_y, unsigned int z_index)
+gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 : gr_object(pos_x, pos_y, size_x, size_y, z_index)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
