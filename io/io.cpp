@@ -755,20 +755,6 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
-void *gr_memcpy_safe_onvideobuffer(natb * base_buff, void *__restrict dest, const void *__restrict src, unsigned long int n)
-{
-	if((static_cast<natb*>(dest)+n) > base_buff+(MAX_SCREENX*MAX_SCREENY) || static_cast<natb*>(dest) < base_buff)
-	{
-		flog(LOG_INFO, "gr_memcpy_safe_framebuffer: anticipato buffer overflow, salto scrittura", dest, src, n);
-		return 0;
-	}
-
-	char *s1 = static_cast<char*>(dest);
-	const char *s2 = static_cast<const char*>(src);
-	for(; 0<n; --n)*s1++ = *s2++;
-	return dest;
-}
-
 void print_palette(natb* buff, int x, int y)
 {
 	int row=0;

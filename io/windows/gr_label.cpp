@@ -1,6 +1,7 @@
 #include "libce.h"
 #include "gr_label.h"
 #include "consts.h"
+#include "libgr.h"
 #include "libfont.h"
 
 gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT back_color)
@@ -11,7 +12,7 @@ gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PI
 
 void gr_label::render()
 {
-	memset(this->buffer, this->back_color, this->size_x*this->size_y);
+	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
 	set_fontstring(this->buffer, this->size_x, this->size_y, 0, 0, this->size_x, this->size_y, this->text, this->back_color);
 
 	//indico l'area modificata

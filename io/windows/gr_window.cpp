@@ -4,6 +4,7 @@
 #include "gr_button.h"
 #include "gr_label.h"
 #include "consts.h"
+#include "libgr.h"
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 : gr_object(pos_x, pos_y, size_x, size_y, z_index)
@@ -14,7 +15,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	// main/topbar container:
 	this->topbar_container = new gr_object(0,0,this->size_x,TOPBAR_HEIGHT,0);
 	this->topbar_bitmap = new gr_bitmap(0,0,this->size_x,TOPBAR_HEIGHT,0);
-	memset(this->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, this->size_x*TOPBAR_HEIGHT);
+	gr_memset(this->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, this->size_x*TOPBAR_HEIGHT);
 	this->topbar_bitmap->render();
 	this->topbar_container->add_child(this->topbar_bitmap);
 	add_child(this->topbar_container);
@@ -35,7 +36,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	// contenitore oggetti finestra + background
 	this->inner_container = new gr_object(0,TOPBAR_HEIGHT,this->size_x,this->size_y-TOPBAR_HEIGHT,0);
 	this->background_bitmap = new gr_bitmap(0,0,this->size_x,this->size_y-TOPBAR_HEIGHT,0);
-	memset(this->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, this->size_x*(this->size_y-TOPBAR_HEIGHT));
+	gr_memset(this->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, this->size_x*(this->size_y-TOPBAR_HEIGHT));
 	this->background_bitmap->render();
 	this->inner_container->add_child(this->background_bitmap);
 
