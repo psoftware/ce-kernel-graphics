@@ -4,7 +4,7 @@
 #include "tipo.h"
 
 //profondità di colore (BPP_8 or BPP_32)
-#define BPP_8
+#define BPP_32
 
 #if !defined(BPP_8) && !defined(BPP_32)
 #error You must define video color depth (BPP_8 or BPP_32)
@@ -14,7 +14,7 @@
 	typedef natb PIXEL_UNIT;
 	#define VBE_DISPI_BPP 0x08;
 #elif defined BPP_32
-	typedef natq PIXEL_UNIT;
+	typedef natl PIXEL_UNIT;
 	#define VBE_DISPI_BPP 0x20;
 #endif
 
@@ -29,13 +29,15 @@
 #define TITLELABEL_PADDING_Y 2
 
 #if defined BPP_8
+	#define WIN_BACKGROUND_COLOR 0x36
 	#define DEFAULT_WIN_BACKCOLOR 0x1e
 	#define TOPBAR_WIN_BACKCOLOR 0x35
 	#define CLOSEBUTTON_WIN_BACKCOLOR 0x04
 #elif defined BPP_32
-	#define DEFAULT_WIN_BACKCOLOR 0x1e
-	#define TOPBAR_WIN_BACKCOLOR 0x35
-	#define CLOSEBUTTON_WIN_BACKCOLOR 0x04
+	#define WIN_BACKGROUND_COLOR 0x005cbbff
+	#define DEFAULT_WIN_BACKCOLOR 0x002ecc71
+	#define TOPBAR_WIN_BACKCOLOR 0x0027ae60
+	#define CLOSEBUTTON_WIN_BACKCOLOR 0x00e00000
 #endif
 
 #endif

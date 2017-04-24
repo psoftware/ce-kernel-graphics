@@ -614,7 +614,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->main_container = new gr_object(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
 	newwindow->topbar_container = new gr_object(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
 	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
-	memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*TOPBAR_HEIGHT);
+	gr_memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*TOPBAR_HEIGHT);
 	newwindow->topbar_bitmap->render();
 	newwindow->topbar_container->add_child(newwindow->topbar_bitmap);
 	newwindow->main_container->add_child(newwindow->topbar_container);
@@ -639,7 +639,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	// contenitore oggetti finestra + background
 	newwindow->inner_container = new gr_object(0,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
 	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
-	memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
+	gr_memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
 	newwindow->background_bitmap->render();
 	newwindow->inner_container->add_child(newwindow->background_bitmap);
 
@@ -803,10 +803,6 @@ err:
 	return event;
 }
 
-const natb WIN_BACKGROUND_COLOR = 0x36;
-const natb WIN_X_COLOR = 0x28;
-const natb WIN_TOPBAR_COLOR = 0x03;
-
 void print_palette(PIXEL_UNIT* buff, int x, int y)
 {
 	int row=0;
@@ -848,9 +844,6 @@ void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
 	mouse_bitmap->set_pos_x(cursor->x);
 	mouse_bitmap->set_pos_y(cursor->y);
 	mouse_bitmap->render();
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
 }
 
 void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_cursor)
@@ -928,9 +921,6 @@ void move_window(int w_id, int to_x, int to_y)
 	wind->pos_y = to_y;
 	wind->main_container->set_pos_x(wind->pos_x);
 	wind->main_container->set_pos_y(wind->pos_y);
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
 
 	/*
 	// devo pulire l'area di framebuffer in cui era presente la finestra
@@ -1178,6 +1168,11 @@ void main_windows_manager(int n)
 					}
 					//sposto il cursore sulla posizione nuova
 					render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
+
+					//copio il buffer secondario sulla memoria video
+					doubled_framebuffer_container->render();
+					framebuffer_container->render();
+					framebuffer_container->clear_render_units();
 			}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
@@ -1210,9 +1205,6 @@ void main_windows_manager(int n)
 			break;
 		}
 
-		//copio il buffer secondario sulla memoria video
-		//update_framebuffer();
-
 		sem_signal(win_man.mutex);
 		sem_signal(win_man.sync_notfull);
 	}
@@ -1229,7 +1221,7 @@ bool windows_init()
 	//sfondo
 	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
 	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
-	memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 	print_palette(bitmap->get_buffer(), 0,0);
 	bitmap->render();
 	doubled_framebuffer_container->add_child(bitmap);
