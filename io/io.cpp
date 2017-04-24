@@ -323,10 +323,18 @@ bool com_init()
 //                         GESTIONE FINESTRE                                  //
 ////////////////////////////////////////////////////////////////////////////////
 
+#include "windows/libgr.h"
+#include "windows/libfont.h"
+#include "windows/gr_object.h"
+#include "windows/gr_bitmap.h"
+#include "windows/gr_button.h"
+#include "windows/gr_label.h"
+#include "windows/gr_window.h"
+
 const int MAX_SCREENX = 1280;
 const int MAX_SCREENY = 1024;
 
-natb* framebuffer = (natb*)0xfd000000;
+PIXEL_UNIT* framebuffer = (PIXEL_UNIT*)0xfd000000;
 natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];	// Secondo buffer (quadruple buffering)
 int column_changed_first = 0;
 int column_changed_last = 0;
@@ -406,13 +414,6 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 	elem=q;
 }
 
-#include "windows/libgr.h"
-#include "windows/libfont.h"
-#include "windows/gr_object.h"
-#include "windows/gr_bitmap.h"
-#include "windows/gr_button.h"
-#include "windows/gr_label.h"
-#include "windows/gr_window.h"
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
 gr_bitmap * mouse_bitmap;
@@ -755,10 +756,10 @@ const natb WIN_BACKGROUND_COLOR = 0x36;
 const natb WIN_X_COLOR = 0x28;
 const natb WIN_TOPBAR_COLOR = 0x03;
 
-void print_palette(natb* buff, int x, int y)
+void print_palette(PIXEL_UNIT* buff, int x, int y)
 {
 	int row=0;
-	for(natb i=0; i<0xFF; i++)
+	for(PIXEL_UNIT i=0; i<0xFF; i++)
 	{
 		for(int k=0; k<10; k++)
 			for(int j=0; j<10; j++)

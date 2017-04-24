@@ -3,7 +3,7 @@
 
 #include "consts.h"
 
-void inline set_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
+void inline set_pixel(PIXEL_UNIT * buffer, int x, int y, int MAX_X, int MAX_Y, PIXEL_UNIT col)
 {
 	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
 		buffer[MAX_X*y+x] = col;

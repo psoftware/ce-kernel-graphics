@@ -4,12 +4,6 @@
 #include "libgr.h"
 #include "libfont.h"
 
-void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
-{
-	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
-		buffer[MAX_X*y+x] = col;
-}
-
 gr_button::gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color)
 : gr_object(pos_x, pos_y, size_x, size_y, z_index), background_color(color), border_color(color+1), clicked_color(color), text_color(color+1), clicked(false)
 {
@@ -26,8 +20,8 @@ void gr_button::render()
 	gr_memset(this->buffer, border_color, size_x);
 	for(natw y=1; y < this->size_y-1; y++)
 	{
-		put_pixel(this->buffer, 0, y, this->size_x, this->size_y, this->border_color);
-		put_pixel(this->buffer, size_x-1, y, this->size_x, this->size_y, this->border_color);
+		set_pixel(this->buffer, 0, y, this->size_x, this->size_y, this->border_color);
+		set_pixel(this->buffer, size_x-1, y, this->size_x, this->size_y, this->border_color);
 	}
 	gr_memset(this->buffer+size_x*(size_y-1), border_color, size_x);
 
