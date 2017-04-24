@@ -21,7 +21,7 @@ public:
 	gr_label * title_label;
 
 	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index);
-	void set_title(char *str);
+	void set_title(const char *str);
 };
 
 #endif

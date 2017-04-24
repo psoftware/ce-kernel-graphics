@@ -36,7 +36,7 @@ void gr_button::render()
 	push_render_unit(newunit);
 }
 
-void gr_button::set_text(char * text)
+void gr_button::set_text(const char * text)
 {
 	copy(text, this->text);
 }

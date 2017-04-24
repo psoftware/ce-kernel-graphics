@@ -47,7 +47,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	set_visibility(false);
 }
 
-void gr_window::set_title(char *str)
+void gr_window::set_title(const char *str)
 {
 	this->title_label->set_text(str);
 }

@@ -20,7 +20,7 @@ void gr_label::render()
 	push_render_unit(newunit);
 }
 
-void gr_label::set_text(char * text)
+void gr_label::set_text(const char * text)
 {
 	copy(text, this->text);
 }

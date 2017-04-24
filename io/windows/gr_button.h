@@ -18,7 +18,7 @@ public:
 	gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color);
 
 	void render();
-	void set_text(char * text);
+	void set_text(const char * text);
 };
 
 #endif
