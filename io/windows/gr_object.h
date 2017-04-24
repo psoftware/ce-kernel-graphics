@@ -21,6 +21,7 @@ protected:
 	int old_pos_y;
 	int old_size_x;
 	int old_size_y;
+	bool old_visible;
 
 	int pos_x;
 	int pos_y;

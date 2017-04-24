@@ -5,7 +5,7 @@
 
 gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
-		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y),
+		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
 	if(predefined_buffer==0)
@@ -150,6 +150,7 @@ void gr_object::align_old_coords(){
 	this->old_pos_y = this->pos_y;
 	this->old_size_x = this->size_x;
 	this->old_size_y = this->size_y;
+	this->old_visible = this->visible;
 }
 
 //renderizza su buffer tutti i figli nella lista child_tree
@@ -168,11 +169,16 @@ void gr_object::render()
 		// creo una nuova render_unit e faccio finta che faccia parte di quelle di obj.
 		// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
 		// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
-		render_subset_unit *oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
-		oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
-		// devo, ovviamente, resettare le coordinate old di obj, allineandole a quelle correnti
+		if(obj->old_visible)	// questa operazione va fatta solo se la scia era visibile
+		{
+			render_subset_unit *oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+			oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
+			// devo, ovviamente, resettare le coordinate old di obj, allineandole a quelle correnti
+			obj->push_render_unit(oldareaunit);
+		}
+
+		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old è coinvolta
 		obj->align_old_coords();
-		obj->push_render_unit(oldareaunit);
 
 		// itero tutte le subset unit di obj, le tolgo anche dalla lista
 		for(render_subset_unit *objunit=obj->pop_render_unit(); objunit!=0; objunit=obj->pop_render_unit())
@@ -220,8 +226,9 @@ void gr_object::render()
 	//flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		//questo oggetto mi server solo per sfruttare il metodo intesect e nient'altro
-		render_subset_unit objintersect(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+		// se l'oggetto non è visibile, questo nono deve essere visualizzato. La scia è gestita nel blocco precedente
+		if(!obj->visible)
+			continue;
 
 		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)
 		{
@@ -237,9 +244,6 @@ void gr_object::render()
 			//flog(LOG_INFO, "## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
 			//flog(LOG_INFO, "## (2) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
 			//flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-
-			//if(!subsetunit->intersects(&objintersect))
-				//flog(LOG_INFO, "# l'oggetto non interseca nulla");
 
 			//controllo se l'oggetto si interseca con questa render unit
 			if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
