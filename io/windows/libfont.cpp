@@ -4,8 +4,9 @@
 #include "font.h"
 
 
-int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, natb backColor)
+int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT backColor)
 {
+	PIXEL_UNIT *font_bitmap_cast = reinterpret_cast<PIXEL_UNIT*>(font_bitmap);
 	int row_off = nchar / 16;
 	int col_off = nchar % 16;
 
@@ -14,11 +15,21 @@ int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nch
 
 	for(int i=0; i<16; i++)
 		for(int j=start; j<end; j++)
-			if(font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
+		{
+			//purtroppo c'è poco da fare, le bitmap dei font sono fatte male
+			#ifdef BPP_8
+			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
 				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
 			else
-				//this->set_pixel(x+j-start, y+i, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
-				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, 0x00);
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)]);
+			#endif
+			#ifdef BPP_32
+			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] >> 24 < 0xff)
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
+			else
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)]);
+			#endif
+		}
 
 	return font_width[nchar];
 }
@@ -48,7 +59,7 @@ int get_charfont_width(char c)
 					
 }
 
-void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, natb backColor)
+void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT backColor)
 {
 	int slength = (int)strlen(str);
 	//int x_eff = ((i*16) % bound_x);
