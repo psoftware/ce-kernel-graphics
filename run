@@ -32,7 +32,7 @@ fi
 cmd="$QEMU_PRE_CMD $QEMU \
 	-kernel $QEMU_BOOT \
 	-initrd build/sistema \
-	-drive file=.swap,format=raw,cache=unsafe \
+	-drive file=.swap,format=raw,index=0,cache=unsafe \
 	-no-reboot \
 	$QEMU_EXTRA_OPTIONS \
 	-m $MEM"
@@ -50,8 +50,8 @@ else
 	cmd="$cmd -serial stdio"
 fi
 
-if [ -f "$CDEPATH" ]; then
-	cmd="$cmd -hdc \"$CDEPATH\""
+if [ -f "$CEHDPATH" ]; then
+	cmd="$cmd -drive file=\"$CEHDPATH\",index=2,format=raw"
 fi
 
 cmd="$cmd $@"

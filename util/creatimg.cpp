@@ -280,6 +280,7 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 					e[l]->a.RW    = 1;
 					e[l]->a.US    = liv;
 					e[l]->a.P     = 0;
+					c.scrivi(l);
 				} else {
 					c.leggi(l - 1, e[l]->a.block);
 				}
@@ -341,6 +342,7 @@ void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 				e[l]->a.RW    = 1;
 				e[l]->a.US    = 1;
 				e[l]->a.P     = 0;
+				c.scrivi(l);
 			} else {
 				c.leggi(l - 1, e[l]->a.block);
 			}

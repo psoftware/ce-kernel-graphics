@@ -585,7 +585,22 @@ int_tipo_pf:
 	pushq %rsi
 	movq 16(%rsp), %rdi // errore
 	movq 24(%rsp), %rsi // eip
+	// salviamo gli altri registri scratch non salvati dal C++
+	pushq %rax
+	pushq %rdx
+	pushq %rcx
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
 	call c_pre_routine_pf
+	pop %r11
+	pop %r10
+	pop %r9
+	pop %r8
+	pop %rcx
+	pop %rdx
+	pop %rax
 	popq %rsi
 	popq %rdi
 	addq $8, %rsp

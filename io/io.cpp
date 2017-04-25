@@ -893,6 +893,8 @@ bool hd_init()
 			addr iff = trasforma(&hd.prd[0]);
 			outputl(reinterpret_cast<natq>(iff),
 					hd.bus_master.iBMDTPR);
+			natw cmd = pci_read_confw(bus, dev, fun, 4);
+			pci_write_confw(bus, dev, fun, 4, cmd | 0x5);
 		}
 	}
 
