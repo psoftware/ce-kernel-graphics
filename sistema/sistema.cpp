@@ -143,6 +143,13 @@ extern "C" void inspronti()
 
 //
 
+inline void log_sched_info(const char event, natl procid)
+{
+	#ifdef DO_GRAPH
+	flog(LOG_INFO, "%d%c%d GRAPH", time, event, procid); // New GRAPH c++
+	#endif
+}
+
 extern "C" void schedulatore(void)
 {
 	if( pronti!=dummy_punt || sospesi == 0)
@@ -154,8 +161,7 @@ extern "C" void schedulatore(void)
 
 	if(old_esecuzione != esecuzione)
 	{
-		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id); // New GRAPH c++
-		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id); //old GRAPH bash
+		log_sched_info('S', esecuzione->id);
 		/*flog(LOG_INFO, "-- Debug Lista PRONTI");
 		debug_lista(pronti);
 		flog(LOG_INFO, "-- Debug Lista SOSPESI");
@@ -1034,7 +1040,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		id = p->id;			// id del processo creato
 						// (allocato da crea_processo)
 		flog(LOG_INFO, "proc=%d entry=%p(%d) prio=%d liv=%d", id, f, a, prio, liv);
-		flog(LOG_INFO, "%dP%d GRAPH", time, p->id);	//NEW GRAPH c++
+		log_sched_info('P', p->id);
 	}
 
 	return id;
@@ -1092,8 +1098,7 @@ extern "C" void c_terminate_p()
 	distruggi_processo(p);
 	processi--;			//
 	flog(LOG_INFO, "Processo %d terminato", p->id);
-	flog(LOG_INFO, "%dT%d GRAPH", time, p->id);	//NEW GRAPH c++
-	flog(LOG_INFO, "[%d]GRAPH-T*%d*", time, p->id); //OLD GRAPH bash
+	log_sched_info('T', p->id);
 	dealloca(p);
 	schedulatore();			//
 }
