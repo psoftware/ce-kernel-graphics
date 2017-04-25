@@ -1441,11 +1441,12 @@ proc_elem init;
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 extern "C" void end_program();	//
+extern "C" void halt();
 // corpo del processo dummy	//
 void dd(int i)
 {
 	while (processi != 1)
-		;
+		halt();
 	end_program();
 }
 

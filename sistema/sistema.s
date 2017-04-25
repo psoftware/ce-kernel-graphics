@@ -784,6 +784,11 @@ end_program:
 	int $TIPO_EP
 	ret
 
+	.global halt
+halt:
+		HLT
+		retq
+
 	.global salta_a_main
 salta_a_main:
 	call carica_stato		// carichiamo tr
