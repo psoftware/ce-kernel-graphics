@@ -1222,13 +1222,13 @@ bool windows_init()
 	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
 	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
 	gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
-	print_palette(bitmap->get_buffer(), 0,0);
+	//print_palette(bitmap->get_buffer(), 0,0);
 	bitmap->render();
 	doubled_framebuffer_container->add_child(bitmap);
 
 	//cursore
 	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
-	memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
+	gr_memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
 	mouse_bitmap->set_trasparency(true);
 	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);

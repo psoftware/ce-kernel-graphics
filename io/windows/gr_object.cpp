@@ -260,8 +260,27 @@ void gr_object::render()
 			else
 				for(int y=0; y<(lmax_y-lmin_y); y++)
 					for(int x=0; x<(lmax_x-lmin_x); x++)
+				#if defined(BPP_8)
 						if(*(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x) != 0x03)
 							set_pixel(this->buffer, x+lminpos_x, y+lminpos_y, this->size_x, this->size_y, *(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x));
+				#elif defined(BPP_32)
+						{	// algoritmo per realizzare l'alpha blending
+							PIXEL_UNIT src_pixel = *(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x);
+							PIXEL_UNIT dst_pixel = *(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x); //?
+							natb alpha = src_pixel >> 24;
+							natb src_red = (src_pixel >> 16) & 0xff;
+							natb src_green = (src_pixel >> 8) & 0xff;
+							natb src_blue = src_pixel & 0xff;
+							natb dst_red = (dst_pixel >> 16) & 0xff;
+							natb dst_green = (dst_pixel >> 8) & 0xff;
+							natb dst_blue = dst_pixel & 0xff;
+							dst_red = (alpha * (dst_red-src_red)) + dst_red;
+							dst_green = (alpha * (dst_green-src_green)) + dst_green;
+							dst_blue = (alpha * (dst_blue-src_blue)) + dst_blue;
+							//flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d dst_red %d dst_green %d dst_blue %d", alpha, src_red, src_green, src_blue, dst_red, dst_green, dst_blue);
+							*(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
+						}
+				#endif
 
 			debug_color+=3;
 		}
