@@ -386,58 +386,7 @@ bool stdvga_init()
 const int MAX_SCREENX = 1280;
 const int MAX_SCREENY = 1024;
 
-natb doubled_framebuffer[MAX_SCREENX*MAX_SCREENY];	// Secondo buffer (quadruple buffering)
-int column_changed_first = 0;
-int column_changed_last = 0;
-int line_changed_first = 0;				// quando devo copiare il doubled_framebuffer nel framebuffer voglio ottimizzare al massimo l'operazione di copia,
-int line_changed_last = 0;			// quindi cerco di copiare solo quello che ho effettivamente modificato.
-/*
-void inline put_pixel(natb * buffer, int x, int y, int MAX_X, int MAX_Y, natb col)
-{
-	if(x<MAX_X && y<MAX_Y && x>=0 && y>=0)
-		buffer[MAX_X*y+x] = col;
-}
-
-int set_fontchar(natb* buff, int x, int y, int nchar, natb backColor)
-{
-	int row_off = nchar / 16;
-	int col_off = nchar % 16;
-
-	natb start = (16 - font_width[nchar])/2;
-	natb end = start + font_width[nchar];
-
-	for(int i=0; i<16; i++)
-		for(int j=start; j<end; j++)
-			if(font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
-				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, MAX_SCREENY, backColor);
-			else
-				put_pixel(buff, x+j-start, y+i, MAX_SCREENX, MAX_SCREENY, font_bitmap[(row_off*16 + i)*256 + (j + col_off*16)] & 15);
-
-	return font_width[nchar];
-}
-
-void set_fontstring(natb* buff, int x, int y, int bound_x, int bound_y, const char * str, natb backColor)
-{
-	int slength = (int)strlen(str);
-	//int x_eff = ((i*16) % bound_x);
-	//int y_eff = (i*16 / bound_x)*16;
-	int x_eff = 0;
-	int y_eff = 0;
-	for(int i=0; i<slength; i++)
-	{	
-		if(str[i] != '\n')
-			x_eff += set_fontchar(buff, x+x_eff, y+(y_eff*16), str[i], backColor);
-		if((x_eff + 16) > bound_x || str[i] == '\n')
-		{
-			x_eff = 0;
-			y_eff++;
-		}
-		
-	}
-}
-*/
 // ----- user event
-
 // l'inserimento evento è fatto in testa
 void event_push(des_user_event *& head, des_user_event * elem)
 {
@@ -480,7 +429,7 @@ struct des_window
 	int size_y;
 	int pos_x;
 	int pos_y;
-	natb backColor;
+	PIXEL_UNIT backColor;
 	natb obj_count;
 	windowObject * objects[MAX_WINDOWS_OBJECTS];
 	des_user_event * event_list;
@@ -839,7 +788,7 @@ struct des_cursor
 	int y;
 };
 
-void render_mousecursor_onbuffer(natb* buff, des_cursor* cursor)
+void render_mousecursor_onbuffer(des_cursor* cursor)
 {
 	mouse_bitmap->set_pos_x(cursor->x);
 	mouse_bitmap->set_pos_y(cursor->y);
@@ -921,44 +870,6 @@ void move_window(int w_id, int to_x, int to_y)
 	wind->pos_y = to_y;
 	wind->main_container->set_pos_x(wind->pos_x);
 	wind->main_container->set_pos_y(wind->pos_y);
-
-	/*
-	// devo pulire l'area di framebuffer in cui era presente la finestra
-	clean_window_onvideobuffer(doubled_framebuffer, wind);
-
-	// devo renderizzare nuovamente le finestre su cui quella da spostare é sovrapposta
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		if(w_id==i)
-			continue;
-
-		des_window * otherw = &win_man.windows_arr[i];
-		// condizione per individuare se la finestra condivide parti di framebuffer con altre finestre
-		if((wind->pos_x + wind->size_x > otherw->pos_x) && (wind->pos_x < otherw->pos_x + otherw->size_x) &&
-			(wind->pos_y + wind->size_y + TOPBAR_HEIGHT > otherw->pos_y) && (wind->pos_y < otherw->pos_y + otherw->size_y + TOPBAR_HEIGHT))
-		{
-			render_topbar_onvideobuffer(doubled_framebuffer, otherw);
-			render_window_onvideobuffer(doubled_framebuffer, otherw);	//copio nuovamente il bitmap della finestra sul buffer video secondario
-		}
-	}
-
-	// faccio in modo che la finestra non vada mai oltre i bound dello schermo
-	if(to_x<0)
-		wind->pos_x=0;
-	else if(to_x+wind->size_x>=MAX_SCREENX)
-		wind->pos_x=MAX_SCREENX-1-wind->size_x;
-	else
-		wind->pos_x = to_x;
-	if(to_y<0)
-		wind->pos_y=0;
-	else if(to_y+wind->size_y+TOPBAR_HEIGHT>=MAX_SCREENY)
-		wind->pos_y=MAX_SCREENY-1-wind->size_y-TOPBAR_HEIGHT;
-	else
-		wind->pos_y = to_y;
-
-	render_topbar_onvideobuffer(doubled_framebuffer, wind);
-	render_window_onvideobuffer(doubled_framebuffer, wind);
-	*/
 }
 
 void mouse_notify_move(int delta_x, int delta_y)
@@ -1113,13 +1024,6 @@ void user_add_keypress_event_onfocused(char key)
 
 void main_windows_manager(int n)
 {
-	//set_background(doubled_framebuffer);
-	//print_palette(doubled_framebuffer, 900,450);
-	//update_framebuffer();
-
-	//patina di debug
-	//memset(framebuffer, 0x80, MAX_SCREENX*MAX_SCREENY);
-
 	des_cursor main_cursor = {0,0,0,0};
 	win_man.focus_wind=-1;
 	win_man.is_dragging=false;
@@ -1166,8 +1070,9 @@ void main_windows_manager(int n)
 						doubled_framebuffer_container->focus_child(f_wind->main_container);
 						move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
 					}
+
 					//sposto il cursore sulla posizione nuova
-					render_mousecursor_onbuffer(doubled_framebuffer, &main_cursor);
+					render_mousecursor_onbuffer(&main_cursor);
 
 					//copio il buffer secondario sulla memoria video
 					doubled_framebuffer_container->render();

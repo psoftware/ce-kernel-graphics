@@ -4,7 +4,7 @@
 #include "tipo.h"
 
 //profondità di colore (BPP_8 or BPP_32)
-#define BPP_32
+#define BPP_8
 
 #if !defined(BPP_8) && !defined(BPP_32)
 #error You must define video color depth (BPP_8 or BPP_32)
