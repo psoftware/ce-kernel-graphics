@@ -45,6 +45,8 @@ all: \
      build/creatimg \
      utente/prog
 
+$(WINDOWS_OBJ_FILES): $(wildcard io/windows/*.h)
+
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
