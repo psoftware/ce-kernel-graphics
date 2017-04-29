@@ -136,11 +136,19 @@ void debug_lista(proc_elem *p_lista)
 extern "C" void inspronti()
 {
 // (
-	inserimento_lista(pronti, esecuzione);
+	esecuzione->puntatore = pronti;
+	pronti = esecuzione;
 // )
 }
 
 //
+
+inline void log_sched_info(const char event, natl procid)
+{
+	#ifdef DO_GRAPH
+	flog(LOG_INFO, "%d%c%d GRAPH", time, event, procid); // New GRAPH c++
+	#endif
+}
 
 extern "C" void schedulatore(void)
 {
@@ -153,9 +161,7 @@ extern "C" void schedulatore(void)
 
 	if(old_esecuzione != esecuzione)
 	{
-		time+=2;
-		flog(LOG_INFO, "%dS%d GRAPH", time, esecuzione->id); // New GRAPH c++
-		flog(LOG_INFO, "[%d]GRAPH-S*%d*", time, esecuzione->id); //old GRAPH bash
+		log_sched_info('S', esecuzione->id);
 		/*flog(LOG_INFO, "-- Debug Lista PRONTI");
 		debug_lista(pronti);
 		flog(LOG_INFO, "-- Debug Lista SOSPESI");
@@ -230,7 +236,7 @@ extern "C" void c_sem_signal(natl sem)
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
 		inserimento_lista(pronti, lavoro);
-		inspronti();	// preemption
+		inserimento_lista(pronti, esecuzione);	// preemption
 		schedulatore();	// preemption
 	}
 }
@@ -377,11 +383,13 @@ struct pf_error {
 };
 // *)
 
-// (* indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.S")
-extern "C" addr fine_codice_sistema;
-// *)
 void c_routine_pf();
-bool in_pf = false;
+// (* c_pre_routine_pf() e' la routine che viene chiamata in caso di page
+//    fault. Effettua dei controlli aggiuntivi prima di chiamare la
+//    routine c_routine_pf() che provvede a caricare le tabelle e pagine
+//    mancanti
+// *)
+bool in_pf = false;	//* true mentre stiamo gestendo un page fault
 extern "C" void c_pre_routine_pf(	//
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -390,22 +398,25 @@ extern "C" void c_pre_routine_pf(	//
 	)
 {
 
+	// (* se durante la gestione di un page fault si verifica un altro page fault
+	//    c'e' un bug nel modulo sistema.
 	if (in_pf) {
 		panic("page fault ricorsivo: STOP");
 	}
+	// *)
 
-	in_pf = true;
+	in_pf = true;	//* inizia la gestione del page fault
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
-	if (rip < fine_codice_sistema || errore.res == 1) {
+	if (errore.user == 0 || errore.res == 1) {
 		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
 			errore.user  ? "da utente"	: "da sistema",
 			errore.res   ? "bit riservato"	: "");
-		panic("page fault dal modulo sistema");
+		panic("errore di sistema");
 	}
 	// *)
 
@@ -424,7 +435,7 @@ extern "C" void c_pre_routine_pf(	//
 
 	c_routine_pf();
 
-	in_pf = false;
+	in_pf = false;	//* fine della gestione del page fault
 }
 
 
@@ -432,6 +443,11 @@ extern "C" void c_pre_routine_pf(	//
 //                         PAGINE FISICHE                                      //
 /////////////////////////////////////////////////////////////////////////////////
 
+// avremo un descrittore di pagina fisica per ogni pagina fisica della parte
+// M2.  Lo scopo del descrittore e' di contenere alcune informazioni relative
+// al contenuto della pagina fisica descritta. Tali informazioni servono
+// principalmente a facilitare o rendere possibile il rimpiazzamento del
+// contenuto stesso.
 struct des_pf {
 	int	livello;	// 0=pagina, -1=libera
 	bool	residente;	// pagina residente o meno
@@ -445,6 +461,7 @@ struct des_pf {
 };
 
 des_pf* dpf;		// vettore di descrittori di pagine fisiche
+			// (allocato in M1, si veda init_dpf())
 addr prima_pf_utile;	// indirizzo fisico della prima pagina fisica di M2
 des_pf* pagine_libere;	// indice del descrittore della prima pagina libera
 
@@ -466,6 +483,8 @@ addr indirizzo_pf(des_pf* ppf)
 	return (addr)((natq)prima_pf_utile + indice * DIM_PAGINA);
 }
 
+// restituisce il piu' piccolo indirizzo maggiore o uguale ad a
+// e multiplo di m
 addr allinea(addr a, natq m)
 {
 	return (addr) (((natq)a + m - 1) & ~(m - 1));
@@ -474,7 +493,7 @@ addr allinea(addr a, natq m)
 // ( [P_MEM_PHYS]
 // init_dpf viene chiamata in fase di inizalizzazione.  Tutta la
 // memoria non ancora occupata viene usata per le pagine fisiche.  La funzione
-// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica,
+// si preoccupa anche di allocare lo spazio per i descrittori di pagina fisica
 // e di inizializzarli in modo che tutte le pagine fisiche risultino libere
 natq N_DPF;
 // &end e' l'indirizzo del primo byte non occupato dal modulo sistema
@@ -494,6 +513,8 @@ bool init_dpf()
 	// prima_pf_utile e' la prima pagina che inizia dopo la fine di M1
 	prima_pf_utile = allinea(fine_M1, DIM_PAGINA);
 
+	// creiamo la lista delle pagine libere, che inizialmente contiene
+	// tutte le pagine fisiche di M2
 	pagine_libere = &dpf[0];
 	for (natl i = 0; i < N_DPF - 1; i++) {
 		dpf[i].livello = -1;
@@ -504,6 +525,7 @@ bool init_dpf()
 	return true;
 }
 
+// estrea una pagina libera dalla lista, se non vuota
 des_pf* alloca_pagina_fisica_libera()
 {
 	des_pf* p = pagine_libere;
@@ -512,18 +534,20 @@ des_pf* alloca_pagina_fisica_libera()
 	return p;
 }
 
-// (* rende di nuovo libera la pagina fisica il cui descrittore di pagina fisica
-//    ha per indice "i"
+// (* rende di nuovo libera la pagina fisica descritta da ppf
 void rilascia_pagina_fisica(des_pf* ppf)
 {
 	ppf->livello = -1;
 	ppf->prossima_libera = pagine_libere;
 	pagine_libere = ppf;
 }
+// *)
 
-des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); //
-bool scollega(des_pf* ppf);	//
-void scarica(des_pf* ppf); //
+// (* funzione di comodo che alloca una pagina fisica con eventuale
+//    rimpiazzamento di un'altra
+des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // piu' avanti
+bool scollega(des_pf* ppf);	// piu' avanti
+void scarica(des_pf* ppf); // piu' avanti
 des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
 {
 	des_pf *ppf = alloca_pagina_fisica_libera();
@@ -603,7 +627,7 @@ const natq BIT_PCD  = 1U << 4; // il bit Page Cache Disable
 const natq BIT_A    = 1U << 5; // il bit di accesso
 const natq BIT_D    = 1U << 6; // il bit "dirty"
 const natq BIT_PS   = 1U << 7; // il bit "page size"
-const natq BIT_ZERO = 1U << 7; // (* nuova pagina, da azzerare *)
+const natq BIT_ZERO = 1U << 9; // (* nuova pagina, da azzerare *)
 
 const natq ACCB_MASK  = 0x00000000000000FF; // maschera per il byte di accesso
 const natq ADDR_MASK  = 0x7FFFFFFFFFFFF000; // maschera per l'indirizzo
@@ -703,12 +727,6 @@ natq& get_entry(addr tab, natl index)
 	return  pd[index];
 }
 
-void set_entry(addr tab, natl index, natq entry)
-{
-	natq *pd = static_cast<natq*>(tab);
-	pd[index] = entry;
-}
-
 extern "C" des_proc* des_p(natl id);
 // dato un identificatore di processo, un livello e
 // un indirizzo virtuale 'ind_virt', restituisce un riferimento
@@ -755,7 +773,7 @@ proc_elem *a_p[MAX_IRQ];  //
 // )
 
 natq alloca_blocco();
-des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente);
+des_pf* swap2(natl proc, int livello, addr ind_virt);
 bool crea(natl proc, addr ind_virt, int liv, natl priv)
 {
 	natq& dt = get_des(proc, liv + 1, ind_virt);
@@ -772,8 +790,15 @@ bool crea(natl proc, addr ind_virt, int liv, natl priv)
 			dt = dt | BIT_RW;
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
-		if (liv > 0)
-			swap2(proc, liv, ind_virt, (priv == LIV_SISTEMA));
+		if (liv > 0) {
+			des_pf *ppf = swap2(proc, liv, ind_virt);
+			if (!ppf) {
+				flog(LOG_ERR, "swap2(%d, %d, %p) fallita",
+					proc, liv, ind_virt);
+				return false;
+			}
+			ppf->residente = (priv == LIV_SISTEMA);
+		}
 	}
 	return true;
 }
@@ -797,11 +822,16 @@ bool crea_pila(natl proc, natb *bottom, natq size, natl priv)
 	return true;
 }
 
-addr carica_pila(natl proc, natb *bottom, natq size)
+addr carica_pila_sistema(natl proc, natb *bottom, natq size)
 {
 	des_pf *dp = 0;
-	for (natb* ind = bottom - size; ind != bottom; ind += DIM_PAGINA)
-		dp = swap2(proc, 0, ind, true);
+	natb *ind;
+	for (ind = bottom - size; ind != bottom; ind += DIM_PAGINA) {
+		dp = swap2(proc, 0, ind);
+		if (!dp)
+			return 0;
+		dp->residente = true;
+	}
 	return (addr)((natq)indirizzo_pf(dp) + DIM_PAGINA);
 }
 
@@ -880,7 +910,7 @@ proc_elem* crea_processo(void f(int), int a, int prio, char liv, bool IF)
 	// ( creazione della pila sistema .
 	if (!crea_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK, LIV_SISTEMA))
 		goto errore5;
-	pila_sistema = carica_pila(p->id, (natb*)fin_sis_p, DIM_SYS_STACK);
+	pila_sistema = carica_pila_sistema(p->id, (natb*)fin_sis_p, DIM_SYS_STACK);
 	if (pila_sistema == 0)
 		goto errore6;
 	// )
@@ -1010,7 +1040,7 @@ c_activate_p(void f(int), int a, natl prio, natl liv)
 		id = p->id;			// id del processo creato
 						// (allocato da crea_processo)
 		flog(LOG_INFO, "proc=%d entry=%p(%d) prio=%d liv=%d", id, f, a, prio, liv);
-		flog(LOG_INFO, "%dP%d GRAPH", time, p->id);	//NEW GRAPH c++
+		log_sched_info('P', p->id);
 	}
 
 	return id;
@@ -1038,15 +1068,18 @@ void rilascia_ric(addr tab, int liv, natl i, natl n)
 {
 	for (natl j = i; j < i + n && j < 512; j++) {
 		natq dt = get_entry(tab, j);
+		natl blocco;
 		if (extr_P(dt)) {
 			addr sub = extr_IND_FISICO(dt);
 			if (liv > 1)
 				rilascia_ric(sub, liv - 1, 0, 512);
-			rilascia_pagina_fisica(descrittore_pf(sub));
+			des_pf *ppf = descrittore_pf(sub);
+			blocco = ppf->ind_massa;
+			rilascia_pagina_fisica(ppf);
 		} else {
-			natl blocco = extr_IND_MASSA(dt);
-			dealloca_blocco(blocco);
+			blocco = extr_IND_MASSA(dt);
 		}
+		dealloca_blocco(blocco);
 	}
 }
 
@@ -1065,8 +1098,7 @@ extern "C" void c_terminate_p()
 	distruggi_processo(p);
 	processi--;			//
 	flog(LOG_INFO, "Processo %d terminato", p->id);
-	flog(LOG_INFO, "%dT%d GRAPH", time, p->id);	//NEW GRAPH c++
-	flog(LOG_INFO, "[%d]GRAPH-T*%d*", time, p->id); //OLD GRAPH bash
+	log_sched_info('T', p->id);
 	dealloca(p);
 	schedulatore();			//
 }
@@ -1184,6 +1216,13 @@ void swap(int liv, addr ind_virt)
 	if (nuovo_dpf == 0) {
 		des_pf* dpf_vittima =
 			scegli_vittima(esecuzione->id, liv, ind_virt);
+		// (* scegli_vittima potrebbe fallire
+		if (dpf_vittima == 0) {
+			flog(LOG_WARN, "memoria esaurita");
+			in_pf = false;
+			abort_p();
+		}
+		// *)
 		bool occorre_salvare = scollega(dpf_vittima);
 		if (occorre_salvare)
 			scarica(dpf_vittima);
@@ -1268,15 +1307,25 @@ void stat()
 	invalida_TLB();
 }
 
-des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
+// rispetto a swap(), swap2() restituisce un puntatore al descrittore
+// di pagina fisica in cui ha caricato la tabella o pagina mancante.
+// Inoltre, invece di abortire il processo chiamante in caso di errori,
+// si limita a restituire un puntatore nullo. swap2() e' utile nei
+// casi in cui il caricamento e' parte di un'altra operazione piu'
+// complicata.
+des_pf* swap2(natl proc, int livello, addr ind_virt)
 {
 	des_pf* ppf = alloca_pagina_fisica(proc, livello, ind_virt);
 	if (!ppf)
 		return 0;
 	natq e = get_des(proc, livello + 1, ind_virt);
 	natq m = extr_IND_MASSA(e);
+	if (!m) {
+		rilascia_pagina_fisica(ppf);
+		return 0;
+	}
 	ppf->livello = livello;
-	ppf->residente = residente;
+	ppf->residente = 0;
 	ppf->processo = proc;
 	ppf->ind_virtuale = ind_virt;
 	ppf->ind_massa = m;
@@ -1286,6 +1335,7 @@ des_pf* swap2(natl proc, int livello, addr ind_virt, bool residente)
 	return ppf;
 }
 
+// funzione di supporto per carica_tutto()
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
 	natq dp = dim_pag(liv);
@@ -1295,17 +1345,21 @@ bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 		natq e = get_entry(tab, j);
 		if (!extr_IND_MASSA(e))
 			continue;
-		des_pf *ppf = swap2(proc, liv - 1, ind, true);
+		des_pf *ppf = swap2(proc, liv - 1, ind);
 		if (!ppf) {
 			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
 		}
+		ppf->residente = true;
 		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
 	}
 	return true;
 }
 
+// carica e rende residenti tutte le pagine e tabelle allocate nello swap e
+// relative alle entrate della tab4 del processo proc che vanno da i (inclusa)
+// a i+n (esclusa)
 bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
@@ -1335,6 +1389,8 @@ struct des_swap {
 } swap_dev; 	// c'e' un unico oggetto swap
 bool swap_init();
 
+// chiamata in fase di inizializzazione, carica in memoria fisica
+// tutte le parti condivise di livello IO e utente.
 bool crea_spazio_condiviso(natl dummy_proc)
 {
 
@@ -1385,11 +1441,12 @@ proc_elem init;
 
 // creazione del processo dummy iniziale (usata in fase di inizializzazione del sistema)
 extern "C" void end_program();	//
+extern "C" void halt();
 // corpo del processo dummy	//
 void dd(int i)
 {
 	while (processi != 1)
-		;
+		halt();
 	end_program();
 }
 
@@ -1499,6 +1556,19 @@ bool init_pe()
 }
 // )
 
+bool is_accessible(addr a)
+{
+	for (int i = 4; i > 0; i--) {
+		natq d = get_des(esecuzione->id, i, a);
+		bool bitP = extr_P(d);
+		if (!bitP)
+			return false;
+	}
+	return true;
+}
+
+// indirizzo del primo byte che non contiene codice di sistema (vedi "sistema.s")
+extern "C" addr fine_codice_sistema;
 void process_dump(natl id, addr rsp, log_sev sev)
 {
 	des_proc *p = des_p(id);
@@ -1548,7 +1618,12 @@ void process_dump(natl id, addr rsp, log_sev sev)
 	flog(sev, "  backtrace:");
 	natq rbp = p->contesto[I_RBP];
 	for (;;) {
-		natq csite = *((natq *)rbp + 1) - 5;
+		natq* acsite = ((natq *)rbp + 1);
+		if (((natq)acsite & 0x7) || !is_accessible(acsite)) {
+			flog(sev, "  ! %lx", rbp);
+			break;
+		}
+		natq csite = *acsite - 5;
 		if (csite < start || (addr)csite >= fine_codice_sistema)
 			break;
 		flog(sev, "  > %lx", *((natq *)rbp + 1) - 5);
@@ -1576,17 +1651,20 @@ extern "C" void c_panic(const char *msg, addr rsp)
 			natq dp = get_des(id, 1, v_eip);
 			natq ind_fis_pag = (natq)extr_IND_FISICO(dp);
 			addr f_eip = (addr)(ind_fis_pag | ((natq)v_eip & 0xFFF));
-			flog(LOG_ERR, "    *) proc=%d RIP=%x", id, *(natq*)f_eip);
+			flog(LOG_ERR, "    *) proc=%d RIP=%p", id, *(natq*)f_eip);
 		}
 	}
 	end_program();
 }
 
+// se riceviamo un non-maskerable-interrupt, fermiamo il sistema
 extern "C" void c_nmi()
 {
 	panic("INTERRUZIONE FORZATA");
 }
 
+// restituisce l'indirizzo fisico che corrisponde a ind_virt nello
+// spazio di indirizzamento del processo corrente.
 extern "C" addr c_trasforma(addr ind_virt)
 {
 	natq d;
@@ -1655,7 +1733,7 @@ extern "C" void cmain()
 	esecuzione = &init;
 	// *)
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.3 - branch Le Caldare");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.6 - branch Le Caldare");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata");
 
