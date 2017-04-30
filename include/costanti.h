@@ -1,5 +1,5 @@
 // abilita output flog per grafico
-#define DO_GRAPH
+//#define DO_GRAPH
 
 // ( costanti usate in sistema.cpp e sistema.S
 //   SEL = selettori (segmentazione con modello flat)

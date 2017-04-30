@@ -492,6 +492,7 @@ struct des_windows_man
 	des_window windows_arr[MAX_WINDOWS];		//Finestre create
 	int focus_wind;								//Finestra selezionata con mouse
 	bool is_dragging;
+	bool is_resizing;
 
 	//Coda richieste primitive
 	des_window_req req_queue[MAX_REQ_QUEUE];
@@ -863,6 +864,20 @@ int check_window_oncoords(int curs_x, int curs_y)
 	return -1;
 }
 
+int check_borderwindow_oncoords(int curs_x, int curs_y)
+{
+	for(int i=0; i<win_man.windows_count; i++)
+	{
+		des_window * wind = &win_man.windows_arr[i];
+		if(curs_x>wind->pos_x-5 && curs_x<wind->pos_x+5 && curs_y>wind->pos_y && curs_y<wind->pos_y+wind->size_y)
+		{
+			flog(LOG_INFO, "winman: click is on left border of window %d", i);
+			return i;
+		}
+	}
+	return -1;
+}
+
 void move_window(int w_id, int to_x, int to_y)
 {
 	des_window * wind = &win_man.windows_arr[w_id];
@@ -1071,6 +1086,37 @@ void main_windows_manager(int n)
 						move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
 					}
 
+					if(win_man.is_resizing && win_man.focus_wind!=-1)
+					{
+						des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
+						doubled_framebuffer_container->focus_child(f_wind->main_container);
+						if(f_wind->size_x-newreq.delta_x > 0)
+						{
+							f_wind->pos_x += newreq.delta_x;
+							f_wind->size_x -= newreq.delta_x;
+						}
+						f_wind->main_container->set_pos_x(f_wind->pos_x);
+						f_wind->main_container->set_size_x(f_wind->size_x);
+						f_wind->main_container->realloc_buffer();
+						f_wind->inner_container->set_size_x(f_wind->size_x);
+						f_wind->inner_container->realloc_buffer();
+						f_wind->background_bitmap->set_size_x(f_wind->size_x);
+						f_wind->background_bitmap->realloc_buffer();
+						gr_memset(f_wind->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, f_wind->background_bitmap->get_size_x()*f_wind->background_bitmap->get_size_y());
+						f_wind->topbar_container->set_size_x(f_wind->size_x);
+						f_wind->topbar_container->realloc_buffer();
+						f_wind->topbar_bitmap->set_size_x(f_wind->size_x);
+						f_wind->topbar_bitmap->realloc_buffer();
+						if(f_wind->size_x-newreq.delta_x > 0)
+							f_wind->close_button->set_pos_x(f_wind->close_button->get_pos_x() - newreq.delta_x);
+						gr_memset(f_wind->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, f_wind->topbar_bitmap->get_size_x()*f_wind->topbar_bitmap->get_size_y());
+						f_wind->topbar_bitmap->render();
+						f_wind->topbar_container->render();
+						f_wind->background_bitmap->render();
+						f_wind->inner_container->render();
+						f_wind->main_container->render();
+					}
+
 					//sposto il cursore sulla posizione nuova
 					render_mousecursor_onbuffer(&main_cursor);
 
@@ -1086,19 +1132,28 @@ void main_windows_manager(int n)
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
 				{	
-					//se ho cliccato su una topbar, allora significa che devo iniziare a trascinare
-					win_man.focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
+					win_man.focus_wind = check_borderwindow_oncoords(main_cursor.x, main_cursor.y);
 					if(win_man.focus_wind!=-1)
-						win_man.is_dragging=true;
-					else //altrimenti controllo se ho cliccato sul corpo di una finestra e aggiorno il focus
-						win_man.focus_wind = check_window_oncoords(main_cursor.x, main_cursor.y);
+						win_man.is_resizing=true;
+					else
+					{
+						//se ho cliccato su una topbar, allora significa che devo iniziare a trascinare
+						win_man.focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
+						if(win_man.focus_wind!=-1)
+							win_man.is_dragging=true;
+						else //altrimenti controllo se ho cliccato sul corpo di una finestra e aggiorno il focus
+							win_man.focus_wind = check_window_oncoords(main_cursor.x, main_cursor.y);
+					}
 				}
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEUP_EVENT:
 			{
 				if(newreq.button==LEFT)
+				{
 					win_man.is_dragging=false;
+					win_man.is_resizing=false;
+				}
 
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 			}
