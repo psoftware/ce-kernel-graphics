@@ -145,6 +145,11 @@ void gr_object::set_visibility(bool newval){
 	this->visible=newval;
 }
 
+void gr_object::realloc_buffer(){
+	delete buffer;
+	buffer = new PIXEL_UNIT[this->size_x*this->size_y];
+}
+
 void gr_object::align_old_coords(){
 	this->old_pos_x = this->pos_x;
 	this->old_pos_y = this->pos_y;

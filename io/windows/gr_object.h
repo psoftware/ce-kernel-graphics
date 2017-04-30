@@ -55,6 +55,9 @@ public:
 	void set_trasparency(bool newval);
 	void set_visibility(bool newval);
 
+	//metodo per ricreare il buffer (necessario dopo il cambio delle dimensioni)
+	void realloc_buffer();
+
 	virtual void render();
 
 	// struct di utilità per l'algorimo del pittore ottimizzato
