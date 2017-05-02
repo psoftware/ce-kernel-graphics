@@ -69,3 +69,15 @@ struct directory_entry {
 	natw starting_cluster;
 	natl size;
 } __attribute__ ((__packed__));
+
+struct io_pointer {
+	union {
+		natq pid;
+		int result;
+	};
+
+	natw cluster;
+	natl block;
+	natl block_offset;
+	int remaining_size;
+};
