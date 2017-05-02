@@ -1,4 +1,5 @@
 #include "structs.h"
+#include "libstr.h"
 
 natw *FAT;
 boot_block bb;
@@ -65,18 +66,6 @@ void assembly_name(natb *entry, char *string)
 
 }
 
-//fonte http://stackoverflow.com/questions/2488563/strcat-implementation
-char * strcat(char *dest, const char *src)
-{
-    size_t i,j;
-    for (i = 0; dest[i] != '\0'; i++)
-        ;
-    for (j = 0; src[j] != '\0'; j++)
-        dest[i+j] = src[j];
-    dest[i+j] = '\0';
-    return dest;
-}
-
 //per ogni blocco ho 16 entrate
 directory_entry temp_fileentry[16];
 void file_list(natl directoryblock, const char * rootpath="")
@@ -118,6 +107,7 @@ void file_list(natl directoryblock, const char * rootpath="")
 				continue;
 			}
 
+			//sotto cartella
 			if(fileentry[j].attributes & 0x10)
 			{
 				char str_slash[] = "/";
@@ -136,6 +126,101 @@ void file_list(natl directoryblock, const char * rootpath="")
 		}
 	}
 }
+
+natb get_max_level(const char *source)
+{
+	natb previous_slash = 0;
+	natb level = 0;
+	for(natb i=1; i<strlen(source)+1; i++)
+		if(source[i]=='/' || source[i]=='\0')
+		{
+			if(i==previous_slash+1)	//condizione per gestire i doppi slash
+				previous_slash=i;
+			else
+			{
+				previous_slash=i;
+				level++;
+			}
+		}
+
+	return level;
+}
+
+bool find_file(const char *fullpath, natl directoryblock=START_DIRECTORYROOT_BLOCK, natb level=0)
+{	
+	natb errore;
+	char target_file[255] = "";
+	extract_sublevel_filename(target_file, fullpath, level);
+
+	natb stop_level = get_max_level(fullpath) - 1;
+
+	flog(LOG_INFO, "find_file(%s,%d,%d) target=%s stop=%d", fullpath, directoryblock, level, target_file, stop_level);
+
+	//per ogni blocco della root directory
+	natl maxblockcount = (bb.directory_count*sizeof(directory_entry) - 512 - 1) / 512;
+	for(natb i=0; i<maxblockcount; i++)
+	{
+		memset(reinterpret_cast<natb*>(&temp_fileentry), 0, sizeof(temp_fileentry));
+		c_readhd_n(reinterpret_cast<natw*>(temp_fileentry), directoryblock + i, 1, errore);
+
+		//faccio una copia del blocco perchè questa funzione è ricorsiva e sovrascriverebbe l'istanza globale
+		//non posso fare a meno dell'istanza globale perchè è richiesta dal driver. Un'alternativa sarebbe l'heap
+		directory_entry fileentry[16];
+		memcpy(reinterpret_cast<natb*>(&fileentry), reinterpret_cast<natb*>(&temp_fileentry), sizeof(temp_fileentry));
+
+		bool is_lfn=false;
+		for(natb j=0; j<16;j++)
+		{
+			//fine della root directory
+			if(fileentry[j].filename[0] == 0x00)
+				return false;
+
+			//cartella dot
+			if(fileentry[j].filename[0] == 0x2e)
+				continue;
+
+			//entrata LFN, rappresenta una parte del nome del file successivo da leggere
+			//manca il controllo del checksum, si assume che le entrate lfn siano contigue e sempre
+			//relative al file che si troverà successivamente
+			char lnf[255];
+			if(fileentry[j].attributes & 0x0f)
+			{
+				is_lfn=true;
+				assembly_name(reinterpret_cast<natb*>(&fileentry[j]), lnf);
+				continue;
+			}
+
+			flog(LOG_INFO, "sto scorrendo =%s", lnf);
+			//sono arrivato al livello richiesto ma ho trovato una cartella
+			if((fileentry[j].attributes & 0x10) && level==stop_level && streq(target_file, lnf)) 
+			{
+				flog(LOG_INFO, "   Il percorso indicato rappresenta una cartella e non un file!");
+				return true;
+			}
+			else if(level==stop_level && streq(target_file, lnf))
+			{
+				flog(LOG_INFO, "   TROVATO filename = %s startcluster = %d size = %p", lnf, fileentry[j].starting_cluster, fileentry[j].size);
+				print_file(fileentry[j].starting_cluster, fileentry[j].size);
+				return true;
+			}
+			else if(level==stop_level)
+				continue;	//non serve andare avanti
+
+			//sotto cartella
+			if(fileentry[j].attributes & 0x10)
+			{
+				//flog(LOG_INFO, "####### trovata cartella: %s | cluster %d (blocco %d)", partial_path, fileentry[j].starting_cluster,START_DATAAREA+(fileentry[j].starting_cluster-2)*bb.cluster_size);
+				bool found = find_file(fullpath, START_DATAAREA + (fileentry[j].starting_cluster-2)*bb.cluster_size, level+1);
+				if(found)
+					return true;
+				//flog(LOG_INFO, "####### fine cartella: %s ", lnf, fileentry[j].starting_cluster);
+			}
+		}
+	}
+}
+
+
+
 
 void prova_fat16()
 {
@@ -158,5 +243,11 @@ void prova_fat16()
 	//calcolo del blocco iniziale dell'area dei dati (32 è la dimensione di una)
 	START_DATAAREA = START_DIRECTORYROOT_BLOCK + ((bb.directory_count*sizeof(directory_entry)) + 512 - 1) / 512;
 	flog(LOG_INFO, "fat16: START_FAT_BLOCK = %d START_DIRECTORYROOT_BLOCK = %d START_DATAAREA = %d", START_FAT_BLOCK, START_DIRECTORYROOT_BLOCK, START_DATAAREA);
-	file_list(START_DIRECTORYROOT_BLOCK);
+	//file_list(START_DIRECTORYROOT_BLOCK);
+	find_file("/ciao.txt");
+	find_file("/nomeestremamenteesageratamentetroppolunghissimo.txt");
+	find_file("/cartella");
+	find_file("/cartella/filecartella.txt");
+	find_file("/cartella/cartellafiglia/");
+	find_file("/cartella/cartellafiglia/filecartellafiglia.txt");
 }
