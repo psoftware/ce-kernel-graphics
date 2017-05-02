@@ -944,6 +944,8 @@ extern "C" void fill_io_gates(void);
 extern "C" natl end;
 // eseguita in fase di inizializzazione
 //
+
+#include "fs/fat16/fat16.cpp"
 extern "C" void cmain(int sem_io)
 {
 
@@ -954,12 +956,15 @@ extern "C" void cmain(int sem_io)
 		abort_p();
 	}
 	heap_init(&end, DIM_IO_HEAP);
+
 	if (!console_init())
 		abort_p();
 	if (!com_init())
 		abort_p();
 	if (!hd_init())
 		abort_p();
+
+	prova_fat16();
 	sem_signal(sem_io);
 	terminate_p();
 }
