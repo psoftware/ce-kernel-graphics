@@ -79,5 +79,5 @@ struct io_pointer {
 	natw cluster;
 	natl block;
 	natl block_offset;
-	int remaining_size;
+	natl remaining_size;
 };
