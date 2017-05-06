@@ -1,3 +1,6 @@
+#ifndef FATSTRUCTS_H
+#define FATSTRUCTS_H
+
 struct boot_block {
 	//roba per bootloader
 	natb reserved[3];
@@ -85,3 +88,5 @@ struct io_pointer {
 		used = false;
 	}
 };
+
+#endif

@@ -945,7 +945,7 @@ extern "C" natl end;
 // eseguita in fase di inizializzazione
 //
 
-#include "fs/fat16/fat16.cpp"
+#include "fs/fat16/fat16.h"
 extern "C" void cmain(int sem_io)
 {
 

@@ -1,15 +1,30 @@
+#include "libce.h"
+#include "fat16.h"
 #include "structs.h"
 #include "libstr.h"
 
 natw *FAT;
 boot_block bb;
 
+//costanti calcolate da fat16_init
 natw BOOT_BLOCK=0;
 natw START_FAT_BLOCK=1;
 natw START_DIRECTORYROOT_BLOCK;
 natw START_DATAAREA;
 
+//variabili che assistono le funzioni nell'utilizzo della c_readhd
+//(a cui devo passare variabili indirizzabili globalmente)
 natb *cluster;
+directory_entry temp_fileentry[16];
+
+//tabella iopointer
+io_pointer iopointers_table[MAX_IOPOINTERS_COUNT];
+
+//funzioni fornite dal modulo di io
+void *mem_alloc(natl dim);
+void mem_free(void *p);
+extern "C" void c_readhd_n(natw vetti[], natl primo, natb quanti, natb &errore);
+
 void read_file_raw(io_pointer *p, natb* result, int bytecount)
 {
 	//flog(LOG_INFO, "print_file: CHIAMATA con bytecount = %d p->remaining_size = %d", bytecount, p->remaining_size);
@@ -86,8 +101,6 @@ void assembly_name(natb *entry, char *string)
 
 }
 
-//per ogni blocco ho 16 entrate
-directory_entry temp_fileentry[16];
 natb get_max_level(const char *source)
 {
 	natb previous_slash = 0;
@@ -191,13 +204,6 @@ io_pointer find_file(const char *fullpath, natl directoryblock=START_DIRECTORYRO
 	//tecnicamente non ci dovrei arrivare qui
 	return pointer_res;
 }
-
-//mi serve sapere il processo in esecuzione per implementare i meccanismi/politiche di sicurezza
-//struct des_p;
-//extern des_p *esecuzione;
-
-const int MAX_IOPOINTERS_COUNT = 32;
-io_pointer iopointers_table[MAX_IOPOINTERS_COUNT];
 
 //controlla la validità dell'indice passato
 bool is_fd_valid(natw fd)

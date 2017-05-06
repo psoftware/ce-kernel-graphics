@@ -35,6 +35,9 @@ ifdef AUTOCORR
 	NCFLAGS+=-DAUTOCORR
 endif
 
+FAT16_CPP_FILES := $(wildcard io/fs/fat16/*.cpp)
+FAT16_OBJ_FILES = $(patsubst io/fs/fat16/%.cpp,io/fs/fat16/%.o,$(FAT16_CPP_FILES))
+
 all: \
      build/sistema \
      build/parse   \
@@ -44,8 +47,8 @@ all: \
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
-build/io: io/io_s.o io/io_cpp.o
-	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(NLDLIBS)
+build/io: io/io_s.o io/io_cpp.o $(FAT16_OBJ_FILES)
+	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(FAT16_OBJ_FILES) $(NLDLIBS)
 
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o $(NLDLIBS)
@@ -63,6 +66,10 @@ io/io_s.o: io/io.s include/costanti.h
 
 io/io_cpp.o: io/io.cpp include/costanti.h
 	$(NCC) $(NCFLAGS) -c io/io.cpp -o io/io_cpp.o
+
+## compilazione modulo FAT16 di io
+io/fs/fat16/%.o: io/fs/fat16/%.cpp
+	$(NCC) $(NCFLAGS) -c -o $@ $<
 
 # compilazione di utente.s e utente.cpp
 utente/uten_s.o: utente/utente.s include/costanti.h
@@ -115,6 +122,7 @@ swap: build/creatimg build/io build/utente $(SWAP)
 
 clean:
 	rm -f sistema/*.o io/*.o utente/*.o util/*.o
+	rm -f io/fs/fat16/*.o
 	rm -f util/start.mk util/start.gdb util/start.pl
 
 reset: clean
