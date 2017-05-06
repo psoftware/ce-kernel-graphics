@@ -53,7 +53,7 @@ struct boot_block {
 	char disk_label[11];
 
 	//identificatore filesystem
-	natq fat16_magic;
+	char fat16_magic[8];
 
 	//448 bytes pagging
 	natb padding[448];

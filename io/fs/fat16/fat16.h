@@ -7,6 +7,6 @@
 int open_file(const char * filepath);
 int read_file(natb fd, natb *dest, natl bytescount);
 int close_file(natb fd);
-void fat16_init();
+bool fat16_init();
 
 #endif

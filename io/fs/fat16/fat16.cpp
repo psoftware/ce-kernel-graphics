@@ -216,6 +216,8 @@ bool is_fd_valid(natw fd)
 	return true;
 }
 
+//===== INTERFACCIA PER MODULO IO =======
+
 int open_file(const char * filepath)
 {
 	//cerco un iopointer non nullo nella tabella globale degli iopointer
@@ -275,7 +277,7 @@ int close_file(natb fd)
 	return 0;	//success
 }
 
-void fat16_init()
+bool fat16_init()
 {
 	//azzero la struttura, è utile per fare debug (nel caso non funzioni la read)
 	memset(reinterpret_cast<natb*>(&bb), 0, sizeof(bb));
@@ -283,6 +285,16 @@ void fat16_init()
 
 	//carico il boot_block
 	c_readhd_n(reinterpret_cast<natw*>(&bb), BOOT_BLOCK, 1, errore);
+
+	//controllo l'identificatore per accertarmi che il volume sia gestito con fat16
+	char magic[9];
+	strcpy(magic, bb.fat16_magic, 5);
+	if(!streq(magic, "FAT16"))
+	{
+		flog(LOG_INFO, "fat16: il disco non contiene un filesystem FAT16", bb.cluster_size, bb.bytesperblock);
+		return false;
+	}
+
 	flog(LOG_INFO, "fat16: cluster_size=%d blocksize=%d", bb.cluster_size, bb.bytesperblock);
 	flog(LOG_INFO, "fat16: total_block_count=%d total_block_count_extended=%d directory_count=%d", bb.total_block_count, bb.total_block_count_extended, bb.directory_count);
 	flog(LOG_INFO, "fat16: FAT_size=%d FAT_count=%d blocksize=%d", bb.FAT_size, bb.FAT_count, bb.bytesperblock);
@@ -334,4 +346,6 @@ void fat16_init()
 	prova[res] = '\0';
 	flog(LOG_INFO, "read4: %d %s", res, prova);
 	//==========
+
+	return true;
 }

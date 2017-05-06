@@ -963,8 +963,9 @@ extern "C" void cmain(int sem_io)
 		abort_p();
 	if (!hd_init())
 		abort_p();
+	if (!fat16_init())
+		abort_p();
 
-	fat16_init();
 	sem_signal(sem_io);
 	terminate_p();
 }
