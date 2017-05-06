@@ -71,13 +71,17 @@ struct directory_entry {
 } __attribute__ ((__packed__));
 
 struct io_pointer {
-	union {
-		natq pid;
-		int result;
-	};
+	int result;
+	natq pid;
+	bool used;
 
 	natw cluster;
 	natl block;
 	natl block_offset;
 	natl remaining_size;
+
+	io_pointer()
+	{
+		used = false;
+	}
 };

@@ -192,11 +192,41 @@ io_pointer find_file(const char *fullpath, natl directoryblock=START_DIRECTORYRO
 	return pointer_res;
 }
 
-io_pointer iopointers_table[32];
-int free_iopointer_index=0;
+//mi serve sapere il processo in esecuzione per implementare i meccanismi/politiche di sicurezza
+//struct des_p;
+//extern des_p *esecuzione;
+
+const int MAX_IOPOINTERS_COUNT = 32;
+io_pointer iopointers_table[MAX_IOPOINTERS_COUNT];
+
+//controlla la validità dell'indice passato
+bool is_fd_valid(natw fd)
+{
+	if(fd >= MAX_IOPOINTERS_COUNT)
+		return false;
+	if(!iopointers_table[fd].used)
+		return false;
+
+	return true;
+}
+
 int open_file(const char * filepath)
 {
-	io_pointer *p = &iopointers_table[free_iopointer_index];
+	//cerco un iopointer non nullo nella tabella globale degli iopointer
+	natw new_fd;
+	bool fd_found = false;
+	for(new_fd=0; new_fd<MAX_IOPOINTERS_COUNT; new_fd++)
+		if(!iopointers_table[new_fd].used)
+		{
+			fd_found = true;
+			break;
+		}
+
+	if(!fd_found)
+		return -3;	//gli io_pointer sono esauriti
+
+	//cerco il file richiesto e ne ottengo l'io_pointer, insieme al risultato dell'operazione
+	io_pointer *p = &iopointers_table[new_fd];
 	*p = find_file(filepath);
 
 	if(p->result==-1)
@@ -204,19 +234,39 @@ int open_file(const char * filepath)
 	if(p->result==-2)
 		return -2;	//il percorso indicato rappresenta una cartella
 
-	flog(LOG_INFO, "open_file: startcluster = %d size = %d", p->cluster, p->remaining_size);
-	return free_iopointer_index++;
+	//se tutto è andato bene, marco l'io_pointer in tabella come usato, così che non venga assegnato ad altri processi
+	p->used = true;
+
+	//inoltre tengo conto anche di chi ha creato il descrittore, così che altri processi non possano usarlo
+	//p->pid = esecuzione->id;
+
+	flog(LOG_INFO, "open_file: new_fd = %d startcluster = %d size = %d", new_fd, p->cluster, p->remaining_size);
+	return new_fd;
 }
 
 int read_file(natb fd, natb *dest, natl bytescount)
 {
+	if(!is_fd_valid(fd))
+		return -1;
+
 	io_pointer *p = &iopointers_table[fd];
 	//if(esecuzione->id != p->pid)
-		//return -1;
+	//	return -1;
 
 	int available_bytes = p->remaining_size;
 	read_file_raw(p, dest, bytescount);
 	return available_bytes - p->remaining_size;
+}
+
+int close_file(natb fd)
+{
+	if(!is_fd_valid(fd))
+		return -1;
+
+	io_pointer *p = &iopointers_table[fd];
+	p->used = false;
+
+	return 0;	//success
 }
 
 void fat16_init()
@@ -249,7 +299,7 @@ void fat16_init()
 	flog(LOG_INFO, "fat16: START_FAT_BLOCK=%d START_DIRECTORYROOT_BLOCK=%d START_DATAAREA=%d", START_FAT_BLOCK, START_DIRECTORYROOT_BLOCK, START_DATAAREA);
 
 	//===== TEST
-	int fd = open_file("/nomeestremamenteesageratamentetroppolunghissimo.txt");
+	int fd = open_file("/ciao.txt");
 	flog(LOG_INFO, "la open_file mi ha restituito %d", fd);
 
 	natb prova[1525];
@@ -257,14 +307,22 @@ void fat16_init()
 	int res = read_file(fd, prova, 1524);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read1: %d %s", res, prova);
+
+	int fd2 = open_file("/nomemoltolungo.txt");
+	int fd3 = open_file("/nomemoltolungo.txt");
+	close_file(fd2);
+	int fd4 = open_file("/ciao.txt");
+
 	flog(LOG_INFO, "### read2");
 	res = read_file(fd, prova, 716);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read2: %d %s", res, prova);
+
 	flog(LOG_INFO, "### read3");
 	res = read_file(fd, prova, 9);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read3: %d %s", res, prova);
+
 	flog(LOG_INFO, "### read4");
 	res = read_file(fd, prova, 9);
 	prova[res] = '\0';
