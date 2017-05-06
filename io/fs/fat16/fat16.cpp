@@ -221,15 +221,23 @@ int read_file(natb fd, natb *dest, natl bytescount)
 
 void fat16_init()
 {
+	//azzero la struttura, è utile per fare debug (nel caso non funzioni la read)
 	memset(reinterpret_cast<natb*>(&bb), 0, sizeof(bb));
 	natb errore;
 
+	//carico il boot_block
 	c_readhd_n(reinterpret_cast<natw*>(&bb), BOOT_BLOCK, 1, errore);
-	flog(LOG_INFO, "fat16: cluster size=%d fat_count=%d blocksize=%d reservedblocks=%d", bb.cluster_size, bb.FAT_count, bb.bytesperblock, bb.first_reserved_blocks);
-	flog(LOG_INFO, "fat16: directoryentries=%d total_block_count=%d fat_size=%d total_block_count_extended=%d", bb.directory_count, bb.total_block_count, bb.FAT_size, bb.total_block_count_extended);
-	flog(LOG_INFO, "fat16: disk_label=%s", bb.disk_label);
+	flog(LOG_INFO, "fat16: cluster_size=%d blocksize=%d", bb.cluster_size, bb.bytesperblock);
+	flog(LOG_INFO, "fat16: total_block_count=%d total_block_count_extended=%d directory_count=%d", bb.total_block_count, bb.total_block_count_extended, bb.directory_count);
+	flog(LOG_INFO, "fat16: FAT_size=%d FAT_count=%d blocksize=%d", bb.FAT_size, bb.FAT_count, bb.bytesperblock);
 
-	//carico in memoria la tabella FAT
+	//leggo la label del disco
+	const int LABEL_LENGTH = 11;
+	char label[LABEL_LENGTH+1];
+	strcpy(label, bb.disk_label, LABEL_LENGTH);
+	flog(LOG_INFO, "fat16: disk_label=%s", label);
+
+	//carico in memoria la tabella FAT (solo la prima)
 	FAT = reinterpret_cast<natw*>(mem_alloc(bb.FAT_size*512));	//blocchi*512 (natw)
 	c_readhd_n(FAT, START_FAT_BLOCK, bb.FAT_size, errore);
 
@@ -238,29 +246,28 @@ void fat16_init()
 
 	//calcolo del blocco iniziale dell'area dei dati (32 è la dimensione di una), l'espressione strana è per fare il ceiling del numero
 	START_DATAAREA = START_DIRECTORYROOT_BLOCK + ((bb.directory_count*sizeof(directory_entry)) + 512 - 1) / 512;
-	flog(LOG_INFO, "fat16: START_FAT_BLOCK = %d START_DIRECTORYROOT_BLOCK = %d START_DATAAREA = %d", START_FAT_BLOCK, START_DIRECTORYROOT_BLOCK, START_DATAAREA);
+	flog(LOG_INFO, "fat16: START_FAT_BLOCK=%d START_DIRECTORYROOT_BLOCK=%d START_DATAAREA=%d", START_FAT_BLOCK, START_DIRECTORYROOT_BLOCK, START_DATAAREA);
 
-	/*find_file("/ciao.txt");
-	find_file("/nomeestremamenteesageratamentetroppolunghissimo.txt");
-	find_file("/cartella");
-	find_file("/cartella/filecartella.txt");
-	find_file("/cartella/cartellafiglia/");
-	find_file("/cartella/cartellafiglia/filecartellafiglia.txt");*/
-
-	int fd = open_file("/cartella/filecartella.txt");
+	//===== TEST
+	int fd = open_file("/nomeestremamenteesageratamentetroppolunghissimo.txt");
 	flog(LOG_INFO, "la open_file mi ha restituito %d", fd);
 
 	natb prova[1525];
 	flog(LOG_INFO, "### read1");
-	int res = read_file(fd, prova, 1525);
+	int res = read_file(fd, prova, 1524);
+	prova[res] = '\0';
 	flog(LOG_INFO, "read1: %d %s", res, prova);
 	flog(LOG_INFO, "### read2");
 	res = read_file(fd, prova, 716);
+	prova[res] = '\0';
 	flog(LOG_INFO, "read2: %d %s", res, prova);
 	flog(LOG_INFO, "### read3");
 	res = read_file(fd, prova, 9);
+	prova[res] = '\0';
 	flog(LOG_INFO, "read3: %d %s", res, prova);
 	flog(LOG_INFO, "### read4");
 	res = read_file(fd, prova, 9);
+	prova[res] = '\0';
 	flog(LOG_INFO, "read4: %d %s", res, prova);
+	//==========
 }

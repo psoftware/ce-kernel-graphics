@@ -24,6 +24,18 @@ bool streq(const char *str1, const char *str2)
 	return true;
 }
 
+void strcpy(char *dest, const char *source, int char_count=-1)
+{
+	//se non ho definito il numero di caratteri massimo da copiare
+	if(char_count==-1)
+		char_count = strlen(source);
+
+	while (char_count--)
+		*dest++ = *source++;
+
+	*dest = '\0';
+}
+
 void substring(char *result, const char *source, int first_index, int latest_index)
 {
 	for(int i=first_index; i<=latest_index; i++)
