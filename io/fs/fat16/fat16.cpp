@@ -2,6 +2,7 @@
 #include "fat16.h"
 #include "structs.h"
 #include "libstr.h"
+#include "errno.h"
 
 natw *FAT;
 boot_block bb;
@@ -218,7 +219,8 @@ bool is_fd_valid(natw fd)
 
 //===== INTERFACCIA PER MODULO IO =======
 
-int open_file(const char * filepath)
+//la open, per ora, supporta solo l'apertura in lettura
+int open_file(const char * filepath, natb& errno)
 {
 	//cerco un iopointer non nullo nella tabella globale degli iopointer
 	natw new_fd;
@@ -231,16 +233,25 @@ int open_file(const char * filepath)
 		}
 
 	if(!fd_found)
-		return -3;	//gli io_pointer sono esauriti
+	{
+		errno = ENFILE;	//gli io_pointer sono esauriti
+		return -1;
+	}
 
 	//cerco il file richiesto e ne ottengo l'io_pointer, insieme al risultato dell'operazione
 	io_pointer *p = &iopointers_table[new_fd];
 	*p = find_file(filepath);
 
 	if(p->result==-1)
-		return -1;	//file non trovato
+	{
+		errno = EACCES;	//file non trovato
+		return -1;
+	}
 	if(p->result==-2)
-		return -2;	//il percorso indicato rappresenta una cartella
+	{
+		errno = EISDIR;	//il percorso indicato rappresenta una cartella
+		return -1;
+	}
 
 	//se tutto è andato bene, marco l'io_pointer in tabella come usato, così che non venga assegnato ad altri processi
 	p->used = true;
@@ -249,31 +260,40 @@ int open_file(const char * filepath)
 	//p->pid = esecuzione->id;
 
 	flog(LOG_INFO, "open_file: new_fd = %d startcluster = %d size = %d", new_fd, p->cluster, p->remaining_size);
+	errno = 0;
 	return new_fd;
 }
 
-int read_file(natb fd, natb *dest, natl bytescount)
+int read_file(natb fd, natb *dest, natl bytescount, natb& errno)
 {
 	if(!is_fd_valid(fd))
+	{
+		errno = EBADF;
 		return -1;
+	}
 
 	io_pointer *p = &iopointers_table[fd];
 	//if(esecuzione->id != p->pid)
 	//	return -1;
 
+	errno = 0;
 	int available_bytes = p->remaining_size;
 	read_file_raw(p, dest, bytescount);
 	return available_bytes - p->remaining_size;
 }
 
-int close_file(natb fd)
+int close_file(natb fd, natb& errno)
 {
 	if(!is_fd_valid(fd))
+	{
+		errno = EBADF;
 		return -1;
+	}
 
 	io_pointer *p = &iopointers_table[fd];
 	p->used = false;
 
+	errno = 0;
 	return 0;	//success
 }
 
@@ -317,32 +337,35 @@ bool fat16_init()
 	flog(LOG_INFO, "fat16: START_FAT_BLOCK=%d START_DIRECTORYROOT_BLOCK=%d START_DATAAREA=%d", START_FAT_BLOCK, START_DIRECTORYROOT_BLOCK, START_DATAAREA);
 
 	//===== TEST
-	int fd = open_file("/ciao.txt");
+	natb errno;
+	int fd = open_file("/ciao.txt", errno);
 	flog(LOG_INFO, "la open_file mi ha restituito %d", fd);
 
 	natb prova[1525];
 	flog(LOG_INFO, "### read1");
-	int res = read_file(fd, prova, 1524);
+	int res = read_file(fd, prova, 1524, errno);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read1: %d %s", res, prova);
 
-	int fd2 = open_file("/nomemoltolungo.txt");
-	int fd3 = open_file("/nomemoltolungo.txt");
-	close_file(fd2);
-	int fd4 = open_file("/ciao.txt");
+	int fd2 = open_file("/nomemoltolungo.txt", errno);
+	int fd3 = open_file("/nomemoltolungo.txt", errno);
+	close_file(fd2, errno);
+	int fd4 = open_file("/ciao.txt", errno);
+	close_file(fd3, errno);
+	close_file(fd4, errno);
 
 	flog(LOG_INFO, "### read2");
-	res = read_file(fd, prova, 716);
+	res = read_file(fd, prova, 716, errno);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read2: %d %s", res, prova);
 
 	flog(LOG_INFO, "### read3");
-	res = read_file(fd, prova, 9);
+	res = read_file(fd, prova, 9, errno);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read3: %d %s", res, prova);
 
 	flog(LOG_INFO, "### read4");
-	res = read_file(fd, prova, 9);
+	res = read_file(fd, prova, 9, errno);
 	prova[res] = '\0';
 	flog(LOG_INFO, "read4: %d %s", res, prova);
 	//==========
