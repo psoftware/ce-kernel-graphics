@@ -1555,7 +1555,8 @@ extern "C" void c_panic(const char *msg, addr rsp)
 	in_panic = 1;
 
 	flog(LOG_ERR, "PANIC: %s", msg);
-	process_dump(esecuzione->id, rsp, LOG_ERR);
+	if (esecuzione->id)
+		process_dump(esecuzione->id, rsp, LOG_ERR);
 	flog(LOG_ERR, "  processi utente: %d", processi - 1);
 	for (natl id = MIN_PROC_ID; id < MAX_PROC_ID; id += 16) {
 		des_proc *p = des_p(id);
@@ -1718,7 +1719,7 @@ extern "C" void cmain()
 	// )
 
 error:
-	panic("Errore di inizializzazione");
+	c_panic("Errore di inizializzazione", 0);
 }
 
 void gdb_breakpoint() {}
