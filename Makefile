@@ -67,7 +67,7 @@ sistema/sist_cpp.o: sistema/sistema.cpp include/costanti.h
 io/io_s.o: io/io.s include/costanti.h
 	$(NCC) $(NCFLAGS) -x assembler-with-cpp -c io/io.s -o io/io_s.o
 
-io/io_cpp.o: io/io.cpp include/costanti.h
+io/io_cpp.o: io/io.cpp include/costanti.h io/windows/consts.h
 	$(NCC) $(NCFLAGS) -c io/io.cpp -o io/io_cpp.o
 
 ## compilazione modulo windows di io
