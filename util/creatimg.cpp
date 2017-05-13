@@ -59,7 +59,9 @@ union entrata {
 		uint64_t US:	1;
 		uint64_t PWT:	1;
 		uint64_t PCD:	1;
-		uint64_t resvd:	7;
+		uint64_t resvd:	4;
+		uint64_t zeroed:	1;	// pagina di zeri (ottimizzazione)
+		uint64_t resvd2:	2;
 
 		uint64_t block:	51;
 
@@ -301,6 +303,7 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 				CHECKSW(leggi_blocco, e[1]->a.block, &pag);
 			}
 			if (s->pagina_di_zeri()) {
+				e[1]->a.zeroed = 1;
 				CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 				log << " zero";
 			} else {
@@ -358,6 +361,7 @@ void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 				exit(EXIT_FAILURE);
 			}
 			e[1]->a.block = b;
+			e[1]->a.zeroed = 1;
 			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 			log << " NEW zero";
 		}
