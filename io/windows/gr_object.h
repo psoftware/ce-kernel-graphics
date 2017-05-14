@@ -29,7 +29,7 @@ protected:
 	int size_y;
 	int z_index;
 
-	//la trasparenza va indicata esplicitamene, per questioni di ottimizzazione del rendering
+	//la trasparenza va indicata esplicitamente, per questioni di ottimizzazione del rendering
 	bool trasparency;
 	bool visible;
 
@@ -60,15 +60,18 @@ public:
 
 	virtual void render();
 
-	// struct di utilità per l'algorimo del pittore ottimizzato
 protected:
 	// serve per allineare le coordinate old a quelle correnti
 	void align_old_coords();
+
+	// mi restituisce vero se le coordinate sono state modificate dall'ultima chiamata a align_old_coords()
+	bool is_pos_modified();
 	
 	//metodi per la gestione della lista delle render_subset_unit (insiemi di render, algoritmo ottimizzato)
 	void push_render_unit(render_subset_unit *newunit);
 	render_subset_unit *pop_render_unit();
 
+	// classi di utilità per l'algorimo del pittore ottimizzato
 	class render_target
 	{
 	public:

@@ -111,7 +111,12 @@ gr_object::render_subset_unit * gr_object::pop_render_unit()
 
 void gr_object::clear_render_units()
 {
-	units=0; //E' una bestemmia praticamente
+	while(this->units)
+	{
+		render_subset_unit * tempnext = this->units->next;
+		delete this->units;
+		this->units = tempnext;
+	}
 }
 
 int gr_object::get_pos_x(){
@@ -158,6 +163,11 @@ void gr_object::align_old_coords(){
 	this->old_visible = this->visible;
 }
 
+bool gr_object::is_pos_modified(){
+	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y) || (this->old_size_x != this->size_x) ||
+	(this->old_size_y != this->size_y) || (this->old_visible != this->visible);
+}
+
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
@@ -170,15 +180,30 @@ void gr_object::render()
 		//flog(LOG_INFO, "## nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
 		//render_target *newtarget = new render_target(obj);
 
+		// devo capire se l'oggetto è stato spostato di posizione o cambiato di dimensione: in tal caso devo
+		// creare una render_unit che corrisponda esattamente alla dimensione e posizione della finestra in quanto
+		// l'oggetto deve essere renderizzato sulla nuova area.
+		// è inclusa un'ulteriore ottimizzazione in questo caso: se creo una render_unit grande quanto l'oggetto
+		// obj, è inutile scorrere le ulteriori render_unit dell'oggetto in quanto sono tutte contenuta nella
+		// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
+		// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
+		if(obj->is_pos_modified())
+		{
+			// cancello tutte le render_unit dell'oggetto (OTTIMIZZAZIONE)
+			obj->clear_render_units();
+			// aggiungo la nuova render_unit
+			render_subset_unit *newareaunit = new render_subset_unit(0, 0, obj->size_x, obj->size_y);
+			obj->push_render_unit(newareaunit);
+		}
+
 		// controllo di intersezione della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
 		// creo una nuova render_unit e faccio finta che faccia parte di quelle di obj.
 		// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
 		// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
-		if(obj->old_visible)	// questa operazione va fatta solo se la scia era visibile
+		if(obj->is_pos_modified() && obj->old_visible)	// questa operazione va fatta solo se la scia era visibile
 		{
 			render_subset_unit *oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
 			oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
-			// devo, ovviamente, resettare le coordinate old di obj, allineandole a quelle correnti
 			obj->push_render_unit(oldareaunit);
 		}
 
@@ -201,26 +226,28 @@ void gr_object::render()
 			render_subset_unit *subsetunit=this->units, *prec=this->units;
 			while(subsetunit!=0)
 			{
+				// mantengo il puntatore a next della subset unit perchè potrei eliminare subsetunit prima della fine del ciclo
+				render_subset_unit *tempnext = subsetunit->next;
+
 				// controllo di intersezione con una render_unit già creata
 				if(subsetunit->intersects(objunit))
 				{
-					//flog(LOG_INFO, "## trovata render_unit %p", subsetunit);
-
-					//aggiorno le coordinate della objunit perchè così posso confrontarla con altre unit che intersecano
-					//la objunit originale. In tal modo mi risparmio un ciclo aggiuntivo
+					// aggiorno le coordinate della objunit perchè così posso confrontarla con altre unit che intersecano
+					// la objunit originale. In tal modo mi risparmio un ciclo aggiuntivo
 					objunit->expand(subsetunit);
-					//INOLTRE DOVREI ELIMINARE LA subsetunit, CHE CULO, STO SCORRENDO LA LISTA QUINDI POSSO FARLA O(1)
-					if(subsetunit==units)
-						units=subsetunit->next;
+
+					// elimino la render_unit di this che si interseca, perchè ora è contenuta totalmente in "subsetunit"
+					if(subsetunit==this->units)	//testa della lista
+					{
+						this->units=subsetunit->next;
+						prec=this->units;
+					}
 					else
 						prec->next=subsetunit->next;
+
+					delete subsetunit;
 				}
-
-				//render_subset_unit *temp = subsetunit;
-				prec=subsetunit;
-				subsetunit=subsetunit->next;
-
-				//delete temp;
+				subsetunit=tempnext;
 			}
 			//flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
 			this->push_render_unit(objunit);
@@ -231,7 +258,7 @@ void gr_object::render()
 	//flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		// se l'oggetto non è visibile, questo nono deve essere visualizzato. La scia è gestita nel blocco precedente
+		// se l'oggetto non è visibile, questo non deve essere visualizzato. La scia è gestita nel blocco precedente
 		if(!obj->visible)
 			continue;
 

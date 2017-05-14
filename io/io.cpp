@@ -1144,6 +1144,8 @@ void main_windows_manager(int n)
 						f_wind->topbar_bitmap->set_size_x(f_wind->topbar_container->get_size_x());
 						f_wind->topbar_bitmap->realloc_buffer();
 
+						f_wind->border_left_bitmap->render();
+
 						f_wind->border_right_bitmap->set_pos_x(f_wind->size_x+BORDER_TICK);
 						f_wind->border_right_bitmap->render();
 
