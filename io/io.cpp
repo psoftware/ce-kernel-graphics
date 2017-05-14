@@ -326,11 +326,8 @@ bool com_init()
 
 struct stdvga {
 	PIXEL_UNIT* framebuffer;
-
+	natw * vgareg;
 	natw * vbeext;
-	//valori possibili per VBE_DISPI_INDEX_ENABLE
-	static const natw VBE_DISPI_DISABLED = 0x00;
-	static const natw VBE_DISPI_ENABLED = 0x01;
 
 	//indici per vbeext
 	static const natw VBE_DISPI_INDEX_ID = 0x0;
@@ -343,29 +340,49 @@ struct stdvga {
 	static const natw VBE_DISPI_INDEX_VIRT_HEIGHT = 0x7;
 	static const natw VBE_DISPI_INDEX_X_OFFSET = 0x8;
 	static const natw VBE_DISPI_INDEX_Y_OFFSET = 0x9;
+
+	//bit settabili su VBE_DISPI_INDEX_ENABLE
+	static const natw VBE_DISPI_DISABLED = 0x00;
+	static const natw VBE_DISPI_ENABLED = 0x01;
+	static const natw VBE_DISPI_GETCAPS = 0x02;
+	static const natw VBE_DISPI_8BIT_DAC = 0x20;
+	static const natw VBE_DISPI_LFB_ENABLED = 0x40;
+	static const natw VBE_DISPI_NOCLEARMEM =0x80;
 };
+
+
+const int MAX_SCREENX = 1024;
+const int MAX_SCREENY = 700;
 
 stdvga main_videocard;
 
-bool stdvga_init()
+bool bochsvga_init()
 {
-	//cerchiamo la scheda video
 	natb bus = 0, dev = 0, fun = 0;
-	natb code[] = { 0x00, 0x00, 0x03 };
+	natw deviceID = 0x1234;
+	natw vendorID = 0x1111;
 
-	if (!pci_find_class(bus, dev, fun, code)) {
-		flog(LOG_WARN, "stdvga: scheda video non rilevata");
+	//cerchiamo la scheda video basandoci sul deviceID e vendorID
+	if(!pci_find_dev(bus, dev, fun, vendorID, deviceID))
+	{
+		flog(LOG_WARN, "bochsvga: scheda video non rilevata");
 		return false;
-	} else {
-		main_videocard.framebuffer = reinterpret_cast<PIXEL_UNIT*>(pci_read_confl(bus, dev, fun, 0x10) & ~0xf);
-		main_videocard.vbeext = reinterpret_cast<natw*>((pci_read_confl(bus, dev, fun, 0x18) & ~0xf) + 0x0500);
-		flog(LOG_INFO, "stdvga: framebuffer su %p e vbext su %p", main_videocard.framebuffer, main_videocard.vbeext);
 	}
 
-	//impostiamo la profondità di colore (definita tra le costanti) usando le estensioni VBE/BOCHS
-	main_videocard.vbeext[main_videocard.VBE_DISPI_INDEX_ENABLE] = main_videocard.VBE_DISPI_DISABLED;
-	main_videocard.vbeext[main_videocard.VBE_DISPI_INDEX_BPP] = VBE_DISPI_BPP;
-	main_videocard.vbeext[main_videocard.VBE_DISPI_INDEX_ENABLE] = main_videocard.VBE_DISPI_ENABLED;
+	//indirizzo di memoria del framebuffer
+	main_videocard.framebuffer = reinterpret_cast<PIXEL_UNIT*>(pci_read_confl(bus, dev, fun, 0x10) & ~0xf);
+	//indirizzo dell'area di memoria in cui sono mappati i registri, 1:1, del controller VGA (non usati)
+	main_videocard.vgareg = reinterpret_cast<natw*>((pci_read_confl(bus, dev, fun, 0x18) & ~0xf) + 0x0400);
+	//indirizzo dell'area di memoria in cui sono mappati i registri, 2:2, delle estensioni BOCHS VBE
+	main_videocard.vbeext = reinterpret_cast<natw*>((pci_read_confl(bus, dev, fun, 0x18) & ~0xf) + 0x0500);
+	flog(LOG_INFO, "bochsvga: framebuffer su %p e vbext su %p", main_videocard.framebuffer, main_videocard.vbeext);
+
+	//impostiamo risoluzione e profondità di colore usando le api BOCHS VBE
+	main_videocard.vbeext[stdvga::VBE_DISPI_INDEX_ENABLE] = stdvga::VBE_DISPI_DISABLED;
+	main_videocard.vbeext[stdvga::VBE_DISPI_INDEX_XRES] = MAX_SCREENX;
+	main_videocard.vbeext[stdvga::VBE_DISPI_INDEX_YRES] = MAX_SCREENY;
+	main_videocard.vbeext[stdvga::VBE_DISPI_INDEX_BPP] = VBE_DISPI_BPP;
+	main_videocard.vbeext[stdvga::VBE_DISPI_INDEX_ENABLE] = stdvga::VBE_DISPI_ENABLED | stdvga::VBE_DISPI_LFB_ENABLED;
 
 	return true;
 }
@@ -382,9 +399,6 @@ bool stdvga_init()
 #include "windows/gr_button.h"
 #include "windows/gr_label.h"
 #include "windows/gr_window.h"
-
-const int MAX_SCREENX = 1280;
-const int MAX_SCREENY = 1024;
 
 // ----- user event
 // l'inserimento evento è fatto in testa
@@ -1920,7 +1934,7 @@ extern "C" void cmain(int sem_io)
 	}
 	heap_init(&end, DIM_IO_HEAP);
 
-	if(!stdvga_init())
+	if(!bochsvga_init())
 		abort_p();
 	if(!windows_init())
 		abort_p();
