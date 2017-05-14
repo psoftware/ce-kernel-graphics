@@ -455,6 +455,10 @@ struct des_window
 	gr_object * inner_container;
 	gr_bitmap * background_bitmap;
 
+	gr_bitmap * border_left_bitmap;
+	gr_bitmap * border_right_bitmap;
+	gr_bitmap * border_bottom_bitmap;
+
 	gr_button * close_button;
 	gr_label * title_label;
 };
@@ -575,20 +579,22 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
 
 	// main/topbar container:
-	newwindow->main_container = new gr_object(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
-	newwindow->topbar_container = new gr_object(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
-	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->size_x,TOPBAR_HEIGHT,0);
-	gr_memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*TOPBAR_HEIGHT);
+	newwindow->main_container = new gr_object(newwindow->pos_x, newwindow->pos_y, newwindow->size_x+BORDER_TICK*2, newwindow->size_y+BORDER_TICK, 0);
+	newwindow->topbar_container = new gr_object(0,0,newwindow->main_container->get_size_x(),TOPBAR_HEIGHT,0);
+	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->topbar_container->get_size_x(),TOPBAR_HEIGHT,0);
+	gr_memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->topbar_container->get_size_x()*TOPBAR_HEIGHT);
 	newwindow->topbar_bitmap->render();
 	newwindow->topbar_container->add_child(newwindow->topbar_bitmap);
 	newwindow->main_container->add_child(newwindow->topbar_container);
 
 	// pulsante chiusura
+	const int BUTTON_SIZE = 18;
 	const int BUTTON_PADDING_X = 1;
 	const int BUTTON_PADDING_Y = 1;
 	const int LABEL_PADDING_X = 2;
 	const int LABEL_PADDING_Y = 2;
-	newwindow->close_button = new gr_button(newwindow->size_x-TOPBAR_HEIGHT-BUTTON_PADDING_X,BUTTON_PADDING_Y,18,18,1,CLOSEBUTTON_WIN_BACKCOLOR);
+	newwindow->close_button = new gr_button(newwindow->topbar_container->get_size_x()-BUTTON_PADDING_X-BUTTON_SIZE,BUTTON_PADDING_Y,
+		BUTTON_SIZE,BUTTON_SIZE,1,CLOSEBUTTON_WIN_BACKCOLOR);
 	newwindow->close_button->set_text("x");
 	newwindow->close_button->render();
 	newwindow->topbar_container->add_child(newwindow->close_button);
@@ -601,19 +607,32 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	newwindow->topbar_container->add_child(newwindow->title_label);
 
 	// contenitore oggetti finestra + background
-	newwindow->inner_container = new gr_object(0,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
+	newwindow->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
 	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
 	gr_memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
 	newwindow->background_bitmap->render();
 	newwindow->inner_container->add_child(newwindow->background_bitmap);
 
 	newwindow->main_container->add_child(newwindow->inner_container);
+
+	// bordi (destro, sinistro e basso)
+	newwindow->border_left_bitmap = new gr_bitmap(0,TOPBAR_HEIGHT, BORDER_TICK, newwindow->size_y+BORDER_TICK, 0);
+	gr_memset(newwindow->border_left_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, BORDER_TICK*(newwindow->size_y+BORDER_TICK));
+	newwindow->border_right_bitmap = new gr_bitmap(BORDER_TICK+newwindow->size_x, TOPBAR_HEIGHT, BORDER_TICK, newwindow->size_y+BORDER_TICK, 0);
+	gr_memset(newwindow->border_right_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, BORDER_TICK*(newwindow->size_y+BORDER_TICK));
+	newwindow->border_bottom_bitmap = new gr_bitmap(BORDER_TICK, newwindow->size_y, newwindow->size_x, BORDER_TICK, 0);
+	gr_memset(newwindow->border_bottom_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*BORDER_TICK);
+
+	newwindow->main_container->add_child(newwindow->border_left_bitmap);
+	newwindow->main_container->add_child(newwindow->border_right_bitmap);
+	newwindow->main_container->add_child(newwindow->border_bottom_bitmap);
+	newwindow->border_left_bitmap->render();
+	newwindow->border_right_bitmap->render();
+	newwindow->border_bottom_bitmap->render();
+
 	newwindow->main_container->set_visibility(false);
 	doubled_framebuffer_container->add_child(newwindow->main_container);
 
-	/*gr_window *asdasd = new gr_window(newwindow->pos_x,newwindow->pos_y,newwindow->size_x,newwindow->size_y,0);
-	asdasd->render();
-	doubled_framebuffer_container->add_child(asdasd);*/
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -1109,20 +1128,34 @@ void main_windows_manager(int n)
 							f_wind->pos_x += newreq.delta_x;
 							f_wind->size_x -= newreq.delta_x;
 						}
-						f_wind->main_container->set_pos_x(f_wind->pos_x);
-						f_wind->main_container->set_size_x(f_wind->size_x);
+						f_wind->main_container->set_pos_x(f_wind->pos_x+BORDER_TICK);
+						f_wind->main_container->set_size_x(f_wind->size_x+BORDER_TICK*2);
 						f_wind->main_container->realloc_buffer();
+
 						f_wind->inner_container->set_size_x(f_wind->size_x);
 						f_wind->inner_container->realloc_buffer();
+
 						f_wind->background_bitmap->set_size_x(f_wind->size_x);
 						f_wind->background_bitmap->realloc_buffer();
 						gr_memset(f_wind->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, f_wind->background_bitmap->get_size_x()*f_wind->background_bitmap->get_size_y());
-						f_wind->topbar_container->set_size_x(f_wind->size_x);
+
+						f_wind->topbar_container->set_size_x(f_wind->size_x+BORDER_TICK*2);
 						f_wind->topbar_container->realloc_buffer();
-						f_wind->topbar_bitmap->set_size_x(f_wind->size_x);
+						f_wind->topbar_bitmap->set_size_x(f_wind->topbar_container->get_size_x());
 						f_wind->topbar_bitmap->realloc_buffer();
+
+						f_wind->border_right_bitmap->set_pos_x(f_wind->size_x+BORDER_TICK);
+						f_wind->border_right_bitmap->render();
+
+						f_wind->border_bottom_bitmap->set_size_x(f_wind->size_x);
+						f_wind->border_bottom_bitmap->realloc_buffer();
+						gr_memset(f_wind->border_bottom_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, f_wind->border_bottom_bitmap->get_size_x()*f_wind->border_bottom_bitmap->get_size_y());
+
 						if(f_wind->size_x-newreq.delta_x > 0)
+						{
 							f_wind->close_button->set_pos_x(f_wind->close_button->get_pos_x() - newreq.delta_x);
+							f_wind->close_button->render();
+						}
 						gr_memset(f_wind->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, f_wind->topbar_bitmap->get_size_x()*f_wind->topbar_bitmap->get_size_y());
 						f_wind->topbar_bitmap->render();
 						f_wind->topbar_container->render();
