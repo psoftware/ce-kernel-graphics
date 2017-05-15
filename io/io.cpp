@@ -1462,8 +1462,8 @@ int inline bytetosignedshort_z(natb a)
 	return (a>127)? a-256 : a;
 }
 
-const int MOUSE_DELTAX_DIVIDER=2;
-const int MOUSE_DELTAY_DIVIDER=2;
+const int MOUSE_DELTAX_DIVIDER=1;
+const int MOUSE_DELTAY_DIVIDER=1;
 
 void mouse_handler(int i)
 {
