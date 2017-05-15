@@ -306,11 +306,19 @@ void gr_object::render()
 							natb dst_red = (dst_pixel >> 16) & 0xff;
 							natb dst_green = (dst_pixel >> 8) & 0xff;
 							natb dst_blue = dst_pixel & 0xff;
-							dst_red = (alpha * (dst_red-src_red)) + dst_red;
-							dst_green = (alpha * (dst_green-src_green)) + dst_green;
-							dst_blue = (alpha * (dst_blue-src_blue)) + dst_blue;
-							//flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d dst_red %d dst_green %d dst_blue %d", alpha, src_red, src_green, src_blue, dst_red, dst_green, dst_blue);
+							dst_red = (alpha*src_red + (255-alpha)*dst_red) / 255;
+							dst_green = (alpha*src_green + (255-alpha)*dst_green) / 255;
+							dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
 							*(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
+
+							/* //alpha blending debug code
+							if(alpha!=0 && alpha!=0xff && false)
+							{
+								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x));
+								flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
+								flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
+								flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
+							}*/
 						}
 				#endif
 
