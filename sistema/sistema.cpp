@@ -1077,7 +1077,6 @@ void carica(des_pf* ppf) //
 	natq& e = get_des(ppf->processo, ppf->livello + 1, ppf->ind_virtuale);
 	if (extr_ZERO(e)) {
 		memset(indirizzo_pf(ppf), 0, DIM_PAGINA);
-		set_ZERO(e, false);
 	} else {
 		leggi_swap(indirizzo_pf(ppf), ppf->ind_massa);
 	}
@@ -1106,6 +1105,8 @@ bool scollega(des_pf* ppf)	//
 	bool occorre_salvare = bitD || ppf->livello > 0;
 	set_IND_MASSA(e, ppf->ind_massa);
 	set_P(e, false);
+	if (occorre_salvare)
+		set_ZERO(e, false);
 	invalida_entrata_TLB(ppf->ind_virtuale);
 	return occorre_salvare;	//
 }
