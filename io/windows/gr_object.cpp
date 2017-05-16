@@ -191,8 +191,9 @@ void gr_object::render()
 		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
 		render_subset_unit *newareaunit = 0;
 		render_subset_unit *oldareaunit = 0;
+		bool modified = obj->is_pos_modified();
 
-		if(obj->is_pos_modified() || (!obj->old_visible && obj->visible))
+		if(modified || (!obj->old_visible && obj->visible))
 		{
 			newareaunit = new render_subset_unit(0, 0, obj->size_x, obj->size_y);
 
@@ -201,7 +202,7 @@ void gr_object::render()
 		}
 
 		// controllo di presenza della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
-		if(obj->is_pos_modified() || (obj->old_visible && !obj->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
+		if(modified || (obj->old_visible && !obj->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
 		{
 			oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
 
