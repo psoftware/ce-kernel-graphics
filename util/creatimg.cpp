@@ -161,7 +161,6 @@ superblock_t superblock;
 tabella tab[5];
 bm_t blocks;
 pagina pag;
-pagina zero_pag;
 Swap* swap = NULL;
 
 class TabCache {
@@ -304,7 +303,6 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 			}
 			if (s->pagina_di_zeri()) {
 				e[1]->a.zeroed = 1;
-				CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 				log << " zero";
 			} else {
 				s->copia_pagina(&pag);
@@ -362,7 +360,6 @@ void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 			}
 			e[1]->a.block = b;
 			e[1]->a.zeroed = 1;
-			CHECKSW(scrivi_blocco, e[1]->a.block, &zero_pag);
 			log << " NEW zero";
 		}
 		log << " page at " << e[1]->a.block << "\n";
