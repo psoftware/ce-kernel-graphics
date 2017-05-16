@@ -177,7 +177,7 @@ void gr_object::render()
 	//per ogni oggetto (obj) del contenitore
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
-		//flog(LOG_INFO, "## nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+		//flog(LOG_INFO, "   nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
 		//render_target *newtarget = new render_target(obj);
 
 		// devo capire se l'oggetto è stato spostato di posizione o cambiato di dimensione: in tal caso devo
@@ -187,32 +187,54 @@ void gr_object::render()
 		// obj, è inutile scorrere le ulteriori render_unit dell'oggetto in quanto sono tutte contenuta nella
 		// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
 		// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
-		if(obj->is_pos_modified())
+
+		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
+		render_subset_unit *newareaunit = 0;
+		render_subset_unit *oldareaunit = 0;
+
+		if(obj->is_pos_modified() || (!obj->old_visible && obj->visible))
 		{
+			newareaunit = new render_subset_unit(0, 0, obj->size_x, obj->size_y);
+
 			// cancello tutte le render_unit dell'oggetto (OTTIMIZZAZIONE)
 			obj->clear_render_units();
-			// aggiungo la nuova render_unit
-			render_subset_unit *newareaunit = new render_subset_unit(0, 0, obj->size_x, obj->size_y);
-			obj->push_render_unit(newareaunit);
 		}
 
-		// controllo di intersezione della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
-		// creo una nuova render_unit e faccio finta che faccia parte di quelle di obj.
-		// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
-		// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
-		if(obj->is_pos_modified() && obj->old_visible)	// questa operazione va fatta solo se la scia era visibile
+		// controllo di presenza della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
+		if(obj->is_pos_modified() || (obj->old_visible && !obj->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
 		{
-			render_subset_unit *oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+			oldareaunit = new render_subset_unit(obj->old_pos_x, obj->old_pos_y, obj->old_size_x, obj->old_size_y);
+
+			// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
+			// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
 			oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
-			obj->push_render_unit(oldareaunit);
 		}
 
 		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old è coinvolta
 		obj->align_old_coords();
 
+		// la vecchia area potrebbe intersecarsi con la nuova, quindi magari è meglio farne una che contiene entrambi in tal caso
+		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))
+		{
+			newareaunit->expand(oldareaunit);
+			obj->push_render_unit(newareaunit);
+			delete oldareaunit;
+		}
+		else // se, invece, le due aree non si intersecano, allora le tengo separate
+		{
+			if(oldareaunit)
+				obj->push_render_unit(oldareaunit);
+			if(newareaunit)
+				obj->push_render_unit(newareaunit);
+		}
+
 		// itero tutte le subset unit di obj, le tolgo anche dalla lista
 		for(render_subset_unit *objunit=obj->pop_render_unit(); objunit!=0; objunit=obj->pop_render_unit())
 		{
+			// se l'oggetto non è visibile, allora nessuna render unit dovrà essere applicata
+			if(!obj->visible)
+				continue;
+
 			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di this, devo sistemare
 			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
 			objunit->offset_position(obj->pos_x, obj->pos_y);
@@ -243,10 +265,15 @@ void gr_object::render()
 						prec=this->units;
 					}
 					else
+					{
 						prec->next=subsetunit->next;
+						prec = subsetunit;
+					}
 
 					delete subsetunit;
 				}
+				else
+					prec = subsetunit;
 				subsetunit=tempnext;
 			}
 			//flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
@@ -264,6 +291,7 @@ void gr_object::render()
 
 		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)
 		{
+			//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
 			int lmin_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x - obj->pos_x : 0;
 			int lmin_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y - obj->pos_y : 0;
 			int lmax_x = (obj->pos_x + obj->size_x > subsetunit->size_x + subsetunit->pos_x) ? subsetunit->size_x + subsetunit->pos_x - obj->pos_x: obj->size_x;
