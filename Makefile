@@ -109,10 +109,10 @@ util/swap.o: include/costanti.h util/swap.h util/swap.cpp
 util/fswap.o: include/costanti.h util/swap.h util/fswap.cpp
 	g++ -c -g -Iinclude -o util/fswap.o util/fswap.cpp
 
-util/creatimg.o: util/interp.h util/swap.h util/creatimg.cpp
+util/creatimg.o: include/costanti.h util/interp.h util/swap.h util/creatimg.cpp
 	g++ -c -g -Iinclude -o util/creatimg.o util/creatimg.cpp
 
-build/creatimg: include/costanti.h util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
+build/creatimg: util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 	g++ -g -o build/creatimg util/creatimg.o util/elf32.o util/elf64.o util/coff.o util/interp.o util/swap.o util/fswap.o
 
 # creazione del file di swap
