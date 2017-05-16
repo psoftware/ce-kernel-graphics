@@ -1327,9 +1327,9 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	copy_des(tmp, dummy_dir, I_UTN_C, N_UTN_C);
 	dealloca(tmp);
 
-	if (!carica_tutto(dummy_proc, I_MIO_C, 1))
+	if (!carica_tutto(dummy_proc, I_MIO_C, N_MIO_C))
 		return false;
-	if (!carica_tutto(dummy_proc, I_UTN_C, 1))
+	if (!carica_tutto(dummy_proc, I_UTN_C, N_UTN_C))
 		return false;
 	// )
 
