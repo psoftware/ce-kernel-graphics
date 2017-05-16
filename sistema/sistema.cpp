@@ -1162,7 +1162,6 @@ void carica(des_pf* ppf) //
 	natq& e = get_des(ppf->processo, ppf->livello + 1, ppf->ind_virtuale);
 	if (extr_ZERO(e)) {
 		memset(indirizzo_pf(ppf), 0, DIM_PAGINA);
-		set_ZERO(e, false);
 	} else {
 		leggi_swap(indirizzo_pf(ppf), ppf->ind_massa);
 	}
@@ -1191,6 +1190,8 @@ bool scollega(des_pf* ppf)	//
 	bool occorre_salvare = bitD || ppf->livello > 0;
 	set_IND_MASSA(e, ppf->ind_massa);
 	set_P(e, false);
+	if (occorre_salvare)
+		set_ZERO(e, false);
 	invalida_entrata_TLB(ppf->ind_virtuale);
 	return occorre_salvare;	//
 }
@@ -1411,9 +1412,9 @@ bool crea_spazio_condiviso(natl dummy_proc)
 	copy_des(tmp, dummy_dir, I_UTN_C, N_UTN_C);
 	dealloca(tmp);
 
-	if (!carica_tutto(dummy_proc, I_MIO_C, 1))
+	if (!carica_tutto(dummy_proc, I_MIO_C, N_MIO_C))
 		return false;
-	if (!carica_tutto(dummy_proc, I_UTN_C, 1))
+	if (!carica_tutto(dummy_proc, I_UTN_C, N_UTN_C))
 		return false;
 	// )
 
@@ -1642,7 +1643,8 @@ extern "C" void c_panic(const char *msg, addr rsp)
 	in_panic = 1;
 
 	flog(LOG_ERR, "PANIC: %s", msg);
-	process_dump(esecuzione->id, rsp, LOG_ERR);
+	if (esecuzione->id)
+		process_dump(esecuzione->id, rsp, LOG_ERR);
 	flog(LOG_ERR, "  processi utente: %d", processi - 1);
 	for (natl id = MIN_PROC_ID; id < MAX_PROC_ID; id += 16) {
 		des_proc *p = des_p(id);
@@ -1805,7 +1807,7 @@ extern "C" void cmain()
 	// )
 
 error:
-	panic("Errore di inizializzazione");
+	c_panic("Errore di inizializzazione", 0);
 }
 
 void gdb_breakpoint() {}
