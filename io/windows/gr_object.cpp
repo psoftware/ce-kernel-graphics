@@ -266,10 +266,7 @@ void gr_object::render()
 						prec=this->units;
 					}
 					else
-					{
 						prec->next=subsetunit->next;
-						prec = subsetunit;
-					}
 
 					delete subsetunit;
 				}
