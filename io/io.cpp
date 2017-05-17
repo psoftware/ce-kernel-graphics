@@ -1243,10 +1243,17 @@ bool windows_init()
 	doubled_framebuffer_container->add_child(mouse_bitmap);
 
 	//barra
-	/*gr_bitmap * screen_bar = new gr_bitmap(0,0, MAX_SCREENX, 40, 10);
-	memset(screen_bar->get_buffer(), 0x37, MAX_SCREENX*MAX_SCREENY);
+	gr_bitmap * screen_bar = new gr_bitmap(0,0, MAX_SCREENX, MAINBAR_SIZE, MAINBAR_ZINDEX);
+	#ifdef BPP_8
+		gr_memset(screen_bar->get_buffer(), MAINBAR_COLOR, MAX_SCREENX*MAINBAR_SIZE);
+	#elif defined BPP_32
+		for(natl y=0; y<MAINBAR_SIZE; y++)
+			gr_memset(screen_bar->get_buffer() + y*MAX_SCREENX, MAINBAR_COLOR+(((MAINBAR_SIZE-y)*4)<<24), MAX_SCREENX);
+	#endif
+
+	screen_bar->set_trasparency(true);
 	screen_bar->render();
-	doubled_framebuffer_container->add_child(screen_bar);*/
+	doubled_framebuffer_container->add_child(screen_bar);
 
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
