@@ -6,7 +6,7 @@
 int gr_object::id_counter = 0;
 
 gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
-	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
+	: search_flags(0), child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
 		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
@@ -151,6 +151,41 @@ void gr_object::set_trasparency(bool newval){
 }
 void gr_object::set_visibility(bool newval){
 	this->visible=newval;
+}
+
+// gestione degli eventi
+int gr_object::get_id(){
+	return this->id;
+}
+
+void gr_object::set_search_flag(natb flag){
+	this->search_flags |= flag;
+}
+
+void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object::search_filter& filter, gr_object::search_result& result)
+{
+	// scorriamo la lista in modo inverso perchè dobbiamo dare priorità agli oggetti con z-index più alto
+	for(gr_object *obj=child_list_last; obj!=0; obj=obj->previous_brother)
+		if((parent_pos_x >= (obj->pos_x-filter.padding_x) && parent_pos_x < (obj->pos_x + obj->size_x + filter.padding_x))
+		&& (parent_pos_y >= (obj->pos_y-filter.padding_y) && parent_pos_y < (obj->pos_y + obj->size_y + filter.padding_y)) && obj->id!=filter.skip_id)
+		{
+			search_result child_res;
+			obj->search_tree(parent_pos_x - obj->pos_x, parent_pos_y - obj->pos_y, filter, child_res);
+			result = child_res;
+
+			if(child_res.target_parent==0 && (this->search_flags & filter.parent_flags) == filter.parent_flags)
+				result.target_parent=this;
+
+			return;
+		}
+
+	// controlliamo se la foglia possiede i flag impostati nel filtro
+	if((this->search_flags & filter.flags) != filter.flags)
+		return;
+
+	result.target = this;
+	result.target_parent = 0;
+	return;
 }
 
 void gr_object::realloc_buffer(){

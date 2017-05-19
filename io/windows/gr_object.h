@@ -9,6 +9,7 @@ class gr_object {
 private:
 	static int id_counter;
 	int id;
+	char search_flags;
 
 	gr_object *child_list;
 	gr_object *child_list_last;
@@ -104,6 +105,30 @@ protected:
 		void offset_position(int parent_pos_x, int parent_pos_y);
 		void apply_bounds(int size_x, int size_y);
 	};
+
+public:
+	// struct di utilità per la ricerca avanzata degli elementi nell'albero
+	class search_filter
+	{
+	public:
+		int skip_id;
+		natb flags;
+		natb parent_flags;
+		int padding_x;
+		int padding_y;
+	};
+
+	class search_result
+	{
+	public:
+		gr_object* target;
+		gr_object* target_parent;
+	};
+
+	//metodi utili per la gestione degli eventi
+	int get_id();
+	void set_search_flag(natb flag);
+	void search_tree(int parent_pos_x, int parent_pos_y, const search_filter& filter, search_result& result);
 };
 
 #endif

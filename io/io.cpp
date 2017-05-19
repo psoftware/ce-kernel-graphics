@@ -428,6 +428,12 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 	elem=q;
 }
 
+//flag usati per il membro search_flag dei gr_object (max 8)
+static const char WINDOW_FLAG = 1u >> 0;
+static const char BORDER_FLAG = 1u >> 1;
+static const char LABEL_FLAG = 1u >> 2;
+static const char BUTTON_FLAG = 1u >> 3;
+
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
 gr_bitmap * mouse_bitmap;
@@ -580,6 +586,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 
 	// main/topbar container:
 	newwindow->main_container = new gr_object(newwindow->pos_x, newwindow->pos_y, newwindow->size_x+BORDER_TICK*2, newwindow->size_y+BORDER_TICK, 0);
+	newwindow->main_container->set_search_flag(WINDOW_FLAG);
 	newwindow->topbar_container = new gr_object(0,0,newwindow->main_container->get_size_x(),TOPBAR_HEIGHT,0);
 	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->topbar_container->get_size_x(),TOPBAR_HEIGHT,0);
 	gr_memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->topbar_container->get_size_x()*TOPBAR_HEIGHT);
@@ -1180,7 +1187,16 @@ void main_windows_manager(int n)
 			break;
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
-				{	
+				{
+					gr_object::search_filter filter;
+					gr_object::search_result res;
+					filter.skip_id=mouse_bitmap->get_id();
+					filter.padding_x=0;
+					filter.padding_y=0;
+					filter.parent_flags=WINDOW_FLAG;
+					doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
+					flog(LOG_INFO, "winman search_tree: on id %d res %d", (!res.target)?-1:res.target->get_id(), (!res.target_parent)?-1:res.target_parent->get_id());
+
 					win_man.focus_wind = check_borderwindow_oncoords(main_cursor.x, main_cursor.y);
 					if(win_man.focus_wind!=-1)
 						win_man.is_resizing=true;
