@@ -7,6 +7,9 @@
 // che è virtuale e, quindi, ridefinibile da chi eredita questa classe.
 class gr_object {
 private:
+	static int id_counter;
+	int id;
+
 	gr_object *child_list;
 	gr_object *child_list_last;
 	gr_object *next_brother;

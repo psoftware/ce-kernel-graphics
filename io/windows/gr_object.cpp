@@ -3,6 +3,8 @@
 #include "gr_object.h"
 #include "consts.h"
 
+int gr_object::id_counter = 0;
+
 gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
 	: child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
 		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false),
@@ -13,7 +15,8 @@ gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	else
 		buffer=predefined_buffer;
 
-	flog(LOG_INFO, "Nuovo gr_object o derivato con size_x %d e this->size_x %d", size_x, this->size_x);
+	this->id = id_counter++;
+	flog(LOG_INFO, "Nuovo gr_object (%d) o derivato con size_x %d e this->size_x %d", this->id, size_x, this->size_x);
 }
 
 //O(n)
