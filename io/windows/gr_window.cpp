@@ -7,44 +7,61 @@
 #include "libgr.h"
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
-: gr_object(pos_x, pos_y, size_x, size_y, z_index)
+: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK+TOPBAR_HEIGHT, z_index)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
 
-	// main/topbar container:
-	this->topbar_container = new gr_object(0,0,this->size_x,TOPBAR_HEIGHT,0);
-	this->topbar_bitmap = new gr_bitmap(0,0,this->size_x,TOPBAR_HEIGHT,0);
-	gr_memset(this->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, this->size_x*TOPBAR_HEIGHT);
+	this->set_search_flag(WINDOW_FLAG);
+	this->topbar_container = new gr_object(0,0,this->get_size_x(),TOPBAR_HEIGHT,0);
+	this->topbar_container->set_search_flag(TOPBAR_FLAG);
+	this->topbar_bitmap = new gr_bitmap(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
+	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 	this->topbar_bitmap->render();
 	this->topbar_container->add_child(this->topbar_bitmap);
-	add_child(this->topbar_container);
+	this->add_child(this->topbar_container);
 
 	// pulsante chiusura
-	this->close_button = new gr_button(this->size_x-TOPBAR_HEIGHT-CLOSEBUTTON_PADDING_X,CLOSEBUTTON_PADDING_Y,18,18,1,CLOSEBUTTON_WIN_BACKCOLOR);
+	this->close_button = new gr_button(this->topbar_container->get_size_x()-CLOSEBUTTON_PADDING_X-CLOSEBUTTON_SIZE,CLOSEBUTTON_PADDING_Y,
+		CLOSEBUTTON_SIZE,CLOSEBUTTON_SIZE,1,CLOSEBUTTON_WIN_BACKCOLOR);
 	this->close_button->set_text("x");
 	this->close_button->render();
 	this->topbar_container->add_child(this->close_button);
 
 	// titolo finestra
-	this->title_label = new gr_label(TITLELABEL_PADDING_X,CLOSEBUTTON_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
-		TOPBAR_HEIGHT-CLOSEBUTTON_PADDING_Y,1, TOPBAR_WIN_BACKCOLOR);
-	this->title_label->set_text("Finestra");
+	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
+		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,1, TOPBAR_WIN_BACKCOLOR);
+	this->title_label->set_text("Titolo Finestra");
 	this->title_label->render();
 	this->topbar_container->add_child(this->title_label);
 
 	// contenitore oggetti finestra + background
-	this->inner_container = new gr_object(0,TOPBAR_HEIGHT,this->size_x,this->size_y-TOPBAR_HEIGHT,0);
-	this->background_bitmap = new gr_bitmap(0,0,this->size_x,this->size_y-TOPBAR_HEIGHT,0);
-	gr_memset(this->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, this->size_x*(this->size_y-TOPBAR_HEIGHT));
+	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0);
+	this->background_bitmap = new gr_bitmap(0,0,this->inner_container->get_size_x(),this->inner_container->get_size_y(),0);
+	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 	this->background_bitmap->render();
 	this->inner_container->add_child(this->background_bitmap);
 
+	// bordi (destro, sinistro e basso)
+	this->border_left_bitmap = new gr_bitmap(0,TOPBAR_HEIGHT, BORDER_TICK, this->size_y, BORDER_ZINDEX);
+	this->border_left_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+	this->border_right_bitmap = new gr_bitmap(this->size_x-BORDER_TICK, TOPBAR_HEIGHT, BORDER_TICK, this->size_y-TOPBAR_HEIGHT, BORDER_ZINDEX);
+	this->border_right_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+	this->border_bottom_bitmap = new gr_bitmap(BORDER_TICK, this->size_y-BORDER_TICK, this->size_x-2*BORDER_TICK, BORDER_TICK, BORDER_ZINDEX);
+	this->border_bottom_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+
+	this->add_child(this->border_left_bitmap);
+	this->add_child(this->border_right_bitmap);
+	this->add_child(this->border_bottom_bitmap);
+	this->border_left_bitmap->render();
+	this->border_right_bitmap->render();
+	this->border_bottom_bitmap->render();
+
+	this->add_child(this->inner_container);
+	this->set_visibility(false);
+
 	this->topbar_container->render();
 	this->inner_container->render();
-
-	add_child(this->inner_container);
-	set_visibility(false);
 }
 
 void gr_window::set_title(const char *str)
