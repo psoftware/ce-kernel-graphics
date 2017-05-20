@@ -7,7 +7,7 @@ int gr_object::id_counter = 0;
 
 gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
 	: search_flags(0), child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
-		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false),
+		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false), focus_changed(false),
 		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
 {
 	if(predefined_buffer==0)
@@ -94,6 +94,9 @@ void gr_object::focus_child(gr_object *focuschild)
 
 	//lo riaggiungo (viene messo in cima agli altri di pari z-index)
 	add_child(focuschild);
+
+	//forziamo il redraw nella prossima render
+	focus_changed = true;
 }
 
 void gr_object::push_render_unit(render_subset_unit *newunit)
@@ -196,12 +199,13 @@ void gr_object::realloc_buffer(){
 	buffer = new PIXEL_UNIT[this->size_x*this->size_y];
 }
 
-void gr_object::align_old_coords(){
+void gr_object::reset_status(){
 	this->old_pos_x = this->pos_x;
 	this->old_pos_y = this->pos_y;
 	this->old_size_x = this->size_x;
 	this->old_size_y = this->size_y;
 	this->old_visible = this->visible;
+	this->focus_changed = false;
 }
 
 bool gr_object::is_pos_modified(){
@@ -234,7 +238,7 @@ void gr_object::render()
 		render_subset_unit *oldareaunit = 0;
 		bool modified = obj->is_pos_modified();
 
-		if(modified || (!obj->old_visible && obj->visible))
+		if(modified || (!obj->old_visible && obj->visible) || focus_changed)
 		{
 			newareaunit = new render_subset_unit(0, 0, obj->size_x, obj->size_y);
 
@@ -252,8 +256,8 @@ void gr_object::render()
 			oldareaunit->offset_position(obj->pos_x*-1, obj->pos_y*-1);
 		}
 
-		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old è coinvolta
-		obj->align_old_coords();
+		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old e focus sono coinvolti
+		obj->reset_status();
 
 		// la vecchia area potrebbe intersecarsi con la nuova, quindi magari è meglio farne una che contiene entrambi in tal caso
 		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))

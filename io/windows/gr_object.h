@@ -26,6 +26,7 @@ protected:
 	int old_size_x;
 	int old_size_y;
 	bool old_visible;
+	bool focus_changed;
 
 	int pos_x;
 	int pos_y;
@@ -65,8 +66,8 @@ public:
 	virtual void render();
 
 protected:
-	// serve per allineare le coordinate old a quelle correnti
-	void align_old_coords();
+	// serve per allineare le coordinate old a quelle correnti, resettare focus_changed e old_visible
+	void reset_status();
 
 	// mi restituisce vero se le coordinate sono state modificate dall'ultima chiamata a align_old_coords()
 	bool is_pos_modified();
