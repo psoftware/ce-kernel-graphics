@@ -1036,7 +1036,6 @@ void main_windows_manager(int n)
 					{
 						win_man.focused_window->set_pos_x(win_man.focused_window->get_pos_x() + newreq.delta_x);
 						win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + newreq.delta_y);
-						doubled_framebuffer_container->focus_child(win_man.focused_window);
 					}
 
 					if(win_man.is_resizing && win_man.focused_window!=0)
@@ -1090,6 +1089,10 @@ void main_windows_manager(int n)
 
 						// imposto il focus sulla finestra
 						win_man.focused_window = window_of_clicked_object;
+						win_man.focused_window->render();
+						doubled_framebuffer_container->focus_child(win_man.focused_window);
+						doubled_framebuffer_container->render();
+						framebuffer_container->render();
 
 						// devo capire su che punto della finestra ho cliccato, provo a vedere se sui bordi
 						memset(&filter, 0, sizeof(filter));
