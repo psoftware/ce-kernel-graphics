@@ -54,8 +54,8 @@ public:
 	int get_size_y();
 	void set_pos_x(int newval);
 	void set_pos_y(int newval);
-	void set_size_x(int newval);
-	void set_size_y(int newval);
+	virtual void set_size_x(int newval);
+	virtual void set_size_y(int newval);
 	void set_trasparency(bool newval);
 	void set_visibility(bool newval);
 
