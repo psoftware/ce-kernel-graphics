@@ -1,4 +1,4 @@
-#include "libce.h"
+#include "libce_guard.h"
 #include "gr_window.h"
 #include "gr_bitmap.h"
 #include "gr_button.h"

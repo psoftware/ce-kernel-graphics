@@ -1,7 +1,9 @@
 #ifndef GRBITMAP_H
 #define GRBITMAP_H
 
+#include "libce_guard.h"
 #include "consts.h"
+#include "libgr.h"
 #include "gr_object.h"
 
 class gr_bitmap : public gr_object

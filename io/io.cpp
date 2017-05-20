@@ -1,7 +1,7 @@
 // io.cpp
 //
 #include "costanti.h"
-#include "libce.h"
+#include "libce_guard.h"
 #include "newdelete.h"
 #include "windows/gui_objects.h"
 #include "windows/cursor.h"

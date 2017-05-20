@@ -1,4 +1,4 @@
-#include "libce.h"
+#include "libce_guard.h"
 #include "gr_label.h"
 #include "consts.h"
 #include "libgr.h"
