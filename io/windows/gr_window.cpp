@@ -23,14 +23,14 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 
 	// pulsante chiusura
 	this->close_button = new gr_button(this->topbar_container->get_size_x()-CLOSEBUTTON_PADDING_X-CLOSEBUTTON_SIZE,CLOSEBUTTON_PADDING_Y,
-		CLOSEBUTTON_SIZE,CLOSEBUTTON_SIZE,1,CLOSEBUTTON_WIN_BACKCOLOR);
+		CLOSEBUTTON_SIZE,CLOSEBUTTON_SIZE,CLOSEBUTTON_ZINDEX,CLOSEBUTTON_WIN_BACKCOLOR);
 	this->close_button->set_text("x");
 	this->close_button->render();
 	this->topbar_container->add_child(this->close_button);
 
 	// titolo finestra
 	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
-		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,1, TOPBAR_WIN_BACKCOLOR);
+		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,TITLELABEL_ZINDEX, TOPBAR_WIN_BACKCOLOR);
 	this->title_label->set_text("Titolo Finestra");
 	this->title_label->render();
 	this->topbar_container->add_child(this->title_label);
