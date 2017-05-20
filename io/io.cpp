@@ -441,18 +441,8 @@ gr_bitmap * mouse_bitmap;
 const int MAX_WINDOWS_OBJECTS = 10;
 struct des_window
 {
-	natb id;
 	natb p_id;
-	natb * render_buff;
-	int size_x;
-	int size_y;
-	int pos_x;
-	int pos_y;
-	PIXEL_UNIT backColor;
-	natb obj_count;
-	windowObject * objects[MAX_WINDOWS_OBJECTS];
 	des_user_event * event_list;
-
 	gr_window * window;
 };
 
@@ -557,23 +547,13 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 		sem_signal(win_man.mutex);
 		return -1;
 	}
-	natb res_id = win_man.windows_count;
-	win_man.windows_arr[win_man.windows_count].render_buff = new natb[size_x*size_y];
-	win_man.windows_arr[win_man.windows_count].size_x = size_x;
-	win_man.windows_arr[win_man.windows_count].size_y = size_y;
-	win_man.windows_arr[win_man.windows_count].pos_x = pos_x;
-	win_man.windows_arr[win_man.windows_count].pos_y = pos_y;
-	win_man.windows_arr[win_man.windows_count].backColor = DEFAULT_WIN_BACKCOLOR;
-	win_man.windows_arr[win_man.windows_count].obj_count = 0;
-	win_man.windows_arr[win_man.windows_count].event_list = 0;
 
-	win_man.windows_arr[win_man.windows_count].window = new gr_window(pos_x, pos_y, size_x, size_y, 0);
-	doubled_framebuffer_container->add_child(win_man.windows_arr[win_man.windows_count].window);
+	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, 0);
+	doubled_framebuffer_container->add_child(newwindow);
 
-	win_man.windows_count++;
 	sem_signal(win_man.mutex);
 
-	return res_id;
+	return newwindow->get_id();
 }
 
 extern "C" void c_visualizza_finestra(int id, bool sync)
@@ -583,7 +563,7 @@ extern "C" void c_visualizza_finestra(int id, bool sync)
 
 	int new_index;
 
-	if(id >= win_man.MAX_WINDOWS || id<0)
+	if(id<0)
 		goto err;
 	flog(LOG_INFO, "Inserimento richiesta di renderizzazione finestra");
 
@@ -609,7 +589,7 @@ err:	sem_signal(win_man.mutex);
 
 extern "C" int c_crea_oggetto(int w_id, u_windowObject * u_obj)
 {
-	sem_wait(win_man.mutex);
+	/*sem_wait(win_man.mutex);
 
 	des_window * wind;
 
@@ -642,12 +622,12 @@ extern "C" int c_crea_oggetto(int w_id, u_windowObject * u_obj)
 	return wind->obj_count++;
 
 err:	sem_signal(win_man.mutex);
-	return -1;
+	return -1;*/
 }
 
 extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, bool sync)
 {
-	sem_wait(win_man.sync_notfull);
+	/*sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
 	int new_index;
@@ -694,7 +674,7 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 
 //Gestione errori (sblocco mutex e sync su array)
 err:	sem_signal(win_man.mutex);
-	sem_signal(win_man.sync_notfull);
+	sem_signal(win_man.sync_notfull);*/
 }
 
 extern "C" des_user_event c_preleva_evento(int w_id)
@@ -739,7 +719,11 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 
 void graphic_visualizza_finestra(int id)
 {
-	gr_window * window = win_man.windows_arr[id].window;
+	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(id);
+	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
+		return;
+
+	gr_window * window = static_cast<gr_window*>(found_obj);
 	window->set_visibility(true);
 
 	window->render();
@@ -759,10 +743,7 @@ struct des_cursor
 void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y)
 {
 	if(current_bitmap==newbitmap)
-	{
-		flog(LOG_INFO, "same bitmap");
 		return;
-	}
 
 	current_bitmap = newbitmap;
 	mouse_bitmap->set_pos_x(mouse_bitmap->get_pos_x() + bitmap_click_offset_x - offset_x);
@@ -823,42 +804,6 @@ void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_curs
 	render_mousecursor_onbuffer(doubled_framebuffer, main_cursor);
 	
 	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");*/
-}
-
-int check_topbar_oncoords(int curs_x, int curs_y)
-{
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		des_window * wind = &win_man.windows_arr[i];
-		if(curs_x>wind->pos_x && curs_x<wind->pos_x+wind->size_x && curs_y>wind->pos_y && curs_y<wind->pos_y+TOPBAR_HEIGHT)
-			return i;
-	}
-	return -1;
-}
-
-int check_window_oncoords(int curs_x, int curs_y)
-{
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		des_window * wind = &win_man.windows_arr[i];
-		if(curs_x>wind->pos_x && curs_x<wind->pos_x+wind->size_x && curs_y>wind->pos_y && curs_y<wind->pos_y+wind->size_y+TOPBAR_HEIGHT)
-			return i;
-	}
-	return -1;
-}
-
-int check_borderwindow_oncoords(int curs_x, int curs_y)
-{
-	for(int i=0; i<win_man.windows_count; i++)
-	{
-		des_window * wind = &win_man.windows_arr[i];
-		if(curs_x>wind->pos_x-5 && curs_x<wind->pos_x+5 && curs_y>wind->pos_y && curs_y<wind->pos_y+wind->size_y)
-		{
-			flog(LOG_INFO, "winman: click is on left border of window %d", i);
-			return i;
-		}
-	}
-	return -1;
 }
 
 void mouse_notify_move(int delta_x, int delta_y)
@@ -952,9 +897,9 @@ void keyboard_notify_keypress_event(char key)
 
 inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
 {
-	if(abs_x > wind->pos_x && abs_x < wind->pos_x + wind->size_x &&
+	/*if(abs_x > wind->pos_x && abs_x < wind->pos_x + wind->size_x &&
 			abs_y > wind->pos_y + TOPBAR_HEIGHT && abs_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT)
-		return true;
+		return true;*/
 	return false;
 }
 
@@ -976,8 +921,8 @@ void user_add_mousemovez_event_onfocused(int delta_z, int abs_x, int abs_y)
 	des_user_event * event = new des_user_event();
 	event->type=USER_EVENT_MOUSEZ;
 	event->delta_z=delta_z;
-	event->rel_x = abs_x - wind_ev->pos_x;
-	event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
+	//event->rel_x = abs_x - wind_ev->pos_x;
+	//event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
 	event_push(wind_ev->event_list, event);
 }
 
@@ -993,8 +938,8 @@ void user_add_mousebutton_event_onfocused(user_event_type event_type, mouse_butt
 	des_user_event * event = new des_user_event();
 	event->type=event_type;
 	event->button=butt;
-	event->rel_x = abs_x - wind_ev->pos_x;
-	event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
+	//event->rel_x = abs_x - wind_ev->pos_x;
+	//event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
 	event_push(wind_ev->event_list, event);
 }
 
