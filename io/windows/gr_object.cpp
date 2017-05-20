@@ -181,7 +181,10 @@ void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object:
 
 	// controlliamo se la foglia possiede i flag impostati nel filtro
 	if((this->search_flags & filter.flags) != filter.flags)
+	{
+		result.target = 0;
 		return;
+	}
 
 	result.target = this;
 	result.target_parent = 0;
