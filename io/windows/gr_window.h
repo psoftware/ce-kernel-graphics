@@ -37,6 +37,8 @@ public:
 	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index);
 	void set_size_x(int newval);
 	void set_size_y(int newval);
+	int offset_size_x(int offset);
+	int offset_size_y(int offset);
 	void set_title(const char *str);
 	void resize();
 };

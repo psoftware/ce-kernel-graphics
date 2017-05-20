@@ -44,10 +44,13 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 
 	// bordi (destro, sinistro e basso)
 	this->border_left_bitmap = new gr_bitmap(0,TOPBAR_HEIGHT, BORDER_TICK, this->size_y, BORDER_ZINDEX);
+	this->border_left_bitmap->set_search_flag(BORDER_FLAG);
 	this->border_left_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 	this->border_right_bitmap = new gr_bitmap(this->size_x-BORDER_TICK, TOPBAR_HEIGHT, BORDER_TICK, this->size_y-TOPBAR_HEIGHT, BORDER_ZINDEX);
+	this->border_right_bitmap->set_search_flag(BORDER_FLAG);
 	this->border_right_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 	this->border_bottom_bitmap = new gr_bitmap(BORDER_TICK, this->size_y-BORDER_TICK, this->size_x-2*BORDER_TICK, BORDER_TICK, BORDER_ZINDEX);
+	this->border_bottom_bitmap->set_search_flag(BORDER_FLAG);
 	this->border_bottom_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->add_child(this->border_left_bitmap);
@@ -75,26 +78,33 @@ void gr_window::resize()
 	int delta_size_x = this->size_x - old_size_x;
 	int delta_size_y = this->size_y - old_size_y;
 
+	//flog(LOG_INFO, "delta_size_x %d, delta_size_y %d, this_size_x %d, old_size_x %d", delta_size_x, delta_size_y, this->size_x, old_size_x);
+
 	this->inner_container->set_size_x(this->size_x);
 	this->inner_container->set_size_y(this->inner_container->get_size_y() + delta_size_y);
 	this->inner_container->realloc_buffer();
 
 	this->background_bitmap->set_size_x(this->background_bitmap->get_size_x() + delta_size_x);
-	this->background_bitmap->set_size_x(this->background_bitmap->get_size_y() + delta_size_y);
+	this->background_bitmap->set_size_y(this->background_bitmap->get_size_y() + delta_size_y);
 	this->background_bitmap->realloc_buffer();
 	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 
 	this->topbar_container->set_size_x(this->topbar_container->get_size_x() + delta_size_x);
 	this->topbar_container->realloc_buffer();
 	this->topbar_bitmap->set_size_x(this->topbar_container->get_size_x());
+	this->topbar_bitmap->realloc_buffer();
 	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->border_left_bitmap->set_size_y(this->border_left_bitmap->get_size_y() + delta_size_y);
+	this->border_left_bitmap->realloc_buffer();
+	this->border_left_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->border_right_bitmap->set_pos_x(this->border_right_bitmap->get_pos_x() + delta_size_x);
 	this->border_right_bitmap->set_size_y(this->border_right_bitmap->get_size_y() + delta_size_y);
+	this->border_right_bitmap->realloc_buffer();
+	this->border_right_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
-	this->border_bottom_bitmap->set_pos_y(this->border_right_bitmap->get_pos_y() + delta_size_y);
+	this->border_bottom_bitmap->set_pos_y(this->border_bottom_bitmap->get_pos_y() + delta_size_y);
 	this->border_bottom_bitmap->set_size_x(this->border_bottom_bitmap->get_size_x() + delta_size_x);
 	this->border_bottom_bitmap->realloc_buffer();
 	this->border_bottom_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
@@ -102,8 +112,11 @@ void gr_window::resize()
 	this->close_button->set_pos_x(this->close_button->get_pos_x() + delta_size_x);
 	this->close_button->render();
 
+	this->realloc_buffer();
+
 	this->border_left_bitmap->render();
 	this->border_right_bitmap->render();
+	this->border_bottom_bitmap->render();
 	this->topbar_bitmap->render();
 	this->topbar_container->render();
 	this->background_bitmap->render();
@@ -119,6 +132,18 @@ void gr_window::set_size_y(int newval){
 	if(newval < 0)
 		return;
 	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK;
+}
+int gr_window::offset_size_x(int offset){
+	if(this->size_x + offset < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
+		return 0;
+	this->size_x+=offset;
+	return offset;
+}
+int gr_window::offset_size_y(int offset){
+	if((this->size_y + offset < TOPBAR_HEIGHT + BORDER_TICK))
+		return 0;
+	this->size_y+=offset;
+	return offset;
 }
 
 void gr_window::set_title(const char *str)
