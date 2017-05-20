@@ -64,6 +64,63 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	this->inner_container->render();
 }
 
+void gr_window::resize()
+{
+	if(!is_pos_modified())
+		return;
+
+	if(this->size_x<=0 || this->size_y<=0)
+		return;
+
+	int delta_size_x = this->size_x - old_size_x;
+	int delta_size_y = this->size_y - old_size_y;
+
+	this->inner_container->set_size_x(this->size_x);
+	this->inner_container->set_size_y(this->inner_container->get_size_y() + delta_size_y);
+	this->inner_container->realloc_buffer();
+
+	this->background_bitmap->set_size_x(this->background_bitmap->get_size_x() + delta_size_x);
+	this->background_bitmap->set_size_x(this->background_bitmap->get_size_y() + delta_size_y);
+	this->background_bitmap->realloc_buffer();
+	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
+
+	this->topbar_container->set_size_x(this->topbar_container->get_size_x() + delta_size_x);
+	this->topbar_container->realloc_buffer();
+	this->topbar_bitmap->set_size_x(this->topbar_container->get_size_x());
+	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+
+	this->border_left_bitmap->set_size_y(this->border_left_bitmap->get_size_y() + delta_size_y);
+
+	this->border_right_bitmap->set_pos_x(this->border_right_bitmap->get_pos_x() + delta_size_x);
+	this->border_right_bitmap->set_size_y(this->border_right_bitmap->get_size_y() + delta_size_y);
+
+	this->border_bottom_bitmap->set_pos_y(this->border_right_bitmap->get_pos_y() + delta_size_y);
+	this->border_bottom_bitmap->set_size_x(this->border_bottom_bitmap->get_size_x() + delta_size_x);
+	this->border_bottom_bitmap->realloc_buffer();
+	this->border_bottom_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+
+	this->close_button->set_pos_x(this->close_button->get_pos_x() + delta_size_x);
+	this->close_button->render();
+
+	this->border_left_bitmap->render();
+	this->border_right_bitmap->render();
+	this->topbar_bitmap->render();
+	this->topbar_container->render();
+	this->background_bitmap->render();
+	this->inner_container->render();
+}
+
+void gr_window::set_size_x(int newval){
+	if(newval < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
+		return;
+	this->size_x=newval + BORDER_TICK*2;
+}
+void gr_window::set_size_y(int newval){
+	if(newval < 0)
+		return;
+	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK;
+}
+
 void gr_window::set_title(const char *str)
 {
 	this->title_label->set_text(str);
