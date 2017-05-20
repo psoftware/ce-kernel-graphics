@@ -12,6 +12,7 @@ public:
 	gr_bitmap(int pos_x, int pos_y, int size_x, int size_y, int z_index);
 	
 	PIXEL_UNIT * get_buffer();
+	void paint_uniform(PIXEL_UNIT color);
 	void render();
 };
 

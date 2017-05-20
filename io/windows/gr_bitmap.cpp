@@ -14,6 +14,11 @@ void gr_bitmap::render()
 	push_render_unit(newunit);
 }
 
+void gr_bitmap::paint_uniform(PIXEL_UNIT color)
+{
+	gr_memset(buffer, color, this->size_x*this->size_y);
+}
+
 PIXEL_UNIT * gr_bitmap::get_buffer()
 {
 	return buffer;
