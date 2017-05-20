@@ -428,12 +428,6 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 	elem=q;
 }
 
-//flag usati per il membro search_flag dei gr_object (max 8)
-static const char WINDOW_FLAG = 1u >> 0;
-static const char BORDER_FLAG = 1u >> 1;
-static const char LABEL_FLAG = 1u >> 2;
-static const char BUTTON_FLAG = 1u >> 3;
-
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
 gr_bitmap * mouse_bitmap;
@@ -454,19 +448,7 @@ struct des_window
 	windowObject * objects[MAX_WINDOWS_OBJECTS];
 	des_user_event * event_list;
 
-	//variazioni con astrazione
-	gr_object * main_container;
-	gr_object * topbar_container;
-	gr_bitmap * topbar_bitmap;
-	gr_object * inner_container;
-	gr_bitmap * background_bitmap;
-
-	gr_bitmap * border_left_bitmap;
-	gr_bitmap * border_right_bitmap;
-	gr_bitmap * border_bottom_bitmap;
-
-	gr_button * close_button;
-	gr_label * title_label;
+	gr_window * window;
 };
 
 const natb PRIM_SHOW=0;
@@ -515,6 +497,8 @@ struct des_windows_man
 	natb windows_count;
 	des_window windows_arr[MAX_WINDOWS];		//Finestre create
 	int focus_wind;								//Finestra selezionata con mouse
+	gr_window *focused_window;
+	gr_object *dragging_border;
 	bool is_dragging;
 	bool is_resizing;
 
@@ -578,68 +562,8 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	win_man.windows_arr[win_man.windows_count].obj_count = 0;
 	win_man.windows_arr[win_man.windows_count].event_list = 0;
 
-
-	des_window * newwindow = &win_man.windows_arr[win_man.windows_count];
-
-	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
-	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
-
-	// main/topbar container:
-	newwindow->main_container = new gr_object(newwindow->pos_x, newwindow->pos_y, newwindow->size_x+BORDER_TICK*2, newwindow->size_y+BORDER_TICK, 0);
-	newwindow->main_container->set_search_flag(WINDOW_FLAG);
-	newwindow->topbar_container = new gr_object(0,0,newwindow->main_container->get_size_x(),TOPBAR_HEIGHT,0);
-	newwindow->topbar_bitmap = new gr_bitmap(0,0,newwindow->topbar_container->get_size_x(),TOPBAR_HEIGHT,0);
-	gr_memset(newwindow->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->topbar_container->get_size_x()*TOPBAR_HEIGHT);
-	newwindow->topbar_bitmap->render();
-	newwindow->topbar_container->add_child(newwindow->topbar_bitmap);
-	newwindow->main_container->add_child(newwindow->topbar_container);
-
-	// pulsante chiusura
-	const int BUTTON_SIZE = 18;
-	const int BUTTON_PADDING_X = 1;
-	const int BUTTON_PADDING_Y = 1;
-	const int LABEL_PADDING_X = 2;
-	const int LABEL_PADDING_Y = 2;
-	newwindow->close_button = new gr_button(newwindow->topbar_container->get_size_x()-BUTTON_PADDING_X-BUTTON_SIZE,BUTTON_PADDING_Y,
-		BUTTON_SIZE,BUTTON_SIZE,1,CLOSEBUTTON_WIN_BACKCOLOR);
-	newwindow->close_button->set_text("x");
-	newwindow->close_button->render();
-	newwindow->topbar_container->add_child(newwindow->close_button);
-
-	// titolo finestra
-	newwindow->title_label = new gr_label(LABEL_PADDING_X,LABEL_PADDING_Y,newwindow->close_button->get_pos_x()-LABEL_PADDING_X,
-		TOPBAR_HEIGHT-LABEL_PADDING_Y,1, TOPBAR_WIN_BACKCOLOR);
-	newwindow->title_label->set_text("Titolo Finestra");
-	newwindow->title_label->render();
-	newwindow->topbar_container->add_child(newwindow->title_label);
-
-	// contenitore oggetti finestra + background
-	newwindow->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
-	newwindow->background_bitmap = new gr_bitmap(0,0,newwindow->size_x,newwindow->size_y-TOPBAR_HEIGHT,0);
-	gr_memset(newwindow->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, newwindow->size_x*(newwindow->size_y-TOPBAR_HEIGHT));
-	newwindow->background_bitmap->render();
-	newwindow->inner_container->add_child(newwindow->background_bitmap);
-
-	newwindow->main_container->add_child(newwindow->inner_container);
-
-	// bordi (destro, sinistro e basso)
-	newwindow->border_left_bitmap = new gr_bitmap(0,TOPBAR_HEIGHT, BORDER_TICK, newwindow->size_y+BORDER_TICK, 0);
-	gr_memset(newwindow->border_left_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, BORDER_TICK*(newwindow->size_y+BORDER_TICK));
-	newwindow->border_right_bitmap = new gr_bitmap(BORDER_TICK+newwindow->size_x, TOPBAR_HEIGHT, BORDER_TICK, newwindow->size_y+BORDER_TICK, 0);
-	gr_memset(newwindow->border_right_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, BORDER_TICK*(newwindow->size_y+BORDER_TICK));
-	newwindow->border_bottom_bitmap = new gr_bitmap(BORDER_TICK, newwindow->size_y, newwindow->size_x, BORDER_TICK, 0);
-	gr_memset(newwindow->border_bottom_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, newwindow->size_x*BORDER_TICK);
-
-	newwindow->main_container->add_child(newwindow->border_left_bitmap);
-	newwindow->main_container->add_child(newwindow->border_right_bitmap);
-	newwindow->main_container->add_child(newwindow->border_bottom_bitmap);
-	newwindow->border_left_bitmap->render();
-	newwindow->border_right_bitmap->render();
-	newwindow->border_bottom_bitmap->render();
-
-	newwindow->main_container->set_visibility(false);
-	doubled_framebuffer_container->add_child(newwindow->main_container);
-
+	win_man.windows_arr[win_man.windows_count].window = new gr_window(pos_x, pos_y, size_x, size_y, 0);
+	doubled_framebuffer_container->add_child(win_man.windows_arr[win_man.windows_count].window);
 
 	win_man.windows_count++;
 	sem_signal(win_man.mutex);
@@ -810,12 +734,10 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 
 void graphic_visualizza_finestra(int id)
 {
-	des_window * wind = &win_man.windows_arr[id];
-	wind->main_container->set_visibility(true);
+	gr_window * window = win_man.windows_arr[id].window;
+	window->set_visibility(true);
 
-	wind->topbar_container->render();
-	wind->inner_container->render();
-	wind->main_container->render();
+	window->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
 	framebuffer_container->clear_render_units();
@@ -916,15 +838,6 @@ int check_borderwindow_oncoords(int curs_x, int curs_y)
 		}
 	}
 	return -1;
-}
-
-void move_window(int w_id, int to_x, int to_y)
-{
-	des_window * wind = &win_man.windows_arr[w_id];
-	wind->pos_x = to_x;
-	wind->pos_y = to_y;
-	wind->main_container->set_pos_x(wind->pos_x);
-	wind->main_container->set_pos_y(wind->pos_y);
 }
 
 void mouse_notify_move(int delta_x, int delta_y)
@@ -1119,58 +1032,27 @@ void main_windows_manager(int n)
 					main_cursor.y+=newreq.delta_y;
 	
 					//se si è già verificato il mouse_up, significa che ora devo trascinare la finestra
-					if(win_man.is_dragging && win_man.focus_wind!=-1)
+					if(win_man.is_dragging && win_man.focused_window!=0)
 					{
-						des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
-						doubled_framebuffer_container->focus_child(f_wind->main_container);
-						move_window(win_man.focus_wind, f_wind->pos_x + newreq.delta_x, f_wind->pos_y + newreq.delta_y);
+						win_man.focused_window->set_pos_x(win_man.focused_window->get_pos_x() + newreq.delta_x);
+						win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + newreq.delta_y);
+						doubled_framebuffer_container->focus_child(win_man.focused_window);
 					}
 
-					if(win_man.is_resizing && win_man.focus_wind!=-1)
+					if(win_man.is_resizing && win_man.focused_window!=0)
 					{
-						des_window * f_wind = &win_man.windows_arr[win_man.focus_wind];
-						doubled_framebuffer_container->focus_child(f_wind->main_container);
-						if(f_wind->size_x-newreq.delta_x > 0)
+						if(win_man.dragging_border == win_man.focused_window->border_left_bitmap)
 						{
-							f_wind->pos_x += newreq.delta_x;
-							f_wind->size_x -= newreq.delta_x;
+							int effective_delta = win_man.focused_window->offset_size_x(newreq.delta_x*-1);
+							win_man.focused_window->set_pos_x(win_man.focused_window->get_pos_x() + effective_delta*-1);
 						}
-						f_wind->main_container->set_pos_x(f_wind->pos_x+BORDER_TICK);
-						f_wind->main_container->set_size_x(f_wind->size_x+BORDER_TICK*2);
-						f_wind->main_container->realloc_buffer();
+						else if(win_man.dragging_border == win_man.focused_window->border_right_bitmap)
+							win_man.focused_window->offset_size_x(newreq.delta_x);
+						else if(win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
+							win_man.focused_window->offset_size_y(newreq.delta_y);
 
-						f_wind->inner_container->set_size_x(f_wind->size_x);
-						f_wind->inner_container->realloc_buffer();
-
-						f_wind->background_bitmap->set_size_x(f_wind->size_x);
-						f_wind->background_bitmap->realloc_buffer();
-						gr_memset(f_wind->background_bitmap->get_buffer(), DEFAULT_WIN_BACKCOLOR, f_wind->background_bitmap->get_size_x()*f_wind->background_bitmap->get_size_y());
-
-						f_wind->topbar_container->set_size_x(f_wind->size_x+BORDER_TICK*2);
-						f_wind->topbar_container->realloc_buffer();
-						f_wind->topbar_bitmap->set_size_x(f_wind->topbar_container->get_size_x());
-						f_wind->topbar_bitmap->realloc_buffer();
-
-						f_wind->border_left_bitmap->render();
-
-						f_wind->border_right_bitmap->set_pos_x(f_wind->size_x+BORDER_TICK);
-						f_wind->border_right_bitmap->render();
-
-						f_wind->border_bottom_bitmap->set_size_x(f_wind->size_x);
-						f_wind->border_bottom_bitmap->realloc_buffer();
-						gr_memset(f_wind->border_bottom_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, f_wind->border_bottom_bitmap->get_size_x()*f_wind->border_bottom_bitmap->get_size_y());
-
-						if(f_wind->size_x-newreq.delta_x > 0)
-						{
-							f_wind->close_button->set_pos_x(f_wind->close_button->get_pos_x() - newreq.delta_x);
-							f_wind->close_button->render();
-						}
-						gr_memset(f_wind->topbar_bitmap->get_buffer(), TOPBAR_WIN_BACKCOLOR, f_wind->topbar_bitmap->get_size_x()*f_wind->topbar_bitmap->get_size_y());
-						f_wind->topbar_bitmap->render();
-						f_wind->topbar_container->render();
-						f_wind->background_bitmap->render();
-						f_wind->inner_container->render();
-						f_wind->main_container->render();
+						win_man.focused_window->resize();
+						win_man.focused_window->render();
 					}
 
 					//sposto il cursore sulla posizione nuova
@@ -1188,26 +1070,51 @@ void main_windows_manager(int n)
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
 				{
+					//cerco di capire su quale oggetto ho cliccato e se fa parte di una finestra
 					gr_object::search_filter filter;
 					gr_object::search_result res;
+					memset(&filter, 0, sizeof(filter));
 					filter.skip_id=mouse_bitmap->get_id();
-					filter.padding_x=0;
-					filter.padding_y=0;
-					filter.parent_flags=WINDOW_FLAG;
+					filter.padding_x = 2;
+					filter.padding_y = 2;
+					filter.parent_flags = gr_window::WINDOW_FLAG;
 					doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
-					flog(LOG_INFO, "winman search_tree: on id %d res %d", (!res.target)?-1:res.target->get_id(), (!res.target_parent)?-1:res.target_parent->get_id());
 
-					win_man.focus_wind = check_borderwindow_oncoords(main_cursor.x, main_cursor.y);
-					if(win_man.focus_wind!=-1)
-						win_man.is_resizing=true;
-					else
+					gr_object *clicked_object = res.target;
+
+					// se ho cliccato su un oggetto di una finestra
+					if(res.target_parent!=0)
 					{
-						//se ho cliccato su una topbar, allora significa che devo iniziare a trascinare
-						win_man.focus_wind = check_topbar_oncoords(main_cursor.x, main_cursor.y);
-						if(win_man.focus_wind!=-1)
-							win_man.is_dragging=true;
-						else //altrimenti controllo se ho cliccato sul corpo di una finestra e aggiorno il focus
-							win_man.focus_wind = check_window_oncoords(main_cursor.x, main_cursor.y);
+						// non c'è bisogno di un dynamic_cast perchè la ricerca restituisce solo oggetti gr_windows (se tutto va bene)
+						gr_window *window_of_clicked_object = static_cast<gr_window*>(res.target_parent);
+
+						// imposto il focus sulla finestra
+						win_man.focused_window = window_of_clicked_object;
+
+						// devo capire su che punto della finestra ho cliccato, provo a vedere se sui bordi
+						memset(&filter, 0, sizeof(filter));
+						filter.skip_id = mouse_bitmap->get_id();
+						filter.padding_x = 5;
+						filter.padding_y = 5;
+						filter.flags = gr_window::BORDER_FLAG;
+						window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
+						if(res.target != 0)
+						{
+							flog(LOG_INFO, "winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
+							win_man.dragging_border = res.target;
+							win_man.is_resizing = true;
+						}
+
+						// se, invece, ho cliccato su una topbar, allora significa che devo iniziare a trascinare
+						memset(&filter, 0, sizeof(filter));
+						filter.skip_id = mouse_bitmap->get_id();
+						filter.parent_flags = gr_window::TOPBAR_FLAG;
+						window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
+						if(res.target_parent != 0)
+						{
+							flog(LOG_INFO, "winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
+							win_man.is_dragging = true;
+						}
 					}
 				}
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
