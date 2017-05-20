@@ -5,6 +5,7 @@
 #include "newdelete.h"
 #include "windows/gui_objects.h"
 #include "windows/cursor.h"
+#include "windows/h_resize_cursor.h"
 
 //#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
@@ -430,6 +431,10 @@ void event_pop(des_user_event *& head, des_user_event *& elem)
 
 gr_object *framebuffer_container;
 gr_object *doubled_framebuffer_container;
+
+int bitmap_click_offset_x;
+int bitmap_click_offset_y;
+const void *current_bitmap;
 gr_bitmap * mouse_bitmap;
 
 // ----- des_window
@@ -751,10 +756,26 @@ struct des_cursor
 	int y;
 };
 
+void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y)
+{
+	if(current_bitmap==newbitmap)
+	{
+		flog(LOG_INFO, "same bitmap");
+		return;
+	}
+
+	current_bitmap = newbitmap;
+	mouse_bitmap->set_pos_x(mouse_bitmap->get_pos_x() + bitmap_click_offset_x - offset_x);
+	mouse_bitmap->set_pos_y(mouse_bitmap->get_pos_y() + bitmap_click_offset_y - offset_y);
+	bitmap_click_offset_x = offset_x;
+	bitmap_click_offset_y = offset_y;
+	gr_memcpy(mouse_bitmap->get_buffer(), newbitmap, 32*32);
+}
+
 void render_mousecursor_onbuffer(des_cursor* cursor)
 {
-	mouse_bitmap->set_pos_x(cursor->x);
-	mouse_bitmap->set_pos_y(cursor->y);
+	mouse_bitmap->set_pos_x(cursor->x - bitmap_click_offset_x);
+	mouse_bitmap->set_pos_y(cursor->y - bitmap_click_offset_x);
 	mouse_bitmap->render();
 }
 
@@ -1091,8 +1112,6 @@ void main_windows_manager(int n)
 						win_man.focused_window = window_of_clicked_object;
 						win_man.focused_window->render();
 						doubled_framebuffer_container->focus_child(win_man.focused_window);
-						doubled_framebuffer_container->render();
-						framebuffer_container->render();
 
 						// devo capire su che punto della finestra ho cliccato, provo a vedere se sui bordi
 						memset(&filter, 0, sizeof(filter));
@@ -1106,6 +1125,7 @@ void main_windows_manager(int n)
 							flog(LOG_INFO, "winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
 							win_man.dragging_border = res.target;
 							win_man.is_resizing = true;
+							switch_mousecursor_bitmap(h_resize_cursor, h_resize_cursor_click_x, h_resize_cursor_click_y);
 						}
 
 						// se, invece, ho cliccato su una topbar, allora significa che devo iniziare a trascinare
@@ -1118,6 +1138,9 @@ void main_windows_manager(int n)
 							flog(LOG_INFO, "winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
 							win_man.is_dragging = true;
 						}
+
+						doubled_framebuffer_container->render();
+						framebuffer_container->render();
 					}
 				}
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
@@ -1128,6 +1151,9 @@ void main_windows_manager(int n)
 				{
 					win_man.is_dragging=false;
 					win_man.is_resizing=false;
+					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
+					doubled_framebuffer_container->render();
+					framebuffer_container->render();
 				}
 
 				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
@@ -1163,7 +1189,7 @@ bool windows_init()
 
 	//cursore
 	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
-	gr_memcpy(mouse_bitmap->get_buffer(), main_cursor, 32*32);
+	switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 	mouse_bitmap->set_trasparency(true);
 	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);
