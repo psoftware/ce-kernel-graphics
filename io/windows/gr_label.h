@@ -3,6 +3,7 @@
 
 #include "consts.h"
 #include "gr_object.h"
+#include "windows/u_obj.h"
 
 class gr_label : public gr_object
 {
@@ -12,7 +13,7 @@ class gr_label : public gr_object
 
 public:
 	gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT back_color);
-
+	gr_label(u_label* u_l);
 	void render();
 	void set_text(const char *text);
 };

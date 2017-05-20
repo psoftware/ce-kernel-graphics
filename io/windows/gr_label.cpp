@@ -10,6 +10,12 @@ gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PI
 	copy("", this->text);
 }
 
+gr_label::gr_label(u_label* u_l)
+: gr_object(u_l->pos_x, u_l->pos_y, u_l->size_x, u_l->size_y, u_l->z_index), text_color(u_l->text_color), back_color(u_l->back_color)
+{
+	copy(u_l->text, this->text);
+}
+
 void gr_label::render()
 {
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);

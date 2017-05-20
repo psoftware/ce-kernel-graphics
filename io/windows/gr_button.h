@@ -3,6 +3,7 @@
 
 #include "consts.h"
 #include "gr_object.h"
+#include "windows/u_obj.h"
 
 class gr_button : public gr_object
 {
@@ -16,6 +17,7 @@ class gr_button : public gr_object
 
 public:
 	gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color);
+	gr_button(u_button* u_b);
 
 	void render();
 	void set_text(const char * text);

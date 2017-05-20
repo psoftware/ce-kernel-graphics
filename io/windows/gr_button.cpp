@@ -10,6 +10,13 @@ gr_button::gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	copy("", this->text);
 }
 
+gr_button::gr_button(u_button* u_b)
+: gr_object(u_b->pos_x, u_b->pos_y, u_b->size_x, u_b->size_y, u_b->z_index), background_color(u_b->back_color), border_color(u_b->border_color),
+clicked_color(u_b->clicked_color), text_color(u_b->text_color), clicked(false)
+{
+	copy(u_b->text, this->text);
+}
+
 void gr_button::render()
 {
 	PIXEL_UNIT color = (clicked) ? clicked_color : background_color;
