@@ -33,14 +33,15 @@ const natb W_ID_TEXTBOX=2;
 class u_windowObject
 {
 	public:
+	int id;
 	natb TYPE;
-	unsigned short size_x;
-	unsigned short size_y;
+	short size_x;
+	short size_y;
 	short pos_x;
 	short pos_y;
 	short z_index;
 
-	natb backColor;
+	natb back_color;
 
 	virtual void process_event(des_user_event event)=0;
 };
@@ -49,7 +50,10 @@ class u_button : public u_windowObject
 {
 	public:
 	char text[20];
-	natb borderColor;
+
+	natb border_color;
+	natb clicked_color;
+	natb text_color;
 	bool clicked;
 	u_button()
 	{
@@ -70,6 +74,7 @@ class u_label : public u_windowObject
 {
 	public:
 	char text[100];
+	natb text_color;
 	u_label()
 	{
 		TYPE=W_ID_LABEL;

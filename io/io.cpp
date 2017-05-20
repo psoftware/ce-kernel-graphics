@@ -465,7 +465,7 @@ struct des_window_req
 
 	natb act;
 	union {
-		windowObject * obj;
+		//windowObject * obj;
 		int delta_x;			//mousebutton
 		int delta_z;			//mousez
 		mouse_button button;	//mousebutton
@@ -760,52 +760,6 @@ void render_mousecursor_onbuffer(des_cursor* cursor)
 	mouse_bitmap->render();
 }
 
-void renderobject_onwindow(int w_id, windowObject * w_obj, des_cursor* main_cursor)
-{
-	return;
-/*
-	if(w_id >= win_man.MAX_WINDOWS || w_id<0 || w_obj==0)
-		return;
-
-	flog(LOG_INFO, "renderobject_onwindow: renderizzo oggetto...");
-
-	des_window * wind = &win_man.windows_arr[w_id];
-
-	// renderizzo oggetto richiesto
-	w_obj->render();
-
-	// pulisco buffer finestra
-	clean_window_buffer(wind);
-
-	// ristampo tutti gli oggetti già renderizzati sul buffer della finestra
-	for(int i=0; i<wind->obj_count; i++)
-	{
-		windowObject * obj = wind->objects[i];
-		if(!(obj->is_rendered))
-			continue;
-
-		int max_x = (obj->pos_x + obj->size_x > wind->size_x) ? wind->size_x - obj->pos_x : obj->size_x;
-		int max_y = (obj->pos_y + obj->size_y > wind->size_y) ? wind->size_y - obj->pos_y : obj->size_y;
-		if(max_x<=0 || max_y<=0)
-			continue;
-
-		for(int i=0; i<max_x; i++)
-			for(int j=0; j<max_y; j++)
-				set_pixel(wind->render_buff, obj->pos_x+i, obj->pos_y+j, wind->size_x, wind->size_y, obj->render_buff[j*obj->size_x+i]);
-	}
-
-	// copio il buffer della finestra su quello video
-	render_topbar_onvideobuffer(doubled_framebuffer, wind);
-	render_window_onvideobuffer(doubled_framebuffer, wind);
-
-	update_framebuffer_linechanged(wind->pos_x, wind->pos_x+wind->size_x, wind->pos_y, wind->pos_y + wind->size_y + TOPBAR_HEIGHT);
-
-	// renderizzo anche il mouse
-	render_mousecursor_onbuffer(doubled_framebuffer, main_cursor);
-	
-	flog(LOG_INFO, "renderobject_onwindow: renderizzazione completata");*/
-}
-
 void mouse_notify_move(int delta_x, int delta_y)
 {
 	sem_wait(win_man.sync_notfull);
@@ -985,7 +939,7 @@ void main_windows_manager(int n)
 			break;
 			case PRIM_UPDATE_OBJECT:
 				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.w_id);
-				renderobject_onwindow(newreq.w_id, newreq.obj, &main_cursor);
+				//renderobject_onwindow(newreq.w_id, newreq.obj, &main_cursor);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;

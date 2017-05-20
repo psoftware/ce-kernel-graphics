@@ -3,7 +3,7 @@
 #include "../../io/windows/font.h"
 
 //-------- SISTEMA
-
+/*
 class windowObject
 {
 	public:
@@ -226,4 +226,4 @@ class textbox : public windowObject
 
 		this->is_rendered=true;
 	}
-};
+};*/
