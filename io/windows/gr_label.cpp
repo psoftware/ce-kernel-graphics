@@ -16,6 +16,20 @@ gr_label::gr_label(u_label* u_l)
 	copy(u_l->text, this->text);
 }
 
+gr_label& gr_label::operator=(const u_label& u_l)
+{
+	this->set_pos_x(u_l.pos_x);
+	this->set_pos_y(u_l.pos_y);
+	this->set_size_x(u_l.size_x);
+	this->set_size_y(u_l.size_y);
+	this->z_index = u_l.z_index;
+	this->text_color = u_l.text_color;
+	this->back_color = u_l.back_color;
+	copy(u_l.text, this->text);
+
+	return *this;
+}
+
 void gr_label::render()
 {
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
