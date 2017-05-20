@@ -129,6 +129,8 @@ public:
 	//metodi utili per la gestione degli eventi
 	int get_id();
 	void set_search_flag(natb flag);
+	bool has_flag(natb flag);
+	gr_object *search_child_by_id(int id);
 	void search_tree(int parent_pos_x, int parent_pos_y, const search_filter& filter, search_result& result);
 };
 

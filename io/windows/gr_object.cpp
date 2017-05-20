@@ -165,6 +165,18 @@ void gr_object::set_search_flag(natb flag){
 	this->search_flags |= flag;
 }
 
+bool gr_object::has_flag(natb flag){
+	return this->search_flags & flag;
+}
+
+gr_object *gr_object::search_child_by_id(int id){
+	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
+		if(obj->get_id()==id)
+			return obj;
+
+	return 0;
+}
+
 void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object::search_filter& filter, gr_object::search_result& result)
 {
 	// scorriamo la lista in modo inverso perchè dobbiamo dare priorità agli oggetti con z-index più alto
