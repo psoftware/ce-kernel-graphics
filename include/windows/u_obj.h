@@ -1,6 +1,8 @@
 #ifndef U_OBJ_
 #define U_OBJ_
 
+#include "../io/windows/consts.h"
+
 enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN, USER_EVENT_KEYBOARDPRESS};
 enum mouse_button {LEFT,MIDDLE,RIGHT};
 
@@ -41,7 +43,7 @@ class u_windowObject
 	short pos_y;
 	short z_index;
 
-	natb back_color;
+	PIXEL_UNIT back_color;
 
 	virtual void process_event(des_user_event event)=0;
 };
@@ -51,9 +53,9 @@ class u_button : public u_windowObject
 	public:
 	char text[20];
 
-	natb border_color;
-	natb clicked_color;
-	natb text_color;
+	PIXEL_UNIT border_color;
+	PIXEL_UNIT clicked_color;
+	PIXEL_UNIT text_color;
 	bool clicked;
 	u_button()
 	{
@@ -74,7 +76,7 @@ class u_label : public u_windowObject
 {
 	public:
 	char text[100];
-	natb text_color;
+	PIXEL_UNIT text_color;
 	u_label()
 	{
 		TYPE=W_ID_LABEL;
