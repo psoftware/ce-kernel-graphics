@@ -6,6 +6,10 @@
 #include "consts.h"
 #include "libgr.h"
 
+extern "C" void sem_wait(natl sem);
+extern "C" void sem_signal(natl sem);
+extern "C" natl sem_ini(int val);
+
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK+TOPBAR_HEIGHT, z_index)
 {
@@ -69,6 +73,9 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 
 	this->topbar_container->render();
 	this->inner_container->render();
+
+	//inizializzo il semaforo per la sincronizzazione sulla coda degli eventi
+	event_sem_sync_notempty = sem_ini(0);
 }
 
 void gr_window::resize()
@@ -221,6 +228,62 @@ gr_object *gr_window::search_user_object(u_windowObject * u_obj)
 {
 	if(u_obj==0)
 		return 0;
-flog(LOG_INFO, "searching u_obj->id %d", u_obj->id);
+
 	return this->inner_container->search_child_by_id(u_obj->id);
+}
+
+// gestione degli eventi per utente
+void gr_window::user_event_push(des_user_event * event)
+{
+	if(event==0)
+		return;
+	event->next=event_head;
+	event_head=event;
+
+	sem_signal(event_sem_sync_notempty);
+}
+
+des_user_event *gr_window::user_event_pop()
+{
+	if(event_head==0)
+		sem_wait(event_sem_sync_notempty);
+
+	des_user_event *p=event_head, *q;
+	for(q=event_head; q->next!=0; q=q->next)
+		p=q;
+
+	if(p==event_head)
+		event_head=0;
+	else
+		p->next=0;
+
+	return q;
+}
+
+void gr_window::user_event_add_mousemovez(int delta_z, int rel_x, int rel_y)
+{
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_MOUSEZ;
+	event->delta_z=delta_z;
+	event->rel_x = rel_x;
+	event->rel_y = rel_y;
+	user_event_push(event);
+}
+
+void gr_window::user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int rel_x, int rel_y)
+{
+	des_user_event * event = new des_user_event();
+	event->type=event_type;
+	event->button=butt;
+	event->rel_x = rel_x;
+	event->rel_y = rel_y;
+	user_event_push(event);
+}
+
+void gr_window::user_event_add_keypress(char key)
+{
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_KEYBOARDPRESS;
+	event->k_char=key;
+	user_event_push(event);
 }
