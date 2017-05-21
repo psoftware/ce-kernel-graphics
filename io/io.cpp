@@ -691,26 +691,47 @@ err:
 extern "C" des_user_event c_preleva_evento(int w_id)
 {
 	sem_wait(win_man.mutex);
+	flog(LOG_INFO, "c_preleva_evento: chiamata su finestra %d", w_id);
 
-	des_user_event event;
-	event.type=NOEVENT;
+	gr_window * window;
+	gr_object * found_obj;
+	des_user_event popped_event;
 
-	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
-		goto err;
-	//flog(LOG_INFO, "c_preleva_evento: chiamata su finestra %d", w_id);
+	// prelevo l'evento e lo restituisco
+	while(true)
+	{
+		// cerco la finestra dalla quale prelevare l'evento
+		// cerco all'interno del ciclo perchè la finestra potrebbe essere stata eliminata!
+		found_obj = doubled_framebuffer_container->search_child_by_id(w_id);
+		if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
+			goto err;
+		window = static_cast<gr_window*>(found_obj);
 
-	if(win_man.windows_arr[w_id].event_list==0)
-		goto err;
-
-	des_user_event * popped_event;
-	event_pop(win_man.windows_arr[w_id].event_list, popped_event);
-	event=*popped_event;
-	flog(LOG_INFO, "c_preleva_evento: ho trovato un evento di tipo %d", popped_event->type);
-	delete popped_event;
+		popped_event = window->user_event_pop();
+		// se la lista è vuota mi devo bloccare
+		if(popped_event.type==NOEVENT)
+		{
+			// sblocco subito il mutex, altrimenti vado in lock
+			sem_signal(win_man.mutex);
+			// mi metto in attesa sul semaforo della lista degli elementi
+			sem_wait(window->event_sem_sync_notempty);
+			// appena vengo sbloccato devo assicurarmi di riottenere la mutua esclusione sul gestore delle finestre
+			sem_wait(win_man.mutex);
+		}
+		else
+		{
+			// sblocco il mutex e restituisco il risultato
+			sem_signal(win_man.mutex);
+			return popped_event;
+		}
+	}
 
 err:
+	flog(LOG_INFO, "c_preleva_evento: errore generico");
 	sem_signal(win_man.mutex);
-	return event;
+	des_user_event error_event;
+	error_event.type=NOEVENT;
+	return error_event;
 }
 
 void print_palette(PIXEL_UNIT* buff, int x, int y)
@@ -871,59 +892,6 @@ inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
 	return false;
 }
 
-void user_add_mousemovez_event_onfocused(int delta_z, int abs_x, int abs_y)
-{
-	if(win_man.focus_wind==-1)
-	{
-		flog(LOG_INFO, "user_add_mousemovez_event_onfocused: nessuna finestra in focus");
-		return;
-	}
-
-	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
-	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
-	if(!coords_on_window(wind_ev, abs_x, abs_y))
-	{
-		flog(LOG_INFO, "user_add_mousemovez_event_onfocused: coordinata fuori da finestra");
-		return;
-	}
-	des_user_event * event = new des_user_event();
-	event->type=USER_EVENT_MOUSEZ;
-	event->delta_z=delta_z;
-	//event->rel_x = abs_x - wind_ev->pos_x;
-	//event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
-	event_push(wind_ev->event_list, event);
-}
-
-void user_add_mousebutton_event_onfocused(user_event_type event_type, mouse_button butt, int abs_x, int abs_y)
-{
-	if(win_man.focus_wind==-1)
-		return;
-
-	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
-	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
-	if(!coords_on_window(wind_ev, abs_x, abs_y))
-		return;
-	des_user_event * event = new des_user_event();
-	event->type=event_type;
-	event->button=butt;
-	//event->rel_x = abs_x - wind_ev->pos_x;
-	//event->rel_y = abs_y - wind_ev->pos_y - TOPBAR_HEIGHT;
-	event_push(wind_ev->event_list, event);
-}
-
-void user_add_keypress_event_onfocused(char key)
-{
-	if(win_man.focus_wind==-1)
-		return;
-
-	//metto l'evento nella coda degli eventi della finestra a cui è rivolto
-	des_window * wind_ev = &win_man.windows_arr[win_man.focus_wind];
-	des_user_event * event = new des_user_event();
-	event->type=USER_EVENT_KEYBOARDPRESS;
-	event->k_char=key;
-	event_push(wind_ev->event_list, event);
-}
-
 void main_windows_manager(int n)
 {
 	des_cursor main_cursor = {0,0,0,0};
@@ -999,7 +967,8 @@ void main_windows_manager(int n)
 			}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
-				user_add_mousemovez_event_onfocused(newreq.delta_z, main_cursor.x, main_cursor.y);
+				if(win_man.focused_window!=0)
+					win_man.focused_window->user_event_add_mousemovez(newreq.delta_z, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
@@ -1014,7 +983,7 @@ void main_windows_manager(int n)
 					filter.parent_flags = gr_window::WINDOW_FLAG;
 					doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
 
-					gr_object *clicked_object = res.target;
+					//gr_object *clicked_object = res.target;
 
 					// se ho cliccato su un oggetto di una finestra
 					if(res.target_parent!=0)
@@ -1041,23 +1010,29 @@ void main_windows_manager(int n)
 							win_man.is_resizing = true;
 							switch_mousecursor_bitmap(h_resize_cursor, h_resize_cursor_click_x, h_resize_cursor_click_y);
 						}
-
-						// se, invece, ho cliccato su una topbar, allora significa che devo iniziare a trascinare
-						memset(&filter, 0, sizeof(filter));
-						filter.skip_id = mouse_bitmap->get_id();
-						filter.parent_flags = gr_window::TOPBAR_FLAG;
-						window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
-						if(res.target_parent != 0)
+						else
 						{
-							flog(LOG_INFO, "winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
-							win_man.is_dragging = true;
+							// se, invece, ho cliccato su una topbar, allora significa che devo iniziare a trascinare
+							memset(&filter, 0, sizeof(filter));
+							filter.skip_id = mouse_bitmap->get_id();
+							filter.parent_flags = gr_window::TOPBAR_FLAG;
+							window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
+							if(res.target_parent != 0)
+							{
+								flog(LOG_INFO, "winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
+								win_man.is_dragging = true;
+							}
+							else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
+								if(win_man.focused_window!=0)
+									win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 						}
 
 						doubled_framebuffer_container->render();
 						framebuffer_container->render();
 					}
 				}
-				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
+				if(win_man.focused_window!=0)
+					win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEUP_EVENT:
 			{
@@ -1065,17 +1040,23 @@ void main_windows_manager(int n)
 				{
 					win_man.is_dragging=false;
 					win_man.is_resizing=false;
+
+					if(win_man.focused_window!=0)
+					{
+						win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
+						win_man.focused_window = 0;
+					}
+
 					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 					doubled_framebuffer_container->render();
 					framebuffer_container->render();
 				}
-
-				user_add_mousebutton_event_onfocused(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 			}
 			break;
 			case KEYBOARD_KEYPRESS_EVENT:
 			{
-				user_add_keypress_event_onfocused(newreq.button);
+				if(win_man.focused_window!=0)
+					win_man.focused_window->user_event_add_keypress(newreq.button);
 			}
 			break;
 		}
