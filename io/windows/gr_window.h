@@ -51,9 +51,9 @@ public:
 	// funzioni per la gestione degli eventi
 private:
 	des_user_event *event_head;
-	natl event_sem_sync_notempty;
 	void user_event_push(des_user_event * event);
 public:
+	natl event_sem_sync_notempty;
 	des_user_event user_event_pop();
 	void user_event_add_mousemovez(int delta_z, int rel_x, int rel_y);
 	void user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int rel_x, int rel_y);

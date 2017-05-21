@@ -6,9 +6,8 @@
 #include "consts.h"
 #include "libgr.h"
 
-extern "C" void sem_wait(natl sem);
-extern "C" void sem_signal(natl sem);
 extern "C" natl sem_ini(int val);
+extern "C" void sem_signal(natl sem);
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK+TOPBAR_HEIGHT, z_index)
@@ -239,14 +238,17 @@ void gr_window::user_event_push(des_user_event * event)
 		return;
 	event->next=event_head;
 	event_head=event;
-
-	sem_signal(event_sem_sync_notempty);
 }
 
 des_user_event gr_window::user_event_pop()
 {
+	// restituiamo un evento con tipo NOEVENT se la lista è vuota
 	if(event_head==0)
-		sem_wait(event_sem_sync_notempty);
+	{
+		des_user_event error_event;
+		error_event.type=NOEVENT;
+		return error_event;
+	}
 
 	des_user_event *p=event_head, *q;
 	for(q=event_head; q->next!=0; q=q->next)
@@ -271,6 +273,7 @@ void gr_window::user_event_add_mousemovez(int delta_z, int rel_x, int rel_y)
 	event->rel_x = rel_x;
 	event->rel_y = rel_y;
 	user_event_push(event);
+	sem_signal(event_sem_sync_notempty);
 }
 
 void gr_window::user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int rel_x, int rel_y)
@@ -281,6 +284,7 @@ void gr_window::user_event_add_mousebutton(user_event_type event_type, mouse_but
 	event->rel_x = rel_x;
 	event->rel_y = rel_y;
 	user_event_push(event);
+	sem_signal(event_sem_sync_notempty);
 }
 
 void gr_window::user_event_add_keypress(char key)
@@ -289,4 +293,5 @@ void gr_window::user_event_add_keypress(char key)
 	event->type=USER_EVENT_KEYBOARDPRESS;
 	event->k_char=key;
 	user_event_push(event);
+	sem_signal(event_sem_sync_notempty);
 }
