@@ -33,5 +33,21 @@ process_body hello_body2(int a)
 
 	copy("Inizio processo 2!\nFine 1!\nFine 2!", label1->text);
 	aggiorna_oggetto(finestra, label_id, label1, true);
+
+	while(true)
+	{
+		copy("Inizio processo 2!\nCarattere Animato [/]", label1->text);
+		aggiorna_oggetto(finestra, label_id, label1, true);
+		delay(10);
+		copy("Inizio processo 2!\nCarattere Animato [-]", label1->text);
+		aggiorna_oggetto(finestra, label_id, label1, true);
+		delay(10);
+		copy("Inizio processo 2!\nCarattere Animato [\\]", label1->text);
+		aggiorna_oggetto(finestra, label_id, label1, true);
+		delay(10);
+		copy("Inizio processo 2!\nCarattere Animato [|]", label1->text);
+		aggiorna_oggetto(finestra, label_id, label1, true);
+		delay(10);
+	}
 }
 
