@@ -33,7 +33,7 @@ gr_label& gr_label::operator=(const u_label& u_l)
 void gr_label::render()
 {
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
-	set_fontstring(this->buffer, this->size_x, this->size_y, 0, 0, this->size_x, this->size_y, this->text, this->back_color);
+	set_fontstring(this->buffer, this->size_x, this->size_y, 0, 0, this->size_x, this->size_y, this->text, this->text_color, this->back_color);
 
 	//indico l'area modificata
 	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);

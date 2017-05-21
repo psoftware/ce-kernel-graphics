@@ -40,7 +40,7 @@ void gr_button::render()
 	PIXEL_UNIT color = (clicked) ? clicked_color : background_color;
 	gr_memset(this->buffer, color, size_x*size_y);
 	int text_width = get_fontstring_width(this->text);
-	set_fontstring(this->buffer, this->size_x, this->size_y, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y, this->text, this->background_color);
+	set_fontstring(this->buffer, this->size_x, this->size_y, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y, this->text, this->text_color, this->background_color);
 
 	gr_memset(this->buffer, border_color, size_x);
 	for(natw y=1; y < this->size_y-1; y++)

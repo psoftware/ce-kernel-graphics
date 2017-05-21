@@ -4,7 +4,7 @@
 #include "font.h"
 
 
-int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT backColor)
+int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
 {
 	PIXEL_UNIT *font_bitmap_cast = reinterpret_cast<PIXEL_UNIT*>(font_bitmap);
 	int row_off = nchar / 16;
@@ -21,13 +21,13 @@ int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nch
 			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
 				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
 			else
-				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)]);
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, text_color);
 			#endif
 			#ifdef BPP_32
 			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] >> 24 < 0xff)
 				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
 			else
-				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)]);
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, text_color);
 			#endif
 		}
 
@@ -59,7 +59,7 @@ int get_charfont_width(char c)
 					
 }
 
-void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT backColor)
+void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
 {
 	int slength = (int)strlen(str);
 	//int x_eff = ((i*16) % bound_x);
@@ -69,7 +69,7 @@ void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int 
 	for(int i=0; i<slength; i++)
 	{	
 		if(str[i] != '\n')
-			x_eff += set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, str[i], backColor);
+			x_eff += set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, str[i], text_color, backColor);
 
 		if(i==slength-1)
 			break;
