@@ -1146,7 +1146,7 @@ extern "C" void c_driver_td(void)
 		attesa = MAX_WAIT;
 	}
 	else
-		inspronti();
+		inserimento_lista(pronti, esecuzione);
 
 	time++;
 
