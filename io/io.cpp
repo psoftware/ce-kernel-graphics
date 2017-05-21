@@ -456,7 +456,7 @@ const natb KEYBOARD_KEYPRESS_EVENT=14;
 
 struct des_window_req
 {
-	natb w_id;
+	gr_window *window;
 	natb p_id;
 
 	//Sincronizzazione primitiva se richiesta
@@ -465,7 +465,7 @@ struct des_window_req
 
 	natb act;
 	union {
-		//windowObject * obj;
+		u_windowObject *obj;	//aggiorna_oggetto
 		int delta_x;			//mousebutton
 		int delta_z;			//mousez
 		mouse_button button;	//mousebutton
@@ -510,14 +510,14 @@ struct des_windows_man
 
 des_windows_man win_man;
 
-int windows_queue_insert(des_windows_man& win_cont, natb w_id, natb p_id, natb act, bool sync)
+int windows_queue_insert(des_windows_man& win_cont, gr_window *window, natb p_id, natb act, bool sync)
 {
 	//Controllo Coda piena
 	if (win_cont.top == ((win_cont.rear - 1 + MAX_REQ_QUEUE) % MAX_REQ_QUEUE))
 		return -1;
 
 	natb resindex = win_cont.top;
-	win_cont.req_queue[win_cont.top].w_id = w_id;
+	win_cont.req_queue[win_cont.top].window = window;
 	win_cont.req_queue[win_cont.top].p_id = p_id;
 	win_cont.req_queue[win_cont.top].act = act;
 	win_cont.req_queue[win_cont.top].to_sync = sync;
@@ -556,18 +556,23 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	return newwindow->get_id();
 }
 
-extern "C" void c_visualizza_finestra(int id, bool sync)
+extern "C" void c_visualizza_finestra(int w_id, bool sync)
 {
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
+	gr_window *window;
 	int new_index;
 
-	if(id<0)
+	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(w_id);
+	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
 		goto err;
+
+	window = static_cast<gr_window*>(found_obj);
+
 	flog(LOG_INFO, "Inserimento richiesta di renderizzazione finestra");
 
-	new_index = windows_queue_insert(win_man, id, 100, PRIM_SHOW, sync);
+	new_index = windows_queue_insert(win_man, window, 100, PRIM_SHOW, sync);
 	if(new_index == -1)
 	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
 		//errore solo per rendere più robusto il codice
@@ -589,73 +594,74 @@ err:	sem_signal(win_man.mutex);
 
 extern "C" int c_crea_oggetto(int w_id, u_windowObject * u_obj)
 {
-	/*sem_wait(win_man.mutex);
+	sem_wait(win_man.mutex);
+	gr_window * window;
+	gr_object * newobj;
 
-	des_window * wind;
-
-	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
-		goto err;
-	
-	wind = &win_man.windows_arr[w_id];
-	if(wind->obj_count >= MAX_WINDOWS_OBJECTS)
+	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(w_id);
+	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
 		goto err;
 
-	switch(u_obj->TYPE)
-	{
-		case W_ID_LABEL:
-			wind->objects[wind->obj_count] = new label(static_cast<u_label*>(u_obj));
-		break;
-		case W_ID_BUTTON:
-			wind->objects[wind->obj_count] = new button(static_cast<u_button*>(u_obj));
-		break;
-		case W_ID_TEXTBOX:
-			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
-		break;
-		default:
-			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
-			goto err;
-	}
+	window = static_cast<gr_window*>(found_obj);
 
-	flog(LOG_INFO, "c_crea_oggetto: oggetto %d di tipo %d creato su finestra %d", wind->obj_count, u_obj->TYPE, w_id);
+	newobj = window->add_user_object(u_obj);
+	if(newobj == 0)
+		goto err;
 
+	window->render();
 	sem_signal(win_man.mutex);
-	return wind->obj_count++;
+	return newobj->get_id();
 
-err:	sem_signal(win_man.mutex);
-	return -1;*/
+err:
+	flog(LOG_INFO, "c_crea_oggetto: errore generico", u_obj->TYPE);
+	sem_signal(win_man.mutex);
+	return -1;
 }
 
 extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, bool sync)
-{
-	/*sem_wait(win_man.sync_notfull);
+{flog(LOG_INFO, "c_aggiorna_oggetto su window %d obj %d", w_id, o_id);
+	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
+	gr_object * found_window;
+	gr_window * window;
+	gr_object * found_obj;
 	int new_index;
 
-	if(w_id >= win_man.MAX_WINDOWS || w_id<0)
+	// cerco la finestra
+	found_window = doubled_framebuffer_container->search_child_by_id(w_id);
+	if(found_window==0 || !found_window->has_flag(gr_window::WINDOW_FLAG))
 		goto err;
-	if(o_id >= win_man.windows_arr[w_id].obj_count || o_id<0)
-		goto err;
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento oggetto");
 
-	//Copio prima il nuovo contenuto di u_windowObject nell'oggetto windowObject già creato
+	window = static_cast<gr_window*>(found_window);
+
+	// cerco l'oggetto
+	found_obj = window->search_user_object(u_obj);
+	if(found_obj==0)
+		goto err;
+
+	// controllo che l'oggetto utente sia dello stesso tipo dell'oggetto gr
 	switch(u_obj->TYPE)
 	{
 		case W_ID_LABEL:
-			delete win_man.windows_arr[w_id].objects[o_id];
-			win_man.windows_arr[w_id].objects[o_id] = new label(static_cast<u_label*>(u_obj));
-		break;
+			if(!found_obj->has_flag(gr_window::LABEL_FLAG))
+				goto err;
+			break;
 		case W_ID_BUTTON:
-			delete win_man.windows_arr[w_id].objects[o_id];
-			win_man.windows_arr[w_id].objects[o_id] = new button(static_cast<u_button*>(u_obj));
-		break;
-		case W_ID_TEXTBOX:
-			delete win_man.windows_arr[w_id].objects[o_id];
-			win_man.windows_arr[w_id].objects[o_id] = new textbox(static_cast<u_textbox*>(u_obj));
-		break;
+			if(!found_obj->has_flag(gr_window::BUTTON_FLAG))
+				goto err;
+			break;
+		/*case W_ID_TEXTBOX:
+			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
+		break;*/
+		default:
+			flog(LOG_INFO, "c_aggiorna_oggetto: tipo oggetto %d errato", u_obj->TYPE);
+			goto err;
 	}
 
-	new_index = windows_queue_insert(win_man, w_id, 100, PRIM_UPDATE_OBJECT, sync);
+	flog(LOG_INFO, "Inserimento richiesta di aggiornamento oggetto");
+
+	new_index = windows_queue_insert(win_man, window, 100, PRIM_UPDATE_OBJECT, sync);
 	if(new_index == -1)
 	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
 		//errore solo per rendere più robusto il codice
@@ -663,7 +669,10 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 		goto err;
 	}
 
-	win_man.req_queue[new_index].obj = win_man.windows_arr[w_id].objects[o_id];
+	// nella richiesta ci metto comunque l'oggetto dell'utente perchè il lavoro vero e proprio
+	// verrà fatto dalla graphic_aggiorna_oggetto. Qui mi occupo solo di verificare i parametri
+	// e di aggiungere la richiesta nella coda
+	win_man.req_queue[new_index].obj = u_obj;
 
 	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notempty);
@@ -673,8 +682,10 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 	return;
 
 //Gestione errori (sblocco mutex e sync su array)
-err:	sem_signal(win_man.mutex);
-	sem_signal(win_man.sync_notfull);*/
+err:
+	flog(LOG_INFO, "c_aggiorna_oggetto: errore generico", u_obj->TYPE);
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
 }
 
 extern "C" des_user_event c_preleva_evento(int w_id)
@@ -717,15 +728,18 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 	//update_framebuffer_linechanged(x, x+16, y, y+16);
 }
 
-void graphic_visualizza_finestra(int id)
+void graphic_visualizza_finestra(gr_window *window)
 {
-	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(id);
-	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
-		return;
-
-	gr_window * window = static_cast<gr_window*>(found_obj);
 	window->set_visibility(true);
+	window->render();
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
+}
 
+void graphic_aggiorna_oggetto(gr_window *window, u_windowObject* u_obj)
+{
+	window->update_user_object(u_obj);
 	window->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
@@ -932,13 +946,14 @@ void main_windows_manager(int n)
 		switch(newreq.act)
 		{
 			case PRIM_SHOW:
-				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.w_id);
-				graphic_visualizza_finestra(newreq.w_id);
+				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.window->get_id());
+				graphic_visualizza_finestra(newreq.window);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;
 			case PRIM_UPDATE_OBJECT:
-				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.w_id);
+				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.window->get_id());
+				graphic_aggiorna_oggetto(newreq.window, newreq.obj);
 				//renderobject_onwindow(newreq.w_id, newreq.obj, &main_cursor);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
