@@ -4,14 +4,15 @@
 #include "libgr.h"
 #include "libfont.h"
 
-gr_button::gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT color)
-: gr_object(pos_x, pos_y, size_x, size_y, z_index), background_color(color), border_color(color+1), clicked_color(color), text_color(color+1), clicked(false)
+gr_button::gr_button(int pos_x, int pos_y, int size_x, int size_y, int z_index)
+: gr_object(pos_x, pos_y, size_x, size_y, z_index), back_color(BUTTON_DEFAULT_BACKCOLOR), border_color(BUTTON_DEFAULT_BORDERCOLOR),
+	clicked_color(BUTTON_DEFAULT_CLICKEDCOLOR), text_color(BUTTON_DEFAULT_TEXTCOLOR), clicked(false)
 {
 	copy("", this->text);
 }
 
 gr_button::gr_button(u_button* u_b)
-: gr_object(u_b->pos_x, u_b->pos_y, u_b->size_x, u_b->size_y, u_b->z_index), background_color(u_b->back_color), border_color(u_b->border_color),
+: gr_object(u_b->pos_x, u_b->pos_y, u_b->size_x, u_b->size_y, u_b->z_index), back_color(u_b->back_color), border_color(u_b->border_color),
 clicked_color(u_b->clicked_color), text_color(u_b->text_color), clicked(false)
 {
 	copy(u_b->text, this->text);
@@ -25,7 +26,7 @@ gr_button& gr_button::operator=(const u_button& u_b)
 	this->set_size_y(u_b.size_y);
 	this->z_index = u_b.z_index;
 
-	this->background_color = u_b.back_color;
+	this->back_color = u_b.back_color;
 	this->border_color = u_b.border_color;
 	this->clicked_color = u_b.clicked_color;
 	this->text_color = u_b.text_color;
@@ -37,10 +38,10 @@ gr_button& gr_button::operator=(const u_button& u_b)
 
 void gr_button::render()
 {
-	PIXEL_UNIT color = (clicked) ? clicked_color : background_color;
+	PIXEL_UNIT color = (clicked) ? clicked_color : back_color;
 	gr_memset(this->buffer, color, size_x*size_y);
 	int text_width = get_fontstring_width(this->text);
-	set_fontstring(this->buffer, this->size_x, this->size_y, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y, this->text, this->text_color, this->background_color);
+	set_fontstring(this->buffer, this->size_x, this->size_y, (this->size_x - text_width)/2, (this->size_y - 16)/2, text_width, this->size_y, this->text, this->text_color, this->back_color);
 
 	gr_memset(this->buffer, border_color, size_x);
 	for(natw y=1; y < this->size_y-1; y++)
@@ -58,4 +59,17 @@ void gr_button::render()
 void gr_button::set_text(const char * text)
 {
 	copy(text, this->text);
+}
+
+void gr_button::set_back_color(PIXEL_UNIT color) {
+	this->back_color=color;
+}
+void gr_button::set_border_color(PIXEL_UNIT color) {
+	this->border_color=color;
+}
+void gr_button::set_clicked_color(PIXEL_UNIT color) {
+	this->clicked_color=color;
+}
+void gr_button::set_text_color(PIXEL_UNIT color) {
+	this->text_color=color;
 }

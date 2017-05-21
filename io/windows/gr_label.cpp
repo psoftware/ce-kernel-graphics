@@ -4,8 +4,8 @@
 #include "libgr.h"
 #include "libfont.h"
 
-gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT back_color)
-: gr_object(pos_x, pos_y, size_x, size_y, z_index), back_color(back_color)
+gr_label::gr_label(int pos_x, int pos_y, int size_x, int size_y, int z_index)
+: gr_object(pos_x, pos_y, size_x, size_y, z_index), text_color(LABEL_DEFAULT_TEXTCOLOR), back_color(LABEL_DEFAULT_BACKCOLOR)
 {
 	copy("", this->text);
 }
@@ -43,4 +43,12 @@ void gr_label::render()
 void gr_label::set_text(const char * text)
 {
 	copy(text, this->text);
+}
+
+void gr_label::set_back_color(PIXEL_UNIT color){
+	this->back_color = color;
+}
+
+void gr_label::set_text_color(PIXEL_UNIT color){
+	this->text_color = color;
 }
