@@ -243,7 +243,7 @@ void gr_window::user_event_push(des_user_event * event)
 	sem_signal(event_sem_sync_notempty);
 }
 
-des_user_event *gr_window::user_event_pop()
+des_user_event gr_window::user_event_pop()
 {
 	if(event_head==0)
 		sem_wait(event_sem_sync_notempty);
@@ -257,7 +257,10 @@ des_user_event *gr_window::user_event_pop()
 	else
 		p->next=0;
 
-	return q;
+	//ci occupiamo qui dell'eliminazione dell'oggetto, che restituiremo solo per valore
+	des_user_event result = *q;
+	delete q;
+	return result;
 }
 
 void gr_window::user_event_add_mousemovez(int delta_z, int rel_x, int rel_y)
