@@ -6,6 +6,7 @@
 #include "gr_bitmap.h"
 #include "gr_button.h"
 #include "gr_label.h"
+#include "windows/u_obj.h"
 
 // gr_window è una specializzazione della classe gr_object ma, a differenza delle altre classi derivate, non 
 // ridefinisce la funzione render(), quindi resta ancora un container ma aggiunge nuovi metodi
@@ -41,6 +42,10 @@ public:
 	int offset_size_y(int offset);
 	void set_title(const char *str);
 	void resize();
+
+	gr_object *add_user_object(u_windowObject * u_obj);
+	bool update_user_object(u_windowObject * u_obj);
+	gr_object *search_user_object(u_windowObject * u_obj);
 };
 
 #endif

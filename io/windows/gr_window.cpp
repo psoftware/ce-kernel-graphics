@@ -150,3 +150,73 @@ void gr_window::set_title(const char *str)
 {
 	this->title_label->set_text(str);
 }
+
+gr_object *gr_window::add_user_object(u_windowObject * u_obj)
+{
+	gr_object* newobj;
+	switch(u_obj->TYPE)
+	{
+		case W_ID_LABEL:
+			newobj = new gr_label(static_cast<u_label*>(u_obj));
+			newobj->set_search_flag(LABEL_FLAG);
+			break;
+		case W_ID_BUTTON:
+			newobj = new gr_button(static_cast<u_button*>(u_obj));
+			newobj->set_search_flag(BUTTON_FLAG);
+			break;
+		/*case W_ID_TEXTBOX:
+			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
+		break;*/
+		default:
+			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
+			return 0;
+	}
+
+	flog(LOG_INFO, "add_user_object: oggetto %d di tipo %d creato su finestra %d", newobj->get_id(), u_obj->TYPE, this->get_id());
+	u_obj->id = newobj->get_id();
+	newobj->render();
+
+	this->inner_container->add_child(newobj);
+	inner_container->render();
+	return newobj;
+}
+
+bool gr_window::update_user_object(u_windowObject * u_obj)
+{
+	gr_object * dest_obj = this->inner_container->search_child_by_id(u_obj->id);
+	if(dest_obj==0)
+		return false;
+
+	switch(u_obj->TYPE)
+	{
+		case W_ID_LABEL:
+			if(!dest_obj->has_flag(gr_window::LABEL_FLAG))
+				return false;
+			*(static_cast<gr_label*>(dest_obj)) = *static_cast<u_label*>(u_obj);
+			break;
+		case W_ID_BUTTON:
+			if(!dest_obj->has_flag(gr_window::BUTTON_FLAG))
+				return false;
+			*(static_cast<gr_button*>(dest_obj)) = *static_cast<u_button*>(u_obj);
+			break;
+		/*case W_ID_TEXTBOX:
+			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
+		break;*/
+		default:
+			flog(LOG_INFO, "update_user_object: tipo oggetto %d errato", u_obj->TYPE);
+			return true;
+	}
+
+	flog(LOG_INFO, "update_user_object: oggetto %d di tipo %d modificato su finestra %d", dest_obj->get_id(), u_obj->TYPE, this->get_id());
+	dest_obj->render();
+	inner_container->render();
+	return false;
+}
+
+gr_object *gr_window::search_user_object(u_windowObject * u_obj)
+{
+	if(u_obj==0)
+		return 0;
+flog(LOG_INFO, "searching u_obj->id %d", u_obj->id);
+	return this->inner_container->search_child_by_id(u_obj->id);
+}
