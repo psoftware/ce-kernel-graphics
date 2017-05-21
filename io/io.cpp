@@ -3,7 +3,6 @@
 #include "costanti.h"
 #include "libce_guard.h"
 #include "newdelete.h"
-#include "windows/gui_objects.h"
 #include "windows/cursor.h"
 #include "windows/h_resize_cursor.h"
 
