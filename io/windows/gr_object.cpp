@@ -99,6 +99,15 @@ void gr_object::focus_child(gr_object *focuschild)
 	focus_changed = true;
 }
 
+bool gr_object::has_child(gr_object *child)
+{
+	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
+		if(child == obj)
+			return true;
+
+	return false;
+}
+
 void gr_object::push_render_unit(render_subset_unit *newunit)
 {
 	newunit->next = units;
