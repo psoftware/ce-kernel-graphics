@@ -1000,10 +1000,7 @@ void main_windows_manager(int n)
 					win_man.is_resizing=false;
 
 					if(win_man.focused_window!=0)
-					{
 						win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
-						win_man.focused_window = 0;
-					}
 
 					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 					doubled_framebuffer_container->render();
