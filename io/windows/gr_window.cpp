@@ -307,5 +307,5 @@ void gr_window::user_event_add_keypress(char key)
 	des_user_event * event = new des_user_event();
 	event->type=USER_EVENT_KEYBOARDPRESS;
 	event->k_char=key;
-	user_event_push(event);
+	user_event_push_on_focused(0, 0, event);
 }
