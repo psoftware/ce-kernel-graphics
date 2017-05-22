@@ -618,7 +618,7 @@ err:
 }
 
 extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, bool sync)
-{flog(LOG_INFO, "c_aggiorna_oggetto su window %d obj %d", w_id, o_id);
+{
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 

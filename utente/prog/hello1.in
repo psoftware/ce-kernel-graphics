@@ -33,6 +33,7 @@ process_body hello_body1(int a)
 	button1->pos_y=20;
 	button1->z_index=0;
 	button1->back_color=0xffe74c3c;
+	button1->clicked_color=0xffe67e22;
 	button1->border_color=0xffc0392b;
 	button1->text_color=0xffffffff;
 	copy("Chiudi", button1->text);
