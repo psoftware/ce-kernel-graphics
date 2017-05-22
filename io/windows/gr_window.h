@@ -50,9 +50,12 @@ public:
 
 	// funzioni per la gestione degli eventi
 private:
+	gr_object *focused_object;
 	des_user_event *event_head;
 	void user_event_push(des_user_event * event);
 public:
+	bool set_focused_child(gr_object *obj);
+	void clear_focused_child();
 	natl event_sem_sync_notempty;
 	des_user_event user_event_pop();
 	void user_event_add_mousemovez(int delta_z, int abs_x, int abs_y);

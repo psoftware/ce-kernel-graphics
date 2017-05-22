@@ -231,6 +231,25 @@ gr_object *gr_window::search_user_object(u_windowObject * u_obj)
 	return this->inner_container->search_child_by_id(u_obj->id);
 }
 
+bool gr_window::set_focused_child(gr_object *obj)
+{
+	if(obj == 0)
+		return false;
+
+	// controllo che l'oggetto a cui andrò ad assegnare il focus faccia effettivamente parte
+	// di questa finestra (dell'inner_container in particolare)
+	if(!this->inner_container->has_child(obj))
+		return false;
+
+	this->focused_object = obj;
+	return true;
+}
+
+void gr_window::clear_focused_child()
+{
+	this->focused_object = 0;
+}
+
 // gestione degli eventi per utente
 void gr_window::user_event_push(des_user_event * event)
 {
