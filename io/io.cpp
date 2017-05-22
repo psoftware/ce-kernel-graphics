@@ -485,12 +485,6 @@ struct des_window_req
 const natb MAX_REQ_QUEUE=3;
 struct des_windows_man
 {
-	//Finestre
-	static const int MAX_WINDOWS = 5;
-	//static const int TOPBAR_HEIGHT = 20;
-	natb windows_count;
-	des_window windows_arr[MAX_WINDOWS];		//Finestre create
-	int focus_wind;								//Finestra selezionata con mouse
 	gr_window *focused_window;
 	gr_object *dragging_border;
 	bool is_dragging;
@@ -894,7 +888,6 @@ inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
 void main_windows_manager(int n)
 {
 	des_cursor main_cursor = {0,0,0,0};
-	win_man.focus_wind=-1;
 	win_man.is_dragging=false;
 
 	while(true)
@@ -1110,7 +1103,6 @@ bool windows_init()
 	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
 	win_man.sync_notempty = sem_ini(0);
 
-	win_man.windows_count = 0;
 	win_man.top = 0;
 	win_man.rear = 0;
 	
