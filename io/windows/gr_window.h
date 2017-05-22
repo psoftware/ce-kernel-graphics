@@ -53,6 +53,15 @@ private:
 	gr_object *focused_object;
 	des_user_event *event_head;
 	void user_event_push(des_user_event * event);
+	inline void user_event_push_on_focused(int abs_x, int abs_y, des_user_event * event){
+		// questa funzione gestisce solo eventi indirizzati all'oggetto con focus
+		if(focused_object==0)
+			return;
+		event->obj_id = focused_object->get_id();
+		event->rel_x = abs_x - this->pos_x - this->inner_container->get_pos_x() - focused_object->get_pos_x();
+		event->rel_y = abs_y - this->pos_y - this->inner_container->get_pos_y() - focused_object->get_pos_y();
+		user_event_push(event);
+	}
 public:
 	bool set_focused_child(gr_object *obj);
 	void clear_focused_child();

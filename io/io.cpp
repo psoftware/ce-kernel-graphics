@@ -969,7 +969,7 @@ void main_windows_manager(int n)
 					filter.parent_flags = gr_window::WINDOW_FLAG;
 					doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
 
-					//gr_object *clicked_object = res.target;
+					gr_object *clicked_object = res.target;
 
 					// se ho cliccato su un oggetto di una finestra
 					if(res.target_parent!=0)
@@ -1009,8 +1009,10 @@ void main_windows_manager(int n)
 								win_man.is_dragging = true;
 							}
 							else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
-								if(win_man.focused_window!=0)
-									win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
+							{
+								win_man.focused_window->set_focused_child(clicked_object);
+								win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
+							}
 						}
 
 						doubled_framebuffer_container->render();

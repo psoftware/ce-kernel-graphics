@@ -66,32 +66,15 @@ public:
 			return;
 		flog(LOG_INFO, "process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
 
-		//eventi con target x,y
-		if(new_event.type==USER_EVENT_MOUSEZ || new_event.type==USER_EVENT_MOUSEUP || new_event.type==USER_EVENT_MOUSEDOWN)
-		{
-			bool found=false;
-			for(int i=0; i<this->objs_count; i++)
-				if(new_event.rel_x > objs[i]->pos_x && new_event.rel_x < objs[i]->pos_x + objs[i]->size_x &&
-					new_event.rel_y > objs[i]->pos_y && new_event.rel_y < objs[i]->pos_y + objs[i]->size_y)
-				{
-					internal_focus=i;
-					objs[i]->process_event(new_event);
-					update_object(objs[i]);
-					flog(LOG_INFO, "process_event: new focus on %d", internal_focus);
-					found=true;
-				}
-
-			//se l'evento con coordinate non ha centrato oggetti, allora devo togliere il focus
-			if(!found)
-				internal_focus=-1;
-		}
-		else if(internal_focus!=-1)
-		{
-			flog(LOG_INFO, "process_event: non-targetting event on %d", internal_focus);
-			//eventi senza target x,y, quindi applicati su internal_focus
-			objs[internal_focus]->process_event(new_event);
-			update_object(objs[internal_focus]);
-		}
+		// l'evento ha l'id dell'oggetto a cui è destinato, scorriamo la lista e vediamo chi lo possiede
+		for(int i=0; i<objs_count; i++)
+			if(this->objs[i]->id == new_event.obj_id)
+			{
+				flog(LOG_INFO, "process_event: trovato oggetto %d", new_event.obj_id);
+				this->objs[i]->process_event(new_event);
+				update_object(this->objs[i]);
+				break;
+			}
 	}
 };
 

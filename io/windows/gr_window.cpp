@@ -257,6 +257,8 @@ void gr_window::user_event_push(des_user_event * event)
 		return;
 	event->next=event_head;
 	event_head=event;
+
+	sem_signal(event_sem_sync_notempty);
 }
 
 des_user_event gr_window::user_event_pop()
@@ -289,10 +291,7 @@ void gr_window::user_event_add_mousemovez(int delta_z, int abs_x, int abs_y)
 	des_user_event * event = new des_user_event();
 	event->type=USER_EVENT_MOUSEZ;
 	event->delta_z=delta_z;
-	event->rel_x = abs_x - this->pos_x - this->inner_container->get_pos_x();
-	event->rel_y = abs_y - this->pos_y - this->inner_container->get_pos_y();
-	user_event_push(event);
-	sem_signal(event_sem_sync_notempty);
+	user_event_push_on_focused(abs_x, abs_y, event);
 }
 
 void gr_window::user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int abs_x, int abs_y)
@@ -300,10 +299,7 @@ void gr_window::user_event_add_mousebutton(user_event_type event_type, mouse_but
 	des_user_event * event = new des_user_event();
 	event->type=event_type;
 	event->button=butt;
-	event->rel_x = abs_x - this->pos_x - this->inner_container->get_pos_x();
-	event->rel_y = abs_y - this->pos_y - this->inner_container->get_pos_y();
-	user_event_push(event);
-	sem_signal(event_sem_sync_notempty);
+	user_event_push_on_focused(abs_x, abs_y, event);
 }
 
 void gr_window::user_event_add_keypress(char key)
@@ -312,5 +308,4 @@ void gr_window::user_event_add_keypress(char key)
 	event->type=USER_EVENT_KEYBOARDPRESS;
 	event->k_char=key;
 	user_event_push(event);
-	sem_signal(event_sem_sync_notempty);
 }

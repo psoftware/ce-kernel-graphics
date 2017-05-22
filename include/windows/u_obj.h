@@ -8,6 +8,7 @@ enum mouse_button {LEFT,MIDDLE,RIGHT};
 
 struct des_user_event
 {
+	int obj_id;
 	user_event_type type;
 	union
 	{
