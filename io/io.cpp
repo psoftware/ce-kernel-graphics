@@ -400,51 +400,20 @@ bool bochsvga_init()
 #include "windows/gr_label.h"
 #include "windows/gr_window.h"
 
-// ----- user event
-// l'inserimento evento è fatto in testa
-void event_push(des_user_event *& head, des_user_event * elem)
-{
-	if(elem==0)
-		return;
-	elem->next=head;
-	head=elem;
-}
-
-// la rimozione è fatta in coda
-void event_pop(des_user_event *& head, des_user_event *& elem)
-{
-	if(head==0)
-		return;
-
-	des_user_event *p=head, *q;
-	for(q=head; q->next!=0; q=q->next)
-		p=q;
-
-	if(p==head)
-		head=0;
-	else
-		p->next=0;
-
-	elem=q;
-}
-
+// il framebuffer container è collegato al framebuffer
 gr_object *framebuffer_container;
+// questo oggetto contiene tutti i figli della finestra ed è usato per
+// implementare la tecnica del double buffering
 gr_object *doubled_framebuffer_container;
 
+// variabili per la gestione della bitmap del cursore
 int bitmap_click_offset_x;
 int bitmap_click_offset_y;
 const void *current_bitmap;
 gr_bitmap * mouse_bitmap;
 
-// ----- des_window
-const int MAX_WINDOWS_OBJECTS = 10;
-struct des_window
-{
-	natb p_id;
-	des_user_event * event_list;
-	gr_window * window;
-};
-
+// costanti utilizzate come tipi per i comandi aggiunti nella coda del gestore
+// delle finestre
 const natb PRIM_SHOW=0;
 const natb PRIM_UPDATE_OBJECT=2;
 const natb MOUSE_UPDATE_EVENT=10;
@@ -482,11 +451,16 @@ struct des_window_req
 	}
 };
 
+// questa struttura contiene le variabili necessarie al gestore delle finestre
+// per funzionare
 const natb MAX_REQ_QUEUE=3;
 struct des_windows_man
 {
+	//Elementi per la gestione del focus su finestre e oggetti
 	gr_window *focused_window;
 	gr_object *dragging_border;
+
+	//Variabili per gestire lo stato di resize o trascinamento
 	bool is_dragging;
 	bool is_resizing;
 
@@ -501,8 +475,10 @@ struct des_windows_man
 	natb sync_notfull;
 };
 
+// istanza globale del gestore delle finestre
 des_windows_man win_man;
 
+// ======= Funzioni per l'inserimento di comandi nella coda del gestore delle finestre
 int windows_queue_insert(des_windows_man& win_cont, gr_window *window, natb p_id, natb act, bool sync)
 {
 	//Controllo Coda piena
@@ -530,7 +506,7 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 	return true;
 }
 
-//Primitive
+// ======= Primitive messe a disposizione dell'utente =======
 extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
 {
 	sem_wait(win_man.mutex);
@@ -732,10 +708,9 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 		if(i%16==0 && i!=0)
 			row++;
 	}
-
-	//update_framebuffer_linechanged(x, x+16, y, y+16);
 }
 
+// ======= Funzioni eseguite dal gestore delle finestre relative ai comandi/primitive in coda =======
 void graphic_visualizza_finestra(gr_window *window)
 {
 	window->set_visibility(true);
@@ -754,6 +729,7 @@ void graphic_aggiorna_oggetto(gr_window *window, u_windowObject* u_obj)
 	framebuffer_container->clear_render_units();
 }
 
+// ======= Funzioni e strutture per la gestione del cursore =======
 struct des_cursor
 {
 	int old_x;
@@ -782,6 +758,7 @@ void render_mousecursor_onbuffer(des_cursor* cursor)
 	mouse_bitmap->render();
 }
 
+// ======= Funzioni per inserire nella lista dei comandi eventi =======
 void mouse_notify_move(int delta_x, int delta_y)
 {
 	sem_wait(win_man.sync_notfull);
@@ -871,14 +848,7 @@ void keyboard_notify_keypress_event(char key)
 	sem_signal(win_man.sync_notempty);
 }
 
-inline bool coords_on_window(des_window *wind, int abs_x, int abs_y)
-{
-	/*if(abs_x > wind->pos_x && abs_x < wind->pos_x + wind->size_x &&
-			abs_y > wind->pos_y + TOPBAR_HEIGHT && abs_y < wind->pos_y + wind->size_y + TOPBAR_HEIGHT)
-		return true;*/
-	return false;
-}
-
+// funzione main del processo windows_manager
 void main_windows_manager(int n)
 {
 	des_cursor main_cursor = {0,0,0,0};
