@@ -537,10 +537,10 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 
 	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, 0);
 	doubled_framebuffer_container->add_child(newwindow);
-
+	int newwindow_id = newwindow->get_id();
 	sem_signal(win_man.mutex);
 
-	return newwindow->get_id();
+	return newwindow_id;
 }
 
 extern "C" void c_visualizza_finestra(int w_id, bool sync)
