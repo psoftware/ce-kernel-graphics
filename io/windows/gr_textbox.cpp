@@ -37,7 +37,7 @@ void gr_textbox::render()
 	// stampo sfondo
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
 	// renderizzo il testo
-	set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2, this->text, this->text_color, this->back_color);
+	set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2, this->text, this->text_color, this->back_color, true);
 
 	// stampo i bordi
 	gr_memset(this->buffer, this->border_color, this->size_x);

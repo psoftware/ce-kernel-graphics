@@ -59,7 +59,7 @@ int get_charfont_width(char c)
 					
 }
 
-void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
+void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT text_color, PIXEL_UNIT backColor, bool print_caret)
 {
 	int slength = (int)strlen(str);
 	//int x_eff = ((i*16) % bound_x);
@@ -81,4 +81,15 @@ void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int 
 		}
 	
 	}
+
+	if(!print_caret)
+		return;
+
+	const natb ASCII_CARET = 124;
+	if((x_eff + get_charfont_width(ASCII_CARET)) > bound_x)
+	{
+		x_eff = 0;
+		y_eff++;
+	}
+	set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, ASCII_CARET, text_color, backColor);
 }
