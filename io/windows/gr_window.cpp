@@ -3,6 +3,7 @@
 #include "gr_bitmap.h"
 #include "gr_button.h"
 #include "gr_label.h"
+#include "gr_textbox.h"
 #include "consts.h"
 #include "libgr.h"
 
@@ -174,9 +175,10 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 			newobj = new gr_button(static_cast<u_button*>(u_obj));
 			newobj->set_search_flag(BUTTON_FLAG);
 			break;
-		/*case W_ID_TEXTBOX:
-			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
-		break;*/
+		case W_ID_TEXTBOX:
+			newobj = new gr_textbox(static_cast<u_textbox*>(u_obj));
+			newobj->set_search_flag(TEXTBOX_FLAG);
+			break;
 		default:
 			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			return 0;
@@ -209,9 +211,11 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 				return false;
 			*(static_cast<gr_button*>(dest_obj)) = *static_cast<u_button*>(u_obj);
 			break;
-		/*case W_ID_TEXTBOX:
-			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
-		break;*/
+		case W_ID_TEXTBOX:
+			if(!dest_obj->has_flag(gr_window::TEXTBOX_FLAG))
+				return false;
+			*(static_cast<gr_textbox*>(dest_obj)) = *static_cast<u_textbox*>(u_obj);
+			break;
 		default:
 			flog(LOG_INFO, "update_user_object: tipo oggetto %d errato", u_obj->TYPE);
 			return true;

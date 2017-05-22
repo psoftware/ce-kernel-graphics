@@ -614,9 +614,10 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 			if(!found_obj->has_flag(gr_window::BUTTON_FLAG))
 				goto err;
 			break;
-		/*case W_ID_TEXTBOX:
-			wind->objects[wind->obj_count] = new textbox(static_cast<u_textbox*>(u_obj));
-		break;*/
+		case W_ID_TEXTBOX:
+			if(!found_obj->has_flag(gr_window::TEXTBOX_FLAG))
+				goto err;
+			break;
 		default:
 			flog(LOG_INFO, "c_aggiorna_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			goto err;

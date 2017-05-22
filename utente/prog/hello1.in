@@ -47,7 +47,9 @@ process_body hello_body1(int a)
 	textbox1->pos_x=20;
 	textbox1->pos_y=50;
 	textbox1->z_index=0;
-	textbox1->back_color=0x1F;
+	textbox1->back_color=0xffffffff;
+	textbox1->text_color=0xff000000;
+	textbox1->border_color=0xff000000;
 	copy("AAA", textbox1->text);
 
 	uwind.add_object(textbox1);

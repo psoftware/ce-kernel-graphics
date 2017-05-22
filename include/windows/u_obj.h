@@ -93,6 +93,8 @@ class u_textbox : public u_windowObject
 {
 	public:
 	char text[100];
+	PIXEL_UNIT border_color;
+	PIXEL_UNIT text_color;
 	u_textbox()
 	{
 		TYPE=W_ID_TEXTBOX;

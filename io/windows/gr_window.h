@@ -20,6 +20,7 @@ public:
 	static const char LABEL_FLAG = 1u << 2;
 	static const char BUTTON_FLAG = 1u << 3;
 	static const char TOPBAR_FLAG = 1u << 4;
+	static const char TEXTBOX_FLAG = 1u << 5;
 
 	// componenti della finestra
 public:
