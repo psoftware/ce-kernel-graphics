@@ -535,12 +535,6 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 {
 	sem_wait(win_man.mutex);
 
-	if(win_man.windows_count >= win_man.MAX_WINDOWS)
-	{
-		sem_signal(win_man.mutex);
-		return -1;
-	}
-
 	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, 0);
 	doubled_framebuffer_container->add_child(newwindow);
 
