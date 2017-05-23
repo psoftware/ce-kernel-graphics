@@ -416,6 +416,7 @@ gr_bitmap * mouse_bitmap;
 // delle finestre
 const natb PRIM_SHOW=0;
 const natb PRIM_UPDATE_OBJECT=2;
+const natb PRIM_TIME_TICK=3;
 const natb MOUSE_UPDATE_EVENT=10;
 const natb MOUSE_Z_UPDATE_EVENT=11;
 const natb MOUSE_MOUSEUP_EVENT=12;
@@ -696,6 +697,21 @@ err:
 	des_user_event error_event;
 	error_event.type=NOEVENT;
 	return error_event;
+}
+
+// ======= Primitiva ponte messa a disposizione del modulo sistema =======
+extern "C" void c_winman_time_tick()
+{
+	sem_wait(win_man.mutex);
+
+	int new_index = windows_queue_insert(win_man, 0, 100, PRIM_TIME_TICK, false);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+	}
+
+	sem_signal(win_man.mutex);
 }
 
 void print_palette(PIXEL_UNIT* buff, int x, int y)

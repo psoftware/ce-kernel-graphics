@@ -92,6 +92,7 @@
 #define IO_TIPO_WINDOC		0x81	// crea_oggetto
 #define IO_TIPO_WINDUC		0x82	// aggiorna_oggetto
 #define IO_TIPO_WINDPE		0x83	// preleva_evento
+#define IO_TIPO_WINDTK		0x84	// winman_time_tick
 // * in piu' rispetto al libro
 // )
 

@@ -333,6 +333,7 @@ fill_io_gates:
 	fill_io_gate	IO_TIPO_WINDOC	a_crea_oggetto
 	fill_io_gate	IO_TIPO_WINDUC	a_aggiorna_oggetto
 	fill_io_gate	IO_TIPO_WINDPE	a_preleva_evento
+	fill_io_gate	IO_TIPO_WINDTK	a_winman_time_tick
 	fill_io_gate	IO_TIPO_HDR	a_readhd_n
 	fill_io_gate	IO_TIPO_HDW	a_writehd_n
 	fill_io_gate	IO_TIPO_DMAHDR	a_dmareadhd_n
@@ -404,6 +405,11 @@ a_aggiorna_oggetto:
 	.extern c_preleva_evento
 a_preleva_evento:
 	call c_preleva_evento
+	iretq
+
+	.extern c_winman_time_tick
+a_winman_time_tick:
+	call c_winman_time_tick
 	iretq
 
 /////////////////////////////////////////////////
