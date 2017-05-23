@@ -702,16 +702,26 @@ err:
 // ======= Primitiva ponte messa a disposizione del modulo sistema =======
 extern "C" void c_winman_time_tick()
 {
+	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
+
+	flog(LOG_INFO, "c_winman_time_tick: chiamata su c_winman_time_tick");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, PRIM_TIME_TICK, false);
 	if(new_index == -1)
 	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
 		//errore solo per rendere più robusto il codice
 		flog(LOG_INFO, "Inserimento richiesta fallito");
+		goto err;
 	}
 
 	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+	return;
+err:
+	flog(LOG_INFO, "c_winman_time_tick: errore generico");
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
 }
 
 void print_palette(PIXEL_UNIT* buff, int x, int y)
