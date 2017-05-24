@@ -699,13 +699,13 @@ err:
 	return error_event;
 }
 
-// ======= Primitiva ponte messa a disposizione del modulo sistema =======
-extern "C" void c_winman_time_tick()
+// ======= Funzione per l'aggiunta dell'evento tick da parte del processo winman_tick =======
+void winman_time_tick()
 {
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	//flog(LOG_INFO, "c_winman_time_tick: chiamata su c_winman_time_tick");
+	//flog(LOG_INFO, "winman_time_tick: chiamata su winman_time_tick");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, PRIM_TIME_TICK, false);
 	if(new_index == -1)
@@ -719,7 +719,7 @@ extern "C" void c_winman_time_tick()
 	sem_signal(win_man.sync_notempty);
 	return;
 err:
-	flog(LOG_INFO, "c_winman_time_tick: errore generico");
+	flog(LOG_INFO, "winman_time_tick: errore generico");
 	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notfull);
 }
@@ -1066,7 +1066,7 @@ void main_winman_tick(int n)
 {
 	while(true)
 	{
-		c_winman_time_tick();
+		winman_time_tick();
 		delay(20);
 	}
 }
