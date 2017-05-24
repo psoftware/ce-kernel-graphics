@@ -51,9 +51,22 @@ process_body hello_body1(int a)
 	textbox1->text_color=0xff000000;
 	textbox1->border_color=0xff000000;
 	copy("AAA", textbox1->text);
-
 	uwind.add_object(textbox1);
 	uwind.update_object(textbox1);
+
+	u_textbox * textbox2 = new u_textbox();
+	textbox2->size_x=80;
+	textbox2->size_y=20;
+	textbox2->pos_x=20;
+	textbox2->pos_y=120;
+	textbox2->z_index=0;
+	textbox2->back_color=0xffffffff;
+	textbox2->text_color=0xff000000;
+	textbox2->border_color=0xff000000;
+	copy("", textbox2->text);
+
+	uwind.add_object(textbox2);
+	uwind.update_object(textbox2);
 
 	copy("Inizio processo 1!", label1->text);
 	uwind.update_object(label1);

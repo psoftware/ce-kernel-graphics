@@ -245,6 +245,20 @@ bool gr_window::set_focused_child(gr_object *obj)
 	if(!this->inner_container->has_child(obj))
 		return false;
 
+	// devo gestire lo stato del cursore del testo delle textbox:
+	// se l'oggetto che aveva il focus era una textbox, allora devo assicurarmi
+	// che il cursore del testo venga eliminato
+	if(this->focused_object != 0 && this->focused_object->has_flag(TEXTBOX_FLAG))
+	{
+		gr_textbox *focused_textbox = static_cast<gr_textbox*>(this->focused_object);
+		if(focused_textbox->get_caret_print())
+		{
+			focused_textbox->set_caret_print(false);
+			focused_textbox->render();
+			inner_container->render();
+		}
+	}
+
 	this->focused_object = obj;
 	return true;
 }
