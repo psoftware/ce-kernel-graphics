@@ -1028,8 +1028,6 @@ void main_windows_manager(int n)
 						framebuffer_container->render();
 					}
 				}
-				if(win_man.focused_window!=0)
-					win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 			break;
 			case MOUSE_MOUSEUP_EVENT:
 			{
