@@ -66,6 +66,7 @@ private:
 public:
 	bool set_focused_child(gr_object *obj);
 	void clear_focused_child();
+	void process_tick_event();
 	natl event_sem_sync_notempty;
 	des_user_event user_event_pop();
 	void user_event_add_mousemovez(int delta_z, int abs_x, int abs_y);

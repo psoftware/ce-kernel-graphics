@@ -8,6 +8,7 @@
 class gr_textbox : public gr_object
 {
 	char text[TEXTBOX_MAX_TEXT+1];
+	bool caret_print;
 	PIXEL_UNIT text_color;
 	PIXEL_UNIT back_color;
 	PIXEL_UNIT border_color;
@@ -18,6 +19,8 @@ public:
 	gr_textbox& operator=(const u_textbox& u_t);
 
 	void render();
+	bool get_caret_print();
+	void set_caret_print(bool print);
 	void set_back_color(PIXEL_UNIT color);
 	void set_text_color(PIXEL_UNIT color);
 	void set_border_color(PIXEL_UNIT color);

@@ -37,7 +37,7 @@ void gr_textbox::render()
 	// stampo sfondo
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
 	// renderizzo il testo
-	set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2, this->text, this->text_color, this->back_color, true);
+	set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2, this->text, this->text_color, this->back_color, this->caret_print);
 
 	// stampo i bordi
 	gr_memset(this->buffer, this->border_color, this->size_x);
@@ -51,6 +51,14 @@ void gr_textbox::render()
 	// indico l'area modificata
 	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
 	push_render_unit(newunit);
+}
+
+bool gr_textbox::get_caret_print() {
+	return this->caret_print;
+}
+
+void gr_textbox::set_caret_print(bool print) {
+	this->caret_print = print;
 }
 
 void gr_textbox::set_back_color(PIXEL_UNIT color){

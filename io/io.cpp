@@ -705,7 +705,7 @@ extern "C" void c_winman_time_tick()
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	flog(LOG_INFO, "c_winman_time_tick: chiamata su c_winman_time_tick");
+	//flog(LOG_INFO, "c_winman_time_tick: chiamata su c_winman_time_tick");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, PRIM_TIME_TICK, false);
 	if(new_index == -1)
@@ -909,6 +909,18 @@ void main_windows_manager(int n)
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;
+			case PRIM_TIME_TICK:
+			{
+				if(win_man.focused_window==0)
+					break;
+				flog(LOG_INFO, "act(%d): Processo richiesta di evento tick per finestra %d", newreq.act, win_man.focused_window->get_id());
+				win_man.focused_window->process_tick_event();
+				win_man.focused_window->render();
+				doubled_framebuffer_container->render();
+				framebuffer_container->render();
+				framebuffer_container->clear_render_units();
+			}
+			break;
 			case MOUSE_UPDATE_EVENT:
 			{
 					//flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
@@ -1049,6 +1061,16 @@ void main_windows_manager(int n)
 		
 }
 
+// main del processo per la generazione degli eventi tick
+void main_winman_tick(int n)
+{
+	while(true)
+	{
+		c_winman_time_tick();
+		delay(20);
+	}
+}
+
 bool windows_init()
 {
 	//framebuffer e doubledbuffer
@@ -1104,7 +1126,7 @@ bool windows_init()
 
 	flog(LOG_INFO, "attivo gestore delle finestre...");
 	activate_p(main_windows_manager, 0, 200, LIV_SISTEMA);
-
+	activate_p(main_winman_tick, 0, 199, LIV_SISTEMA);
 	return true;
 }
 

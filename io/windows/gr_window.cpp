@@ -254,6 +254,17 @@ void gr_window::clear_focused_child()
 	this->focused_object = 0;
 }
 
+void gr_window::process_tick_event()
+{
+	if(this->focused_object == 0 || !this->focused_object->has_flag(TEXTBOX_FLAG))
+		return;
+
+	gr_textbox *focused_textbox = static_cast<gr_textbox*>(this->focused_object);
+	focused_textbox->set_caret_print(!focused_textbox->get_caret_print());
+	focused_textbox->render();
+	inner_container->render();
+}
+
 // gestione degli eventi per utente
 void gr_window::user_event_push(des_user_event * event)
 {
