@@ -3,7 +3,7 @@
 
 #include "virtual.h"
 
-const int MAX_USER_OBJECTS=20;
+const int MAX_USER_OBJECTS=100;
 class u_window
 {
 private:
@@ -57,6 +57,14 @@ public:
 				return true;
 			}
 		return false;
+	}
+
+	u_windowObject * get_object(int id)
+	{
+		for(int i=0; i<objs_count; i++)
+			if(this->objs[i]->id==id)
+				return this->objs[i];
+		return 0;
 	}
 
 	void process_event()
