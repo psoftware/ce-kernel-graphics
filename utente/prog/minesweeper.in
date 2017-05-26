@@ -1,0 +1,240 @@
+#include <sys.h>
+#include <lib.h>
+#include <windows/u_obj.h>
+#include <winobj.h>
+
+process minesweeper body minesweeper_body(0), 22, LIV_UTENTE;
+
+// ISO C rand
+int rand_r(unsigned int *seed)
+{
+  unsigned int next = *seed;
+  int result;
+
+  next *= 1103515245;
+  next += 12345;
+  result = (unsigned int) (next / 65536) % 2048;
+
+  next *= 1103515245;
+  next += 12345;
+  result <<= 10;
+  result ^= (unsigned int) (next / 65536) % 1024;
+
+  next *= 1103515245;
+  next += 12345;
+  result <<= 10;
+  result ^= (unsigned int) (next / 65536) % 1024;
+
+  *seed = next;
+
+  return result;
+}
+
+u_window * main_wind;
+
+enum cell_type {WHITE,NUMBER,FLOWER};
+struct des_cell {
+	bool clicked;
+	cell_type type;
+	natb number;
+
+	u_button *button;
+
+	des_cell()
+	{
+		clicked = false;
+		type = WHITE;
+		number = 0;
+	}
+};
+
+const int CELL_SIZE = 40;
+const int CELL_COUNTX = 9;
+const int CELL_COUNTY = 9;
+const int FLOWER_COUNT = 10;
+des_cell *matrix;
+
+void regen_matrix()
+{
+	unsigned int seed=1;
+
+	// generiamo le caselle con i fiori e inizializziamo tutte le altre
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+		{
+			matrix[x+y*CELL_COUNTX].type = WHITE;
+
+			int random_num = rand_r(&seed) % (CELL_COUNTX*CELL_COUNTY);
+			if(random_num < (CELL_COUNTX*CELL_COUNTY)/3)
+				matrix[x+y*CELL_COUNTX].type = FLOWER;
+
+			u_button *button = matrix[x+y*CELL_COUNTX].button;
+			button->back_color=0xffbdc3c7;
+			button->clicked_color=0xff7f8c8d;
+			button->border_color=0xffffffff;
+			button->text_color=0xff000000;
+			copy("", button->text);
+
+			main_wind->update_object(button);
+		}
+
+	// generiamo le caselle con i numeri
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+			if(matrix[x+y*CELL_COUNTX].type != FLOWER)
+			{
+				des_cell *cell = &matrix[x+y*CELL_COUNTX];
+				
+				int flower_rect_count = 0;
+				for(int y1=y-1; y1<y+2; y1++)
+					for(int x1=x-1; x1<x+2; x1++)
+						if(x1>=0 && x1<CELL_COUNTX && y1>=0 && y1<CELL_COUNTY)
+							if(matrix[x1+y1*CELL_COUNTX].type == FLOWER)
+								flower_rect_count++;
+
+
+				if(flower_rect_count == 0)
+				{
+					cell->type = WHITE;
+				}
+				else
+				{
+					cell->type = NUMBER;
+					cell->number = flower_rect_count;
+				}
+			}
+}
+
+void uncover_cell(int x, int y)
+{
+	u_button *button = matrix[x+y*CELL_COUNTX].button;
+	des_cell *cell = &matrix[x+y*CELL_COUNTX];
+
+	if(cell->type == FLOWER)
+	{
+		button->back_color=0xffe74c3c;
+		button->text_color=0xffffffff;
+		copy("F", button->text);
+	}
+	else if(cell->type == NUMBER)
+	{
+		switch(cell->number)
+		{
+			case 1: button->text_color=0xff3498db; break;
+			case 2: button->text_color=0xff2ecc71; break;
+			case 3: button->text_color=0xffe74c3c; break;
+			case 4: button->text_color=0xff2980b9; break;
+			case 5: button->text_color=0xff; break;
+			case 6: button->text_color=0xff; break;
+			case 7: button->text_color=0xff; break;
+			case 8: button->text_color=0xff; break;
+		}
+		button->back_color = 0xffffffff;
+		char button_text[3];
+		sprintf(button_text, 3, "%d", cell->number);
+		copy(button_text, button->text);
+	}
+	else if(cell->type == WHITE)
+	{
+		button->back_color = 0xffffffff;
+	}
+
+	cell->clicked = true;
+	main_wind->update_object(button);
+}
+
+void uncover_all()
+{
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+			uncover_cell(x, y);
+}
+
+void uncover_recursive(int x, int y)
+{
+	if(matrix[x+y*CELL_COUNTX].clicked)
+		return;
+
+	if(matrix[x+y*CELL_COUNTX].type == NUMBER || matrix[x+y*CELL_COUNTX].type == WHITE)
+	{
+		uncover_cell(x,y);
+		matrix[x+y*CELL_COUNTX].clicked = true;
+	}
+	else
+		return;
+						
+	int flower_rect_count = 0;
+		for(int y1=y-1; y1<y+2; y1++)
+			for(int x1=x-1; x1<x+2; x1++)
+				if(x1>=0 && x1<CELL_COUNTX && y1>=0 && y1<CELL_COUNTY)
+					uncover_recursive(x1, y1);
+}
+
+void cell_click_down_handler(des_user_event event)
+{
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+		{
+			u_button *button = matrix[x+y*CELL_COUNTX].button;
+			des_cell *cell = &matrix[x+y*CELL_COUNTX];
+
+			if(event.obj_id != button->id || cell->clicked)
+				continue;
+
+			if(cell->type == WHITE)
+				uncover_recursive(x, y);
+			else if(cell->type == FLOWER)
+				uncover_all();
+			else
+				uncover_cell(x, y);
+			return;
+		}
+}
+
+process_body minesweeper_body(int a)
+{
+	const int WIN_MAX_X = CELL_SIZE*CELL_COUNTX;
+	const int WIN_MAX_Y = CELL_SIZE*CELL_COUNTY;
+	main_wind = new u_window(WIN_MAX_X,WIN_MAX_Y,20,80);
+	main_wind->show();
+
+	//creo la matrice
+	matrix = new des_cell[CELL_COUNTX*CELL_COUNTY];
+
+	int pos_x = 0;
+	int pos_y = 0;
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+		{
+			u_button * button = new u_button();
+			button->size_x=CELL_SIZE;
+			button->size_y=CELL_SIZE;
+			button->pos_x=pos_x;
+			button->pos_y=pos_y;
+			button->z_index=0;
+			button->back_color=0xffbdc3c7;
+			button->border_color=0xffffffff;
+			button->text_color=0xff000000;
+			button->handler_mouse_down = cell_click_down_handler;
+			copy("", button->text);
+			main_wind->add_object(button);
+			main_wind->update_object(button);
+
+			matrix[x+y*CELL_COUNTX].button = button;
+
+			if(pos_x + CELL_SIZE >= WIN_MAX_X)
+			{
+				pos_x = 0;
+				pos_y += CELL_SIZE;
+			}
+			else
+				pos_x += CELL_SIZE;
+		}
+
+	// aggiorniamo lo stato della griglia
+	regen_matrix();
+
+	//event receive cycle
+	while(true)
+		main_wind->process_event();
+}
