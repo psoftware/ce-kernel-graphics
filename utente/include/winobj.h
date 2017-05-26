@@ -71,7 +71,33 @@ public:
 			if(this->objs[i]->id == new_event.obj_id)
 			{
 				flog(LOG_INFO, "process_event: trovato oggetto %d", new_event.obj_id);
+
+				// cerchiamo l'handler definito dall'utente che gestisce questo tipo di evento
+				void(*handler)(des_user_event) = 0;
+				switch(new_event.type)
+				{
+					case USER_EVENT_MOUSEZ:
+						handler = this->objs[i]->handler_mouse_z;
+					break;
+					case USER_EVENT_MOUSEUP:
+						handler = this->objs[i]->handler_mouse_up;
+					break;
+					case USER_EVENT_MOUSEDOWN:
+						handler = this->objs[i]->handler_mouse_down;
+					break;
+					case USER_EVENT_KEYBOARDPRESS:
+						handler = this->objs[i]->handler_keyboard_press;
+					break;
+				}
+
+				// chiamiamo l'handler definito dall'utente, se definito
+				if(handler != 0)
+					handler(new_event);
+
+				// chiamiamo l'handler di default
 				this->objs[i]->process_event(new_event);
+
+				// aggiorniamo l'oggetto
 				update_object(this->objs[i]);
 				break;
 			}

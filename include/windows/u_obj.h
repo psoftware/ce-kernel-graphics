@@ -35,7 +35,7 @@ const natb W_ID_TEXTBOX=2;
 
 class u_windowObject
 {
-	public:
+public:
 	int id;
 	natb TYPE;
 	short size_x;
@@ -45,6 +45,11 @@ class u_windowObject
 	short z_index;
 
 	PIXEL_UNIT back_color;
+
+	void(*handler_mouse_z)(des_user_event event);
+	void(*handler_mouse_up)(des_user_event event);
+	void(*handler_mouse_down)(des_user_event event);
+	void(*handler_keyboard_press)(des_user_event event);
 
 	virtual void process_event(des_user_event event)=0;
 };

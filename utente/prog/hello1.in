@@ -8,12 +8,22 @@ process hello1 body hello_body1(0), 22, LIV_UTENTE;
 
 long int wait1=139999999;
 
+u_window * uwind;
+u_label * label1;
+u_textbox * textbox1;
+
+void button1_click_down_handler(des_user_event event)
+{
+	copy(textbox1->text, label1->text);
+	uwind->update_object(label1);
+}
+
 process_body hello_body1(int a)
 {
-	u_window uwind(128,160,20,80);
-	uwind.show();
+	uwind = new u_window(128,160,20,80);
+	uwind->show();
 
-	u_label * label1 = new u_label();
+	label1 = new u_label();
 	label1->size_x=120;
 	label1->size_y=120;
 	label1->pos_x=4;
@@ -23,11 +33,11 @@ process_body hello_body1(int a)
 	label1->text_color=0x000000;
 	copy("", label1->text);
 
-	uwind.add_object(label1);
-	uwind.update_object(label1);
+	uwind->add_object(label1);
+	uwind->update_object(label1);
 
 	u_button * button1 = new u_button();
-	button1->size_x=40;
+	button1->size_x=50;
 	button1->size_y=20;
 	button1->pos_x=(128 - button1->size_x)/2;
 	button1->pos_y=20;
@@ -36,12 +46,13 @@ process_body hello_body1(int a)
 	button1->clicked_color=0xffe67e22;
 	button1->border_color=0xffc0392b;
 	button1->text_color=0xffffffff;
-	copy("Chiudi", button1->text);
+	button1->handler_mouse_down = button1_click_down_handler;
+	copy("Stampa", button1->text);
 
-	uwind.add_object(button1);
-	uwind.update_object(button1);
+	uwind->add_object(button1);
+	uwind->update_object(button1);
 
-	u_textbox * textbox1 = new u_textbox();
+	textbox1 = new u_textbox();
 	textbox1->size_x=80;
 	textbox1->size_y=60;
 	textbox1->pos_x=20;
@@ -51,8 +62,8 @@ process_body hello_body1(int a)
 	textbox1->text_color=0xff000000;
 	textbox1->border_color=0xff000000;
 	copy("AAA", textbox1->text);
-	uwind.add_object(textbox1);
-	uwind.update_object(textbox1);
+	uwind->add_object(textbox1);
+	uwind->update_object(textbox1);
 
 	u_textbox * textbox2 = new u_textbox();
 	textbox2->size_x=80;
@@ -65,22 +76,21 @@ process_body hello_body1(int a)
 	textbox2->border_color=0xff000000;
 	copy("", textbox2->text);
 
-	uwind.add_object(textbox2);
-	uwind.update_object(textbox2);
+	uwind->add_object(textbox2);
+	uwind->update_object(textbox2);
 
 	copy("Inizio processo 1!", label1->text);
-	uwind.update_object(label1);
+	uwind->update_object(label1);
 
 	while(--wait1);
 	copy("Inizio processo 1!\nBLABLABLA    BLABLABLA", label1->text);
-	uwind.update_object(label1);
+	uwind->update_object(label1);
 
 	button1->pos_x+=10;
 	button1->pos_y+=5;
-	uwind.update_object(button1);
+	uwind->update_object(button1);
 
 	//event receive cycle
 	while(true)
-		uwind.process_event();
+		uwind->process_event();
 }
-
