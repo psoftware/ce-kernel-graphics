@@ -80,7 +80,7 @@ salva_stato:
 	popq %rax
 
 	movq %rax, RAX(%rbx)
-	movq %rcx, RDX(%rbx)
+	movq %rcx, RCX(%rbx)
 	movq %rdx, RDX(%rbx)
 	popq %rax
 	movq %rax, RBX(%rbx)
