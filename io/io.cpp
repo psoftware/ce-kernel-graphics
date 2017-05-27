@@ -580,6 +580,9 @@ const int KBD_IRQ = 1;
 
 bool kbd_init()
 {
+	// blocchiamo subito le interruzioni generabili dalla tastiera
+	halt_inputkbd(&console.kbd.indreg);
+
 	if (activate_pe(estern_kbd, 0, PRIO, LIV, KBD_IRQ) == 0xFFFFFFFF) {
 		flog(LOG_ERR, "kbd: impossibile creare estern_kbd");
 		return false;
