@@ -324,6 +324,7 @@ void c_routine_pf();
 //    mancanti
 // *)
 bool in_pf = false;	//* true mentre stiamo gestendo un page fault
+extern "C" natq end;
 extern "C" void c_pre_routine_pf(	//
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -343,7 +344,7 @@ extern "C" void c_pre_routine_pf(	//
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
-	if (errore.user == 0 || errore.res == 1) {
+	if ((errore.user == 0 && rip < &end)|| errore.res == 1) {
 		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
@@ -1220,20 +1221,21 @@ void stat()
 // funzione di supporto per carica_tutto()
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
-	natq dp = dim_pag(liv);
+	natq dp = dim_pag(liv + 1);
 
-	natl i = i_tab(ind, liv);
+	natl i = i_tab(ind, liv + 1);
 	for (natl j = i; j < i + n; j++, ind = (addr)((natq)ind + dp)) {
 		natq e = get_entry(tab, j);
 		if (!extr_IND_MASSA(e))
 			continue;
-		des_pf *ppf = swap(proc, liv - 1, ind);
+		des_pf *ppf = swap(proc, liv, ind);
 		if (!ppf) {
 			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
 		}
 		ppf->residente = true;
-		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
+		if (liv > PRELOAD_LEVEL &&
+				!carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
 	}
 	return true;
@@ -1246,7 +1248,7 @@ bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
 
-	return carica_ric(proc, p->cr3, 4, norm((addr)(i * dim_pag(4))), n);
+	return carica_ric(proc, p->cr3, 3, norm((addr)(i * dim_pag(4))), n);
 }
 
 
