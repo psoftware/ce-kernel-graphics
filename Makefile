@@ -118,7 +118,7 @@ clean:
 	rm -f util/start.mk util/start.gdb util/start.pl
 
 reset: clean
-	rm -f build/* swap
+	rm -f build/* $(SWAP) .swap
 
 build:
 	mkdir -p $@
