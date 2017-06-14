@@ -475,10 +475,10 @@ extern "C" void c_writeconsole(cstr buff) //
 extern "C" void go_inputkbd(interfkbd_reg* indreg); //
 extern "C" void halt_inputkbd(interfkbd_reg* indreg); //
 
-void startkbd_in(des_kbd* p_des, str buff) //
+void startkbd_in(des_kbd* p_des, str buff, natl dim)
 {
 	p_des->punt = buff;
-	p_des->cont = 80;
+	p_des->cont = dim;
 	go_inputkbd(&p_des->indreg);
 }
 
@@ -488,7 +488,7 @@ extern "C" void c_readconsole(str buff, natl& quanti) //
 
 	p_des = &console;
 	sem_wait(p_des->mutex);
-	startkbd_in(&p_des->kbd, buff);
+	startkbd_in(&p_des->kbd, buff, quanti);
 	sem_wait(p_des->sincr);
 	quanti = p_des->kbd.cont;
 	sem_signal(p_des->mutex);
