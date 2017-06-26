@@ -169,8 +169,8 @@ extern "C" void c_sem_signal(natl sem)
 
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
+		inspronti();	// preemption
 		inserimento_lista(pronti, lavoro);
-		inserimento_lista(pronti, esecuzione);	// preemption
 		schedulatore();	// preemption
 	}
 }
