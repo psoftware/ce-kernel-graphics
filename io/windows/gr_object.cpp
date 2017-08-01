@@ -60,6 +60,16 @@ bool gr_object::remove_child(gr_object *removechild)
 	if(removechild==0 || child_list==0 || child_list_last==0)
 		return false;
 
+	// se l'oggetto viene eliminato deve essere eliminato anche dal buffer parente,
+	// quindi procediamo ad aggiungere una render_unit adatta al parente stesso:
+	// l'operazione di redraw avverrà alla chiamata della render() sul parente.
+	// facciamo sempre riferimento alle coordinate old perchè mantengono lo stato
+	// dell'oggetto all'ultima chiamata della render().
+	// ci interessa creare la render_unit solo nel caso in cui l'oggetto è visibile
+
+	if(removechild->old_visible)
+		this->push_render_unit(new render_subset_unit(removechild->pos_x, removechild->pos_y, removechild->size_x, removechild->size_y));
+
 	if(removechild==child_list)
 	{
 		child_list=removechild->next_brother;
@@ -81,6 +91,9 @@ bool gr_object::remove_child(gr_object *removechild)
 		removechild->previous_brother->next_brother=removechild->next_brother;
 		removechild->next_brother->previous_brother=removechild->previous_brother;
 	}
+
+	// è meglio che lo faccia l'utilizzatore della libreria perchè non è detto che l'istanza stia in memoria dinamica
+	//delete removechild;
 
 	return true;
 }
