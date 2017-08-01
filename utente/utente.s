@@ -61,6 +61,11 @@ crea_finestra:
 	int $IO_TIPO_WINDC
 	ret
 
+	.global chiudi_finestra
+chiudi_finestra:
+	int $IO_TIPO_WINDCL
+	ret
+
 	.global visualizza_finestra
 visualizza_finestra:
 	int $IO_TIPO_WINDV

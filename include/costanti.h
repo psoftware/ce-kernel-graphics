@@ -88,10 +88,11 @@
 #define IO_TIPO_WSE0		0x75	// writese_0
 
 #define IO_TIPO_WINDC		0x79	// crea_finestra
-#define IO_TIPO_WINDV		0x80	// visualizza_finestra
-#define IO_TIPO_WINDOC		0x81	// crea_oggetto
-#define IO_TIPO_WINDUC		0x82	// aggiorna_oggetto
-#define IO_TIPO_WINDPE		0x83	// preleva_evento
+#define IO_TIPO_WINDCL		0x80	// chiudi_finestra
+#define IO_TIPO_WINDV		0x81	// visualizza_finestra
+#define IO_TIPO_WINDOC		0x82	// crea_oggetto
+#define IO_TIPO_WINDUC		0x83	// aggiorna_oggetto
+#define IO_TIPO_WINDPE		0x84	// preleva_evento
 // * in piu' rispetto al libro
 // )
 

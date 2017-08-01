@@ -415,6 +415,7 @@ gr_bitmap * mouse_bitmap;
 // costanti utilizzate come tipi per i comandi aggiunti nella coda del gestore
 // delle finestre
 const natb PRIM_SHOW=0;
+const natb PRIM_CLOSE_WIND=1;
 const natb PRIM_UPDATE_OBJECT=2;
 const natb PRIM_TIME_TICK=3;
 const natb MOUSE_UPDATE_EVENT=10;
@@ -518,6 +519,43 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 	sem_signal(win_man.mutex);
 
 	return newwindow_id;
+}
+
+extern "C" int c_chiudi_finestra(int w_id, bool sync)
+{
+	sem_wait(win_man.sync_notfull);
+	sem_wait(win_man.mutex);
+
+	gr_window *window;
+	int new_index;
+
+	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(w_id);
+	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
+		goto err;
+
+	window = static_cast<gr_window*>(found_obj);
+
+	flog(LOG_INFO, "Inserimento richiesta di chiusura finestra");
+
+	new_index = windows_queue_insert(win_man, window, 100, PRIM_CLOSE_WIND, sync);
+	if(new_index == -1)
+	{ 	//Questa situazione non può accadere a causa del semaforo not_full, aggiungo codice di gestione
+		//errore solo per rendere più robusto il codice
+		flog(LOG_INFO, "Inserimento richiesta fallito");
+		goto err;
+	}
+
+	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notempty);
+	if(sync)
+		sem_wait(win_man.req_queue[new_index].if_sync);
+
+	return 0;
+
+//Gestione errori (sblocco mutex e sync su array)
+err:	sem_signal(win_man.mutex);
+	sem_signal(win_man.sync_notfull);
+	return -1;
 }
 
 extern "C" void c_visualizza_finestra(int w_id, bool sync)
@@ -747,6 +785,14 @@ void graphic_visualizza_finestra(gr_window *window)
 	framebuffer_container->clear_render_units();
 }
 
+void graphic_chiudi_finestra(gr_window *window)
+{
+	doubled_framebuffer_container->remove_child(window);
+	doubled_framebuffer_container->render();
+	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
+}
+
 void graphic_aggiorna_oggetto(gr_window *window, u_windowObject* u_obj)
 {
 	window->update_user_object(u_obj);
@@ -899,6 +945,12 @@ void main_windows_manager(int n)
 			case PRIM_SHOW:
 				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.window->get_id());
 				graphic_visualizza_finestra(newreq.window);
+				if(newreq.to_sync)
+					sem_signal(newreq.if_sync);
+			break;
+			case PRIM_CLOSE_WIND:
+				flog(LOG_INFO, "act(%d): Processo richiesta di chiusura finestra per finestra %d", newreq.act, newreq.window->get_id());
+				graphic_chiudi_finestra(newreq.window);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;

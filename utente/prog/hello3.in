@@ -33,5 +33,8 @@ process_body hello_body3(int a)
 
 	copy("Inizio processo 3!\nFine 1!\nFine 2!", label1->text);
 	aggiorna_oggetto(finestra, label_id, label1, true);
+
+	delay(10);
+	chiudi_finestra(finestra);
 }
 
