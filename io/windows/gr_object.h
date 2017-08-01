@@ -66,6 +66,8 @@ public:
 
 	virtual void render();
 
+	virtual ~gr_object();
+
 protected:
 	// serve per allineare le coordinate old a quelle correnti, resettare focus_changed e old_visible
 	void reset_status();

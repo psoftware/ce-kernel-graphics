@@ -452,6 +452,11 @@ void gr_object::render()
 */
 }
 
+// distruttore: devo cancellare tutte le render_unit
+gr_object::~gr_object(){
+	this->clear_render_units();
+}
+
 // ==================================================================
 // struct di utilità per l'ottimizzazione dell'algoritmo di rendering
 // render_target
