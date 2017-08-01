@@ -2,6 +2,7 @@
 #include "libgr.h"
 #include "gr_object.h"
 #include "consts.h"
+#include "log.h"
 
 int gr_object::id_counter = 0;
 
@@ -16,7 +17,7 @@ gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 		buffer=predefined_buffer;
 
 	this->id = id_counter++;
-	flog(LOG_INFO, "Nuovo gr_object (%d) o derivato con size_x %d e this->size_x %d", this->id, size_x, this->size_x);
+	LOG_DEBUG("Nuovo gr_object (%d) o derivato con size_x %d e this->size_x %d", this->id, size_x, this->size_x);
 }
 
 //O(n)

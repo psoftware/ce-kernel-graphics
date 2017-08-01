@@ -6,6 +6,7 @@
 #include "gr_textbox.h"
 #include "consts.h"
 #include "libgr.h"
+#include "log.h"
 
 extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
@@ -184,7 +185,7 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 			return 0;
 	}
 
-	flog(LOG_INFO, "add_user_object: oggetto %d di tipo %d creato su finestra %d", newobj->get_id(), u_obj->TYPE, this->get_id());
+	LOG_DEBUG("add_user_object: oggetto %d di tipo %d creato su finestra %d", newobj->get_id(), u_obj->TYPE, this->get_id());
 	u_obj->id = newobj->get_id();
 	newobj->render();
 
@@ -221,7 +222,7 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 			return true;
 	}
 
-	flog(LOG_INFO, "update_user_object: oggetto %d di tipo %d modificato su finestra %d", dest_obj->get_id(), u_obj->TYPE, this->get_id());
+	LOG_DEBUG("update_user_object: oggetto %d di tipo %d modificato su finestra %d", dest_obj->get_id(), u_obj->TYPE, this->get_id());
 	dest_obj->render();
 	inner_container->render();
 	return false;

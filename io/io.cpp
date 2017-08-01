@@ -5,6 +5,7 @@
 #include "newdelete.h"
 #include "windows/cursor.h"
 #include "windows/h_resize_cursor.h"
+#include "log.h"
 
 //#define BOCHS
 ////////////////////////////////////////////////////////////////////////////////
@@ -535,7 +536,7 @@ extern "C" int c_chiudi_finestra(int w_id, bool sync)
 
 	window = static_cast<gr_window*>(found_obj);
 
-	flog(LOG_INFO, "Inserimento richiesta di chiusura finestra");
+	LOG_DEBUG("Inserimento richiesta di chiusura finestra");
 
 	new_index = windows_queue_insert(win_man, window, 100, PRIM_CLOSE_WIND, sync);
 	if(new_index == -1)
@@ -572,7 +573,7 @@ extern "C" void c_visualizza_finestra(int w_id, bool sync)
 
 	window = static_cast<gr_window*>(found_obj);
 
-	flog(LOG_INFO, "Inserimento richiesta di renderizzazione finestra");
+	LOG_DEBUG("Inserimento richiesta di renderizzazione finestra");
 
 	new_index = windows_queue_insert(win_man, window, 100, PRIM_SHOW, sync);
 	if(new_index == -1)
@@ -662,7 +663,7 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 			goto err;
 	}
 
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento oggetto");
+	LOG_DEBUG("Inserimento richiesta di aggiornamento oggetto");
 
 	new_index = windows_queue_insert(win_man, window, 100, PRIM_UPDATE_OBJECT, sync);
 	if(new_index == -1)
@@ -694,7 +695,7 @@ err:
 extern "C" des_user_event c_preleva_evento(int w_id)
 {
 	sem_wait(win_man.mutex);
-	flog(LOG_INFO, "c_preleva_evento: chiamata su finestra %d", w_id);
+	LOG_DEBUG("c_preleva_evento: chiamata su finestra %d", w_id);
 
 	gr_window * window;
 	gr_object * found_obj;
@@ -837,7 +838,7 @@ void mouse_notify_move(int delta_x, int delta_y)
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	//flog(LOG_INFO, "Inserimento richiesta di aggiornamento posizione mouse (x,y)");
+	LOG_DEBUG("Inserimento richiesta di aggiornamento posizione mouse (x,y)");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, MOUSE_UPDATE_EVENT, false);
 	if(new_index == -1)
@@ -860,7 +861,7 @@ void mouse_notify_z_move(int delta_z)
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento coordinata z mouse");
+	LOG_DEBUG("Inserimento richiesta di aggiornamento coordinata z mouse");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, MOUSE_Z_UPDATE_EVENT, false);
 	if(new_index == -1)
@@ -882,7 +883,7 @@ void mouse_notify_mousebutton_event(int EVENT, mouse_button who)
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	flog(LOG_INFO, "Inserimento richiesta di aggiornamento stato button mouse");
+	LOG_DEBUG("Inserimento richiesta di aggiornamento stato button mouse");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, EVENT, false);
 	if(new_index == -1)
@@ -904,7 +905,7 @@ void keyboard_notify_keypress_event(char key)
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
 
-	flog(LOG_INFO, "Inserimento richiesta di inserimento tasto");
+	LOG_DEBUG("Inserimento richiesta di inserimento tasto");
 
 	int new_index = windows_queue_insert(win_man, 0, 100, KEYBOARD_KEYPRESS_EVENT, false);
 	if(new_index == -1)
@@ -932,30 +933,30 @@ void main_windows_manager(int n)
 		sem_wait(win_man.sync_notempty);
 		sem_wait(win_man.mutex);
 
-		//flog(LOG_INFO, "main_windows_manager: risvegliato");
+		LOG_DEBUG("main_windows_manager: risvegliato");
 		des_window_req newreq;
 		if(!windows_queue_extract(win_man, newreq))
 		{
-			flog(LOG_ERR, "main_windows_manager: Errore nell'estrazione delle richieste.");
+			LOG_ERROR("main_windows_manager: Errore nell'estrazione delle richieste.");
 			abort_p();
 		}
 
 		switch(newreq.act)
 		{
 			case PRIM_SHOW:
-				flog(LOG_INFO, "act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.window->get_id());
+				LOG_DEBUG("act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.window->get_id());
 				graphic_visualizza_finestra(newreq.window);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;
 			case PRIM_CLOSE_WIND:
-				flog(LOG_INFO, "act(%d): Processo richiesta di chiusura finestra per finestra %d", newreq.act, newreq.window->get_id());
+				LOG_DEBUG("act(%d): Processo richiesta di chiusura finestra per finestra %d", newreq.act, newreq.window->get_id());
 				graphic_chiudi_finestra(newreq.window);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;
 			case PRIM_UPDATE_OBJECT:
-				flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.window->get_id());
+				LOG_DEBUG("act(%d): Processo richiesta di aggiornamento oggetto per finestra %d", newreq.act, newreq.window->get_id());
 				graphic_aggiorna_oggetto(newreq.window, newreq.obj);
 				//renderobject_onwindow(newreq.w_id, newreq.obj, &main_cursor);
 				if(newreq.to_sync)
@@ -965,7 +966,7 @@ void main_windows_manager(int n)
 			{
 				if(win_man.focused_window==0)
 					break;
-				flog(LOG_INFO, "act(%d): Processo richiesta di evento tick per finestra %d", newreq.act, win_man.focused_window->get_id());
+				LOG_DEBUG("act(%d): Processo richiesta di evento tick per finestra %d", newreq.act, win_man.focused_window->get_id());
 				win_man.focused_window->process_tick_event();
 				win_man.focused_window->render();
 				doubled_framebuffer_container->render();
@@ -1052,7 +1053,7 @@ void main_windows_manager(int n)
 						window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
 						if(res.target != 0)
 						{
-							flog(LOG_INFO, "winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
+							LOG_DEBUG("winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
 							win_man.dragging_border = res.target;
 							win_man.is_resizing = true;
 							switch_mousecursor_bitmap(h_resize_cursor, h_resize_cursor_click_x, h_resize_cursor_click_y);
@@ -1130,7 +1131,7 @@ bool windows_init()
 
 	//sfondo
 	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
-	flog(LOG_INFO, "bitmap buffer address %p", bitmap->get_buffer());
+	LOG_DEBUG("bitmap buffer address %p", bitmap->get_buffer());
 	gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 	//print_palette(bitmap->get_buffer(), 0,0);
 	bitmap->render();
@@ -1170,7 +1171,7 @@ bool windows_init()
 	
 	if(win_man.sync_notfull==-1 || win_man.sync_notempty==-1)
 	{
-		flog(LOG_ERR, "attivazione del gestore delle finestre fallita.");
+		LOG_ERROR("attivazione del gestore delle finestre fallita.");
 		return false;
 	}
 
@@ -1397,7 +1398,7 @@ void mouse_handler(int i)
 			int x,y, new_x,new_y,new_z;
 			if(!(mouse_bytes[0] & 0x08)) //Il bit 3 deve sempre essere ad 1 per byte dei flag
 			{
-				flog(LOG_INFO, "mouse_driver: invalid packets alignment");
+				LOG_ERROR("mouse_driver: invalid packets alignment");
 				discard_one_packet=true;
 				goto fine;
 			}
@@ -1405,7 +1406,7 @@ void mouse_handler(int i)
 			// condizione di overflow (cestino il dato)
 			if ((mouse_bytes[0] & 0x80) || (mouse_bytes[0] & 0x40))
 			{
-				flog(LOG_INFO, "mouse_driver: Mouse Overflow!");
+				LOG_ERROR("mouse_driver: Mouse Overflow!");
 				goto fine;
 			}
 
@@ -1441,39 +1442,39 @@ void mouse_handler(int i)
 
 			if (mouse_bytes[0] & 0x4 && !ps2_mouse.middle_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Middle button is pressed!");
+				LOG_DEBUG("mouse_driver: Middle button is pressed!");
 				ps2_mouse.middle_click=true;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, MIDDLE);
 			}
 			else if (!(mouse_bytes[0] & 0x4) && ps2_mouse.middle_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Middle button is released!");
+				LOG_DEBUG("mouse_driver: Middle button is released!");
 				ps2_mouse.middle_click=false;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, MIDDLE);
 			}
 
 			if (mouse_bytes[0] & 0x2 && !ps2_mouse.right_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Right button is pressed!");
+				LOG_DEBUG("mouse_driver: Right button is pressed!");
 				ps2_mouse.right_click=true;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, RIGHT);
 			}
 			else if (!(mouse_bytes[0] & 0x2) && ps2_mouse.right_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Right button is released!");
+				LOG_DEBUG("mouse_driver: Right button is released!");
 				ps2_mouse.right_click=false;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, RIGHT);
 			}
 
 			if (mouse_bytes[0] & 0x1 && !ps2_mouse.left_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Left button is pressed!");
+				LOG_DEBUG("mouse_driver: Left button is pressed!");
 				ps2_mouse.left_click=true;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEDOWN_EVENT, LEFT);
 			}
 			else if (!(mouse_bytes[0] & 0x1) && ps2_mouse.left_click)
 			{
-				flog(LOG_INFO, "mouse_driver: Left button is released!");
+				LOG_DEBUG("mouse_driver: Left button is released!");
 				ps2_mouse.left_click=false;
 				mouse_notify_mousebutton_event(MOUSE_MOUSEUP_EVENT, LEFT);
 			}
