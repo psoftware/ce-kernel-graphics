@@ -1080,6 +1080,8 @@ void main_windows_manager(int n)
 						doubled_framebuffer_container->render();
 						framebuffer_container->render();
 					}
+					else // se il click non è stato fatto su una finestra dobbiamo togliere il focus alla finestra con focus
+						win_man.focused_window = 0;
 				}
 			break;
 			case MOUSE_MOUSEUP_EVENT:
