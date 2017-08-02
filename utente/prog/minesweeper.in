@@ -155,19 +155,24 @@ void uncover_recursive(int x, int y)
 	if(matrix[x+y*CELL_COUNTX].clicked)
 		return;
 
-	if(matrix[x+y*CELL_COUNTX].type == NUMBER || matrix[x+y*CELL_COUNTX].type == WHITE)
+	if(matrix[x+y*CELL_COUNTX].type == WHITE) // se troviamo il bianco allora bisogna continuare la ricorsione
 	{
 		uncover_cell(x,y);
 		matrix[x+y*CELL_COUNTX].clicked = true;
 	}
-	else
+	else if(matrix[x+y*CELL_COUNTX].type == NUMBER)	// se troviamo un numero lo scopriamo ma fermiamo la ricorsione
+	{
+		uncover_cell(x,y);
+		matrix[x+y*CELL_COUNTX].clicked = true;
+		return;
+	}
+	else	// se c'è un fiore allora non va scoperto, inoltre dobbiamo fermare la ricorsione
 		return;
 						
-	int flower_rect_count = 0;
-		for(int y1=y-1; y1<y+2; y1++)
-			for(int x1=x-1; x1<x+2; x1++)
-				if(x1>=0 && x1<CELL_COUNTX && y1>=0 && y1<CELL_COUNTY)
-					uncover_recursive(x1, y1);
+	for(int y1=y-1; y1<y+2; y1++)
+		for(int x1=x-1; x1<x+2; x1++)
+			if(x1>=0 && x1<CELL_COUNTX && y1>=0 && y1<CELL_COUNTY)
+				uncover_recursive(x1, y1);
 }
 
 void cell_click_down_handler(des_user_event event)
