@@ -31,6 +31,7 @@ int rand_r(unsigned int *seed)
 }
 
 u_window * main_wind;
+u_label * flower_left_label;
 
 enum cell_type {WHITE,NUMBER,FLOWER};
 struct des_cell {
@@ -54,19 +55,28 @@ const int CELL_COUNTY = 9;
 const int FLOWER_COUNT = 10;
 des_cell *matrix;
 
+int flower_left;
+int closed_cells;
+unsigned int seed=1;
+
 void regen_matrix()
 {
-	unsigned int seed=1;
+	flower_left = 0;
+	closed_cells = CELL_COUNTX*CELL_COUNTY;
 
 	// generiamo le caselle con i fiori e inizializziamo tutte le altre
 	for(int y=0; y<CELL_COUNTY; y++)
 		for(int x=0; x<CELL_COUNTY; x++)
 		{
 			matrix[x+y*CELL_COUNTX].type = WHITE;
+			matrix[x+y*CELL_COUNTX].clicked = false;
 
 			int random_num = rand_r(&seed) % (CELL_COUNTX*CELL_COUNTY);
-			if(random_num < (CELL_COUNTX*CELL_COUNTY)/3)
+			if(random_num < (CELL_COUNTX*CELL_COUNTY)/5)
+			{
 				matrix[x+y*CELL_COUNTX].type = FLOWER;
+				flower_left++;
+			}
 
 			u_button *button = matrix[x+y*CELL_COUNTX].button;
 			button->back_color=0xffbdc3c7;
@@ -103,6 +113,30 @@ void regen_matrix()
 					cell->number = flower_rect_count;
 				}
 			}
+
+	// aggiorna la label delle mine
+	snprintf(flower_left_label->text, 50, "Mine rimanenti: %d", flower_left);
+	main_wind->update_object(flower_left_label);
+}
+
+void uncover_all();
+void check_won()
+{
+	if(closed_cells != flower_left)
+		return;
+
+	// aggiorna la label delle mine
+	snprintf(flower_left_label->text, 50, "Hai vinto!! :D", flower_left);
+	main_wind->update_object(flower_left_label);
+
+	uncover_all();
+}
+
+void you_lose()
+{
+	// aggiorna la label delle mine
+	snprintf(flower_left_label->text, 50, "Hai perso :(", flower_left);
+	main_wind->update_object(flower_left_label);
 }
 
 void uncover_cell(int x, int y)
@@ -140,6 +174,7 @@ void uncover_cell(int x, int y)
 	}
 
 	cell->clicked = true;
+	--closed_cells;
 	main_wind->update_object(button);
 }
 
@@ -175,7 +210,7 @@ void uncover_recursive(int x, int y)
 				uncover_recursive(x1, y1);
 }
 
-void cell_click_down_handler(des_user_event event)
+void cell_click_up_handler(des_user_event event)
 {
 	for(int y=0; y<CELL_COUNTY; y++)
 		for(int x=0; x<CELL_COUNTY; x++)
@@ -189,17 +224,30 @@ void cell_click_down_handler(des_user_event event)
 			if(cell->type == WHITE)
 				uncover_recursive(x, y);
 			else if(cell->type == FLOWER)
+			{
 				uncover_all();
+				you_lose();
+				return;
+			}
 			else
 				uncover_cell(x, y);
+
+			check_won();
+
 			return;
 		}
+}
+
+void restart_button_click_handler(des_user_event event)
+{
+	seed++;
+	regen_matrix();
 }
 
 process_body minesweeper_body(int a)
 {
 	const int WIN_MAX_X = CELL_SIZE*CELL_COUNTX;
-	const int WIN_MAX_Y = CELL_SIZE*CELL_COUNTY;
+	const int WIN_MAX_Y = CELL_SIZE*CELL_COUNTY + 30;
 	main_wind = new u_window(WIN_MAX_X,WIN_MAX_Y,20,80);
 	main_wind->show();
 
@@ -220,7 +268,7 @@ process_body minesweeper_body(int a)
 			button->back_color=0xffbdc3c7;
 			button->border_color=0xffffffff;
 			button->text_color=0xff000000;
-			button->handler_mouse_down = cell_click_down_handler;
+			button->handler_mouse_up = cell_click_up_handler;
 			copy("", button->text);
 			main_wind->add_object(button);
 			main_wind->update_object(button);
@@ -235,6 +283,32 @@ process_body minesweeper_body(int a)
 			else
 				pos_x += CELL_SIZE;
 		}
+
+	// creo la label che mantiene il conteggio dei fiori
+	flower_left_label = new u_label();
+	flower_left_label->size_x=120;
+	flower_left_label->size_y=20;
+	flower_left_label->pos_x=10;
+	flower_left_label->pos_y=WIN_MAX_Y-25;
+	flower_left_label->back_color=0x002ecc71;
+	flower_left_label->text_color=0xffffffff;
+
+	// creo il pulsante per il restart
+	u_button * restart_button = new u_button();
+	restart_button->size_x=50;
+	restart_button->size_y=20;
+	restart_button->pos_x=155;
+	restart_button->pos_y=WIN_MAX_Y-25;
+	restart_button->z_index=0;
+	restart_button->back_color=0xffbdc3c7;
+	restart_button->border_color=0xffffffff;
+	restart_button->text_color=0xff000000;
+	restart_button->handler_mouse_up = restart_button_click_handler;
+	copy("Resetta", restart_button->text);
+
+	main_wind->add_object(restart_button);
+
+	main_wind->add_object(flower_left_label);
 
 	// aggiorniamo lo stato della griglia
 	regen_matrix();
