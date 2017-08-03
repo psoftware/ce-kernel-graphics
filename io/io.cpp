@@ -1178,8 +1178,8 @@ bool windows_init()
 	}
 
 	flog(LOG_INFO, "attivo gestore delle finestre...");
-	activate_p(main_windows_manager, 0, 200, LIV_SISTEMA);
-	activate_p(main_winman_tick, 0, 199, LIV_SISTEMA);
+	activate_p(main_windows_manager, 0, PRIO_WINMAN, LIV_SISTEMA);
+	activate_p(main_winman_tick, 0, PRIO_WINTICK, LIV_SISTEMA);
 	return true;
 }
 
@@ -1534,7 +1534,7 @@ bool mouse_init()
 	flog(LOG_INFO, "Risposta mouse: %d", mouseresp);
 
 	//Setto handler
-	activate_pe(mouse_handler, 0, 2, 0, 12);
+	activate_pe(mouse_handler, 0, PRIO_MOUSE, LIV_SISTEMA, 12);
 
 	flog(LOG_INFO, "mouse inizializzato");
 

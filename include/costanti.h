@@ -116,3 +116,11 @@
 #define N_UTN_C	      128
 #define N_UTN_P	      127
 // )
+
+
+// priorità per processi
+#define PRIO_WINMAN 250
+#define PRIO_WINTICK 249
+
+// priorità per processi esterni
+#define PRIO_MOUSE	251
