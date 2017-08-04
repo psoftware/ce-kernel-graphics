@@ -5,7 +5,7 @@
 #ifndef SYS_H_
 #define SYS_H_
 
-#include <libce.h>
+#include <libce_guard.h>
 #include <costanti.h>
 #include <windows/u_obj.h>
 

@@ -2,6 +2,7 @@
 #define U_WINOBJ_
 
 #include "virtual.h"
+#include "log.h"
 
 const int MAX_USER_OBJECTS=100;
 class u_window
@@ -72,13 +73,13 @@ public:
 		des_user_event new_event = preleva_evento(w_id);
 		if(new_event.type==NOEVENT)
 			return;
-		flog(LOG_INFO, "process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
+		LOG_DEBUG("process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
 
 		// l'evento ha l'id dell'oggetto a cui è destinato, scorriamo la lista e vediamo chi lo possiede
 		for(int i=0; i<objs_count; i++)
 			if(this->objs[i]->id == new_event.obj_id)
 			{
-				flog(LOG_INFO, "process_event: trovato oggetto %d", new_event.obj_id);
+				LOG_DEBUG("process_event: trovato oggetto %d", new_event.obj_id);
 
 				// cerchiamo l'handler definito dall'utente che gestisce questo tipo di evento
 				void(*handler)(des_user_event) = 0;
