@@ -39,6 +39,9 @@ endif
 WINDOWS_CPP_FILES := $(wildcard io/windows/*.cpp)
 WINDOWS_OBJ_FILES = $(patsubst io/windows/%.cpp,io/windows/%.o,$(WINDOWS_CPP_FILES))
 
+RESOURCES_CPP_FILES := $(wildcard io/windows/resources/*.cpp)
+RESOURCES_OBJ_FILES = $(patsubst io/windows/resources/%.cpp,io/windows/resources/%.o,$(RESOURCES_CPP_FILES))
+
 all: \
      build/sistema \
      build/parse   \
@@ -50,8 +53,8 @@ $(WINDOWS_OBJ_FILES): $(wildcard io/windows/*.h)
 build/sistema: sistema/sist_s.o sistema/sist_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/sistema -Ttext $(START_SISTEMA) sistema/sist_s.o sistema/sist_cpp.o $(NLDLIBS)
 
-build/io: io/io_s.o io/io_cpp.o $(WINDOWS_OBJ_FILES)
-	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(WINDOWS_OBJ_FILES) $(NLDLIBS)
+build/io: io/io_s.o io/io_cpp.o $(WINDOWS_OBJ_FILES) $(RESOURCES_OBJ_FILES)
+	$(NLD) $(NLDFLAGS) -o build/io -Ttext $(START_IO) io/io_s.o io/io_cpp.o $(WINDOWS_OBJ_FILES) $(RESOURCES_OBJ_FILES) $(NLDLIBS)
 
 build/utente: utente/uten_s.o utente/lib.o utente/uten_cpp.o
 	$(NLD) $(NLDFLAGS) -o build/utente -Ttext $(START_UTENTE) utente/uten_cpp.o utente/uten_s.o utente/lib.o $(NLDLIBS)
@@ -72,6 +75,10 @@ io/io_cpp.o: io/io.cpp include/costanti.h io/windows/consts.h
 
 ## compilazione modulo windows di io
 io/windows/%.o: io/windows/%.cpp
+	$(NCC) $(NCFLAGS) -c -o $@ $<
+
+## compilazione risorse per modulo windows dell'io
+io/windows/resources/%.o: io/windows/resources/%.cpp
 	$(NCC) $(NCFLAGS) -c -o $@ $<
 
 # compilazione di utente.s e utente.cpp
@@ -127,6 +134,13 @@ clean:
 	rm -f sistema/*.o io/*.o utente/*.o util/*.o
 	rm -f io/windows/*.o
 	rm -f util/start.mk util/start.gdb util/start.pl
+
+clean-res:
+	rm -f io/windows/resources/*.o
+
+clean-all: \
+	clean \
+	clean-res
 
 reset: clean
 	rm -f build/* swap
