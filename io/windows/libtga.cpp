@@ -49,6 +49,7 @@ void TgaParser::to_bitmap(void *dest) {
 	// lo standard TGA descrive più metodi di rappresentazione della bitmap nell campo img_data,
 	// in particolare si può scegliere l'angolo di partenza dalla quale si inizia a scrivere la
 	// bitmap e se quanti bit è rappresentato l'alpha channel (qui supportiamo solo 0 o 8 bit)
+
 	switch(direction) {
 		case 0x00: //bottom-left (dobbiamo invertire l'ordine delle righe)
 			//flog(LOG_INFO, "libtga: bottom-left");

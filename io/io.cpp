@@ -353,7 +353,7 @@ struct stdvga {
 
 
 const int MAX_SCREENX = 1024;
-const int MAX_SCREENY = 700;
+const int MAX_SCREENY = 768;
 
 stdvga main_videocard;
 
@@ -400,6 +400,8 @@ bool bochsvga_init()
 #include "windows/gr_button.h"
 #include "windows/gr_label.h"
 #include "windows/gr_window.h"
+#include "windows/libtga.h"
+#include "windows/resources/resources.h"
 
 // il framebuffer container è collegato al framebuffer
 gr_object *framebuffer_container;
@@ -1134,7 +1136,9 @@ bool windows_init()
 	//sfondo
 	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
 	LOG_DEBUG("bitmap buffer address %p", bitmap->get_buffer());
-	gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	//gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
+	TgaParser tga_c(tga_wallpaper);
+	tga_c.to_bitmap(bitmap->get_buffer());
 	//print_palette(bitmap->get_buffer(), 0,0);
 	bitmap->render();
 	doubled_framebuffer_container->add_child(bitmap);
@@ -1173,7 +1177,6 @@ bool windows_init()
 	
 	if(win_man.sync_notfull==-1 || win_man.sync_notempty==-1)
 	{
-		LOG_ERROR("attivazione del gestore delle finestre fallita.");
 		return false;
 	}
 
