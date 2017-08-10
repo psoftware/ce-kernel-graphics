@@ -108,6 +108,7 @@ protected:
 		void expand(render_subset_unit *param);
 		void offset_position(int parent_pos_x, int parent_pos_y);
 		void apply_bounds(int size_x, int size_y);
+		void intersect(render_subset_unit *param);
 	};
 
 public:

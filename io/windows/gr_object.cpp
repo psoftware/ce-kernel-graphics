@@ -369,42 +369,39 @@ void gr_object::render()
 
 		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)
 		{
+			// devo renderizzare solo l'area dell'oggetto effettivamente contenuta nella render unit...
+			render_subset_unit print_area(obj->pos_x, obj->pos_y, obj->size_x, obj->size_y);
+			// ...quindi interseco le due aree e faccio il redraw solo in quest'area
+			print_area.intersect(subsetunit);
+
 			//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-			int lmin_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x - obj->pos_x : 0;
-			int lmin_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y - obj->pos_y : 0;
-			int lmax_x = (obj->pos_x + obj->size_x > subsetunit->size_x + subsetunit->pos_x) ? subsetunit->size_x + subsetunit->pos_x - obj->pos_x: obj->size_x;
-			int lmax_y = (obj->pos_y + obj->size_y > subsetunit->size_y + subsetunit->pos_y) ? subsetunit->size_y + subsetunit->pos_y - obj->pos_y: obj->size_y;
-			//int lminpos_x = (subsetunit->pos_x > obj->pos_x) ? subsetunit->pos_x : obj->pos_x;	//RIDONDANTE
-			//int lminpos_y = (subsetunit->pos_y > obj->pos_y) ? subsetunit->pos_y : obj->pos_y;	//RIDONDANTE
-			int lminpos_x = obj->pos_x + lmin_x;
-			int lminpos_y = obj->pos_y + lmin_y;
+			//flog(LOG_INFO, "## (1) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
+			//flog(LOG_INFO, "## (2) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			//flog(LOG_INFO, "## (3) print_area %d %d %d %d", print_area.pos_x, print_area.pos_y, print_area.size_x, print_area.size_y);
 
-			//flog(LOG_INFO, "## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
-			//flog(LOG_INFO, "## (2) stampo obj %p con x=%d y=%d w=%d h=%d", obj, obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
-			//flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			// controllo se l'oggetto si interseca con subsetunit (cioè se l'intersezione non dà come risultato un insieme vuoto)
+			if(print_area.size_x < 0 || print_area.size_y < 0)
+				continue;	// scartiamo la subsetunit e passiamo alla prossima
 
-			//controllo se l'oggetto si interseca con questa render unit
-			if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
-			{
-				//flog(LOG_INFO, "# oggetto non intersecante oppure max_x/max_y errate");
-				continue;
-			}
-
+			// queste due coordinate si ottengono dalla print_area ma facendo riferimento all'oggetto obj
+			int start_obj_x = print_area.pos_x - obj->pos_x;
+			int start_obj_y = print_area.pos_y - obj->pos_y;
 			if(!obj->trasparency)
-				for(int y=0; y<(lmax_y-lmin_y); y++)
-					gr_memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
+				for(int y=0; y<print_area.size_y; y++)
+					gr_memcpy(this->buffer + print_area.pos_x + this->size_x*(y+print_area.pos_y), obj->buffer + start_obj_x + (y+start_obj_y)*obj->size_x, print_area.size_x);
+					//gr_memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), obj->buffer + lmin_x + (y+lmin_y)*obj->size_x, lmax_x-lmin_x);
 					//memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
 					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
 			else
-				for(int y=0; y<(lmax_y-lmin_y); y++)
-					for(int x=0; x<(lmax_x-lmin_x); x++)
+				for(int y=0; y<print_area.size_y; y++)
+					for(int x=0; x<print_area.size_x; x++)
 				#if defined(BPP_8)
-						if(*(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x) != 0x03)
-							set_pixel(this->buffer, x+lminpos_x, y+lminpos_y, this->size_x, this->size_y, *(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x));
+						if(*(obj->buffer + start_obj_x + x + (y+start_obj_y)*obj->size_x) != 0x03)
+							set_pixel(this->buffer, x+print_area.pos_x, y+print_area.pos_y, this->size_x, this->size_y, *(obj->buffer + start_obj_x + x + (y+start_obj_y)*obj->size_x));
 				#elif defined(BPP_32)
 						{	// algoritmo per realizzare l'alpha blending
-							PIXEL_UNIT src_pixel = *(obj->buffer + lmin_x + x + (y+lmin_y)*obj->size_x);
-							PIXEL_UNIT dst_pixel = *(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x); //?
+							PIXEL_UNIT src_pixel = *(obj->buffer + start_obj_x + x + (y+start_obj_y)*obj->size_x);
+							PIXEL_UNIT dst_pixel = *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x); //?
 							natb alpha = src_pixel >> 24;
 							natb src_red = (src_pixel >> 16) & 0xff;
 							natb src_green = (src_pixel >> 8) & 0xff;
@@ -415,12 +412,12 @@ void gr_object::render()
 							dst_red = (alpha*src_red + (255-alpha)*dst_red) / 255;
 							dst_green = (alpha*src_green + (255-alpha)*dst_green) / 255;
 							dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
-							*(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
+							*(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
 
 							/* //alpha blending debug code
 							if(alpha!=0 && alpha!=0xff && false)
 							{
-								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + lminpos_x + x + (y+lminpos_y)*this->size_x));
+								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x));
 								flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
 								flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
 								flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
@@ -555,4 +552,31 @@ void gr_object::render_subset_unit::apply_bounds(int size_x, int size_y)
 	}
 	if(this->pos_y + this->size_y > size_y)
 		this->size_y -= this->pos_y + this->size_y - size_y;
+}
+
+void gr_object::render_subset_unit::intersect(render_subset_unit *param)
+{
+	//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", param, param->pos_x, param->pos_y, param->size_x, param->size_y);
+	int lmin_x = (param->pos_x > this->pos_x) ? param->pos_x : this->pos_x;
+	int lmin_y = (param->pos_y > this->pos_y) ? param->pos_y : this->pos_y;
+	int lmax_x = (this->pos_x + this->size_x > param->size_x + param->pos_x) ? param->pos_x + param->size_x : this->pos_x + this->size_x;
+	int lmax_y = (this->pos_y + this->size_y > param->size_y + param->pos_y) ? param->pos_y + param->size_y : this->pos_y + this->size_y;
+
+	//flog(LOG_INFO, "TEST## (1) debug limiti lmin_x=%d lmin_y=%d lmax_x=%d lmax_y=%d:", lmin_x, lmin_y, lmax_x, lmax_y);
+	//flog(LOG_INFO, "## (2) stampo this %p con x=%d y=%d w=%d h=%d", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
+	//flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", param, param->pos_x,param->pos_y, param->size_x, param->size_y);
+
+	//controllo se l'oggetto si interseca con questa render unit
+	if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
+	{
+		//flog(LOG_INFO, "# oggetto non intersecante");
+		this->size_x = -1;
+		this->size_y = -1;
+		return;
+	}
+
+	this->pos_x = lmin_x;
+	this->pos_y = lmin_y;
+	this->size_x = lmax_x - lmin_x;
+	this->size_y = lmax_y - lmin_y;
 }
