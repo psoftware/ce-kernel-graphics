@@ -1129,7 +1129,7 @@ void main_winman_tick(int n)
 bool windows_init()
 {
 	//framebuffer e doubledbuffer
-	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, main_videocard.framebuffer);
+	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, true, main_videocard.framebuffer);
 	doubled_framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0);
 	framebuffer_container->add_child(doubled_framebuffer_container);
 

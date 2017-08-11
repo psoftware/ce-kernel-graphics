@@ -38,8 +38,11 @@ protected:
 	bool trasparency;
 	bool visible;
 
+	//...
+	bool buffered;
+
 public:
-	gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer=0);
+	gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, bool buffered=true, PIXEL_UNIT *predefined_buffer=0);
 
 	//metodi per la gestione dei figli del gr_object
 	void add_child(gr_object *child);
@@ -63,6 +66,10 @@ public:
 
 	//metodo per ricreare il buffer (necessario dopo il cambio delle dimensioni)
 	void realloc_buffer();
+
+	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva
+	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0);
+	void recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0);
 
 	virtual void render();
 

@@ -6,12 +6,12 @@
 
 int gr_object::id_counter = 0;
 
-gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, PIXEL_UNIT *predefined_buffer)
+gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, bool buffered, PIXEL_UNIT *predefined_buffer)
 	: search_flags(0), child_list(0), child_list_last(0), next_brother(0), previous_brother(0), units(0),
 		old_pos_x(pos_x), old_pos_y(pos_y), old_size_x(size_x), old_size_y(size_y), old_visible(false), focus_changed(false),
-		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true)
+		pos_x(pos_x), pos_y(pos_y), size_x(size_x), size_y(size_y), z_index(z_index), trasparency(false), visible(true), buffered(buffered)
 {
-	if(predefined_buffer==0)
+	if(predefined_buffer==0 && buffered)
 		buffer = new PIXEL_UNIT[size_x*size_y];
 	else
 		buffer=predefined_buffer;
@@ -248,14 +248,236 @@ bool gr_object::is_pos_modified(){
 	(this->old_size_y != this->size_y) || (this->old_visible != this->visible);
 }
 
+struct render_subset_unit;
+void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y)
+{
+	// nulla da fare in questo caso
+	if(!target)
+		return;
+	//flog(LOG_INFO, "build_render_areas: chiamata su %p", target);
+	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
+	// (usiamo il for perchè l'albero è generico e non binario)
+	if(!target->buffered)
+	{
+		render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		//flog(LOG_INFO, "current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		// la unit non deve sforare i bound dell'oggetto parente, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
+		current_parent_restriction.intersect(parent_restriction);
+
+		// procediamo con la visita anticipata
+		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
+			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);
+	}
+	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
+	{
+		// devo capire se l'oggetto è stato spostato di posizione o cambiato di dimensione: in tal caso devo
+		// creare una render_unit che corrisponda esattamente alla dimensione e posizione della finestra in quanto
+		// l'oggetto deve essere renderizzato sulla nuova area.
+		// è inclusa un'ulteriore ottimizzazione in questo caso: se creo una render_unit grande quanto l'oggetto
+		// obj, è inutile scorrere le ulteriori render_unit dell'oggetto in quanto sono tutte contenuta nella
+		// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
+		// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
+
+		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
+		render_subset_unit *newareaunit = 0;
+		render_subset_unit *oldareaunit = 0;
+		bool modified = target->is_pos_modified();
+
+		if(modified || (!target->old_visible && target->visible) || focus_changed)
+		{
+			newareaunit = new render_subset_unit(0, 0, target->size_x, target->size_y);
+
+			// cancello tutte le render_unit dell'oggetto (OTTIMIZZAZIONE)
+			target->clear_render_units();
+		}
+
+		// controllo di presenza della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
+		if(modified || (target->old_visible && !target->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
+		{
+			oldareaunit = new render_subset_unit(target->old_pos_x, target->old_pos_y, target->old_size_x, target->old_size_y);
+
+			// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
+			// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
+			oldareaunit->offset_position(target->pos_x*-1, target->pos_y*-1);
+		}
+
+		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old e focus sono coinvolti
+		target->reset_status();
+
+		// la vecchia area potrebbe intersecarsi con la nuova, quindi magari è meglio farne una che contiene entrambi in tal caso
+		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))
+		{
+			newareaunit->expand(oldareaunit);
+			target->push_render_unit(newareaunit);
+			delete oldareaunit;
+		}
+		else // se, invece, le due aree non si intersecano, allora le tengo separate
+		{
+			if(oldareaunit)
+				target->push_render_unit(oldareaunit);
+			if(newareaunit)
+				target->push_render_unit(newareaunit);
+		}
+//flog(LOG_INFO, "== parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
+		// itero tutte le subset unit di target, le tolgo anche dalla lista
+		for(render_subset_unit *targetunit=target->pop_render_unit(); targetunit!=0; targetunit=target->pop_render_unit())
+		{
+			// se l'oggetto non è visibile, allora nessuna render unit dovrà essere applicata
+			if(!target->visible)
+				continue;
+
+			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di this, devo sistemare
+			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
+			targetunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ora targetunit ha le coord che fanno riferimento a this
+
+			// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
+			//flog(LOG_INFO, "== target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+			targetunit->intersect(parent_restriction);
+			//flog(LOG_INFO, "   target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+
+			// itero tutte le subset unit che ho già creato, cioè quelle del gr_target this,
+			// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
+			// una lista di render_unit non intersecate tra di loro.
+			render_subset_unit *subsetunit=this->units, *prec=this->units;
+			while(subsetunit!=0)
+			{
+				// mantengo il puntatore a next della subset unit perchè potrei eliminare subsetunit prima della fine del ciclo
+				render_subset_unit *tempnext = subsetunit->next;
+
+				// controllo di intersezione con una render_unit già creata
+				if(subsetunit->intersects(targetunit))
+				{
+					// aggiorno le coordinate della targetunit perchè così posso confrontarla con altre unit che intersecano
+					// la targetunit originale. In tal modo mi risparmio un ciclo aggiuntivo
+					targetunit->expand(subsetunit);
+
+					// elimino la render_unit di this che si interseca, perchè ora è contenuta totalmente in "subsetunit"
+					if(subsetunit==this->units)	//testa della lista
+					{
+						this->units=subsetunit->next;
+						prec=this->units;
+					}
+					else
+						prec->next=subsetunit->next;
+
+					delete subsetunit;
+				}
+				else
+					prec = subsetunit;
+				subsetunit=tempnext;
+			}
+			//flog(LOG_INFO, "## inserisco targetunit %p in this %p", targetunit, this);
+			this->push_render_unit(targetunit);
+		}
+	}
+}
+
+void gr_object::recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y)
+{
+	//flog(LOG_INFO, "#### recursive rendering %p", target);
+	// nulla da fare in questo caso
+	if(!target)
+		return;
+
+	//flog(LOG_INFO, "build_render_areas: chiamata su %p", target);
+	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
+	// (usiamo il for perchè l'albero è generico e non binario)
+	render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+	current_parent_restriction.intersect(parent_restriction);
+
+	if(!target->buffered)
+	{
+		//flog(LOG_INFO, "-> current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		// procediamo con la visita anticipata
+		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
+			recursive_render(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);
+		//flog(LOG_INFO, "<- no more child");
+	}
+	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
+	{
+		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)	// le units appartengono a THIS
+		{
+			// devo renderizzare solo l'area dell'oggetto effettivamente contenuta nella render unit...
+			render_subset_unit print_area(current_parent_restriction.pos_x, current_parent_restriction.pos_y, current_parent_restriction.size_x, current_parent_restriction.size_y);
+			// ...quindi interseco le due aree e faccio il redraw solo in quest'area
+			print_area.intersect(subsetunit);
+
+			//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			//flog(LOG_INFO, "## (1) stampo target %p con x=%d y=%d w=%d h=%d", target, target->pos_x,target->pos_y, target->size_x, target->size_y);
+			//flog(LOG_INFO, "## (2) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			//flog(LOG_INFO, "## (3) print_area %d %d %d %d", print_area.pos_x, print_area.pos_y, print_area.size_x, print_area.size_y);
+
+			// controllo se l'oggetto si interseca con subsetunit (cioè se l'intersezione non dà come risultato un insieme vuoto)
+			if(print_area.size_x <= 0 || print_area.size_y <= 0)
+				continue;	// scartiamo la subsetunit e passiamo alla prossima
+
+			// queste due coordinate si ottengono dalla print_area ma facendo riferimento all'oggetto target
+			int start_obj_x = print_area.pos_x - ancestors_offset_x- target->pos_x;
+			int start_obj_y = print_area.pos_y - ancestors_offset_y- target->pos_y;
+			if(!target->trasparency)
+				for(int y=0; y<print_area.size_y; y++)
+					gr_memcpy(this->buffer + print_area.pos_x + this->size_x*(y+print_area.pos_y), target->buffer + start_obj_x + (y+start_obj_y)*target->size_x, print_area.size_x);
+					//gr_memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), target->buffer + lmin_x + (y+lmin_y)*target->size_x, lmax_x-lmin_x);
+					//memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
+					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
+			else
+				for(int y=0; y<print_area.size_y; y++)
+					for(int x=0; x<print_area.size_x; x++)
+				#if defined(BPP_8)
+						if(*(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x) != 0x03)
+							set_pixel(this->buffer, x+print_area.pos_x, y+print_area.pos_y, this->size_x, this->size_y, *(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x));
+				#elif defined(BPP_32)
+						{	// algoritmo per realizzare l'alpha blending
+							PIXEL_UNIT src_pixel = *(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x);
+							PIXEL_UNIT dst_pixel = *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x); //?
+							natb alpha = src_pixel >> 24;
+							natb src_red = (src_pixel >> 16) & 0xff;
+							natb src_green = (src_pixel >> 8) & 0xff;
+							natb src_blue = src_pixel & 0xff;
+							natb dst_red = (dst_pixel >> 16) & 0xff;
+							natb dst_green = (dst_pixel >> 8) & 0xff;
+							natb dst_blue = dst_pixel & 0xff;
+							dst_red = (alpha*src_red + (255-alpha)*dst_red) / 255;
+							dst_green = (alpha*src_green + (255-alpha)*dst_green) / 255;
+							dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
+							*(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
+
+							/* //alpha blending debug code
+							if(alpha!=0 && alpha!=0xff && false)
+							{
+								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x));
+								flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
+								flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
+								flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
+							}*/
+						}
+				#endif
+		}
+	}
+}
+
 //renderizza su buffer tutti i figli nella lista child_tree
 void gr_object::render()
 {
+	//flog(LOG_INFO, "###### rendering %p", this);
+	if(!this->buffered)
+	{
+		//flog(LOG_ERR, "render: object is not buffered");
+		return;
+	}
 	static natb debug_color = 0x20;
 	//flog(LOG_INFO, "## --- inizio render()");
+	render_subset_unit pr(0, 0, this->size_x, this->size_y);
+
+	// step 1
+	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
+			build_render_areas(&pr, child);
+	// step 2
+	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
+			recursive_render(&pr, child);
 
 	//per ogni oggetto (obj) del contenitore
-	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
+	/*for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
 	{
 		//flog(LOG_INFO, "   nuovo oggetto x=%d y=%d w=%d h=%d:", obj->pos_x,obj->pos_y, obj->size_x, obj->size_y);
 		//render_target *newtarget = new render_target(obj);
@@ -357,8 +579,8 @@ void gr_object::render()
 			//flog(LOG_INFO, "## inserisco objunit %p in this %p", objunit, this);
 			this->push_render_unit(objunit);
 		}
-	}
-
+	}*/
+/*
 	// === Inizio fase di stampa ===
 	//flog(LOG_INFO, "## stampa su parente %p con x=%d y=%d w=%d h=%d:", this, this->pos_x,this->pos_y, this->size_x, this->size_y);
 	for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)
@@ -414,20 +636,20 @@ void gr_object::render()
 							dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
 							*(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
 
-							/* //alpha blending debug code
+							 //alpha blending debug code
 							if(alpha!=0 && alpha!=0xff && false)
 							{
 								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x));
 								flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
 								flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
 								flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
-							}*/
+							}
 						}
 				#endif
 
 			debug_color+=3;
 		}
-	}
+	}*/
 
 	//flog(LOG_INFO, "## --- fine render() sperimentale");
 	//flog(LOG_INFO, "#");

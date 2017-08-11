@@ -18,7 +18,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
 
 	this->set_search_flag(WINDOW_FLAG);
-	this->topbar_container = new gr_object(0,0,this->get_size_x(),TOPBAR_HEIGHT,0);
+	this->topbar_container = new gr_object(0,0,this->get_size_x(),TOPBAR_HEIGHT,0,false);
 	this->topbar_container->set_search_flag(TOPBAR_FLAG);
 	this->topbar_bitmap = new gr_bitmap(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
 	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
@@ -45,7 +45,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	this->topbar_container->add_child(this->title_label);
 
 	// contenitore oggetti finestra + background
-	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0);
+	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0,false);
 	this->background_bitmap = new gr_bitmap(0,0,this->inner_container->get_size_x(),this->inner_container->get_size_y(),0);
 	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 	this->background_bitmap->render();
