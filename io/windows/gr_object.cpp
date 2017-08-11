@@ -567,7 +567,7 @@ void gr_object::render_subset_unit::intersect(render_subset_unit *param)
 	//flog(LOG_INFO, "## (3) stampo render_unit %p con x=%d y=%d w=%d h=%d", param, param->pos_x,param->pos_y, param->size_x, param->size_y);
 
 	//controllo se l'oggetto si interseca con questa render unit
-	if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmax_y>lmax_y)
+	if(lmax_x<=0 || lmax_y<=0 || lmin_x<0 || lmin_y<0 || lmin_x>lmax_x || lmin_y>lmax_y)
 	{
 		//flog(LOG_INFO, "# oggetto non intersecante");
 		this->size_x = -1;
