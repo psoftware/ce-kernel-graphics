@@ -68,7 +68,7 @@ public:
 	void realloc_buffer();
 
 	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva
-	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0);
+	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0, bool ancestor_modified=false);
 	void recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0);
 
 	virtual void render();

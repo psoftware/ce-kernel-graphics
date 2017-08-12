@@ -230,6 +230,9 @@ void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object:
 }
 
 void gr_object::realloc_buffer(){
+	if(!this->buffered)
+		return;
+
 	delete buffer;
 	buffer = new PIXEL_UNIT[this->size_x*this->size_y];
 }
@@ -249,7 +252,7 @@ bool gr_object::is_pos_modified(){
 }
 
 struct render_subset_unit;
-void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y)
+void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y, bool ancestor_modified)
 {
 	// nulla da fare in questo caso
 	if(!target)
@@ -257,38 +260,32 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 	//flog(LOG_INFO, "build_render_areas: chiamata su %p", target);
 	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
 	// (usiamo il for perchè l'albero è generico e non binario)
-	if(!target->buffered)
-	{
-		render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
-		//flog(LOG_INFO, "current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
-		// la unit non deve sforare i bound dell'oggetto parente, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
-		current_parent_restriction.intersect(parent_restriction);
 
-		// procediamo con la visita anticipata
-		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
-			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);
-	}
-	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
-	{
-		// devo capire se l'oggetto è stato spostato di posizione o cambiato di dimensione: in tal caso devo
-		// creare una render_unit che corrisponda esattamente alla dimensione e posizione della finestra in quanto
-		// l'oggetto deve essere renderizzato sulla nuova area.
-		// è inclusa un'ulteriore ottimizzazione in questo caso: se creo una render_unit grande quanto l'oggetto
-		// obj, è inutile scorrere le ulteriori render_unit dell'oggetto in quanto sono tutte contenuta nella
-		// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
-		// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
+	// devo capire se l'oggetto è stato spostato di posizione o cambiato di dimensione: in tal caso devo
+	// creare una render_unit che corrisponda esattamente alla dimensione e posizione della finestra in quanto
+	// l'oggetto deve essere renderizzato sulla nuova area.
+	// è inclusa un'ulteriore ottimizzazione in questo caso: se creo una render_unit grande quanto l'oggetto
+	// obj, è inutile scorrere le ulteriori render_unit dell'oggetto in quanto sono tutte contenuta nella
+	// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
+	// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
 
+	bool modified = target->is_pos_modified();
+
+	// OTTIMIZZAZIONE: ricordiamo che le render_unit di questo target sono tutte contenute all'interno del
+	// contenitore padre. Se il padre è stato modificato allora già è presente una render_unit in this che
+	// copre la newareaunit e la oldareaunit
+	if(!ancestor_modified)
+	{
 		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
 		render_subset_unit *newareaunit = 0;
 		render_subset_unit *oldareaunit = 0;
-		bool modified = target->is_pos_modified();
 
 		if(modified || (!target->old_visible && target->visible) || focus_changed)
 		{
 			newareaunit = new render_subset_unit(0, 0, target->size_x, target->size_y);
 
 			// cancello tutte le render_unit dell'oggetto (OTTIMIZZAZIONE)
-			target->clear_render_units();
+			target->clear_render_units();	// HA SENSO PER GLI OGGETTI UNBUFFERED?
 		}
 
 		// controllo di presenza della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
@@ -308,16 +305,39 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))
 		{
 			newareaunit->expand(oldareaunit);
-			target->push_render_unit(newareaunit);
+			newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ricordiamo che la render_unit va messa in this
+			this->push_render_unit(newareaunit);
 			delete oldareaunit;
 		}
 		else // se, invece, le due aree non si intersecano, allora le tengo separate
 		{
 			if(oldareaunit)
-				target->push_render_unit(oldareaunit);
+			{
+				oldareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ricordiamo che la render_unit va messa in this
+				this->push_render_unit(oldareaunit);
+			}
 			if(newareaunit)
-				target->push_render_unit(newareaunit);
+			{
+				newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ricordiamo che la render_unit va messa in this
+				this->push_render_unit(newareaunit);
+			}
 		}
+	}
+
+	if(!target->buffered)
+	{
+		render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		//flog(LOG_INFO, "current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		// la unit non deve sforare i bound dell'oggetto parente, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
+		current_parent_restriction.intersect(parent_restriction);
+
+		// procediamo con la visita anticipata
+		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
+			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, modified || ancestor_modified);
+	}
+	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
+	{
+
 //flog(LOG_INFO, "== parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
 		// itero tutte le subset unit di target, le tolgo anche dalla lista
 		for(render_subset_unit *targetunit=target->pop_render_unit(); targetunit!=0; targetunit=target->pop_render_unit())
