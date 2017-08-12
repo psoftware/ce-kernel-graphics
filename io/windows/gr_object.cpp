@@ -110,7 +110,8 @@ void gr_object::focus_child(gr_object *focuschild)
 	add_child(focuschild);
 
 	//forziamo il redraw nella prossima render
-	focus_changed = true;
+	if(focuschild != 0)
+		focuschild->focus_changed = true;
 }
 
 bool gr_object::has_child(gr_object *child)
