@@ -924,6 +924,17 @@ void keyboard_notify_keypress_event(char key)
 	sem_signal(win_man.sync_notempty);
 }
 
+// label per monitorare la memoria heap
+gr_label *heap_label;
+void render_heap_label()
+{
+	char heap_text[31];
+	//snprintf(heap_text, 30, "Memoria... %d KiB", (DIM_IO_HEAP - disponibile())/1024);
+	snprintf(heap_text, 30, "Memoria... %d B", (DIM_IO_HEAP - disponibile()));
+	heap_label->set_text(heap_text);
+	heap_label->render();
+}
+
 // funzione main del processo windows_manager
 void main_windows_manager(int n)
 {
@@ -966,11 +977,16 @@ void main_windows_manager(int n)
 			break;
 			case PRIM_TIME_TICK:
 			{
+				//sfruttiamo questo evento per aggiornare la label che visualizza l'heap allocata
+				render_heap_label();
+
 				if(win_man.focused_window==0)
 					break;
+
 				LOG_DEBUG("act(%d): Processo richiesta di evento tick per finestra %d", newreq.act, win_man.focused_window->get_id());
 				win_man.focused_window->process_tick_event();
 				win_man.focused_window->render();
+
 				doubled_framebuffer_container->render();
 				framebuffer_container->render();
 				framebuffer_container->clear_render_units();
@@ -1161,6 +1177,11 @@ bool windows_init()
 	screen_bar->set_trasparency(true);
 	screen_bar->render();
 	doubled_framebuffer_container->add_child(screen_bar);
+
+	//label memoria heap
+	heap_label = new gr_label(0,0,140,20,HEAP_LABEL_ZINDEX);
+	render_heap_label();
+	doubled_framebuffer_container->add_child(heap_label);
 
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();

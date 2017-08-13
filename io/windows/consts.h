@@ -28,6 +28,7 @@
 #define CURSOR_ZINDEX 50
 #define MAINBAR_ZINDEX 11
 #define WINDOWS_PLANE_ZINDEX 10
+#define HEAP_LABEL_ZINDEX 1
 #define BACKGROUND_ZINDEX 0
 
 // constanti per gr_window
