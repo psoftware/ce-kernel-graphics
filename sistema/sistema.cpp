@@ -235,8 +235,8 @@ extern "C" void c_sem_signal(natl sem)
 
 	if ((s->counter) <= 0) {
 		rimozione_lista(s->pointer, lavoro);
+		inspronti();	// preemption
 		inserimento_lista(pronti, lavoro);
-		inserimento_lista(pronti, esecuzione);	// preemption
 		schedulatore();	// preemption
 	}
 }
@@ -390,6 +390,7 @@ void c_routine_pf();
 //    mancanti
 // *)
 bool in_pf = false;	//* true mentre stiamo gestendo un page fault
+extern "C" natq end;
 extern "C" void c_pre_routine_pf(	//
 	// (* prevediamo dei parametri aggiuntivi:
 		pf_error errore,	/* vedi sopra */
@@ -409,7 +410,7 @@ extern "C" void c_pre_routine_pf(	//
 	// (* il sistema non e' progettato per gestire page fault causati
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
-	if (errore.user == 0 || errore.res == 1) {
+	if ((errore.user == 0 && rip < &end)|| errore.res == 1) {
 		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
@@ -543,21 +544,8 @@ void rilascia_pagina_fisica(des_pf* ppf)
 }
 // *)
 
-// (* funzione di comodo che alloca una pagina fisica con eventuale
-//    rimpiazzamento di un'altra
 des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale); // piu' avanti
-bool scollega(des_pf* ppf);	// piu' avanti
-void scarica(des_pf* ppf); // piu' avanti
-des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
-{
-	des_pf *ppf = alloca_pagina_fisica_libera();
-	if (ppf == 0) {
-		if ( (ppf = scegli_vittima(proc, livello, ind_virt)) && scollega(ppf) )
-			scarica(ppf);
-	}
-	return ppf;
-}
-// *)
+des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt); // piu' avanti
 // )
 
 
@@ -773,7 +761,7 @@ proc_elem *a_p[MAX_IRQ];  //
 // )
 
 natq alloca_blocco();
-des_pf* swap2(natl proc, int livello, addr ind_virt);
+des_pf* swap(natl proc, int livello, addr ind_virt);
 bool crea(natl proc, addr ind_virt, int liv, natl priv)
 {
 	natq& dt = get_des(proc, liv + 1, ind_virt);
@@ -791,7 +779,7 @@ bool crea(natl proc, addr ind_virt, int liv, natl priv)
 			if (priv == LIV_UTENTE) dt = dt | BIT_US;
 		}
 		if (liv > 0) {
-			des_pf *ppf = swap2(proc, liv, ind_virt);
+			des_pf *ppf = swap(proc, liv, ind_virt);
 			if (!ppf) {
 				flog(LOG_ERR, "swap2(%d, %d, %p) fallita",
 					proc, liv, ind_virt);
@@ -827,7 +815,7 @@ addr carica_pila_sistema(natl proc, natb *bottom, natq size)
 	des_pf *dp = 0;
 	natb *ind;
 	for (ind = bottom - size; ind != bottom; ind += DIM_PAGINA) {
-		dp = swap2(proc, 0, ind);
+		dp = swap(proc, 0, ind);
 		if (!dp)
 			return 0;
 		dp->residente = true;
@@ -1196,7 +1184,51 @@ bool scollega(des_pf* ppf)	//
 	return occorre_salvare;	//
 }
 
-void swap(int liv, addr ind_virt); //
+// alloca una pagina fisica destinata a contenere l'entita' del
+// livello specificato, relativa all'indirizzo virtuale ind_virt
+// nello spazio di indirizzamento di proc
+des_pf* alloca_pagina_fisica(natl proc, int livello, addr ind_virt)
+{
+	des_pf *ppf = alloca_pagina_fisica_libera();
+	if (ppf == 0) {
+		ppf = scegli_vittima(proc, livello, ind_virt);
+		if (ppf == 0)
+			return 0;
+		bool occorre_salvare = scollega(ppf);
+		if (occorre_salvare)
+			scarica(ppf);
+	}
+	return ppf;
+}
+
+// carica l'entita' del livello specificato, relativa all'indirizzo virtuale
+// ind_virt nello spazio di indirizzamento di proc
+des_pf* swap(natl proc, int livello, addr ind_virt)
+{
+	des_pf* ppf = alloca_pagina_fisica(proc, livello, ind_virt);
+	if (!ppf) {
+		flog(LOG_WARN, "memoria esaurita");
+		return 0;
+	}
+	natq e = get_des(proc, livello + 1, ind_virt);
+	natq m = extr_IND_MASSA(e);
+	if (!m) {
+		flog(LOG_WARN, "indirizzo %p fuori dallo spazio virtuale allocato",
+				ind_virt);
+		rilascia_pagina_fisica(ppf);
+		return 0;
+	}
+	ppf->livello = livello;
+	ppf->residente = 0;
+	ppf->processo = proc;
+	ppf->ind_virtuale = ind_virt;
+	ppf->ind_massa = m;
+	ppf->contatore = 0;
+	carica(ppf);
+	collega(ppf);
+	return ppf;
+}
+
 void c_routine_pf()	//
 {
 	addr ind_virt = readCR2();
@@ -1204,50 +1236,12 @@ void c_routine_pf()	//
 	for (int i = 3; i >= 0; i--) {
 		natq d = get_des(esecuzione->id, i + 1, ind_virt);
 		bool bitP = extr_P(d);
-		if (!bitP)
-			swap(i, ind_virt);
-	}
-}
-
-void swap(int liv, addr ind_virt)
-{
-	// "ind_virt" e' l'indirizzo virtuale non tradotto
-	// carica una tabella delle pagine o una pagina
-	des_pf* nuovo_dpf = alloca_pagina_fisica_libera();
-	if (nuovo_dpf == 0) {
-		des_pf* dpf_vittima =
-			scegli_vittima(esecuzione->id, liv, ind_virt);
-		// (* scegli_vittima potrebbe fallire
-		if (dpf_vittima == 0) {
-			flog(LOG_WARN, "memoria esaurita");
-			in_pf = false;
-			abort_p();
+		if (!bitP) {
+			des_pf *ppf = swap(esecuzione->id, i, ind_virt);
+			if (!ppf)
+				abort_p();
 		}
-		// *)
-		bool occorre_salvare = scollega(dpf_vittima);
-		if (occorre_salvare)
-			scarica(dpf_vittima);
-		nuovo_dpf = dpf_vittima;
 	}
-	natq des = get_des(esecuzione->id, liv + 1, ind_virt);
-	natl IM = extr_IND_MASSA(des);
-	// (* non tutto lo spazio virtuale e' disponibile
-	if (!IM) {
-		flog(LOG_WARN, "indirizzo %p fuori dallo spazio virtuale allocato",
-				ind_virt);
-		rilascia_pagina_fisica(nuovo_dpf);
-		in_pf = false;
-		abort_p();
-	}
-	// *)
-	nuovo_dpf->livello = liv;
-	nuovo_dpf->residente = false;
-	nuovo_dpf->processo = esecuzione->id;
-	nuovo_dpf->ind_virtuale = ind_virt;
-	nuovo_dpf->ind_massa = IM;
-	nuovo_dpf->contatore  = 0;
-	carica(nuovo_dpf);
-	collega(nuovo_dpf);
 }
 
 bool vietato(des_pf* ppf, natl proc, int liv, addr ind_virt)
@@ -1308,51 +1302,25 @@ void stat()
 	invalida_TLB();
 }
 
-// rispetto a swap(), swap2() restituisce un puntatore al descrittore
-// di pagina fisica in cui ha caricato la tabella o pagina mancante.
-// Inoltre, invece di abortire il processo chiamante in caso di errori,
-// si limita a restituire un puntatore nullo. swap2() e' utile nei
-// casi in cui il caricamento e' parte di un'altra operazione piu'
-// complicata.
-des_pf* swap2(natl proc, int livello, addr ind_virt)
-{
-	des_pf* ppf = alloca_pagina_fisica(proc, livello, ind_virt);
-	if (!ppf)
-		return 0;
-	natq e = get_des(proc, livello + 1, ind_virt);
-	natq m = extr_IND_MASSA(e);
-	if (!m) {
-		rilascia_pagina_fisica(ppf);
-		return 0;
-	}
-	ppf->livello = livello;
-	ppf->residente = 0;
-	ppf->processo = proc;
-	ppf->ind_virtuale = ind_virt;
-	ppf->ind_massa = m;
-	ppf->contatore = 0;
-	carica(ppf);
-	collega(ppf);
-	return ppf;
-}
 
 // funzione di supporto per carica_tutto()
 bool carica_ric(natl proc, addr tab, int liv, addr ind, natl n)
 {
-	natq dp = dim_pag(liv);
+	natq dp = dim_pag(liv + 1);
 
-	natl i = i_tab(ind, liv);
+	natl i = i_tab(ind, liv + 1);
 	for (natl j = i; j < i + n; j++, ind = (addr)((natq)ind + dp)) {
 		natq e = get_entry(tab, j);
 		if (!extr_IND_MASSA(e))
 			continue;
-		des_pf *ppf = swap2(proc, liv - 1, ind);
+		des_pf *ppf = swap(proc, liv, ind);
 		if (!ppf) {
 			flog(LOG_ERR, "impossibile caricare pagina virtuale %p", ind);
 			return false;
 		}
 		ppf->residente = true;
-		if (liv > 1 && !carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
+		if (liv > PRELOAD_LEVEL &&
+				!carica_ric(proc, indirizzo_pf(ppf), liv - 1, ind, 512))
 			return false;
 	}
 	return true;
@@ -1365,7 +1333,7 @@ bool carica_tutto(natl proc, natl i, natl n)
 {
 	des_proc *p = des_p(proc);
 
-	return carica_ric(proc, p->cr3, 4, norm((addr)(i * dim_pag(4))), n);
+	return carica_ric(proc, p->cr3, 3, norm((addr)(i * dim_pag(4))), n);
 }
 
 
@@ -1735,7 +1703,7 @@ extern "C" void cmain()
 	esecuzione = &init;
 	// *)
 
-	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.6 - branch Le Caldare");
+	flog(LOG_INFO, "Nucleo di Calcolatori Elettronici, v5.8 - branch Le Caldare");
 	init_gdt();
 	flog(LOG_INFO, "gdt inizializzata");
 

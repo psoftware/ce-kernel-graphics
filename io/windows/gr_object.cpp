@@ -103,6 +103,13 @@ bool gr_object::remove_child(gr_object *removechild)
 // O(n)
 void gr_object::focus_child(gr_object *focuschild)
 {
+	if(focuschild == 0)
+		return;
+
+	//se focuschild ha già il focus è inutile marcare il redraw e fare la rimozione e aggiunta
+	if(focuschild->next_brother == 0 || focuschild->next_brother->z_index != focuschild->z_index)
+		return;
+
 	//lo rimuovo dalla lista
 	remove_child(focuschild);
 
@@ -110,7 +117,7 @@ void gr_object::focus_child(gr_object *focuschild)
 	add_child(focuschild);
 
 	//forziamo il redraw nella prossima render
-	focus_changed = true;
+	focuschild->focus_changed = true;
 }
 
 bool gr_object::has_child(gr_object *child)

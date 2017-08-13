@@ -516,7 +516,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 {
 	sem_wait(win_man.mutex);
 
-	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, 0);
+	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, WINDOWS_PLANE_ZINDEX);
 	doubled_framebuffer_container->add_child(newwindow);
 	int newwindow_id = newwindow->get_id();
 	sem_signal(win_man.mutex);
@@ -779,30 +779,31 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 }
 
 // ======= Funzioni eseguite dal gestore delle finestre relative ai comandi/primitive in coda =======
-void graphic_visualizza_finestra(gr_window *window)
+inline void render_on_framebuffer()
 {
-	window->set_visibility(true);
-	window->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
 	framebuffer_container->clear_render_units();
 }
 
+void graphic_visualizza_finestra(gr_window *window)
+{
+	window->set_visibility(true);
+	window->render();
+	render_on_framebuffer();
+}
+
 void graphic_chiudi_finestra(gr_window *window)
 {
 	doubled_framebuffer_container->remove_child(window);
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	render_on_framebuffer();
 }
 
 void graphic_aggiorna_oggetto(gr_window *window, u_windowObject* u_obj)
 {
 	window->update_user_object(u_obj);
 	window->render();
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	render_on_framebuffer();
 }
 
 // ======= Funzioni e strutture per la gestione del cursore =======
@@ -924,6 +925,17 @@ void keyboard_notify_keypress_event(char key)
 	sem_signal(win_man.sync_notempty);
 }
 
+// label per monitorare la memoria heap
+gr_label *heap_label;
+void render_heap_label()
+{
+	char heap_text[31];
+	//snprintf(heap_text, 30, "Memoria... %d KiB", (DIM_IO_HEAP - disponibile())/1024);
+	snprintf(heap_text, 30, "Memoria... %d B", (DIM_IO_HEAP - disponibile()));
+	heap_label->set_text(heap_text);
+	heap_label->render();
+}
+
 // funzione main del processo windows_manager
 void main_windows_manager(int n)
 {
@@ -966,14 +978,17 @@ void main_windows_manager(int n)
 			break;
 			case PRIM_TIME_TICK:
 			{
+				//sfruttiamo questo evento per aggiornare la label che visualizza l'heap allocata
+				render_heap_label();
+
 				if(win_man.focused_window==0)
 					break;
+
 				LOG_DEBUG("act(%d): Processo richiesta di evento tick per finestra %d", newreq.act, win_man.focused_window->get_id());
 				win_man.focused_window->process_tick_event();
 				win_man.focused_window->render();
-				doubled_framebuffer_container->render();
-				framebuffer_container->render();
-				framebuffer_container->clear_render_units();
+
+				render_on_framebuffer();
 			}
 			break;
 			case MOUSE_UPDATE_EVENT:
@@ -1010,10 +1025,8 @@ void main_windows_manager(int n)
 					//sposto il cursore sulla posizione nuova
 					render_mousecursor_onbuffer(&main_cursor);
 
-					//copio il buffer secondario sulla memoria video
-					doubled_framebuffer_container->render();
-					framebuffer_container->render();
-					framebuffer_container->clear_render_units();
+					//renderizzo a schermo
+					render_on_framebuffer();
 			}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
@@ -1079,8 +1092,7 @@ void main_windows_manager(int n)
 							}
 						}
 
-						doubled_framebuffer_container->render();
-						framebuffer_container->render();
+						render_on_framebuffer();
 					}
 					else // se il click non è stato fatto su una finestra dobbiamo togliere il focus alla finestra con focus
 						win_man.focused_window = 0;
@@ -1097,8 +1109,7 @@ void main_windows_manager(int n)
 						win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 
 					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
-					doubled_framebuffer_container->render();
-					framebuffer_container->render();
+					render_on_framebuffer();
 				}
 			}
 			break;
@@ -1134,17 +1145,16 @@ bool windows_init()
 	framebuffer_container->add_child(doubled_framebuffer_container);
 
 	//sfondo
-	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
-	LOG_DEBUG("bitmap buffer address %p", bitmap->get_buffer());
+	gr_bitmap * background_bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,BACKGROUND_ZINDEX);
 	//gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 	TgaParser tga_c(tga_wallpaper);
-	tga_c.to_bitmap(bitmap->get_buffer());
+	tga_c.to_bitmap(background_bitmap->get_buffer());
 	//print_palette(bitmap->get_buffer(), 0,0);
-	bitmap->render();
-	doubled_framebuffer_container->add_child(bitmap);
+	background_bitmap->render();
+	doubled_framebuffer_container->add_child(background_bitmap);
 
 	//cursore
-	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
+	mouse_bitmap = new gr_bitmap(0,0,32,32,CURSOR_ZINDEX);
 	switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 	mouse_bitmap->set_trasparency(true);
 	mouse_bitmap->render();
@@ -1163,9 +1173,12 @@ bool windows_init()
 	screen_bar->render();
 	doubled_framebuffer_container->add_child(screen_bar);
 
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	//label memoria heap
+	heap_label = new gr_label(0,0,140,20,HEAP_LABEL_ZINDEX);
+	render_heap_label();
+	doubled_framebuffer_container->add_child(heap_label);
+
+	render_on_framebuffer();
 
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);

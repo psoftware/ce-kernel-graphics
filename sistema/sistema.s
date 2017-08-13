@@ -80,7 +80,7 @@ salva_stato:
 	popq %rax
 
 	movq %rax, RAX(%rbx)
-	movq %rcx, RDX(%rbx)
+	movq %rcx, RCX(%rbx)
 	movq %rdx, RDX(%rbx)
 	popq %rax
 	movq %rax, RBX(%rbx)
@@ -224,46 +224,44 @@ invalida_entrata_TLB:
 	invlpg (%rdi)
 	ret
 
-// controlla che l'indirizzo virtuale in %r10 sia accessibile dal
-// livello di privelegio del chiamante della INT. Abortisce il
-// processo in caso contrario.
-.macro check_cavallo
-	movq 8(%rsp), %r11
-	cmpq $SEL_CODICE_SISTEMA, %r11
-	je 1f
-	movabs $0xffff000000000000, %rax
-	testq %r10, %rax
-	jnz 1f
+violazione:
 	movq $2, %rdi
 	movabs $param_err, %rsi
-	movq %r10, %rdx
+	movq %rax, %rdx
+	xorq %rax, %rax
 	call flog
 	int $TIPO_AB
-1:	
 
-.endm
-
+// controlla che l'indirizzo virtuale op sia accessibile dal
+// livello di privilegio del chiamante della INT. Abortisce il
+// processo in caso contrario.
 .macro cavallo_di_troia reg
 
-	movq \reg, %r10
-	check_cavallo
+	cmpq $SEL_CODICE_SISTEMA, 8(%rsp)
+	je 1f
+	movabs $0xffff000000000000, %rax
+	testq \reg, %rax
+	jnz 1f
+	movq \reg, %rax
+	jmp violazione
+1:	
 .endm
 
-.macro cavallo_di_troia2 reg1 reg2
+// controlla che base+dim non causi un wrap-around
+.macro cavallo_di_troia2 base dim
 
-	movq \reg1, %r10
-	addq \reg2, %r10
-	decq %r10
-	check_cavallo
+	movq \base, %rax
+	addq \dim, %rax
+	jc violazione
 .endm
 
-.macro cavallo_di_troia3 reg1 reg2
+// come sopra, ma la dimensione e' in settori
+.macro cavallo_di_troia3 base sec
 
-	movq \reg2, %r10
-	shlq $9, %r10
-	addq \reg1, %r10
-	decq %r10
-	check_cavallo
+	movq \base, %rax
+	shlq $9, %rax
+	addq \sec, %rax
+	jc violazione
 .endm
 
 // Carica un gate della IDT

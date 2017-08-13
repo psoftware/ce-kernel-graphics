@@ -22,9 +22,16 @@
 #define BUTTON_MAX_TEXT 10
 #define TEXTBOX_MAX_TEXT 100
 
-// constanti per gr_window
+// costanti per gli oggetti del desktop
 #define MAINBAR_SIZE 40
-#define MAINBAR_ZINDEX 10
+
+#define CURSOR_ZINDEX 50
+#define MAINBAR_ZINDEX 11
+#define WINDOWS_PLANE_ZINDEX 10
+#define HEAP_LABEL_ZINDEX 1
+#define BACKGROUND_ZINDEX 0
+
+// constanti per gr_window
 #define TOPBAR_HEIGHT 20
 #define CLOSEBUTTON_SIZE 18
 #define CLOSEBUTTON_PADDING_X 1
