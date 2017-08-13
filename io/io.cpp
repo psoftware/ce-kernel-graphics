@@ -779,30 +779,31 @@ void print_palette(PIXEL_UNIT* buff, int x, int y)
 }
 
 // ======= Funzioni eseguite dal gestore delle finestre relative ai comandi/primitive in coda =======
-void graphic_visualizza_finestra(gr_window *window)
+inline void render_on_framebuffer()
 {
-	window->set_visibility(true);
-	window->render();
 	doubled_framebuffer_container->render();
 	framebuffer_container->render();
 	framebuffer_container->clear_render_units();
 }
 
+void graphic_visualizza_finestra(gr_window *window)
+{
+	window->set_visibility(true);
+	window->render();
+	render_on_framebuffer();
+}
+
 void graphic_chiudi_finestra(gr_window *window)
 {
 	doubled_framebuffer_container->remove_child(window);
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	render_on_framebuffer();
 }
 
 void graphic_aggiorna_oggetto(gr_window *window, u_windowObject* u_obj)
 {
 	window->update_user_object(u_obj);
 	window->render();
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	render_on_framebuffer();
 }
 
 // ======= Funzioni e strutture per la gestione del cursore =======
@@ -987,9 +988,7 @@ void main_windows_manager(int n)
 				win_man.focused_window->process_tick_event();
 				win_man.focused_window->render();
 
-				doubled_framebuffer_container->render();
-				framebuffer_container->render();
-				framebuffer_container->clear_render_units();
+				render_on_framebuffer();
 			}
 			break;
 			case MOUSE_UPDATE_EVENT:
@@ -1026,10 +1025,8 @@ void main_windows_manager(int n)
 					//sposto il cursore sulla posizione nuova
 					render_mousecursor_onbuffer(&main_cursor);
 
-					//copio il buffer secondario sulla memoria video
-					doubled_framebuffer_container->render();
-					framebuffer_container->render();
-					framebuffer_container->clear_render_units();
+					//renderizzo a schermo
+					render_on_framebuffer();
 			}
 			break;
 			case MOUSE_Z_UPDATE_EVENT:
@@ -1095,8 +1092,7 @@ void main_windows_manager(int n)
 							}
 						}
 
-						doubled_framebuffer_container->render();
-						framebuffer_container->render();
+						render_on_framebuffer();
 					}
 					else // se il click non è stato fatto su una finestra dobbiamo togliere il focus alla finestra con focus
 						win_man.focused_window = 0;
@@ -1113,8 +1109,7 @@ void main_windows_manager(int n)
 						win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 
 					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
-					doubled_framebuffer_container->render();
-					framebuffer_container->render();
+					render_on_framebuffer();
 				}
 			}
 			break;
@@ -1183,9 +1178,7 @@ bool windows_init()
 	render_heap_label();
 	doubled_framebuffer_container->add_child(heap_label);
 
-	doubled_framebuffer_container->render();
-	framebuffer_container->render();
-	framebuffer_container->clear_render_units();
+	render_on_framebuffer();
 
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);
