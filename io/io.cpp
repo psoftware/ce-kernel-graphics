@@ -516,7 +516,7 @@ extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigne
 {
 	sem_wait(win_man.mutex);
 
-	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, 0);
+	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, WINDOWS_PLANE_ZINDEX);
 	doubled_framebuffer_container->add_child(newwindow);
 	int newwindow_id = newwindow->get_id();
 	sem_signal(win_man.mutex);
@@ -1134,17 +1134,16 @@ bool windows_init()
 	framebuffer_container->add_child(doubled_framebuffer_container);
 
 	//sfondo
-	gr_bitmap * bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,0);
-	LOG_DEBUG("bitmap buffer address %p", bitmap->get_buffer());
+	gr_bitmap * background_bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,BACKGROUND_ZINDEX);
 	//gr_memset(bitmap->get_buffer(), WIN_BACKGROUND_COLOR, MAX_SCREENX*MAX_SCREENY);
 	TgaParser tga_c(tga_wallpaper);
-	tga_c.to_bitmap(bitmap->get_buffer());
+	tga_c.to_bitmap(background_bitmap->get_buffer());
 	//print_palette(bitmap->get_buffer(), 0,0);
-	bitmap->render();
-	doubled_framebuffer_container->add_child(bitmap);
+	background_bitmap->render();
+	doubled_framebuffer_container->add_child(background_bitmap);
 
 	//cursore
-	mouse_bitmap = new gr_bitmap(0,0,32,32,777);
+	mouse_bitmap = new gr_bitmap(0,0,32,32,CURSOR_ZINDEX);
 	switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 	mouse_bitmap->set_trasparency(true);
 	mouse_bitmap->render();
