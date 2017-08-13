@@ -111,4 +111,11 @@
 #define N_MIO_C		1
 #define N_UTN_C	      128
 #define N_UTN_P	      127
+
+// livello fino al quale le tabelle o le pagine delle sezioni condivise devono
+// essere precaricate all'avvio. Con 0, che e' il livello delle pagine, le
+// sezioni condivise vengono precaricate per intero.  Aumentando il livello
+// (fino a 3) si puo' velocizzare l'avvio, al prezzo di causare page fault
+// nelle sezioni condivise durante l'esecuzione.
+#define PRELOAD_LEVEL	0
 // )
