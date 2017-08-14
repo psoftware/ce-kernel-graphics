@@ -277,6 +277,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 	// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
 
 	bool modified = target->is_pos_modified();
+	bool newarea_needed = (!target->old_visible && target->visible) || focus_changed;
 
 	// OTTIMIZZAZIONE: ricordiamo che le render_unit di questo target sono tutte contenute all'interno del
 	// contenitore padre. Se il padre è stato modificato allora già è presente una render_unit in this che
@@ -287,7 +288,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 		render_subset_unit *newareaunit = 0;
 		render_subset_unit *oldareaunit = 0;
 
-		if(modified || (!target->old_visible && target->visible) || focus_changed)
+		if(modified || newarea_needed)
 		{
 			newareaunit = new render_subset_unit(0, 0, target->size_x, target->size_y);
 
@@ -340,7 +341,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 
 		// procediamo con la visita anticipata
 		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
-			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, modified || ancestor_modified);
+			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, modified || newarea_needed || ancestor_modified);
 	}
 	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
 	{
