@@ -376,7 +376,8 @@ a_writese_0:
 	cavallo_di_troia %rsi
 	cavallo_di_troia %rdx
 	cavallo_di_troia2 %rdx $4
-	cavallo_di_troia2 %rsi (%rdx)
+	movslq (%rdx), %r8
+	cavallo_di_troia2 %rsi %r8
 	call c_writese_0
 	iretq
 
