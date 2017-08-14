@@ -261,6 +261,8 @@ bool gr_object::is_pos_modified(){
 struct render_subset_unit;
 void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y, bool ancestor_modified)
 {
+	LOG_DEBUG("** build_render_areas(): target call start");
+
 	// nulla da fare in questo caso
 	if(!target)
 		return;
@@ -339,7 +341,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
 	{
 
-//flog(LOG_INFO, "== parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
+	LOG_DEBUG("parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
 		// itero tutte le subset unit di target, le tolgo anche dalla lista
 		for(render_subset_unit *targetunit=target->pop_render_unit(); targetunit!=0; targetunit=target->pop_render_unit())
 		{
@@ -352,9 +354,9 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 			targetunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ora targetunit ha le coord che fanno riferimento a this
 
 			// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
-			//flog(LOG_INFO, "== target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+			LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 			targetunit->intersect(parent_restriction);
-			//flog(LOG_INFO, "   target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+			LOG_DEBUG("2) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 
 			// itero tutte le subset unit che ho già creato, cioè quelle del gr_target this,
 			// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
@@ -368,6 +370,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 				// controllo di intersezione con una render_unit già creata
 				if(subsetunit->intersects(targetunit))
 				{
+					LOG_DEBUG("intersection with a this render_unit");
 					// aggiorno le coordinate della targetunit perchè così posso confrontarla con altre unit che intersecano
 					// la targetunit originale. In tal modo mi risparmio un ciclo aggiuntivo
 					targetunit->expand(subsetunit);
@@ -395,7 +398,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 
 void gr_object::recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y)
 {
-	//flog(LOG_INFO, "#### recursive rendering %p", target);
+	LOG_DEBUG("#### recursive rendering %p", target);
 	// nulla da fare in questo caso
 	if(!target)
 		return;
@@ -424,9 +427,9 @@ void gr_object::recursive_render(render_subset_unit *parent_restriction, gr_obje
 			print_area.intersect(subsetunit);
 
 			//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-			//flog(LOG_INFO, "## (1) stampo target %p con x=%d y=%d w=%d h=%d", target, target->pos_x,target->pos_y, target->size_x, target->size_y);
-			//flog(LOG_INFO, "## (2) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-			//flog(LOG_INFO, "## (3) print_area %d %d %d %d", print_area.pos_x, print_area.pos_y, print_area.size_x, print_area.size_y);
+			LOG_DEBUG("## (1) stampo target %p con x=%d y=%d w=%d h=%d", target, target->pos_x,target->pos_y, target->size_x, target->size_y);
+			LOG_DEBUG("## (2) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+			LOG_DEBUG("## (3) print_area %d %d %d %d", print_area.pos_x, print_area.pos_y, print_area.size_x, print_area.size_y);
 
 			// controllo se l'oggetto si interseca con subsetunit (cioè se l'intersezione non dà come risultato un insieme vuoto)
 			if(print_area.size_x <= 0 || print_area.size_y <= 0)
