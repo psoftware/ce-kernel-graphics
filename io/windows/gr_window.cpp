@@ -12,7 +12,7 @@ extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
-: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK+TOPBAR_HEIGHT, z_index)
+: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK+TOPBAR_HEIGHT, z_index, false)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
@@ -45,7 +45,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	this->topbar_container->add_child(this->title_label);
 
 	// contenitore oggetti finestra + background
-	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0,false);
+	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0);
 	this->background_bitmap = new gr_bitmap(0,0,this->inner_container->get_size_x(),this->inner_container->get_size_y(),0);
 	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 	this->background_bitmap->render();
