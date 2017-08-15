@@ -20,6 +20,17 @@ gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	LOG_DEBUG("Nuovo gr_object (%d) o derivato con size_x %d e this->size_x %d", this->id, size_x, this->size_x);
 }
 
+gr_object& gr_object::operator=(const u_windowObject& u)
+{
+	this->set_pos_x(u.pos_x);
+	this->set_pos_y(u.pos_y);
+	this->set_size_x(u.size_x);
+	this->set_size_y(u.size_y);
+	this->z_index = u.z_index;
+
+	return *this;
+}
+
 //O(n)
 void gr_object::add_child(gr_object *newchild)
 {

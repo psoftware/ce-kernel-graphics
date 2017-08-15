@@ -19,11 +19,8 @@ gr_textbox::gr_textbox(u_textbox* u_t)
 
 gr_textbox& gr_textbox::operator=(const u_textbox& u_t)
 {
-	this->set_pos_x(u_t.pos_x);
-	this->set_pos_y(u_t.pos_y);
-	this->set_size_x(u_t.size_x);
-	this->set_size_y(u_t.size_y);
-	this->z_index = u_t.z_index;
+	gr_object::operator=(u_t);
+
 	this->text_color = u_t.text_color;
 	this->back_color = u_t.back_color;
 	this->border_color = u_t.border_color;

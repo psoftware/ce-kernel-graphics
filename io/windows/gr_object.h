@@ -2,6 +2,7 @@
 #define GROBJECT_H
 
 #include "consts.h"
+#include "windows/u_obj.h"
 
 // di default la classe rappresenta un container, differisce da altri oggetti per la funzione render()
 // che è virtuale e, quindi, ridefinibile da chi eredita questa classe.
@@ -43,6 +44,9 @@ protected:
 
 public:
 	gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, bool buffered=true, PIXEL_UNIT *predefined_buffer=0);
+
+	//overloading operatore di assegnamento per oggetti di tipo u_obj
+	gr_object& operator=(const u_windowObject& u);
 
 	//metodi per la gestione dei figli del gr_object
 	void add_child(gr_object *child);

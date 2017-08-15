@@ -21,6 +21,7 @@ public:
 	static const char BUTTON_FLAG = 1u << 3;
 	static const char TOPBAR_FLAG = 1u << 4;
 	static const char TEXTBOX_FLAG = 1u << 5;
+	static const char PROGRESSBAR_FLAG = 1u << 6;
 
 	// componenti della finestra
 public:
@@ -31,6 +32,7 @@ public:
 
 	gr_bitmap * border_left_bitmap;
 	gr_bitmap * border_right_bitmap;
+	gr_bitmap * border_top_bitmap;
 	gr_bitmap * border_bottom_bitmap;
 
 	gr_button * close_button;
@@ -53,6 +55,7 @@ public:
 private:
 	gr_object *focused_object;
 	des_user_event *event_head;
+	des_user_event *event_tail;
 	void user_event_push(des_user_event * event);
 	inline void user_event_push_on_focused(int abs_x, int abs_y, des_user_event * event){
 		// questa funzione gestisce solo eventi indirizzati all'oggetto con focus

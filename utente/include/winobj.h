@@ -72,7 +72,10 @@ public:
 	{
 		des_user_event new_event = preleva_evento(w_id);
 		if(new_event.type==NOEVENT)
+		{
+			LOG_ERROR("process_event: nessun evento prelevato, probabile bug");
 			return;
+		}
 		LOG_DEBUG("process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
 
 		// l'evento ha l'id dell'oggetto a cui è destinato, scorriamo la lista e vediamo chi lo possiede

@@ -32,6 +32,7 @@ struct des_user_event
 const natb W_ID_LABEL=0;
 const natb W_ID_BUTTON=1;
 const natb W_ID_TEXTBOX=2;
+const natb W_ID_PROGRESSBAR=3;
 
 class u_windowObject
 {
@@ -119,6 +120,22 @@ class u_textbox : public u_windowObject
 				text[eos+1]='\0';
 			}
 		}
+	}
+};
+
+class u_progressbar : public u_windowObject
+{
+	public:
+	int progress_perc;
+
+	u_progressbar()
+	{
+		TYPE=W_ID_PROGRESSBAR;
+	}
+
+	void process_event(des_user_event event)
+	{
+		//nessun evento da gestire
 	}
 };
 
