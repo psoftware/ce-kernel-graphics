@@ -18,11 +18,7 @@ gr_progressbar::gr_progressbar(u_progressbar* u_pb)
 
 gr_progressbar& gr_progressbar::operator=(const u_progressbar& u_pb)
 {
-	this->set_pos_x(u_pb.pos_x);
-	this->set_pos_y(u_pb.pos_y);
-	this->set_size_x(u_pb.size_x);
-	this->set_size_y(u_pb.size_y);
-	this->z_index = u_pb.z_index;
+	gr_object::operator=(u_pb);
 
 	this->progress_perc = u_pb.progress_perc;
 

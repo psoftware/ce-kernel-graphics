@@ -20,11 +20,7 @@ clicked_color(u_b->clicked_color), text_color(u_b->text_color), clicked(false)
 
 gr_button& gr_button::operator=(const u_button& u_b)
 {
-	this->set_pos_x(u_b.pos_x);
-	this->set_pos_y(u_b.pos_y);
-	this->set_size_x(u_b.size_x);
-	this->set_size_y(u_b.size_y);
-	this->z_index = u_b.z_index;
+	gr_object::operator=(u_b);
 
 	this->back_color = u_b.back_color;
 	this->border_color = u_b.border_color;
