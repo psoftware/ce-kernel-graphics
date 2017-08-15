@@ -129,12 +129,49 @@ bool gr_object::has_child(gr_object *child)
 	return false;
 }
 
+// O(n)
 void gr_object::push_render_unit(render_subset_unit *newunit)
 {
-	newunit->next = units;
-	units=newunit;
+	// itero tutte le subset unit che ho già creato, cioè quelle di this,
+	// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
+	// una lista di render_unit non intersecate tra di loro.
+
+	render_subset_unit *subsetunit=this->units, *prec=this->units;
+	while(subsetunit!=0)
+	{
+		// mantengo il puntatore a next della subset unit perchè potrei eliminare subsetunit prima della fine del ciclo
+		render_subset_unit *tempnext = subsetunit->next;
+
+		// controllo di intersezione con una render_unit già creata
+		if(subsetunit->intersects(newunit))
+		{
+			LOG_DEBUG("push_render_unit: intersection with a this render_unit");
+			// aggiorno le coordinate della newunit perchè così posso confrontarla con altre unit che intersecano
+			// la newunit originale. In tal modo mi risparmio un ciclo aggiuntivo
+			newunit->expand(subsetunit);
+
+			// elimino la render_unit di this che si interseca, perchè ora è contenuta totalmente in "subsetunit"
+			if(subsetunit==this->units)	//testa della lista
+			{
+				this->units=subsetunit->next;
+				prec=this->units;
+			}
+			else
+				prec->next=subsetunit->next;
+
+			delete subsetunit;
+		}
+		else
+			prec = subsetunit;
+		subsetunit=tempnext;
+	}
+
+	// aggiungo l'oggetto alla lista
+	newunit->next = this->units;
+	this->units = newunit;
 }
 
+// O(1)
 gr_object::render_subset_unit * gr_object::pop_render_unit()
 {
 	if(units==0)
@@ -358,39 +395,6 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 			targetunit->intersect(parent_restriction);
 			LOG_DEBUG("2) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 
-			// itero tutte le subset unit che ho già creato, cioè quelle del gr_target this,
-			// con l'obiettivo di trovare render unit di this che si interesecano con esso e avere
-			// una lista di render_unit non intersecate tra di loro.
-			render_subset_unit *subsetunit=this->units, *prec=this->units;
-			while(subsetunit!=0)
-			{
-				// mantengo il puntatore a next della subset unit perchè potrei eliminare subsetunit prima della fine del ciclo
-				render_subset_unit *tempnext = subsetunit->next;
-
-				// controllo di intersezione con una render_unit già creata
-				if(subsetunit->intersects(targetunit))
-				{
-					LOG_DEBUG("intersection with a this render_unit");
-					// aggiorno le coordinate della targetunit perchè così posso confrontarla con altre unit che intersecano
-					// la targetunit originale. In tal modo mi risparmio un ciclo aggiuntivo
-					targetunit->expand(subsetunit);
-
-					// elimino la render_unit di this che si interseca, perchè ora è contenuta totalmente in "subsetunit"
-					if(subsetunit==this->units)	//testa della lista
-					{
-						this->units=subsetunit->next;
-						prec=this->units;
-					}
-					else
-						prec->next=subsetunit->next;
-
-					delete subsetunit;
-				}
-				else
-					prec = subsetunit;
-				subsetunit=tempnext;
-			}
-			//flog(LOG_INFO, "## inserisco targetunit %p in this %p", targetunit, this);
 			this->push_render_unit(targetunit);
 		}
 	}
