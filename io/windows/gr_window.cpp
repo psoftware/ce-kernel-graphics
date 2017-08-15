@@ -4,6 +4,7 @@
 #include "gr_button.h"
 #include "gr_label.h"
 #include "gr_textbox.h"
+#include "gr_progressbar.h"
 #include "consts.h"
 #include "libgr.h"
 #include "log.h"
@@ -180,6 +181,10 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 			newobj = new gr_textbox(static_cast<u_textbox*>(u_obj));
 			newobj->set_search_flag(TEXTBOX_FLAG);
 			break;
+		case W_ID_PROGRESSBAR:
+			newobj = new gr_progressbar(static_cast<u_progressbar*>(u_obj));
+			newobj->set_search_flag(PROGRESSBAR_FLAG);
+			break;
 		default:
 			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			return 0;
@@ -216,6 +221,11 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 			if(!dest_obj->has_flag(gr_window::TEXTBOX_FLAG))
 				return false;
 			*(static_cast<gr_textbox*>(dest_obj)) = *static_cast<u_textbox*>(u_obj);
+			break;
+		case W_ID_PROGRESSBAR:
+			if(!dest_obj->has_flag(gr_window::PROGRESSBAR_FLAG))
+				return false;
+			*(static_cast<gr_progressbar*>(dest_obj)) = *static_cast<u_progressbar*>(u_obj);
 			break;
 		default:
 			flog(LOG_INFO, "update_user_object: tipo oggetto %d errato", u_obj->TYPE);
