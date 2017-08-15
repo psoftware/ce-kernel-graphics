@@ -55,6 +55,7 @@ public:
 private:
 	gr_object *focused_object;
 	des_user_event *event_head;
+	des_user_event *event_tail;
 	void user_event_push(des_user_event * event);
 	inline void user_event_push_on_focused(int abs_x, int abs_y, des_user_event * event){
 		// questa funzione gestisce solo eventi indirizzati all'oggetto con focus

@@ -13,7 +13,7 @@ extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
-: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index)
+: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index), event_head(0), event_tail(0)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
@@ -196,7 +196,7 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 			newobj->set_search_flag(PROGRESSBAR_FLAG);
 			break;
 		default:
-			flog(LOG_INFO, "c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
+			LOG_ERROR("c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			return 0;
 	}
 
@@ -238,7 +238,7 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 			*(static_cast<gr_progressbar*>(dest_obj)) = *static_cast<u_progressbar*>(u_obj);
 			break;
 		default:
-			flog(LOG_INFO, "update_user_object: tipo oggetto %d errato", u_obj->TYPE);
+			LOG_ERROR("update_user_object: tipo oggetto %d errato", u_obj->TYPE);
 			return true;
 	}
 
@@ -305,8 +305,16 @@ void gr_window::user_event_push(des_user_event * event)
 {
 	if(event==0)
 		return;
-	event->next=event_head;
-	event_head=event;
+
+	event->next = 0;
+
+	// facciamo un inserimento in coda
+	if(event_tail == 0)	//lista vuota
+		event_head = event;
+	else
+		event_tail->next = event;
+
+	event_tail = event;
 
 	sem_signal(event_sem_sync_notempty);
 }
@@ -321,18 +329,17 @@ des_user_event gr_window::user_event_pop()
 		return error_event;
 	}
 
-	des_user_event *p=event_head, *q;
-	for(q=event_head; q->next!=0; q=q->next)
-		p=q;
-
-	if(p==event_head)
-		event_head=0;
-	else
-		p->next=0;
-
 	//ci occupiamo qui dell'eliminazione dell'oggetto, che restituiremo solo per valore
-	des_user_event result = *q;
-	delete q;
+	des_user_event *target = event_head;
+	des_user_event result = *target;
+
+	//estraiamo dalla testa
+	event_head = event_head->next;
+	delete target;
+
+	if(event_head==0)
+		event_tail=0;
+
 	return result;
 }
 
