@@ -1016,16 +1016,24 @@ void main_windows_manager(int n)
 						{
 							int effective_delta = win_man.focused_window->offset_size_x(newreq.delta_x*-1);
 							win_man.focused_window->set_pos_x(win_man.focused_window->get_pos_x() + effective_delta*-1);
+							win_man.focused_window->user_event_add_resize(effective_delta*-1, 0, effective_delta, 0);
 						}
 						else if(win_man.dragging_border == win_man.focused_window->border_right_bitmap)
-							win_man.focused_window->offset_size_x(newreq.delta_x);
+						{
+							int effective_delta = win_man.focused_window->offset_size_x(newreq.delta_x);
+							win_man.focused_window->user_event_add_resize(0, 0, effective_delta, 0);
+						}
 						else if(win_man.dragging_border == win_man.focused_window->border_top_bitmap)
 						{
 							int effective_delta = win_man.focused_window->offset_size_y(newreq.delta_y*-1);
 							win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + effective_delta*-1);
+							win_man.focused_window->user_event_add_resize(0, effective_delta*-1, 0, effective_delta);
 						}
 						else if(win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
-							win_man.focused_window->offset_size_y(newreq.delta_y);
+						{
+							int effective_delta = win_man.focused_window->offset_size_y(newreq.delta_y);
+							win_man.focused_window->user_event_add_resize(0, 0, 0, effective_delta);
+						}
 
 						win_man.focused_window->resize();
 						win_man.focused_window->render();

@@ -30,7 +30,8 @@ process_body hello_body1(int a)
 	label1->pos_y=4;
 	label1->z_index=0;
 	label1->back_color=0xcbf442;
-	label1->text_color=0x000000;
+	label1->text_color=0xff000000;
+	label1->set_anchor(TOP_ANCHOR | BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
 	copy("", label1->text);
 
 	uwind->add_object(label1);
@@ -40,13 +41,14 @@ process_body hello_body1(int a)
 	button1->size_x=50;
 	button1->size_y=20;
 	button1->pos_x=(128 - button1->size_x)/2;
-	button1->pos_y=20;
+	button1->pos_y=135;
 	button1->z_index=0;
 	button1->back_color=0xffe74c3c;
 	button1->clicked_color=0xffe67e22;
 	button1->border_color=0xffc0392b;
 	button1->text_color=0xffffffff;
 	button1->handler_mouse_down = button1_click_down_handler;
+	button1->set_anchor(BOTTOM_ANCHOR);
 	copy("Stampa", button1->text);
 
 	uwind->add_object(button1);
@@ -54,13 +56,14 @@ process_body hello_body1(int a)
 
 	textbox1 = new u_textbox();
 	textbox1->size_x=80;
-	textbox1->size_y=60;
-	textbox1->pos_x=20;
-	textbox1->pos_y=50;
+	textbox1->size_y=40;
+	textbox1->pos_x=(128 - textbox1->size_x)/2;
+	textbox1->pos_y=60;
 	textbox1->z_index=0;
 	textbox1->back_color=0xffffffff;
 	textbox1->text_color=0xff000000;
 	textbox1->border_color=0xff000000;
+	textbox1->set_anchor(TOP_ANCHOR | BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
 	copy("AAA", textbox1->text);
 	uwind->add_object(textbox1);
 	uwind->update_object(textbox1);
@@ -68,12 +71,13 @@ process_body hello_body1(int a)
 	u_textbox * textbox2 = new u_textbox();
 	textbox2->size_x=80;
 	textbox2->size_y=20;
-	textbox2->pos_x=20;
-	textbox2->pos_y=120;
+	textbox2->pos_x=(128 - textbox2->size_x)/2;
+	textbox2->pos_y=110;
 	textbox2->z_index=0;
 	textbox2->back_color=0xffffffff;
 	textbox2->text_color=0xff000000;
 	textbox2->border_color=0xff000000;
+	textbox2->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
 	copy("", textbox2->text);
 
 	uwind->add_object(textbox2);
@@ -83,12 +87,8 @@ process_body hello_body1(int a)
 	uwind->update_object(label1);
 
 	while(--wait1);
-	copy("Inizio processo 1!\nBLABLABLA    BLABLABLA", label1->text);
+	copy("Prova a ridimensionare la finestra!", label1->text);
 	uwind->update_object(label1);
-
-	button1->pos_x+=10;
-	button1->pos_y+=5;
-	uwind->update_object(button1);
 
 	//event receive cycle
 	while(true)

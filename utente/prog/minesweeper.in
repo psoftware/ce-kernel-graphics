@@ -269,6 +269,7 @@ process_body minesweeper_body(int a)
 			button->border_color=0xffffffff;
 			button->text_color=0xff000000;
 			button->handler_mouse_up = cell_click_up_handler;
+			button->set_anchor(0);
 			copy("", button->text);
 			main_wind->add_object(button);
 			main_wind->update_object(button);
@@ -292,18 +293,20 @@ process_body minesweeper_body(int a)
 	flower_left_label->pos_y=WIN_MAX_Y-25;
 	flower_left_label->back_color=0x002ecc71;
 	flower_left_label->text_color=0xffffffff;
+	flower_left_label->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR);
 
 	// creo il pulsante per il restart
 	u_button * restart_button = new u_button();
 	restart_button->size_x=50;
 	restart_button->size_y=20;
-	restart_button->pos_x=155;
+	restart_button->pos_x=(WIN_MAX_X - restart_button->size_x)/2;
 	restart_button->pos_y=WIN_MAX_Y-25;
 	restart_button->z_index=0;
 	restart_button->back_color=0xffbdc3c7;
 	restart_button->border_color=0xffffffff;
 	restart_button->text_color=0xff000000;
 	restart_button->handler_mouse_up = restart_button_click_handler;
+	restart_button->set_anchor(BOTTOM_ANCHOR);
 	copy("Resetta", restart_button->text);
 
 	main_wind->add_object(restart_button);
