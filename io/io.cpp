@@ -1019,6 +1019,11 @@ void main_windows_manager(int n)
 						}
 						else if(win_man.dragging_border == win_man.focused_window->border_right_bitmap)
 							win_man.focused_window->offset_size_x(newreq.delta_x);
+						else if(win_man.dragging_border == win_man.focused_window->border_top_bitmap)
+						{
+							int effective_delta = win_man.focused_window->offset_size_y(newreq.delta_y*-1);
+							win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + effective_delta*-1);
+						}
 						else if(win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
 							win_man.focused_window->offset_size_y(newreq.delta_y);
 

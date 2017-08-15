@@ -32,6 +32,7 @@ public:
 
 	gr_bitmap * border_left_bitmap;
 	gr_bitmap * border_right_bitmap;
+	gr_bitmap * border_top_bitmap;
 	gr_bitmap * border_bottom_bitmap;
 
 	gr_button * close_button;
