@@ -352,15 +352,22 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))
 		{
 			newareaunit->expand(oldareaunit);
-			target->push_render_unit(newareaunit);
+			newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
+			this->push_render_unit(newareaunit);
 			delete oldareaunit;
 		}
 		else // se, invece, le due aree non si intersecano, allora le tengo separate
 		{
 			if(oldareaunit)
-				target->push_render_unit(oldareaunit);
+			{
+				oldareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
+				this->push_render_unit(oldareaunit);
+			}
 			if(newareaunit)
-				target->push_render_unit(newareaunit);
+			{
+				newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
+				this->push_render_unit(newareaunit);
+			}
 		}
 	}
 
