@@ -71,12 +71,24 @@ public:
 	void process_event()
 	{
 		des_user_event new_event = preleva_evento(w_id);
+
+		LOG_DEBUG("process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
+
 		if(new_event.type==NOEVENT)
 		{
 			LOG_ERROR("process_event: nessun evento prelevato, probabile bug");
 			return;
+		} else if(new_event.type==USER_EVENT_RESIZE)	// è un evento che va diffuso a tutti i figli (resize della finestra)
+		{
+			for(int i=0; i<objs_count; i++)
+			{
+				this->objs[i]->process_event(new_event);
+
+				// aggiorniamo l'oggetto
+				update_object(this->objs[i]);
+			}
+			return;	// nient'altro da fare
 		}
-		LOG_DEBUG("process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
 
 		// l'evento ha l'id dell'oggetto a cui è destinato, scorriamo la lista e vediamo chi lo possiede
 		for(int i=0; i<objs_count; i++)
@@ -88,6 +100,8 @@ public:
 				void(*handler)(des_user_event) = 0;
 				switch(new_event.type)
 				{
+					case NOEVENT: case USER_EVENT_RESIZE:
+					break;
 					case USER_EVENT_MOUSEZ:
 						handler = this->objs[i]->handler_mouse_z;
 					break;

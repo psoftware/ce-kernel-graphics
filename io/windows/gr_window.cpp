@@ -366,3 +366,14 @@ void gr_window::user_event_add_keypress(char key)
 	event->k_char=key;
 	user_event_push_on_focused(0, 0, event);
 }
+
+void gr_window::user_event_add_resize(int delta_pos_x, int delta_pos_y, int delta_size_x, int delta_size_y)
+{
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_RESIZE;
+	event->delta_pos_x=delta_pos_x;
+	event->delta_pos_y=delta_pos_y;
+	event->delta_size_x=delta_size_x;
+	event->delta_size_y=delta_size_y;
+	user_event_push(event);
+}
