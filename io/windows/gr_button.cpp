@@ -69,3 +69,6 @@ void gr_button::set_clicked_color(PIXEL_UNIT color) {
 void gr_button::set_text_color(PIXEL_UNIT color) {
 	this->text_color=color;
 }
+void gr_button::set_clicked(bool clicked) {
+	this->clicked=clicked;
+}
