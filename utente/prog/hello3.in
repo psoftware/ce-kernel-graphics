@@ -6,7 +6,7 @@ process hello3 body hello_body3(0), 20, LIV_UTENTE;
 long int wait3=39999999;
 process_body hello_body3(int a)
 {
-	int finestra = crea_finestra(128,128,320,30);
+	int finestra = crea_finestra(128,128,320,30, "Close test");
 
 	u_label * label1 = new u_label();
 	label1->size_x=120;

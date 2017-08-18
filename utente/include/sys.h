@@ -27,7 +27,7 @@ extern "C" void iniconsole(natb cc);
 extern "C" void readconsole(char* buff, natl& quanti);
 extern "C" void writeconsole(const char* buff);
 
-extern "C" int crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y);
+extern "C" int crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y, const char *title);
 extern "C" int chiudi_finestra(int w_id);
 extern "C" void visualizza_finestra(int id, bool sync);
 extern "C" int crea_oggetto(int w_id, void * obj);

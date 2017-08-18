@@ -253,7 +253,7 @@ process_body minesweeper_body(int a)
 {
 	const int WIN_MAX_X = CELL_SIZE*CELL_COUNTX;
 	const int WIN_MAX_Y = CELL_SIZE*CELL_COUNTY + 30;
-	main_wind = new u_window(WIN_MAX_X,WIN_MAX_Y,20,80);
+	main_wind = new u_window(WIN_MAX_X,WIN_MAX_Y,20,80, "Minesweeper");
 	main_wind->handler_closed_window = minesweeper_close_handler;
 	main_wind->show();
 

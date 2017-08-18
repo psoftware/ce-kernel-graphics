@@ -12,7 +12,7 @@
 extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
 
-gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
+gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char * title)
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index), event_head(0), event_tail(0)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
@@ -42,7 +42,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
 		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,TITLELABEL_ZINDEX);
 	this->title_label->set_back_color(TOPBAR_WIN_BACKCOLOR);
-	this->title_label->set_text("Titolo Finestra");
+	this->title_label->set_text(title);
 	this->title_label->render();
 	this->topbar_container->add_child(this->title_label);
 

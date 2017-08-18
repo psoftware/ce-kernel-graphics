@@ -20,9 +20,9 @@ public:
 	void(*handler_closing_window)(des_user_event event);
 	void(*handler_closed_window)(des_user_event event);
 
-	u_window(int size_x, int size_y, int pos_x, int pos_y)
+	u_window(int size_x, int size_y, int pos_x, int pos_y, const char *title)
 	{
-		w_id = crea_finestra(size_x, size_y, pos_x, pos_y);
+		w_id = crea_finestra(size_x, size_y, pos_x, pos_y, title);
 		objs_count=0;
 	}
 

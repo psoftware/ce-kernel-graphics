@@ -25,7 +25,7 @@ void hello1_close_handler(des_user_event event)
 
 process_body hello_body1(int a)
 {
-	uwind = new u_window(128,160,20,80);
+	uwind = new u_window(128,160,20,80, "Resize Test");
 	uwind->handler_closed_window = hello1_close_handler;
 	uwind->show();
 

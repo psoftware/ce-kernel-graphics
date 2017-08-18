@@ -513,11 +513,11 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 }
 
 // ======= Primitive messe a disposizione dell'utente =======
-extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y)
+extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y, const char* title)
 {
 	sem_wait(win_man.mutex);
 
-	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, WINDOWS_PLANE_ZINDEX);
+	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, WINDOWS_PLANE_ZINDEX, title);
 	doubled_framebuffer_container->add_child(newwindow);
 	int newwindow_id = newwindow->get_id();
 	sem_signal(win_man.mutex);

@@ -39,7 +39,7 @@ public:
 	gr_button * close_button;
 	gr_label * title_label;
 
-	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index);
+	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char* title);
 	void set_size_x(int newval);
 	void set_size_y(int newval);
 	int offset_size_x(int offset);
