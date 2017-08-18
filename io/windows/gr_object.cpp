@@ -493,9 +493,10 @@ void gr_object::render()
 */
 }
 
-// distruttore: devo cancellare tutte le render_unit
+// distruttore: devo cancellare tutte le render_unit ed eliminare il buffer
 gr_object::~gr_object(){
 	this->clear_render_units();
+	delete buffer;
 }
 
 // ==================================================================
