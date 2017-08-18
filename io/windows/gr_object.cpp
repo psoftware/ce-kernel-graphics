@@ -147,6 +147,11 @@ bool gr_object::has_child(gr_object *child)
 	return false;
 }
 
+gr_object* gr_object::get_first_child()
+{
+	return this->child_list;
+}
+
 void gr_object::push_render_unit(render_subset_unit *newunit)
 {
 	newunit->next = units;

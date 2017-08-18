@@ -50,6 +50,7 @@ public:
 	bool remove_child(gr_object *child);
 	void focus_child(gr_object *child);
 	bool has_child(gr_object *child);
+	gr_object* get_first_child();
 
 	//metodo per la pulizia delle render units (serve per il framebuffer)
 	void clear_render_units();
