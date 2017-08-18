@@ -7,6 +7,7 @@
 #include "gr_button.h"
 #include "gr_label.h"
 #include "windows/u_obj.h"
+#include "windows/user_event.h"
 
 // gr_window è una specializzazione della classe gr_object ma, a differenza delle altre classi derivate, non 
 // ridefinisce la funzione render(), quindi resta ancora un container ma aggiunge nuovi metodi

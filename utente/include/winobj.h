@@ -9,14 +9,14 @@ class u_window
 {
 private:
 	int w_id;
+
+	// lista oggetti finestra (id e puntatori a struct)
 	int objs_ident[MAX_USER_OBJECTS];
 	u_windowObject * objs[MAX_USER_OBJECTS];
 	int objs_count;
 
-	int internal_focus;
-
 public:
-	// handler
+	// handler dell'utente relativi a eventi della finestra
 	void(*handler_closing_window)(des_user_event event);
 	void(*handler_closed_window)(des_user_event event);
 
@@ -24,7 +24,6 @@ public:
 	{
 		w_id = crea_finestra(size_x, size_y, pos_x, pos_y);
 		objs_count=0;
-		internal_focus=-1;
 	}
 
 	void show(bool async=false)
