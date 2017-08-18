@@ -80,6 +80,9 @@ public:
 	}
 
 	virtual void process_event(des_user_event event){
+		// cerchiamo l'handler definito dall'utente che gestisce questo tipo di evento
+		void(*handler)(des_user_event) = 0;
+
 		switch(event.type)
 		{
 			case NOEVENT: break;
@@ -104,10 +107,25 @@ public:
 					pos_y+=(event.delta_size_y + anchor_carry_y)/2;
 					anchor_carry_y = (event.delta_size_y + anchor_carry_y) % 2;
 				};
-				//flog(LOG_INFO, "pos dx %d dy. size dx %d dy %d", event.delta_pos_x, event.delta_pos_y, event.delta_size_x, event.delta_size_y);
+			break;
+			case USER_EVENT_MOUSEZ:
+				handler = this->handler_mouse_z;
+			break;
+			case USER_EVENT_MOUSEUP:
+				handler = this->handler_mouse_up;
+			break;
+			case USER_EVENT_MOUSEDOWN:
+				handler = this->handler_mouse_down;
+			break;
+			case USER_EVENT_KEYBOARDPRESS:
+				handler = this->handler_keyboard_press;
 			break;
 			default: break;
 		}
+
+		// chiamiamo l'handler definito dall'utente, se definito
+		if(handler != 0)
+			handler(event);
 	}
 };
 

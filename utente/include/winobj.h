@@ -72,7 +72,7 @@ public:
 		return 0;
 	}
 
-	void process_event()
+	void next_event()
 	{
 		des_user_event new_event = preleva_evento(w_id);
 
@@ -114,32 +114,7 @@ public:
 			{
 				LOG_DEBUG("process_event: trovato oggetto %d", new_event.obj_id);
 
-				// cerchiamo l'handler definito dall'utente che gestisce questo tipo di evento
-				void(*handler)(des_user_event) = 0;
-				switch(new_event.type)
-				{
-					case NOEVENT: case USER_EVENT_RESIZE:
-					break;
-					case USER_EVENT_MOUSEZ:
-						handler = this->objs[i]->handler_mouse_z;
-					break;
-					case USER_EVENT_MOUSEUP:
-						handler = this->objs[i]->handler_mouse_up;
-					break;
-					case USER_EVENT_MOUSEDOWN:
-						handler = this->objs[i]->handler_mouse_down;
-					break;
-					case USER_EVENT_KEYBOARDPRESS:
-						handler = this->objs[i]->handler_keyboard_press;
-					break;
-					default: break;
-				}
-
-				// chiamiamo l'handler definito dall'utente, se definito
-				if(handler != 0)
-					handler(new_event);
-
-				// chiamiamo l'handler di default
+				// chiamiamo il metodo che si occupa di gestire gli eventi sull'oggetto
 				this->objs[i]->process_event(new_event);
 
 				// aggiorniamo l'oggetto

@@ -324,5 +324,5 @@ process_body minesweeper_body(int a)
 
 	//event receive cycle
 	while(true)
-		main_wind->process_event();
+		main_wind->next_event();
 }
