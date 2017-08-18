@@ -800,7 +800,12 @@ void graphic_visualizza_finestra(gr_window *window)
 
 void graphic_chiudi_finestra(gr_window *window)
 {
+	// togliamo il focus alla finestra se ce l'ha
+	if(win_man.focused_window == window)
+		win_man.focused_window = 0;
+
 	doubled_framebuffer_container->remove_child(window);
+	delete window;
 	render_on_framebuffer();
 }
 
