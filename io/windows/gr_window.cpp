@@ -32,6 +32,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 		CLOSEBUTTON_SIZE,CLOSEBUTTON_SIZE,CLOSEBUTTON_ZINDEX);
 	this->close_button->set_back_color(CLOSEBUTTON_WIN_BACKCOLOR);
 	this->close_button->set_border_color(CLOSEBUTTON_WIN_BORDERCOLOR);
+	this->close_button->set_clicked_color(CLOSEBUTTON_WIN_CLICKEDCOLOR);
 	this->close_button->set_text_color(CLOSEBUTTON_WIN_TEXTCOLOR);
 	this->close_button->set_text("x");
 	this->close_button->render();
@@ -298,6 +299,35 @@ void gr_window::process_tick_event()
 	focused_textbox->set_caret_print(!focused_textbox->get_caret_print());
 	focused_textbox->render();
 	inner_container->render();
+}
+
+bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
+{
+	if(dest_obj==0)
+		return false;
+
+	// non abbiamo niente da fare in questi casi, ma dobbiamo segnalare
+	// che va fatto il trascinamento dell'oggetto
+	if(dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label)
+		return true;
+
+	// eventi per close_button
+	if(dest_obj == this->close_button && mouse_down)
+	{
+		this->close_button->set_clicked(true);
+		this->close_button->render();
+	}
+	else if(dest_obj == this->close_button && !mouse_down)
+	{
+		this->close_button->set_clicked(false);
+		this->close_button->render();
+	}
+
+	this->topbar_container->render();
+
+	// il trascinamento non va segnalato se stiamo gestendo eventi
+	// su oggetti interni alla topbar (esclusa la bitmap)
+	return false;
 }
 
 // gestione degli eventi per utente

@@ -464,6 +464,7 @@ struct des_windows_man
 	//Elementi per la gestione del focus su finestre e oggetti
 	gr_window *focused_window;
 	gr_object *dragging_border;
+	gr_object *topbar_clicking_object;
 
 	//Variabili per gestire lo stato di resize o trascinamento
 	bool is_dragging;
@@ -1092,15 +1093,22 @@ void main_windows_manager(int n)
 						}
 						else
 						{
-							// se, invece, ho cliccato su una topbar, allora significa che devo iniziare a trascinare
+							// controllo se ho cliccato sulla topbar
 							memset(&filter, 0, sizeof(filter));
 							filter.skip_id = mouse_bitmap->get_id();
 							filter.parent_flags = gr_window::TOPBAR_FLAG;
 							window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
 							if(res.target_parent != 0)
 							{
-								flog(LOG_INFO, "winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
-								win_man.is_dragging = true;
+								LOG_DEBUG("winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
+								// teniamo da parte l'oggetto cliccato sulla topbar perchè serve per l'evento MOUSEUP
+								win_man.topbar_clicking_object = clicked_object;
+
+								// il metodo processa gli eventi per la topbar e ci comunica se va fatto il trascinamento o meno
+								win_man.is_dragging = window_of_clicked_object->click_on_topbar(clicked_object, true);
+
+								// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
+								window_of_clicked_object->render();
 							}
 							else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
 							{
@@ -1123,7 +1131,23 @@ void main_windows_manager(int n)
 					win_man.is_resizing=false;
 
 					if(win_man.focused_window!=0)
-						win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
+					{
+						// gestione eventi per topbar
+						if(win_man.topbar_clicking_object != 0)
+						{
+							// inoltriamo l'evento al metodo che gestisce quelli per la topbar
+							win_man.focused_window->click_on_topbar(win_man.topbar_clicking_object, false);
+
+							// assicuriamoci di dimenticarci dell'oggetto a cui destinare l'evento, per evitare eventi duplicati
+							win_man.topbar_clicking_object = 0;
+
+							// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
+							win_man.focused_window->render();
+						}
+						else
+							// inoltriamo l'evento di click all'utente solo se non è avvenuto su topbar
+							win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
+					}
 
 					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
 					render_on_framebuffer();
