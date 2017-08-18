@@ -32,6 +32,7 @@ int rand_r(unsigned int *seed)
 
 u_window * main_wind;
 u_label * flower_left_label;
+u_button * restart_button;
 
 enum cell_type {WHITE,NUMBER,FLOWER};
 struct des_cell {
@@ -246,6 +247,14 @@ void restart_button_click_handler(des_user_event event)
 
 void minesweeper_close_handler(des_user_event event)
 {
+	for(int y=0; y<CELL_COUNTY; y++)
+		for(int x=0; x<CELL_COUNTY; x++)
+			delete matrix[x+y*CELL_COUNTX].button;
+
+	delete flower_left_label;
+	delete restart_button;
+	delete matrix;
+	delete main_wind;
 	terminate_p();
 }
 
@@ -302,7 +311,7 @@ process_body minesweeper_body(int a)
 	flower_left_label->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR);
 
 	// creo il pulsante per il restart
-	u_button * restart_button = new u_button();
+	restart_button = new u_button();
 	restart_button->size_x=50;
 	restart_button->size_y=20;
 	restart_button->pos_x=(WIN_MAX_X - restart_button->size_x)/2;
