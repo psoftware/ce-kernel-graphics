@@ -86,6 +86,46 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	event_sem_sync_notempty = sem_ini(0);
 }
 
+gr_window::~gr_window() {
+	//cancelliamo tutti gli eventi
+	des_user_event res;
+	while(res.type!=NOEVENT)
+		this->user_event_pop();
+
+
+	this->topbar_container->remove_child(this->close_button);
+	this->topbar_container->remove_child(this->title_label);
+	this->topbar_container->remove_child(this->topbar_bitmap);
+	delete close_button;
+	delete title_label;
+	delete topbar_bitmap;
+
+	this->remove_child(this->topbar_container);
+	delete topbar_container;
+
+	this->inner_container->remove_child(this->background_bitmap);
+	delete background_bitmap;
+
+	this->remove_child(this->border_left_bitmap);
+	this->remove_child(this->border_right_bitmap);
+	this->remove_child(this->border_top_bitmap);
+	this->remove_child(this->border_bottom_bitmap);
+	delete border_left_bitmap;
+	delete border_right_bitmap;
+	delete border_top_bitmap;
+	delete border_bottom_bitmap;
+
+	// vanno, inoltre, eliminati tutti gli oggetti della finestra, cioè tutti i figli dell'inner container
+	for(gr_object *child=this->inner_container->get_first_child(); child!=0; child=this->inner_container->get_first_child())
+	{
+		this->inner_container->remove_child(child);
+		delete child;
+	}
+
+	this->remove_child(this->inner_container);
+	delete inner_container;
+}
+
 void gr_window::resize()
 {
 	if(!is_pos_modified())
