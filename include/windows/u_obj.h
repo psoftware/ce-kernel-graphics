@@ -3,7 +3,7 @@
 
 #include "../io/windows/consts.h"
 
-enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN, USER_EVENT_KEYBOARDPRESS, USER_EVENT_RESIZE};
+enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN, USER_EVENT_KEYBOARDPRESS, USER_EVENT_RESIZE, USER_EVENT_CLOSE_WINDOW};
 enum mouse_button {LEFT,MIDDLE,RIGHT};
 
 struct des_user_event
@@ -83,6 +83,7 @@ public:
 		switch(event.type)
 		{
 			case NOEVENT: break;
+			case USER_EVENT_CLOSE_WINDOW: break;	// noi non sappiamo niente della finestra padre, quindi se la deve vedere qualcun'altro
 			case USER_EVENT_RESIZE:
 				if((anchor & LEFT_ANCHOR) && (anchor & RIGHT_ANCHOR))
 					size_x+=event.delta_size_x;

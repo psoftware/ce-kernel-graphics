@@ -78,6 +78,7 @@ public:
 	void user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int abs_x, int abs_y);
 	void user_event_add_keypress(char key);
 	void user_event_add_resize(int delta_pos_x, int delta_pos_y, int delta_size_x, int delta_size_y);
+	void user_event_add_close_window();
 };
 
 #endif

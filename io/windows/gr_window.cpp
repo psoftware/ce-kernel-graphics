@@ -321,6 +321,7 @@ bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
 	{
 		this->close_button->set_clicked(false);
 		this->close_button->render();
+		this->user_event_add_close_window();
 	}
 
 	this->topbar_container->render();
@@ -405,5 +406,12 @@ void gr_window::user_event_add_resize(int delta_pos_x, int delta_pos_y, int delt
 	event->delta_pos_y=delta_pos_y;
 	event->delta_size_x=delta_size_x;
 	event->delta_size_y=delta_size_y;
+	user_event_push(event);
+}
+
+void gr_window::user_event_add_close_window()
+{
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_CLOSE_WINDOW;
 	user_event_push(event);
 }

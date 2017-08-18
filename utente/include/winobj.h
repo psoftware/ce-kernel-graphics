@@ -16,6 +16,10 @@ private:
 	int internal_focus;
 
 public:
+	// handler
+	void(*handler_closing_window)(des_user_event event);
+	void(*handler_closed_window)(des_user_event event);
+
 	u_window(int size_x, int size_y, int pos_x, int pos_y)
 	{
 		w_id = crea_finestra(size_x, size_y, pos_x, pos_y);
@@ -89,6 +93,20 @@ public:
 			}
 			return;	// nient'altro da fare
 		}
+		else if(new_event.type==USER_EVENT_CLOSE_WINDOW)	// è un evento destinato alla finestra, non dobbiamo diffonderlo ai figli
+		{
+			// evento pre-chiusura
+			if(this->handler_closing_window!=0)
+				this->handler_closing_window(new_event);
+
+			// chiudiamo la finestra
+			chiudi_finestra(this->w_id);
+
+			// evento post-chiusura (serve al processo per terminare)
+			if(this->handler_closed_window!=0)
+				this->handler_closed_window(new_event);
+			return;
+		}
 
 		// l'evento ha l'id dell'oggetto a cui è destinato, scorriamo la lista e vediamo chi lo possiede
 		for(int i=0; i<objs_count; i++)
@@ -114,6 +132,7 @@ public:
 					case USER_EVENT_KEYBOARDPRESS:
 						handler = this->objs[i]->handler_keyboard_press;
 					break;
+					default: break;
 				}
 
 				// chiamiamo l'handler definito dall'utente, se definito
