@@ -275,7 +275,7 @@ void gr_object::reset_status(){
 
 bool gr_object::is_pos_modified(){
 	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y) || (this->old_size_x != this->size_x) ||
-	(this->old_size_y != this->size_y) || (this->old_visible != this->visible);
+	(this->old_size_y != this->size_y);
 }
 
 //renderizza su buffer tutti i figli nella lista child_tree
