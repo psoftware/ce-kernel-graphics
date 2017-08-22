@@ -41,6 +41,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	// titolo finestra
 	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
 		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,TITLELABEL_ZINDEX);
+	this->title_label->set_text_color(TITLELABEL_TEXTCOLOR);
 	this->title_label->set_back_color(TOPBAR_WIN_BACKCOLOR);
 	this->title_label->set_text(title);
 	this->title_label->render();

@@ -14,7 +14,7 @@ process_body hello_body3(int a)
 	label1->pos_x=4;
 	label1->pos_y=4;
 	label1->z_index=0;
-	label1->back_color=0xcbf442;
+	label1->back_color=0xffcbf442;
 	copy("", label1->text);
 	int label_id = crea_oggetto(finestra, label1);
 
