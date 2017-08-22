@@ -129,7 +129,7 @@ gr_window::~gr_window() {
 
 void gr_window::resize()
 {
-	if(!is_pos_modified())
+	if(!is_size_modified())
 		return;
 
 	if(this->size_x<=0 || this->size_y<=0)

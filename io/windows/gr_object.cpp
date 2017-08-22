@@ -274,8 +274,11 @@ void gr_object::reset_status(){
 }
 
 bool gr_object::is_pos_modified(){
-	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y) || (this->old_size_x != this->size_x) ||
-	(this->old_size_y != this->size_y);
+	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y);
+}
+
+bool gr_object::is_size_modified(){
+	return (this->old_size_x != this->size_x) || (this->old_size_y != this->size_y);
 }
 
 //renderizza su buffer tutti i figli nella lista child_tree
@@ -301,7 +304,7 @@ void gr_object::render()
 		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
 		render_subset_unit *newareaunit = 0;
 		render_subset_unit *oldareaunit = 0;
-		bool modified = obj->is_pos_modified();
+		bool modified = obj->is_pos_modified() || obj->is_size_modified();
 
 		if(modified || (!obj->old_visible && obj->visible) || focus_changed)
 		{
