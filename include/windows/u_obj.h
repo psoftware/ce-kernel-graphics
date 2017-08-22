@@ -107,9 +107,12 @@ class u_button : public u_windowObject
 	PIXEL_UNIT clicked_color;
 	PIXEL_UNIT text_color;
 	bool clicked;
-	u_button() : u_windowObject(W_ID_BUTTON)
+	u_button() : u_windowObject(W_ID_BUTTON), clicked(false)
 	{
-		clicked=false;
+		border_color=BUTTON_DEFAULT_BORDERCOLOR;
+		clicked_color=BUTTON_DEFAULT_CLICKEDCOLOR;
+		text_color=BUTTON_DEFAULT_TEXTCOLOR;
+		back_color=BUTTON_DEFAULT_BACKCOLOR;
 	}
 
 	void process_event(des_user_event event)
@@ -130,7 +133,8 @@ class u_label : public u_windowObject
 	PIXEL_UNIT text_color;
 	u_label() : u_windowObject(W_ID_LABEL)
 	{
-
+		text_color=LABEL_DEFAULT_TEXTCOLOR;
+		back_color=LABEL_DEFAULT_BACKCOLOR;
 	}
 
 	void process_event(des_user_event event)
@@ -147,7 +151,8 @@ class u_textbox : public u_windowObject
 	PIXEL_UNIT text_color;
 	u_textbox() : u_windowObject(W_ID_TEXTBOX)
 	{
-
+		border_color = TEXTBOX_DEFAULT_BORDERCOLOR;
+		text_color = TEXTBOX_DEFAULT_TEXTCOLOR;
 	}
 
 	void process_event(des_user_event event)
