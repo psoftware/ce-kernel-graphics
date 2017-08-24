@@ -6,7 +6,7 @@ process hello2 body hello_body2(0), 21, LIV_UTENTE;
 long int wait2=89999999;
 process_body hello_body2(int a)
 {
-	int finestra = crea_finestra(128,128,160,40);
+	int finestra = crea_finestra(128,128,160,40, "Objects Tests");
 
 	u_label * label1 = new u_label();
 	label1->size_x=128;
@@ -14,7 +14,7 @@ process_body hello_body2(int a)
 	label1->pos_x=0;
 	label1->pos_y=0;
 	label1->z_index=0;
-	label1->back_color=0xcbf442;
+	label1->back_color=0xffcbf442;
 	copy("", label1->text);
 	int label_id = crea_oggetto(finestra, label1);
 

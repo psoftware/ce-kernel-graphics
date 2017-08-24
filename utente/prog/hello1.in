@@ -18,9 +18,15 @@ void button1_click_down_handler(des_user_event event)
 	uwind->update_object(label1);
 }
 
+void hello1_close_handler(des_user_event event)
+{
+	terminate_p();
+}
+
 process_body hello_body1(int a)
 {
-	uwind = new u_window(128,160,20,80);
+	uwind = new u_window(128,160,20,80, "Resize Test");
+	uwind->handler_closed_window = hello1_close_handler;
 	uwind->show();
 
 	label1 = new u_label();
@@ -29,9 +35,9 @@ process_body hello_body1(int a)
 	label1->pos_x=4;
 	label1->pos_y=4;
 	label1->z_index=0;
-	label1->back_color=0xcbf442;
-	label1->text_color=0xff000000;
 	label1->set_anchor(TOP_ANCHOR | BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
+	label1->back_color=0xffcbf442;
+	label1->text_color=0xff000000;
 	copy("", label1->text);
 
 	uwind->add_object(label1);
@@ -92,5 +98,5 @@ process_body hello_body1(int a)
 
 	//event receive cycle
 	while(true)
-		uwind->process_event();
+		uwind->next_event();
 }

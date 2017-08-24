@@ -2,45 +2,10 @@
 #define U_OBJ_
 
 #include "../io/windows/consts.h"
+#include "windows/user_event.h"
 
-enum user_event_type {NOEVENT, USER_EVENT_MOUSEZ, USER_EVENT_MOUSEUP, USER_EVENT_MOUSEDOWN, USER_EVENT_KEYBOARDPRESS, USER_EVENT_RESIZE};
-enum mouse_button {LEFT,MIDDLE,RIGHT};
-
-struct des_user_event
-{
-	int obj_id;
-	user_event_type type;
-	union
-	{
-		mouse_button button;	//mousebutton
-		int delta_z;			//mousez
-		natb k_char;			//tastiera
-		int delta_pos_x;		//resize
-	};
-	union
-	{
-		int rel_x;				//mousebutton
-		natb k_flag;			//tastiera
-		int delta_pos_y;		//resize
-	};
-	union
-	{
-		int rel_y;				//mousebutton
-		int delta_size_x;		//resize
-	};
-	union
-	{
-		int delta_size_y;		//resize
-	};
-
-	des_user_event * next;
-};
-
-// costanti per controllare i cast
-const natb W_ID_LABEL=0;
-const natb W_ID_BUTTON=1;
-const natb W_ID_TEXTBOX=2;
-const natb W_ID_PROGRESSBAR=3;
+// costanti per controllare i cast (polimorfismo)
+enum u_obj_type {W_ID_LABEL, W_ID_BUTTON, W_ID_TEXTBOX, W_ID_PROGRESSBAR};
 
 // costanti per la variabile anchor
 const natb LEFT_ANCHOR = 1u;
@@ -50,27 +15,31 @@ const natb BOTTOM_ANCHOR = 1u << 3;
 
 class u_windowObject
 {
-public:
-	int id;
-	natb TYPE;
-	short size_x;
-	short size_y;
-	short pos_x;
-	short pos_y;
-	short z_index;
-
-	char anchor;
+private:
+	short anchor;
 	short anchor_carry_x;
 	short anchor_carry_y;
 
+public:
+	const u_obj_type TYPE;	// ci serve per il polimorfismo
+
+	int id;
+
+	short pos_x;
+	short pos_y;
+	short size_x;
+	short size_y;
+	short z_index;
+
 	PIXEL_UNIT back_color;
 
+	// handler definibili dall'utente
 	void(*handler_mouse_z)(des_user_event event);
 	void(*handler_mouse_up)(des_user_event event);
 	void(*handler_mouse_down)(des_user_event event);
 	void(*handler_keyboard_press)(des_user_event event);
 
-	u_windowObject() : anchor(TOP_ANCHOR | LEFT_ANCHOR) {
+	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE) {
 
 	}
 
@@ -80,9 +49,13 @@ public:
 	}
 
 	virtual void process_event(des_user_event event){
+		// cerchiamo l'handler definito dall'utente che gestisce questo tipo di evento
+		void(*handler)(des_user_event) = 0;
+
 		switch(event.type)
 		{
 			case NOEVENT: break;
+			case USER_EVENT_CLOSE_WINDOW: break;	// noi non sappiamo niente della finestra padre, quindi se la deve vedere qualcun'altro
 			case USER_EVENT_RESIZE:
 				if((anchor & LEFT_ANCHOR) && (anchor & RIGHT_ANCHOR))
 					size_x+=event.delta_size_x;
@@ -103,10 +76,25 @@ public:
 					pos_y+=(event.delta_size_y + anchor_carry_y)/2;
 					anchor_carry_y = (event.delta_size_y + anchor_carry_y) % 2;
 				};
-				//flog(LOG_INFO, "pos dx %d dy. size dx %d dy %d", event.delta_pos_x, event.delta_pos_y, event.delta_size_x, event.delta_size_y);
-			break;
+				break;
+			case USER_EVENT_MOUSEZ:
+				handler = this->handler_mouse_z;
+				break;
+			case USER_EVENT_MOUSEUP:
+				handler = this->handler_mouse_up;
+				break;
+			case USER_EVENT_MOUSEDOWN:
+				handler = this->handler_mouse_down;
+				break;
+			case USER_EVENT_KEYBOARDPRESS:
+				handler = this->handler_keyboard_press;
+				break;
 			default: break;
 		}
+
+		// chiamiamo l'handler definito dall'utente, se definito
+		if(handler != 0)
+			handler(event);
 	}
 };
 
@@ -119,10 +107,12 @@ class u_button : public u_windowObject
 	PIXEL_UNIT clicked_color;
 	PIXEL_UNIT text_color;
 	bool clicked;
-	u_button()
+	u_button() : u_windowObject(W_ID_BUTTON), clicked(false)
 	{
-		TYPE=W_ID_BUTTON;
-		clicked=false;
+		border_color=BUTTON_DEFAULT_BORDERCOLOR;
+		clicked_color=BUTTON_DEFAULT_CLICKEDCOLOR;
+		text_color=BUTTON_DEFAULT_TEXTCOLOR;
+		back_color=BUTTON_DEFAULT_BACKCOLOR;
 	}
 
 	void process_event(des_user_event event)
@@ -141,9 +131,10 @@ class u_label : public u_windowObject
 	public:
 	char text[120];
 	PIXEL_UNIT text_color;
-	u_label()
+	u_label() : u_windowObject(W_ID_LABEL)
 	{
-		TYPE=W_ID_LABEL;
+		text_color=LABEL_DEFAULT_TEXTCOLOR;
+		back_color=LABEL_DEFAULT_BACKCOLOR;
 	}
 
 	void process_event(des_user_event event)
@@ -158,9 +149,10 @@ class u_textbox : public u_windowObject
 	char text[100];
 	PIXEL_UNIT border_color;
 	PIXEL_UNIT text_color;
-	u_textbox()
+	u_textbox() : u_windowObject(W_ID_TEXTBOX)
 	{
-		TYPE=W_ID_TEXTBOX;
+		border_color = TEXTBOX_DEFAULT_BORDERCOLOR;
+		text_color = TEXTBOX_DEFAULT_TEXTCOLOR;
 	}
 
 	void process_event(des_user_event event)
@@ -187,9 +179,9 @@ class u_progressbar : public u_windowObject
 	public:
 	int progress_perc;
 
-	u_progressbar()
+	u_progressbar() : u_windowObject(W_ID_PROGRESSBAR)
 	{
-		TYPE=W_ID_PROGRESSBAR;
+
 	}
 
 	void process_event(des_user_event event)

@@ -53,6 +53,7 @@ public:
 	bool remove_child(gr_object *child);
 	void focus_child(gr_object *child);
 	bool has_child(gr_object *child);
+	gr_object* get_first_child();
 
 	//metodo per la pulizia delle render units (serve per il framebuffer)
 	void clear_render_units();
@@ -85,6 +86,7 @@ protected:
 
 	// mi restituisce vero se le coordinate sono state modificate dall'ultima chiamata a align_old_coords()
 	bool is_pos_modified();
+	bool is_size_modified();
 	
 	//metodi per la gestione della lista delle render_subset_unit (insiemi di render, algoritmo ottimizzato)
 	void push_render_unit(render_subset_unit *newunit);

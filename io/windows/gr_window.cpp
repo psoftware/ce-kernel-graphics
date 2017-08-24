@@ -12,7 +12,7 @@
 extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
 
-gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
+gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char * title)
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index, false), event_head(0), event_tail(0)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
@@ -32,6 +32,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 		CLOSEBUTTON_SIZE,CLOSEBUTTON_SIZE,CLOSEBUTTON_ZINDEX);
 	this->close_button->set_back_color(CLOSEBUTTON_WIN_BACKCOLOR);
 	this->close_button->set_border_color(CLOSEBUTTON_WIN_BORDERCOLOR);
+	this->close_button->set_clicked_color(CLOSEBUTTON_WIN_CLICKEDCOLOR);
 	this->close_button->set_text_color(CLOSEBUTTON_WIN_TEXTCOLOR);
 	this->close_button->set_text("x");
 	this->close_button->render();
@@ -40,8 +41,9 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	// titolo finestra
 	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
 		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,TITLELABEL_ZINDEX);
+	this->title_label->set_text_color(TITLELABEL_TEXTCOLOR);
 	this->title_label->set_back_color(TOPBAR_WIN_BACKCOLOR);
-	this->title_label->set_text("Titolo Finestra");
+	this->title_label->set_text(title);
 	this->title_label->render();
 	this->topbar_container->add_child(this->title_label);
 
@@ -85,9 +87,49 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index)
 	event_sem_sync_notempty = sem_ini(0);
 }
 
+gr_window::~gr_window() {
+	//cancelliamo tutti gli eventi
+	des_user_event res;
+	while(res.type!=NOEVENT)
+		this->user_event_pop();
+
+
+	this->topbar_container->remove_child(this->close_button);
+	this->topbar_container->remove_child(this->title_label);
+	this->topbar_container->remove_child(this->topbar_bitmap);
+	delete close_button;
+	delete title_label;
+	delete topbar_bitmap;
+
+	this->remove_child(this->topbar_container);
+	delete topbar_container;
+
+	this->inner_container->remove_child(this->background_bitmap);
+	delete background_bitmap;
+
+	this->remove_child(this->border_left_bitmap);
+	this->remove_child(this->border_right_bitmap);
+	this->remove_child(this->border_top_bitmap);
+	this->remove_child(this->border_bottom_bitmap);
+	delete border_left_bitmap;
+	delete border_right_bitmap;
+	delete border_top_bitmap;
+	delete border_bottom_bitmap;
+
+	// vanno, inoltre, eliminati tutti gli oggetti della finestra, cioè tutti i figli dell'inner container
+	for(gr_object *child=this->inner_container->get_first_child(); child!=0; child=this->inner_container->get_first_child())
+	{
+		this->inner_container->remove_child(child);
+		delete child;
+	}
+
+	this->remove_child(this->inner_container);
+	delete inner_container;
+}
+
 void gr_window::resize()
 {
-	if(!is_pos_modified())
+	if(!is_size_modified())
 		return;
 
 	if(this->size_x<=0 || this->size_y<=0)
@@ -300,6 +342,36 @@ void gr_window::process_tick_event()
 	inner_container->render();
 }
 
+bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
+{
+	if(dest_obj==0)
+		return false;
+
+	// non abbiamo niente da fare in questi casi, ma dobbiamo segnalare
+	// che va fatto il trascinamento dell'oggetto
+	if(dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label)
+		return true;
+
+	// eventi per close_button
+	if(dest_obj == this->close_button && mouse_down)
+	{
+		this->close_button->set_clicked(true);
+		this->close_button->render();
+	}
+	else if(dest_obj == this->close_button && !mouse_down)
+	{
+		this->close_button->set_clicked(false);
+		this->close_button->render();
+		this->user_event_add_close_window();
+	}
+
+	this->topbar_container->render();
+
+	// il trascinamento non va segnalato se stiamo gestendo eventi
+	// su oggetti interni alla topbar (esclusa la bitmap)
+	return false;
+}
+
 // gestione degli eventi per utente
 void gr_window::user_event_push(des_user_event * event)
 {
@@ -375,5 +447,12 @@ void gr_window::user_event_add_resize(int delta_pos_x, int delta_pos_y, int delt
 	event->delta_pos_y=delta_pos_y;
 	event->delta_size_x=delta_size_x;
 	event->delta_size_y=delta_size_y;
+	user_event_push(event);
+}
+
+void gr_window::user_event_add_close_window()
+{
+	des_user_event * event = new des_user_event();
+	event->type=USER_EVENT_CLOSE_WINDOW;
 	user_event_push(event);
 }

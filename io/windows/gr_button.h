@@ -26,6 +26,7 @@ public:
 	void set_border_color(PIXEL_UNIT color);
 	void set_clicked_color(PIXEL_UNIT color);
 	void set_text_color(PIXEL_UNIT color);
+	void set_clicked(bool clicked);
 };
 
 #endif

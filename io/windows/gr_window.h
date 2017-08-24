@@ -7,6 +7,7 @@
 #include "gr_button.h"
 #include "gr_label.h"
 #include "windows/u_obj.h"
+#include "windows/user_event.h"
 
 // gr_window è una specializzazione della classe gr_object ma, a differenza delle altre classi derivate, non 
 // ridefinisce la funzione render(), quindi resta ancora un container ma aggiunge nuovi metodi
@@ -38,7 +39,8 @@ public:
 	gr_button * close_button;
 	gr_label * title_label;
 
-	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index);
+	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char* title);
+	~gr_window();
 	void set_size_x(int newval);
 	void set_size_y(int newval);
 	int offset_size_x(int offset);
@@ -70,12 +72,15 @@ public:
 	bool set_focused_child(gr_object *obj);
 	void clear_focused_child();
 	void process_tick_event();
+	bool click_on_topbar(gr_object * dest_obj, bool mouse_down);
+
 	natl event_sem_sync_notempty;
 	des_user_event user_event_pop();
 	void user_event_add_mousemovez(int delta_z, int abs_x, int abs_y);
 	void user_event_add_mousebutton(user_event_type event_type, mouse_button butt, int abs_x, int abs_y);
 	void user_event_add_keypress(char key);
 	void user_event_add_resize(int delta_pos_x, int delta_pos_y, int delta_size_x, int delta_size_y);
+	void user_event_add_close_window();
 };
 
 #endif

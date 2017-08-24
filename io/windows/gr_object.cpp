@@ -147,6 +147,11 @@ bool gr_object::has_child(gr_object *child)
 	return false;
 }
 
+gr_object* gr_object::get_first_child()
+{
+	return this->child_list;
+}
+
 // O(n)
 void gr_object::push_render_unit(render_subset_unit *newunit)
 {
@@ -309,8 +314,11 @@ void gr_object::reset_status(){
 }
 
 bool gr_object::is_pos_modified(){
-	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y) || (this->old_size_x != this->size_x) ||
-	(this->old_size_y != this->size_y) || (this->old_visible != this->visible);
+	return (this->old_pos_x != this->pos_x) || (this->old_pos_y != this->pos_y);
+}
+
+bool gr_object::is_size_modified(){
+	return (this->old_size_x != this->size_x) || (this->old_size_y != this->size_y);
 }
 
 struct render_subset_unit;
@@ -333,7 +341,7 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 	// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
 	// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
 
-	bool modified = target->is_pos_modified();
+	bool modified = target->is_pos_modified() || target->is_size_modified();
 	bool newarea_needed = (!target->old_visible && target->visible) || focus_changed;
 
 	// OTTIMIZZAZIONE: ricordiamo che le render_unit di questo target sono tutte contenute all'interno del
@@ -546,7 +554,7 @@ void gr_object::render()
 		// potrei già inizializzare le render unit qui, ma è meglio fare meno new possibili
 		render_subset_unit *newareaunit = 0;
 		render_subset_unit *oldareaunit = 0;
-		bool modified = obj->is_pos_modified();
+		bool modified = obj->is_pos_modified() || obj->is_size_modified();
 
 		if(modified || (!obj->old_visible && obj->visible) || focus_changed)
 		{
@@ -738,9 +746,10 @@ void gr_object::render()
 */
 }
 
-// distruttore: devo cancellare tutte le render_unit
+// distruttore: devo cancellare tutte le render_unit ed eliminare il buffer
 gr_object::~gr_object(){
 	this->clear_render_units();
+	delete buffer;
 }
 
 // ==================================================================

@@ -121,7 +121,7 @@
 // sezioni condivise vengono precaricate per intero.  Aumentando il livello
 // (fino a 3) si puo' velocizzare l'avvio, al prezzo di causare page fault
 // nelle sezioni condivise durante l'esecuzione.
-#define PRELOAD_LEVEL	0
+#define PRELOAD_LEVEL	2
 // )
 
 
