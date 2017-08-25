@@ -424,97 +424,107 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 			targetunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ora targetunit ha le coord che fanno riferimento a this
 
 			// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
-			LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+			//LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 			targetunit->intersect(parent_restriction);
-			LOG_DEBUG("2) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+			LOG_DEBUG("intersected target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 
 			this->push_render_unit(targetunit);
 		}
 	}
 }
 
-void gr_object::recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y)
+void gr_object::recursive_render(render_subset_unit *child_restriction, gr_object *ancestor_to_render, int ancestors_offset_x, int ancestors_offset_y)
 {
-	LOG_DEBUG("#### recursive rendering %p", target);
-	// nulla da fare in questo caso
-	if(!target)
-		return;
+	LOG_DEBUG("#### recursive rendering v2 on (%d)", this->id);
 
-	//flog(LOG_INFO, "build_render_areas: chiamata su %p", target);
 	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
 	// (usiamo il for perchè l'albero è generico e non binario)
-	render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
-	current_parent_restriction.intersect(parent_restriction);
-
-	if(!target->buffered)
+	if(!this->buffered && this->child_list!=0)	//Container non bufferati ATTENZIONE QUESTA CONDIZIONE VA SISTEMATA DANDO UNA SISTEMATA A TUTTA LA GERARCHIA DELLE CLASSI
 	{
-		//flog(LOG_INFO, "-> current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		LOG_DEBUG("## UNBUFFERED this (%d) con x=%d y=%d w=%d h=%d", this->id, this->pos_x,this->pos_y, this->size_x, this->size_y);
 		// procediamo con la visita anticipata
-		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
-			recursive_render(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);
+		for(gr_object *target_child=this->child_list; target_child!=0; target_child=target_child->next_brother)
+		{
+			// diciamo al figlio su che area deve renderizzarsi, dobbiamo ricalcolare la restrizione (che sarà sempre relativa a this)
+			render_subset_unit new_child_restriction(ancestors_offset_x + this->pos_x + target_child->pos_x, ancestors_offset_y + this->pos_y + target_child->pos_y, target_child->size_x, target_child->size_y);
+			new_child_restriction.intersect(child_restriction);
+
+			LOG_DEBUG("## with new_child_restriction %d %d %d %d", new_child_restriction.pos_x, new_child_restriction.pos_y, new_child_restriction.size_x, new_child_restriction.size_y);
+
+			if(new_child_restriction.size_x <= 0 || new_child_restriction.size_y <= 0)
+			{
+				LOG_DEBUG("## skipping non intersecting");
+				continue;	// scartiamo target_child e passiamo al prossimo
+			}
+			target_child->recursive_render(&new_child_restriction, ancestor_to_render, ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);
+		}
 		//flog(LOG_INFO, "<- no more child");
 	}
 	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
 	{
-		for(render_subset_unit *subsetunit=units; subsetunit!=0; subsetunit=subsetunit->next)	// le units appartengono a THIS
-		{
-			// devo renderizzare solo l'area dell'oggetto effettivamente contenuta nella render unit...
-			render_subset_unit print_area(current_parent_restriction.pos_x, current_parent_restriction.pos_y, current_parent_restriction.size_x, current_parent_restriction.size_y);
-			// ...quindi interseco le due aree e faccio il redraw solo in quest'area
-			print_area.intersect(subsetunit);
+		//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+		LOG_DEBUG("## BUFFERED or NOT CONTAINER stampo this (%d) con x=%d y=%d w=%d h=%d", this->id, this->pos_x,this->pos_y, this->size_x, this->size_y);
+		LOG_DEBUG("## (3) child_restriction %d %d %d %d", child_restriction->pos_x, child_restriction->pos_y, child_restriction->size_x, child_restriction->size_y);
 
-			//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-			LOG_DEBUG("## (1) stampo target %p con x=%d y=%d w=%d h=%d", target, target->pos_x,target->pos_y, target->size_x, target->size_y);
-			LOG_DEBUG("## (2) stampo render_unit %p con x=%d y=%d w=%d h=%d", subsetunit, subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-			LOG_DEBUG("## (3) print_area %d %d %d %d", print_area.pos_x, print_area.pos_y, print_area.size_x, print_area.size_y);
+		// ASSERTION
+		/*if( (child_restriction->pos_x + child_restriction->size_x > ancestor_to_render->size_x) ||
+			(child_restriction->pos_y + child_restriction->size_y > ancestor_to_render->size_y) )
+				LOG_ERROR("## OVERFLOW!!!!!!");*/
 
-			// controllo se l'oggetto si interseca con subsetunit (cioè se l'intersezione non dà come risultato un insieme vuoto)
-			if(print_area.size_x <= 0 || print_area.size_y <= 0)
-				continue;	// scartiamo la subsetunit e passiamo alla prossima
-
-			// queste due coordinate si ottengono dalla print_area ma facendo riferimento all'oggetto target
-			int start_obj_x = print_area.pos_x - ancestors_offset_x- target->pos_x;
-			int start_obj_y = print_area.pos_y - ancestors_offset_y- target->pos_y;
-			if(!target->trasparency)
-				for(int y=0; y<print_area.size_y; y++)
-					gr_memcpy(this->buffer + print_area.pos_x + this->size_x*(y+print_area.pos_y), target->buffer + start_obj_x + (y+start_obj_y)*target->size_x, print_area.size_x);
-					//gr_memcpy(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), target->buffer + lmin_x + (y+lmin_y)*target->size_x, lmax_x-lmin_x);
-					//memset(this->buffer + lminpos_x + this->size_x*(y+lminpos_y), debug_color, lmax_x-lmin_x);
-					//memset(this->buffer + subsetunit->pos_x + this->size_x*(y+subsetunit->pos_y), debug_color, lmax_x-lmin_x);
-			else
-				for(int y=0; y<print_area.size_y; y++)
-					for(int x=0; x<print_area.size_x; x++)
-				#if defined(BPP_8)
-						if(*(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x) != 0x03)
-							set_pixel(this->buffer, x+print_area.pos_x, y+print_area.pos_y, this->size_x, this->size_y, *(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x));
-				#elif defined(BPP_32)
-						{	// algoritmo per realizzare l'alpha blending
-							PIXEL_UNIT src_pixel = *(target->buffer + start_obj_x + x + (y+start_obj_y)*target->size_x);
-							PIXEL_UNIT dst_pixel = *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x); //?
-							natb alpha = src_pixel >> 24;
-							natb src_red = (src_pixel >> 16) & 0xff;
-							natb src_green = (src_pixel >> 8) & 0xff;
-							natb src_blue = src_pixel & 0xff;
-							natb dst_red = (dst_pixel >> 16) & 0xff;
-							natb dst_green = (dst_pixel >> 8) & 0xff;
-							natb dst_blue = dst_pixel & 0xff;
-							dst_red = (alpha*src_red + (255-alpha)*dst_red) / 255;
-							dst_green = (alpha*src_green + (255-alpha)*dst_green) / 255;
-							dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
-							*(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
-
-							/* //alpha blending debug code
-							if(alpha!=0 && alpha!=0xff && false)
-							{
-								flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(this->buffer + print_area.pos_x + x + (y+print_area.pos_y)*this->size_x));
-								flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
-								flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
-								flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
-							}*/
-						}
-				#endif
-		}
+		// procediamo con il draw del figlio sul buffer parente
+		if(this->buffered)	// nel caso in cui l'oggetto è buffered, va fatta una copia del buffer del figlio sull'ancestor
+			gr_object::draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y, child_restriction ,
+				child_restriction->pos_x - ancestors_offset_x - this->pos_x, child_restriction->pos_y - ancestors_offset_y - this->pos_y);
+		else	// se l'oggetto è unbuffered tocca al figlio decidere cosa disegnare, perchè questo non ha un buffer
+			draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y, child_restriction ,
+				child_restriction->pos_x - ancestors_offset_x - this->pos_x, child_restriction->pos_y - ancestors_offset_y - this->pos_y);
 	}
+}
+
+// si occupa di scrivere porzioni dell'oggetto this sul buffer dell'oggetto passato in ancestor_to_render
+void gr_object::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, render_subset_unit *child_restriction, int start_pos_x, int start_pos_y)
+{
+		// queste due coordinate si ottengono dalla child_restriction ma facendo riferimento all'oggetto this
+		// praticamente servono per capire da dove partire a leggere relativamente al buffer dell'oggetto da copiare
+		//int start_obj_x = child_restriction->pos_x - ancestors_offset_x - this->pos_x;
+		//int start_obj_y = child_restriction->pos_y - ancestors_offset_y - this->pos_y;
+		LOG_DEBUG("virtualizable_draw: start_pos_x=%d start_pos_y=%d", start_pos_x, start_pos_y);
+
+		if(!this->trasparency)
+			for(int y=0; y<child_restriction->size_y; y++)
+				gr_memcpy(ancestor_buffer + child_restriction->pos_x + ancestor_size_x*(y+child_restriction->pos_y), this->buffer + start_pos_x + (y+start_pos_y)*this->size_x, child_restriction->size_x);
+		else
+			for(int y=0; y<child_restriction->size_y; y++)
+				for(int x=0; x<child_restriction->size_x; x++)
+			#if defined(BPP_8)
+					if(*(this->buffer + start_pos_x + x + (y+start_pos_y)*this->size_x) != 0x03)
+						set_pixel(ancestor_buffer, x+child_restriction->pos_x, y+child_restriction->pos_y, ancestor_size_x, ancestor_size_y, *(this->buffer + start_pos_x + x + (y+start_pos_y)*this->size_x));
+			#elif defined(BPP_32)
+					{	// algoritmo per realizzare l'alpha blending
+						PIXEL_UNIT src_pixel = *(this->buffer + start_pos_x + x + (y+start_pos_y)*this->size_x);
+						PIXEL_UNIT dst_pixel = *(ancestor_buffer + child_restriction->pos_x + x + (y+child_restriction->pos_y)*ancestor_size_x); //?
+						natb alpha = src_pixel >> 24;
+						natb src_red = (src_pixel >> 16) & 0xff;
+						natb src_green = (src_pixel >> 8) & 0xff;
+						natb src_blue = src_pixel & 0xff;
+						natb dst_red = (dst_pixel >> 16) & 0xff;
+						natb dst_green = (dst_pixel >> 8) & 0xff;
+						natb dst_blue = dst_pixel & 0xff;
+						dst_red = (alpha*src_red + (255-alpha)*dst_red) / 255;
+						dst_green = (alpha*src_green + (255-alpha)*dst_green) / 255;
+						dst_blue = (alpha*src_blue + (255-alpha)*dst_blue) / 255;
+						*(ancestor_buffer + child_restriction->pos_x + x + (y+child_restriction->pos_y)*ancestor_size_x) = (dst_pixel & 0xff000000) | (dst_red << 16) | (dst_green << 8) | dst_blue;
+
+						/* //alpha blending debug code
+						if(alpha!=0 && alpha!=0xff && false)
+						{
+							flog(LOG_INFO, "src %p dst %p newdest %p", src_pixel, dst_pixel, *(ancestor_buffer + child_restriction->pos_x + x + (y+child_restriction->pos_y)*ancestor_size_x));
+							flog(LOG_INFO, "alpha %d src_red %d src_green %d src_blue %d", alpha, src_red, src_green, src_blue);
+							flog(LOG_INFO, "PRE  dst_red %d dst_green %d dst_blue %d", (dst_pixel >> 16) & 0xff, (dst_pixel >> 8) & 0xff, dst_pixel & 0xff);
+							flog(LOG_INFO, "POST dst_red %d dst_green %d dst_blue %d", dst_red, dst_green, dst_blue);
+						}*/
+					}
+			#endif
 }
 
 //renderizza su buffer tutti i figli nella lista child_tree
@@ -526,16 +536,41 @@ void gr_object::render()
 		//flog(LOG_ERR, "render: object is not buffered");
 		return;
 	}
-	static natb debug_color = 0x20;
-	//flog(LOG_INFO, "## --- inizio render()");
+
+	LOG_DEBUG("## --- inizio render()");
 	render_subset_unit pr(0, 0, this->size_x, this->size_y);
 
 	// step 1
 	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
 			build_render_areas(&pr, child);
 	// step 2
+	// la vera e propria frase di draw. Per ogni area da modificare devo fare riscrivere tutti i discendenti di this
 	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
-			recursive_render(&pr, child);
+	{
+		for(render_subset_unit *subsetunit=this->units; subsetunit!=0; subsetunit=subsetunit->next)	// le units appartengono a this
+		{
+			LOG_DEBUG("## -> Child call on (%d) con x=%d y=%d w=%d h=%d", child->id, child->pos_x,child->pos_y, child->size_x, child->size_y);
+			LOG_DEBUG("## -> Subset unit con x=%d y=%d w=%d h=%d", subsetunit->pos_x,subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
+
+			// dobbiamo indicare al figlio su quale area stiamo richiedendo il draw
+			render_subset_unit child_restriction(child->pos_x, child->pos_y, child->size_x, child->size_y);
+
+			// l'area deve essere tale da non sforare i bound di this
+			child_restriction.intersect(&pr);
+
+			// poi restringiamo ulteriormente sulla base dell'area da renderizzare
+			child_restriction.intersect(subsetunit);
+
+			LOG_DEBUG("## -> Intesect result con x=%d y=%d w=%d h=%d", child_restriction.pos_x, child_restriction.pos_y, child_restriction.size_x, child_restriction.size_y);
+
+			// controllo che l'intersezione non sia nulla (ci risparmiamo tutta la serie di chiamate ricorsive)
+			if(child_restriction.size_x <= 0 || child_restriction.size_y <= 0)
+				continue;	// scartiamo la subsetunit e passiamo alla prossima
+
+			// chiediamo ai discendenti di disegnarsi su this
+			child->recursive_render(&child_restriction, this);
+		}
+	}
 
 	//per ogni oggetto (obj) del contenitore
 	/*for(gr_object *obj=child_list; obj!=0; obj=obj->next_brother)

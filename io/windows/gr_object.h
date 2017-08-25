@@ -74,9 +74,10 @@ public:
 
 	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva
 	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0, bool ancestor_modified=false);
-	void recursive_render(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0);
+	void recursive_render(render_subset_unit *child_restriction, gr_object *ancestor_to_render, int ancestors_offset_x=0, int ancestors_offset_y=0);
 
 	virtual void render();
+	virtual void draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, render_subset_unit *child_restriction, int start_pos_x, int start_pos_y);
 
 	virtual ~gr_object();
 
