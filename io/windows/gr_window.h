@@ -4,6 +4,7 @@
 #include "consts.h"
 #include "gr_object.h"
 #include "gr_bitmap.h"
+#include "gr_uniform_bitmap.h"
 #include "gr_button.h"
 #include "gr_label.h"
 #include "windows/u_obj.h"
@@ -27,9 +28,9 @@ public:
 	// componenti della finestra
 public:
 	gr_object * topbar_container;
-	gr_bitmap * topbar_bitmap;
+	gr_uniform_bitmap * topbar_bitmap;
 	gr_object * inner_container;
-	gr_bitmap * background_bitmap;
+	gr_uniform_bitmap * background_bitmap;
 
 	gr_bitmap * border_left_bitmap;
 	gr_bitmap * border_right_bitmap;

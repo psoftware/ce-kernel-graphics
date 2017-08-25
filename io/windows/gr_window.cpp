@@ -21,8 +21,8 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	this->set_search_flag(WINDOW_FLAG);
 	this->topbar_container = new gr_object(BORDER_TICK,BORDER_TICK,this->get_size_x()-BORDER_TICK*2,TOPBAR_HEIGHT,0,false);
 	this->topbar_container->set_search_flag(TOPBAR_FLAG);
-	this->topbar_bitmap = new gr_bitmap(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
-	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+	this->topbar_bitmap = new gr_uniform_bitmap(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
+	this->topbar_bitmap->set_color(TOPBAR_WIN_BACKCOLOR);
 	this->topbar_bitmap->render();
 	this->topbar_container->add_child(this->topbar_bitmap);
 	this->add_child(this->topbar_container);
@@ -49,8 +49,8 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 
 	// contenitore oggetti finestra + background
 	this->inner_container = new gr_object(BORDER_TICK,TOPBAR_HEIGHT+BORDER_TICK,this->size_x-2*BORDER_TICK,this->size_y-TOPBAR_HEIGHT-BORDER_TICK,0);
-	this->background_bitmap = new gr_bitmap(0,0,this->inner_container->get_size_x(),this->inner_container->get_size_y(),0);
-	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
+	this->background_bitmap = new gr_uniform_bitmap(0,0,this->inner_container->get_size_x(),this->inner_container->get_size_y(),0);
+	this->background_bitmap->set_color(DEFAULT_WIN_BACKCOLOR);
 	this->background_bitmap->render();
 	this->inner_container->add_child(this->background_bitmap);
 
@@ -147,13 +147,13 @@ void gr_window::resize()
 	this->background_bitmap->set_size_x(this->background_bitmap->get_size_x() + delta_size_x);
 	this->background_bitmap->set_size_y(this->background_bitmap->get_size_y() + delta_size_y);
 	this->background_bitmap->realloc_buffer();
-	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
+	//this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 
 	this->topbar_container->set_size_x(this->topbar_container->get_size_x() + delta_size_x);
 	this->topbar_container->realloc_buffer();
 	this->topbar_bitmap->set_size_x(this->topbar_container->get_size_x());
 	this->topbar_bitmap->realloc_buffer();
-	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
+	//this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->border_left_bitmap->set_size_y(this->border_left_bitmap->get_size_y() + delta_size_y);
 	this->border_left_bitmap->realloc_buffer();
