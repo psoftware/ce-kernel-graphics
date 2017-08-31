@@ -2,12 +2,22 @@
 #include "consts.h"
 
 gr_uniform_bitmap::gr_uniform_bitmap(int pos_x, int pos_y, int size_x, int size_y, int z_index)
-: gr_object(pos_x, pos_y, size_x, size_y, z_index, false)
+: gr_object(pos_x, pos_y, size_x, size_y, z_index, false), old_color(0), color(1)
 {
 
 }
 void gr_uniform_bitmap::set_color(PIXEL_UNIT color) {
 	this->color = color;
+}
+
+void gr_uniform_bitmap::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y, bool ancestor_modified)
+{
+	if(this->color != this->old_color)
+	{
+		render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
+		push_render_unit(newunit);
+		this->old_color = this->color;
+	}
 }
 
 void gr_uniform_bitmap::render()
