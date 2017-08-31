@@ -322,14 +322,11 @@ bool gr_object::is_size_modified(){
 }
 
 struct render_subset_unit;
-void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x, int ancestors_offset_y, bool ancestor_modified)
+void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_object *target_ancestor, int ancestors_offset_x, int ancestors_offset_y, bool ancestor_modified)
 {
 	LOG_DEBUG("** build_render_areas(): target call start");
 
-	// nulla da fare in questo caso
-	if(!target)
-		return;
-	//flog(LOG_INFO, "build_render_areas: chiamata su %p", target);
+	//flog(LOG_INFO, "build_render_areas: chiamata su %p", this);
 	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
 	// (usiamo il for perchè l'albero è generico e non binario)
 
@@ -341,11 +338,11 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 	// render_unit appena creata. Fa esclusione la render_unit "oldareaunit" (vedi dopo) perchè può anche
 	// sforare i bound dell'oggetto (unica eccezione ammessa in generale).
 
-	bool modified = target->is_pos_modified() || target->is_size_modified();
-	bool newarea_needed = (!target->old_visible && target->visible) || focus_changed;
+	bool modified = this->is_pos_modified() || this->is_size_modified();
+	bool newarea_needed = (!this->old_visible && this->visible) || focus_changed;
 
-	// OTTIMIZZAZIONE: ricordiamo che le render_unit di questo target sono tutte contenute all'interno del
-	// contenitore padre. Se il padre è stato modificato allora già è presente una render_unit in this che
+	// OTTIMIZZAZIONE: ricordiamo che le render_unit di this sono tutte contenute all'interno del
+	// contenitore padre. Se il padre è stato modificato allora già è presente una render_unit in target_ancestor che
 	// copre la newareaunit e la oldareaunit
 	if(!ancestor_modified)
 	{
@@ -355,80 +352,80 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 
 		if(modified || newarea_needed)
 		{
-			newareaunit = new render_subset_unit(0, 0, target->size_x, target->size_y);
+			newareaunit = new render_subset_unit(0, 0, this->size_x, this->size_y);
 
 			// cancello tutte le render_unit dell'oggetto (OTTIMIZZAZIONE)
-			target->clear_render_units();	// HA SENSO PER GLI OGGETTI UNBUFFERED?
+			this->clear_render_units();	// HA SENSO PER GLI OGGETTI UNBUFFERED?
 		}
 
 		// controllo di presenza della VECCHIA POSIZIONE/DIMENSIONE (AREA PRECEDENTEMENTE OCCUPATA):
-		if(modified || (target->old_visible && !target->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
+		if(modified || (this->old_visible && !this->visible)) // questa operazione va fatta solo se la scia era visibile prima del render
 		{
-			oldareaunit = new render_subset_unit(target->old_pos_x, target->old_pos_y, target->old_size_x, target->old_size_y);
+			oldareaunit = new render_subset_unit(this->old_pos_x, this->old_pos_y, this->old_size_x, this->old_size_y);
 
 			// visto che le coordinate old fanno già riferimento al genitore corrente, faccio una offset al contrario, così
 			// che venga annullata quella all'interno del successivo ciclo for (è un trucco per risparmiare codice ridondante)
-			oldareaunit->offset_position(target->pos_x*-1, target->pos_y*-1);
+			oldareaunit->offset_position(this->pos_x*-1, this->pos_y*-1);
 		}
 
 		// resettiamo lo stato delle coordinate old e assegnamogli quelle correnti. anche la visibilità old e focus sono coinvolti
-		target->reset_status();
+		this->reset_status();
 
 		// la vecchia area potrebbe intersecarsi con la nuova, quindi magari è meglio farne una che contiene entrambi in tal caso
 		if(newareaunit && oldareaunit && newareaunit->intersects(oldareaunit))
 		{
 			newareaunit->expand(oldareaunit);
-			newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
-			this->push_render_unit(newareaunit);
+			newareaunit->offset_position(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);   // ricordiamo che la render_unit va messa in target_ancestor
+			target_ancestor->push_render_unit(newareaunit);
 			delete oldareaunit;
 		}
 		else // se, invece, le due aree non si intersecano, allora le tengo separate
 		{
 			if(oldareaunit)
 			{
-				oldareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
-				this->push_render_unit(oldareaunit);
+				oldareaunit->offset_position(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);   // ricordiamo che la render_unit va messa in target_ancestor
+				target_ancestor->push_render_unit(oldareaunit);
 			}
 			if(newareaunit)
 			{
-				newareaunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);   // ricordiamo che la render_unit va messa in this
-				this->push_render_unit(newareaunit);
+				newareaunit->offset_position(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);   // ricordiamo che la render_unit va messa in target_ancestor
+				target_ancestor->push_render_unit(newareaunit);
 			}
 		}
 	}
 
-	if(!target->buffered)
+	if(!this->buffered)
 	{
-		render_subset_unit current_parent_restriction(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
-		//flog(LOG_INFO, "current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, target->size_x, target->size_y);
+		render_subset_unit current_parent_restriction(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, this->size_x, this->size_y);
+		//flog(LOG_INFO, "current_parent_restriction px: %d py: %d sx: %d sy: %d", ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, this->size_x, this->size_y);
 		// la unit non deve sforare i bound dell'oggetto parente, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
 		current_parent_restriction.intersect(parent_restriction);
 
 		// procediamo con la visita anticipata
-		for(gr_object *target_child=target->child_list; target_child!=0; target_child=target_child->next_brother)
-			build_render_areas(&current_parent_restriction, target_child, ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y, modified || newarea_needed || ancestor_modified);
+		for(gr_object *target_child=this->child_list; target_child!=0; target_child=target_child->next_brother)
+			target_child->build_render_areas(&current_parent_restriction, target_ancestor, ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, modified || newarea_needed || ancestor_modified);
 	}
 	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
 	{
 
 	LOG_DEBUG("parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
-		// itero tutte le subset unit di target, le tolgo anche dalla lista
-		for(render_subset_unit *targetunit=target->pop_render_unit(); targetunit!=0; targetunit=target->pop_render_unit())
+		// itero tutte le subset unit di this, le tolgo anche dalla lista
+		for(render_subset_unit *targetunit=this->pop_render_unit(); targetunit!=0; targetunit=this->pop_render_unit())
 		{
 			// se l'oggetto non è visibile, allora nessuna render unit dovrà essere applicata
-			if(!target->visible)
+			if(!this->visible)
 				continue;
 
-			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di this, devo sistemare
+			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di target_ancestor, devo sistemare
 			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
-			targetunit->offset_position(ancestors_offset_x + target->pos_x, ancestors_offset_y + target->pos_y);	// ora targetunit ha le coord che fanno riferimento a this
+			targetunit->offset_position(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);	// ora targetunit ha le coord che fanno riferimento a target_ancestor
 
 			// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
 			//LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 			targetunit->intersect(parent_restriction);
 			LOG_DEBUG("intersected target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
 
-			this->push_render_unit(targetunit);
+			target_ancestor->push_render_unit(targetunit);
 		}
 	}
 }
@@ -542,7 +539,7 @@ void gr_object::render()
 
 	// step 1
 	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
-			build_render_areas(&pr, child);
+			child->build_render_areas(&pr, this);
 	// step 2
 	// la vera e propria frase di draw. Per ogni area da modificare devo fare riscrivere tutti i discendenti di this
 	for(gr_object *child=this->child_list; child!=0; child=child->next_brother)
