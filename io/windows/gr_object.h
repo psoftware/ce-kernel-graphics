@@ -72,8 +72,14 @@ public:
 	//metodo per ricreare il buffer (necessario dopo il cambio delle dimensioni)
 	void realloc_buffer();
 
-	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva
-	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0, bool ancestor_modified=false);
+	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva (e ridefinibile dalle classi derivate).
+	// NOTA IMPORTANTE: questo metodo usa molti argomenti per passare dati da una chiamata all'altra, ma questi sono solo necessari
+	// nel caso in cui il metodo chiamato è quello definito (ricordiamo che è virtuale) da gr_object. In tal caso le render_unit,
+	// per ottimizzazione, vengono inserite direttamente in ancestor_target. Nel caso di un oggetto generico che implementa
+	// l'unbuffering, questi parametri sono totalmente inutili perchè le render_unit vengono inserite nell'oggetto generico e non
+	// in ancestor_target: le restrizioni sono poi applicate dalla chiamata parente sul gr_object, rendendo meno complicata
+	// la ridefinizione di questo metodo da parte di oggetti generici. Potrebbe essere sistemato.
+	virtual void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int ancestors_offset_x=0, int ancestors_offset_y=0, bool ancestor_modified=false);
 	void recursive_render(render_subset_unit *child_restriction, gr_object *ancestor_to_render, int ancestors_offset_x=0, int ancestors_offset_y=0);
 
 	virtual void render();
