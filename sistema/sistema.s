@@ -465,7 +465,7 @@ a_panic:	// routine int $tipo_p
 
 	.extern c_abort_p
 a_abort_p:
-	movl $terminate_stack_end, %esp
+	movq $terminate_stack_end, %rsp
         call c_abort_p
 	call carica_stato
 	iretq
