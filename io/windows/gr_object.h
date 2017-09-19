@@ -83,7 +83,7 @@ public:
 	void recursive_render(render_subset_unit *child_restriction, gr_object *ancestor_to_render, int ancestors_offset_x=0, int ancestors_offset_y=0);
 
 	virtual void render();
-	virtual void draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, render_subset_unit *child_restriction, int start_pos_x, int start_pos_y);
+	virtual void draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, int total_offset_x, int total_offset_y, render_subset_unit *child_restriction);
 
 	virtual ~gr_object();
 

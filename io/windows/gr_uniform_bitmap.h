@@ -16,7 +16,7 @@ public:
 
 	void set_color(PIXEL_UNIT color);
 	void build_render_areas(render_subset_unit *parent_restriction, gr_object *target, int, int, bool);
-	void draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, render_subset_unit *child_restriction, int start_pos_x, int start_pos_y);
+	void draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, int total_offset_x, int total_offset_y, render_subset_unit *child_restriction);
 	void render();
 };
 

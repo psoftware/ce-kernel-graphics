@@ -474,21 +474,23 @@ void gr_object::recursive_render(render_subset_unit *child_restriction, gr_objec
 
 		// procediamo con il draw del figlio sul buffer parente
 		if(this->buffered)	// nel caso in cui l'oggetto è buffered, va fatta una copia del buffer del figlio sull'ancestor
-			gr_object::draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y, child_restriction ,
-				child_restriction->pos_x - ancestors_offset_x - this->pos_x, child_restriction->pos_y - ancestors_offset_y - this->pos_y);
+			gr_object::draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y,
+				ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, child_restriction);
 		else	// se l'oggetto è unbuffered tocca al figlio decidere cosa disegnare, perchè questo non ha un buffer
-			draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y, child_restriction ,
-				child_restriction->pos_x - ancestors_offset_x - this->pos_x, child_restriction->pos_y - ancestors_offset_y - this->pos_y);
+			draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y,
+				ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, child_restriction);
 	}
 }
 
 // si occupa di scrivere porzioni dell'oggetto this sul buffer dell'oggetto passato in ancestor_to_render
-void gr_object::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, render_subset_unit *child_restriction, int start_pos_x, int start_pos_y)
+void gr_object::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ancestor_size_y, int total_offset_x, int total_offset_y, render_subset_unit *child_restriction)
 {
 		// queste due coordinate si ottengono dalla child_restriction ma facendo riferimento all'oggetto this
 		// praticamente servono per capire da dove partire a leggere relativamente al buffer dell'oggetto da copiare
 		//int start_obj_x = child_restriction->pos_x - ancestors_offset_x - this->pos_x;
 		//int start_obj_y = child_restriction->pos_y - ancestors_offset_y - this->pos_y;
+		int start_pos_x = child_restriction->pos_x - total_offset_x;
+		int start_pos_y = child_restriction->pos_y - total_offset_y;
 		LOG_DEBUG("virtualizable_draw: start_pos_x=%d start_pos_y=%d", start_pos_x, start_pos_y);
 
 		if(!this->trasparency)
