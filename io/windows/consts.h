@@ -18,9 +18,9 @@
 	#define VBE_DISPI_BPP 0x20;
 #endif
 
-#define LABEL_MAX_TEXT 40
-#define BUTTON_MAX_TEXT 10
-#define TEXTBOX_MAX_TEXT 100
+#define LABEL_MAX_TEXT 1000
+#define BUTTON_MAX_TEXT 100
+#define TEXTBOX_MAX_TEXT 1000
 
 // costanti per gli oggetti del desktop
 #define MAINBAR_SIZE 40
