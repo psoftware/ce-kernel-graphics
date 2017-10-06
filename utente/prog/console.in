@@ -1,0 +1,112 @@
+#include <sys.h>
+#include <lib.h>
+#include <newdelete.h>
+#include <windows/u_obj.h>
+#include <winobj.h>
+
+#define DEFAULT_X_SIZE 300
+#define DEFAULT_Y_SIZE 180
+
+process console body console_body(0), 22, LIV_UTENTE;
+
+u_window * console_wind;
+u_label * console_label;
+
+char* command_str_pointer;
+
+char* strcat(char *dest, const char *src)
+{
+    char *res = dest;
+
+    while (*dest)
+      dest++;
+    while (*dest++ = *src++);
+
+    return res;
+}
+
+int strcmp(const char* s1, const char* s2)
+{
+    while (*s1 && (*s1 == *s2))
+        s1++, s2++;
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+void console_close_handler(des_user_event event)
+{
+	terminate_p();
+}
+
+void console_concat_text(const char * temp_str)
+{
+	strcat(console_label->text, temp_str);
+	console_wind->update_object(console_label);
+}
+
+void execute(const char * command_str)
+{
+	if(!strcmp(command_str, "help"))
+		console_concat_text("\nNon ne avrai");
+	else if(!strcmp(command_str, "ls") || !strcmp(command_str, "cd") || !strcmp(command_str, "pwd") || !strcmp(command_str, "dir"))
+		console_concat_text("\nQuesto nucleo non sa cosa sia un File System");
+	else
+		console_concat_text("\nComando non valido");
+}
+
+void keyboard_char_handler(des_user_event event)
+{
+	switch(event.k_char)
+	{
+		case '\b':
+		{
+			//cancella carattere
+			int last_char = strlen(console_label->text);
+			if(last_char!=0 && command_str_pointer < (console_label->text + last_char))	// non possiamo sempre cancellare
+				console_label->text[last_char-1] = '\0';
+			break;
+		}
+		case '\n':
+		{
+			// eseguiamo il comando
+			execute(command_str_pointer);
+
+			// mandiamo a capo il testo e ri-settiamo il command_str_pointer
+			console_concat_text("\n> ");
+			command_str_pointer = console_label->text + strlen(console_label->text);
+			break;
+		}
+		default:
+		{
+			const char temp_str[] = {(char)event.k_char, '\0'};
+			console_concat_text(temp_str);
+		}
+	}
+}
+
+process_body console_body(int a)
+{
+	console_wind = new u_window(DEFAULT_X_SIZE,DEFAULT_Y_SIZE,450,80, "Console Emulator");
+	console_wind->show();
+	console_wind->handler_closed_window = console_close_handler;
+
+	console_label = new u_label();
+	console_label->size_x=DEFAULT_X_SIZE;
+	console_label->size_y=DEFAULT_Y_SIZE;
+	console_label->pos_x=0;
+	console_label->pos_y=0;
+	console_label->z_index=0;
+	console_label->set_anchor(TOP_ANCHOR | BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
+	console_label->back_color=0xffe74c3c;
+	console_label->text_color=0xffffffff;
+	console_label->handler_keyboard_press = keyboard_char_handler;
+	copy("> ", console_label->text);
+
+	command_str_pointer = console_label->text + strlen(console_label->text);
+
+	console_wind->add_object(console_label);
+	console_wind->update_object(console_label);
+
+	//event receive cycle
+	while(true)
+		console_wind->next_event();
+}
