@@ -825,6 +825,7 @@ struct des_cursor
 
 PIXEL_UNIT cursor_arrow[32*32];
 PIXEL_UNIT cursor_h_resize[32*32];
+PIXEL_UNIT cursor_v_resize[32*32];
 
 void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y)
 {
@@ -1095,7 +1096,12 @@ void main_windows_manager(int n)
 							LOG_DEBUG("winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
 							win_man.dragging_border = res.target;
 							win_man.is_resizing = true;
-							switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
+
+							// cambio il cursore in h o v resize (a seconda del bordo)
+							if(win_man.dragging_border == win_man.focused_window->border_left_bitmap || win_man.dragging_border == win_man.focused_window->border_right_bitmap)
+								switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
+							else if(win_man.dragging_border == win_man.focused_window->border_top_bitmap || win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
+								switch_mousecursor_bitmap(cursor_v_resize, v_resize_cursor_click_x, v_resize_cursor_click_y);
 						}
 						else
 						{
@@ -1203,12 +1209,15 @@ bool windows_init()
 	background_bitmap->render();
 	doubled_framebuffer_container->add_child(background_bitmap);
 
-	//cursore
+	//caricamento cursori
 	TgaParser tga_arr(tga_aero_arrow);
 	tga_arr.to_bitmap(cursor_arrow);
 	TgaParser tga_h_res(tga_aero_h_resize);
 	tga_h_res.to_bitmap(cursor_h_resize);
+	TgaParser tga_v_res(tga_aero_v_resize);
+	tga_v_res.to_bitmap(cursor_v_resize);
 
+	//oggetto cursore
 	mouse_bitmap = new gr_bitmap(0,0,32,32,CURSOR_ZINDEX);
 	switch_mousecursor_bitmap(cursor_arrow, main_cursor_click_x, main_cursor_click_y);
 	mouse_bitmap->set_trasparency(true);

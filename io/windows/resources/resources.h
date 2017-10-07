@@ -5,15 +5,21 @@
 extern unsigned char tga_aero_arrow[];
 extern unsigned int tga_aero_arrow_len;
 
-// cursore resize
+// cursore h resize
 extern unsigned char tga_aero_h_resize[];
 extern unsigned int tga_aero_h_resize_len;
+
+// cursore v resize
+extern unsigned char tga_aero_v_resize[];
+extern unsigned int tga_aero_v_resize_len;
 
 // configurazione cursori (hot points)
 extern const int main_cursor_click_x;
 extern const int main_cursor_click_y;
 extern const int h_resize_cursor_click_x;
 extern const int h_resize_cursor_click_y;
+extern const int v_resize_cursor_click_x;
+extern const int v_resize_cursor_click_y;
 
 // wallpaper
 extern unsigned char tga_wallpaper[];
