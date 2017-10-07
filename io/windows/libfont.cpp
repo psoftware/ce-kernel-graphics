@@ -21,11 +21,11 @@ void _libfont_init()
 
 	#elif defined BPP_32
 	// carico la bitmap del font dal file tga indicato
-	TgaParser tgp(tga_font_bitmap_mecha);
+	TgaParser tgp(tga_font_bitmap_segoeui);
 	tgp.to_bitmap(loaded_font_bitmap);
 
 	// carico la lista delle larghezze dei caratteri
-	loaded_font_width = tga_font_width_mecha;
+	loaded_font_width = tga_font_width_segoeui;
 	#endif
 
 	libfont_initialized = true;

@@ -18,4 +18,16 @@ extern unsigned short tga_font_width_mecha[];
 extern unsigned char tga_font_bitmap_segoeui[];
 extern unsigned short tga_font_width_segoeui[];
 
+// font arial
+extern unsigned char tga_font_bitmap_arial[];
+extern unsigned short tga_font_width_arial[];
+
+// font verdana
+extern unsigned char tga_font_bitmap_verdana[];
+extern unsigned short tga_font_width_verdana[];
+
+// font msserif
+extern unsigned char tga_font_bitmap_msserif[];
+extern unsigned short tga_font_width_msserif[];
+
 #endif
