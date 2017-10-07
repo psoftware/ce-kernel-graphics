@@ -1185,6 +1185,9 @@ void main_winman_tick(int n)
 
 bool windows_init()
 {
+	//inizializziamo la libreria dei font (è unica ed è linkata col solo modulo di io)
+	_libfont_init();
+
 	//framebuffer e doubledbuffer
 	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, main_videocard.framebuffer);
 	doubled_framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0);

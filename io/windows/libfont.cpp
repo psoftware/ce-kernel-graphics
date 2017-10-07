@@ -1,10 +1,35 @@
 #include "libce_guard.h"
 #include "libgr.h"
 #include "consts.h"
-#include "font.h"
+#include "libtga.h"
+#include "resources/resources.h"
 
-unsigned char* loaded_font_bitmap = font_bitmap;
-unsigned short* loaded_font_width = font_width;
+PIXEL_UNIT loaded_font_bitmap[16*16*256];
+unsigned short* loaded_font_width;
+
+bool libfont_initialized = false;
+
+void _libfont_init()
+{
+	if(libfont_initialized)
+		return;
+
+	#ifdef BPP_8
+	// nel caso di modalità di funzionamento a 8BPP usiamo sempre un charset di default (senza semi-trasparenza)
+	gr_memcpy(loaded_font_bitmap, font_bitmap_8BPP_mecha, 16*16*256);
+	loaded_font_width = tga_font_width_mecha;
+
+	#elif defined BPP_32
+	// carico la bitmap del font dal file tga indicato
+	TgaParser tgp(tga_font_bitmap_mecha);
+	tgp.to_bitmap(loaded_font_bitmap);
+
+	// carico la lista delle larghezze dei caratteri
+	loaded_font_width = tga_font_width_mecha;
+	#endif
+
+	libfont_initialized = true;
+}
 
 int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
 {
