@@ -44,19 +44,20 @@ void TgaParser::to_bitmap(void *dest) {
 
 	natb direction = (this->header->img_descriptor & tga_header::DESCR_DIRECTION_MASK) >> 4;
 	natb alphadepth = (this->header->img_descriptor & tga_header::DESCR_ALPHADEPTH_MASK);
-	flog(LOG_INFO, "libtga: w %d h %d direction %d alpha %p", header->width, header->height, direction, alphadepth);
+	flog(LOG_INFO, "libtga: w=%d h=%d %dBPP direction=%d alpha=%d", header->width, header->height, header->depth, direction, alphadepth);
 
 	// lo standard TGA descrive più metodi di rappresentazione della bitmap nell campo img_data,
 	// in particolare si può scegliere l'angolo di partenza dalla quale si inizia a scrivere la
 	// bitmap e se quanti bit è rappresentato l'alpha channel (qui supportiamo solo 0 o 8 bit)
 
 	switch(direction) {
-		case 0x00: //bottom-left (dobbiamo invertire l'ordine delle righe)
+		case 0: //bottom-left (dobbiamo invertire l'ordine delle righe)
 			//flog(LOG_INFO, "libtga: bottom-left");
 			if(alphadepth==8 && header->depth==32)	//formato 0xAARRGGBB
 				for(int r=0; r<this->header->height; r++)
 					for(int c=0; c<this->header->width; c++)
-							static_cast<unsigned int*>(dest)[(this->header->height-r-1)*this->header->width + c] = img_data[r*this->header->width + c];
+							static_cast<unsigned int*>(dest)[(this->header->height-r-1)*this->header->width + c]
+								= reinterpret_cast<unsigned int*>(img_data)[r*this->header->width + c];
 			else if(alphadepth==0 && header->depth==24)	//formato 0xRRGGBB (24BPP)
 				for(int r=0; r<this->header->height; r++)
 					for(int c=0; c<this->header->width; c++)
@@ -66,15 +67,15 @@ void TgaParser::to_bitmap(void *dest) {
 						static_cast<unsigned char*>(dest)[((this->header->height-r-1)*this->header->width + c)*4 + 3] = 0xFF;	// impostiamo il byte dell'aplha channel a 255
 					}
 		break;
-		case 0x01: //bottom-right (dobbiamo invertire colonne e righe, ma bisogna capire se il pixel è 0xAARRGGBB oppure 0xBBGGRRAA)
+		case 1: //bottom-right (dobbiamo invertire colonne e righe, ma bisogna capire se il pixel è 0xAARRGGBB oppure 0xBBGGRRAA)
 			flog(LOG_INFO, "libtga: bottom-right not yet supported");
 		break;
-		case 0x10: //top-left (è la forma con la quale è costruito il framebuffer)
+		case 2: //top-left (è la forma con la quale è costruito il framebuffer)
 			//flog(LOG_INFO, "libtga: top-left");
 			if(alphadepth==8 && header->depth==32)	//formato 0xAARRGGBB
 				for(int r=0; r<this->header->height; r++)
 					for(int c=0; c<this->header->width; c++)
-							static_cast<unsigned int*>(dest)[r*this->header->width + c] = img_data[r*this->header->width + c];
+							static_cast<unsigned int*>(dest)[r*this->header->width + c] = reinterpret_cast<unsigned int*>(img_data)[r*this->header->width + c];
 			else if(alphadepth==0 && header->depth==24)	//formato 0xRRGGBB (24BPP)
 				for(int r=0; r<this->header->height; r++)
 					for(int c=0; c<this->header->width; c++)
@@ -84,7 +85,7 @@ void TgaParser::to_bitmap(void *dest) {
 						static_cast<unsigned char*>(dest)[(r*this->header->width + c)*4 + 3] = 0xFF;	// impostiamo il byte dell'aplha channel a 255
 					}
 		break;
-		case 0x11: //top-right (dobbiamo invertire le colonne)
+		case 3: //top-right (dobbiamo invertire le colonne)
 			flog(LOG_INFO, "libtga: top-right not yet supported");
 		break;
 	}
