@@ -3,8 +3,6 @@
 #include "costanti.h"
 #include "libce_guard.h"
 #include "newdelete.h"
-#include "windows/cursor.h"
-#include "windows/h_resize_cursor.h"
 #include "log.h"
 
 //#define BOCHS
@@ -825,6 +823,9 @@ struct des_cursor
 	int y;
 };
 
+PIXEL_UNIT cursor_arrow[32*32];
+PIXEL_UNIT cursor_h_resize[32*32];
+
 void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y)
 {
 	if(current_bitmap==newbitmap)
@@ -1094,7 +1095,7 @@ void main_windows_manager(int n)
 							LOG_DEBUG("winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
 							win_man.dragging_border = res.target;
 							win_man.is_resizing = true;
-							switch_mousecursor_bitmap(h_resize_cursor, h_resize_cursor_click_x, h_resize_cursor_click_y);
+							switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
 						}
 						else
 						{
@@ -1154,7 +1155,7 @@ void main_windows_manager(int n)
 							win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 					}
 
-					switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
+					switch_mousecursor_bitmap(cursor_arrow, main_cursor_click_x, main_cursor_click_y);
 					render_on_framebuffer();
 				}
 			}
@@ -1203,8 +1204,13 @@ bool windows_init()
 	doubled_framebuffer_container->add_child(background_bitmap);
 
 	//cursore
+	TgaParser tga_arr(tga_aero_arrow);
+	tga_arr.to_bitmap(cursor_arrow);
+	TgaParser tga_h_res(tga_aero_h_resize);
+	tga_h_res.to_bitmap(cursor_h_resize);
+
 	mouse_bitmap = new gr_bitmap(0,0,32,32,CURSOR_ZINDEX);
-	switch_mousecursor_bitmap(main_cursor_bitmap, main_cursor_click_x, main_cursor_click_y);
+	switch_mousecursor_bitmap(cursor_arrow, main_cursor_click_x, main_cursor_click_y);
 	mouse_bitmap->set_trasparency(true);
 	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);
