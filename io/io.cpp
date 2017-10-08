@@ -397,6 +397,7 @@ bool bochsvga_init()
 #include "windows/gr_bitmap.h"
 #include "windows/gr_button.h"
 #include "windows/gr_label.h"
+#include "windows/gr_progressbar.h"
 #include "windows/gr_window.h"
 #include "windows/libtga.h"
 #include "windows/resources/resources.h"
@@ -1287,15 +1288,58 @@ void main_winman_tick(int n)
 	}
 }
 
+const int TOTAL_STEPS = 8;
+const int STEP_INCREMENT = 100/TOTAL_STEPS;
+void update_loading_status(gr_progressbar * loading_bar, gr_label * loading_status_label, gr_object *loading_container, const char *status_text)
+{
+	static int current_step = 1;
+
+	loading_bar->set_progress((current_step++)*STEP_INCREMENT);
+	loading_bar->render();
+	loading_status_label->set_text(status_text);
+	loading_status_label->render();
+	loading_container->render();
+	framebuffer_container->render();
+	framebuffer_container->clear_render_units();
+}
+
 bool windows_init()
 {
-	//inizializziamo la libreria dei font (è unica ed è linkata col solo modulo di io)
-	_libfont_init();
-
 	//framebuffer e doubledbuffer
 	framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0, main_videocard.framebuffer);
 	doubled_framebuffer_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0);
-	framebuffer_container->add_child(doubled_framebuffer_container);
+
+	//oggetti temporanei per mostrare l'interfaccia di caricamento
+	gr_object *loading_container = new gr_object(0,0, MAX_SCREENX, MAX_SCREENY,0);
+	framebuffer_container->add_child(loading_container);
+	gr_bitmap *loading_background_bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,BACKGROUND_ZINDEX);
+	loading_background_bitmap->paint_uniform(0xff34495e);
+	loading_background_bitmap->render();
+	loading_container->add_child(loading_background_bitmap);
+	loading_container->render();
+
+	//barra di caricamento
+	const int LOADINGBAR_SIZE_X = 300;
+	const int LOADINGBAR_SIZE_Y = 20;
+	const int LOADINGBAR_POS_Y = 500;
+
+	gr_progressbar *loading_bar = new gr_progressbar((MAX_SCREENX-LOADINGBAR_SIZE_X)/2, LOADINGBAR_POS_Y, LOADINGBAR_SIZE_X, LOADINGBAR_SIZE_Y, 1);
+	loading_bar->set_progress(100/TOTAL_STEPS);
+	loading_bar->render();
+	loading_container->add_child(loading_bar);
+	loading_container->render();
+	framebuffer_container->render();
+
+	//inizializziamo la libreria dei font (è unica ed è linkata col solo modulo di io)
+	_libfont_init();
+
+	//label status caricamento
+	gr_label *loading_status_label = new gr_label((MAX_SCREENX-LOADINGBAR_SIZE_X)/2, LOADINGBAR_POS_Y - 20, 200, 16, 1);
+	loading_status_label->set_text_color(0xffffffff);
+	loading_status_label->set_back_color(0xff34495e);
+	loading_container->add_child(loading_status_label);
+
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_wallpaper...");
 
 	//sfondo
 	gr_bitmap * background_bitmap = new gr_bitmap(0,0,MAX_SCREENX,MAX_SCREENY,BACKGROUND_ZINDEX);
@@ -1306,15 +1350,21 @@ bool windows_init()
 	background_bitmap->render();
 	doubled_framebuffer_container->add_child(background_bitmap);
 
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_aero_arrow...");
+
 	//caricamento cursori
 	TgaParser tga_arr(tga_aero_arrow);
 	tga_arr.to_bitmap(cursor_arrow);
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_aero_h_resize...");
 	TgaParser tga_h_res(tga_aero_h_resize);
 	tga_h_res.to_bitmap(cursor_h_resize);
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_aero_v_resize...");
 	TgaParser tga_v_res(tga_aero_v_resize);
 	tga_v_res.to_bitmap(cursor_v_resize);
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_aero_tl_resize...");
 	TgaParser tga_tl_res(tga_aero_tl_resize);
 	tga_tl_res.to_bitmap(cursor_tl_resize);
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Loading tga_aero_tr_resize...");
 	TgaParser tga_tr_res(tga_aero_tr_resize);
 	tga_tr_res.to_bitmap(cursor_tr_resize);
 
@@ -1343,8 +1393,6 @@ bool windows_init()
 	render_heap_label();
 	doubled_framebuffer_container->add_child(heap_label);
 
-	render_on_framebuffer();
-
 	//creare un processo che si occupi della stampa delle finestre
 	win_man.mutex = sem_ini(1);
 	win_man.sync_notfull = sem_ini(MAX_REQ_QUEUE - 1);
@@ -1357,6 +1405,25 @@ bool windows_init()
 	{
 		return false;
 	}
+
+	update_loading_status(loading_bar, loading_status_label, loading_container, "Completed.");
+
+	// distruggiamo gli oggetti della schermata di caricamento
+	loading_container->remove_child(loading_background_bitmap);
+	loading_container->remove_child(loading_bar);
+	loading_container->remove_child(loading_status_label);
+	delete loading_background_bitmap;
+	delete loading_bar;
+	delete loading_status_label;
+	framebuffer_container->remove_child(loading_container);
+	delete loading_container;
+
+	// impostiamo il doubled_framebuffer_container come figlio di framebuffer_container
+	framebuffer_container->clear_render_units();
+	framebuffer_container->add_child(doubled_framebuffer_container);
+
+	// renderizziamo doubled_framebuffer_container e framebuffer_container
+	render_on_framebuffer();
 
 	flog(LOG_INFO, "attivo gestore delle finestre...");
 	activate_p(main_windows_manager, 0, PRIO_WINMAN, LIV_SISTEMA);
