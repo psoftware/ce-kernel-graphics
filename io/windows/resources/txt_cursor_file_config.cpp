@@ -4,3 +4,7 @@ extern const int h_resize_cursor_click_x = 11;
 extern const int h_resize_cursor_click_y = 4;
 extern const int v_resize_cursor_click_x = 4;
 extern const int v_resize_cursor_click_y = 11;
+extern const int tl_resize_cursor_click_x = 9;
+extern const int tl_resize_cursor_click_y = 9;
+extern const int tr_resize_cursor_click_x = 9;
+extern const int tr_resize_cursor_click_y = 9;

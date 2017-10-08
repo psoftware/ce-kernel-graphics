@@ -829,9 +829,12 @@ struct des_cursor
 	int y;
 };
 
+// bitmap dei cursori
 PIXEL_UNIT cursor_arrow[32*32];
 PIXEL_UNIT cursor_h_resize[32*32];
 PIXEL_UNIT cursor_v_resize[32*32];
+PIXEL_UNIT cursor_tl_resize[32*32];
+PIXEL_UNIT cursor_tr_resize[32*32];
 
 void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y)
 {
@@ -986,10 +989,10 @@ inline void resize_window_bottom(gr_window *wind, int delta_y, int& effective_de
 // funzione per settare il cursore del mouse in base al bordo
 inline void switch_mousecursor_by_border()
 {
-	if(!(win_man.dragging_border == win_man.BORDER_LEFT || win_man.dragging_border == win_man.BORDER_RIGHT
-		|| win_man.dragging_border == win_man.BORDER_TOP || win_man.dragging_border == win_man.BORDER_BOTTOM)
-		&& win_man.dragging_border)
-	{}
+	if((win_man.dragging_border == (win_man.BORDER_TOP | win_man.BORDER_LEFT)) || (win_man.dragging_border == (win_man.BORDER_BOTTOM | win_man.BORDER_RIGHT)))
+		switch_mousecursor_bitmap(cursor_tl_resize, tl_resize_cursor_click_x, tl_resize_cursor_click_y);
+	else if((win_man.dragging_border == (win_man.BORDER_TOP | win_man.BORDER_RIGHT)) || (win_man.dragging_border == (win_man.BORDER_BOTTOM | win_man.BORDER_LEFT)))
+		switch_mousecursor_bitmap(cursor_tr_resize, tr_resize_cursor_click_x, tr_resize_cursor_click_y);
 	else if(win_man.dragging_border & win_man.BORDER_LEFT || win_man.dragging_border & win_man.BORDER_RIGHT)
 		switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
 	else if(win_man.dragging_border & win_man.BORDER_TOP || win_man.dragging_border & win_man.BORDER_BOTTOM)
@@ -1291,6 +1294,10 @@ bool windows_init()
 	tga_h_res.to_bitmap(cursor_h_resize);
 	TgaParser tga_v_res(tga_aero_v_resize);
 	tga_v_res.to_bitmap(cursor_v_resize);
+	TgaParser tga_tl_res(tga_aero_tl_resize);
+	tga_tl_res.to_bitmap(cursor_tl_resize);
+	TgaParser tga_tr_res(tga_aero_tr_resize);
+	tga_tr_res.to_bitmap(cursor_tr_resize);
 
 	//oggetto cursore
 	mouse_bitmap = new gr_bitmap(0,0,32,32,CURSOR_ZINDEX);
