@@ -857,7 +857,7 @@ void switch_mousecursor_bitmap(const void *newbitmap, int offset_x, int offset_y
 void render_mousecursor_onbuffer(des_cursor* cursor)
 {
 	mouse_bitmap->set_pos_x(cursor->x - bitmap_click_offset_x);
-	mouse_bitmap->set_pos_y(cursor->y - bitmap_click_offset_x);
+	mouse_bitmap->set_pos_y(cursor->y - bitmap_click_offset_y);
 	mouse_bitmap->render();
 }
 
