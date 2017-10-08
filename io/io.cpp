@@ -461,18 +461,22 @@ struct des_windows_man
 {
 	//Elementi per la gestione del focus su finestre e oggetti
 	gr_window *focused_window;
+	gr_window *passing_on_window;
+	gr_object *passing_on_window_object;
+	gr_object *topbar_clicking_object;
 
-	// flag settabili per il campo dragging_border
+	//gestione del trascinamento
+	bool is_resizing;
+
 	natb dragging_border;
+	//flag settabili per il campo dragging_border
 	static const natb BORDER_LEFT = 1u;
 	static const natb BORDER_RIGHT = 1u << 1;
 	static const natb BORDER_TOP = 1u << 2;
 	static const natb BORDER_BOTTOM = 1u << 3;
-	gr_object *topbar_clicking_object;
 
 	//Variabili per gestire lo stato di resize o trascinamento
 	bool is_dragging;
-	bool is_resizing;
 
 	//Coda richieste primitive
 	des_window_req req_queue[MAX_REQ_QUEUE];
@@ -1058,7 +1062,8 @@ void main_windows_manager(int n)
 			break;
 			case MOUSE_UPDATE_EVENT:
 			{
-					//flog(LOG_INFO, "act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
+					LOG_DEBUG("act(%d): Processo richiesta di aggiornamento dati mouse %d", newreq.act, newreq.w_id);
+
 					main_cursor.old_x=main_cursor.x;
 					main_cursor.old_y=main_cursor.y;
 					main_cursor.x+=newreq.delta_x;
@@ -1072,7 +1077,7 @@ void main_windows_manager(int n)
 					}
 
 					//se stiamo ridimensionando una finestra
-					if(win_man.is_resizing && win_man.focused_window!=0)
+					else if(win_man.is_resizing && win_man.focused_window!=0)
 					{
 						//quando ridimensioniamo non possiamo rendere le size della finestra negative, per questo il delta
 						//non corrisponde necessariamente al delta effettivo, e ce lo dobbiamo conservare perchè
@@ -1098,6 +1103,84 @@ void main_windows_manager(int n)
 						win_man.focused_window->resize();
 						win_man.focused_window->render();
 					}
+					else //cerco di capire su quale oggetto mi sono spostato e se fa parte di una finestra
+					{
+						win_man.dragging_border = 0;
+
+						gr_object::search_filter filter;
+						gr_object::search_result res;
+						memset(&filter, 0, sizeof(filter));
+						filter.skip_id=mouse_bitmap->get_id();
+						filter.padding_x = 2;
+						filter.padding_y = 2;
+						filter.parent_flags = gr_window::WINDOW_FLAG;
+						doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
+
+						gr_object *passing_on_object = res.target;
+
+						// se sono giunto su un oggetto di una finestra
+						if(res.target_parent!=0)
+						{
+							// non c'è bisogno di un dynamic_cast perchè la ricerca restituisce solo oggetti gr_windows (se tutto va bene)
+							win_man.passing_on_window = static_cast<gr_window*>(res.target_parent);
+
+							// devo capire su che punto della finestra mi sono mosso, provo a vedere se sui bordi
+							memset(&filter, 0, sizeof(filter));
+							filter.skip_id = mouse_bitmap->get_id();
+							filter.padding_x = 5;
+							filter.padding_y = 5;
+							filter.flags = gr_window::BORDER_FLAG;
+							win_man.passing_on_window->search_tree(main_cursor.x-win_man.passing_on_window->get_pos_x(), main_cursor.y-win_man.passing_on_window->get_pos_y(), filter, res);
+
+							// sono sul bordo?
+							if(res.target != 0)
+							{
+								int rel_x_cursor = main_cursor.x - win_man.passing_on_window->get_pos_x();
+								int rel_y_cursor = main_cursor.y - win_man.passing_on_window->get_pos_y();
+
+								// individuo il bordo selezionato
+								if(res.target == win_man.passing_on_window->border_left_bitmap)
+									win_man.dragging_border |= win_man.BORDER_LEFT;
+								else if(res.target == win_man.passing_on_window->border_right_bitmap)
+									win_man.dragging_border |= win_man.BORDER_RIGHT;
+								else if(res.target == win_man.passing_on_window->border_top_bitmap)
+									win_man.dragging_border |= win_man.BORDER_TOP;
+								else if(res.target == win_man.passing_on_window->border_bottom_bitmap)
+									win_man.dragging_border |= win_man.BORDER_BOTTOM;
+
+								// valuto se selezionare anche il bordo ortogonale (resize di entrambi le dimensioni x e y)
+								if(res.target == win_man.passing_on_window->border_left_bitmap || res.target == win_man.passing_on_window->border_right_bitmap)
+								{
+									if(rel_y_cursor > win_man.passing_on_window->border_left_bitmap->get_size_y() - BORDER_ANGLE_SIZE)
+										win_man.dragging_border |= win_man.BORDER_BOTTOM;
+									else if(rel_y_cursor < BORDER_ANGLE_SIZE)
+										win_man.dragging_border |= win_man.BORDER_TOP;
+								}
+								else if(res.target == win_man.passing_on_window->border_top_bitmap || res.target == win_man.passing_on_window->border_bottom_bitmap)
+								{
+									if(rel_x_cursor > win_man.passing_on_window->border_top_bitmap->get_size_x() - BORDER_ANGLE_SIZE)
+										win_man.dragging_border |= win_man.BORDER_RIGHT;
+									else if(rel_x_cursor < BORDER_ANGLE_SIZE)
+										win_man.dragging_border |= win_man.BORDER_LEFT;
+								}
+							}
+							else // se sono arrivato qui è perchè l'oggetto sulla quale mi sono posizionato sta nell'inner_container della finestra
+							{
+								//win_man.passing_on_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
+								win_man.passing_on_window_object = passing_on_object;
+							}
+
+							render_on_framebuffer();
+						}
+						else // se NON mi sono spostato su una finestra (me ne ricordo per droppare gli eventi)
+						{
+							win_man.passing_on_window = 0;
+							win_man.passing_on_window_object = 0;
+						}
+					}
+
+					// imposto il cursore
+					switch_mousecursor_by_border();
 
 					//sposto il cursore sulla posizione nuova
 					render_mousecursor_onbuffer(&main_cursor);
@@ -1113,97 +1196,34 @@ void main_windows_manager(int n)
 			case MOUSE_MOUSEDOWN_EVENT:
 				if(newreq.button==LEFT)
 				{
-					//cerco di capire su quale oggetto ho cliccato e se fa parte di una finestra
-					gr_object::search_filter filter;
-					gr_object::search_result res;
-					memset(&filter, 0, sizeof(filter));
-					filter.skip_id=mouse_bitmap->get_id();
-					filter.padding_x = 2;
-					filter.padding_y = 2;
-					filter.parent_flags = gr_window::WINDOW_FLAG;
-					doubled_framebuffer_container->search_tree(main_cursor.x, main_cursor.y, filter, res);
-
-					gr_object *clicked_object = res.target;
-
 					// se ho cliccato su un oggetto di una finestra
-					if(res.target_parent!=0)
+					if(win_man.passing_on_window != 0)
 					{
-						// non c'è bisogno di un dynamic_cast perchè la ricerca restituisce solo oggetti gr_windows (se tutto va bene)
-						gr_window *window_of_clicked_object = static_cast<gr_window*>(res.target_parent);
-
 						// imposto il focus sulla finestra
-						win_man.focused_window = window_of_clicked_object;
+						win_man.focused_window = win_man.passing_on_window;
 						win_man.focused_window->render();
 						doubled_framebuffer_container->focus_child(win_man.focused_window);
 
-						// devo capire su che punto della finestra ho cliccato, provo a vedere se sui bordi
-						memset(&filter, 0, sizeof(filter));
-						filter.skip_id = mouse_bitmap->get_id();
-						filter.padding_x = 5;
-						filter.padding_y = 5;
-						filter.flags = gr_window::BORDER_FLAG;
-						window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
-						if(res.target != 0)
-						{
-							LOG_DEBUG("winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
+						// devo capire su che punto della finestra ho cliccato
+						if(win_man.dragging_border != 0)
 							win_man.is_resizing = true;
-
-							int rel_x_cursor = main_cursor.x - win_man.focused_window->get_pos_x();
-							int rel_y_cursor = main_cursor.y - win_man.focused_window->get_pos_y();
-
-							// individuo il bordo cliccato
-							if(res.target == win_man.focused_window->border_left_bitmap)
-								win_man.dragging_border |= win_man.BORDER_LEFT;
-							else if(res.target == win_man.focused_window->border_right_bitmap)
-								win_man.dragging_border |= win_man.BORDER_RIGHT;
-							else if(res.target == win_man.focused_window->border_top_bitmap)
-								win_man.dragging_border |= win_man.BORDER_TOP;
-							else if(res.target == win_man.focused_window->border_bottom_bitmap)
-								win_man.dragging_border |= win_man.BORDER_BOTTOM;
-
-							// valuto se selezionare anche il bordo ortogonale (resize di entrambi le dimensioni x e y)
-							if(res.target == win_man.focused_window->border_left_bitmap || res.target == win_man.focused_window->border_right_bitmap)
-							{
-								if(rel_y_cursor > win_man.focused_window->border_left_bitmap->get_size_y() - BORDER_ANGLE_SIZE)
-									win_man.dragging_border |= win_man.BORDER_BOTTOM;
-								else if(rel_y_cursor < BORDER_ANGLE_SIZE)
-									win_man.dragging_border |= win_man.BORDER_TOP;
-							}
-							else if(res.target == win_man.focused_window->border_top_bitmap || res.target == win_man.focused_window->border_bottom_bitmap)
-							{
-								if(rel_x_cursor > win_man.focused_window->border_top_bitmap->get_size_x() - BORDER_ANGLE_SIZE)
-									win_man.dragging_border |= win_man.BORDER_RIGHT;
-								else if(rel_x_cursor < BORDER_ANGLE_SIZE)
-									win_man.dragging_border |= win_man.BORDER_LEFT;
-							}
-
-							// imposto il cursore
-							switch_mousecursor_by_border();
-						}
-						else
+						// se ho cliccato su un oggetto della topbar
+						else if(win_man.focused_window->topbar_container->has_child(win_man.passing_on_window_object) != 0)
 						{
-							// controllo se ho cliccato sulla topbar
-							memset(&filter, 0, sizeof(filter));
-							filter.skip_id = mouse_bitmap->get_id();
-							filter.parent_flags = gr_window::TOPBAR_FLAG;
-							window_of_clicked_object->search_tree(main_cursor.x-window_of_clicked_object->get_pos_x(), main_cursor.y-window_of_clicked_object->get_pos_y(), filter, res);
-							if(res.target_parent != 0)
-							{
-								LOG_DEBUG("winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
-								// teniamo da parte l'oggetto cliccato sulla topbar perchè serve per l'evento MOUSEUP
-								win_man.topbar_clicking_object = clicked_object;
+							LOG_DEBUG("winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
+							// teniamo da parte l'oggetto cliccato sulla topbar perchè serve per l'evento MOUSEUP
+							win_man.topbar_clicking_object = win_man.passing_on_window_object;
 
-								// il metodo processa gli eventi per la topbar e ci comunica se va fatto il trascinamento o meno
-								win_man.is_dragging = window_of_clicked_object->click_on_topbar(clicked_object, true);
+							// il metodo processa gli eventi per la topbar e ci comunica se va fatto il trascinamento o meno
+							win_man.is_dragging = win_man.passing_on_window->click_on_topbar(win_man.passing_on_window_object, true);
 
-								// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
-								window_of_clicked_object->render();
-							}
-							else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
-							{
-								win_man.focused_window->set_focused_child(clicked_object);
-								win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
-							}
+							// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
+							win_man.passing_on_window_object->render();
+						}
+						else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
+						{
+							win_man.focused_window->set_focused_child(win_man.passing_on_window_object);
+							win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 						}
 
 						render_on_framebuffer();
@@ -1217,7 +1237,6 @@ void main_windows_manager(int n)
 				if(newreq.button==LEFT)
 				{
 					win_man.is_dragging=false;
-					win_man.dragging_border=0;
 					win_man.is_resizing=false;
 
 					if(win_man.focused_window!=0)
