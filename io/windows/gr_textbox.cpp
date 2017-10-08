@@ -5,7 +5,7 @@
 #include "libfont.h"
 
 gr_textbox::gr_textbox(int pos_x, int pos_y, int size_x, int size_y, int z_index)
-: gr_object(pos_x, pos_y, size_x, size_y, z_index), text_color(TEXTBOX_DEFAULT_TEXTCOLOR), back_color(TEXTBOX_DEFAULT_BACKCOLOR),
+: gr_object(pos_x, pos_y, size_x, size_y, z_index), caret_print(0), text_color(TEXTBOX_DEFAULT_TEXTCOLOR), back_color(TEXTBOX_DEFAULT_BACKCOLOR),
 	border_color(TEXTBOX_DEFAULT_BORDERCOLOR)
 {
 	copy("", this->text);
@@ -24,6 +24,7 @@ gr_textbox& gr_textbox::operator=(const u_textbox& u_t)
 	this->text_color = u_t.text_color;
 	this->back_color = u_t.back_color;
 	this->border_color = u_t.border_color;
+	this->caret_print = false;
 	copy(u_t.text, this->text);
 
 	return *this;
