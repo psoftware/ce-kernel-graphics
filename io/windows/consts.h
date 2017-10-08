@@ -42,6 +42,7 @@
 #define TITLELABEL_ZINDEX 1
 #define BORDER_TICK 1
 #define BORDER_ZINDEX 100
+#define BORDER_ANGLE_SIZE 5
 
 #if defined BPP_8
 	#define WIN_BACKGROUND_COLOR 0x36

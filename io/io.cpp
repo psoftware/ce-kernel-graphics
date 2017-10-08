@@ -461,7 +461,13 @@ struct des_windows_man
 {
 	//Elementi per la gestione del focus su finestre e oggetti
 	gr_window *focused_window;
-	gr_object *dragging_border;
+
+	// flag settabili per il campo dragging_border
+	natb dragging_border;
+	static const natb BORDER_LEFT = 1u;
+	static const natb BORDER_RIGHT = 1u << 1;
+	static const natb BORDER_TOP = 1u << 2;
+	static const natb BORDER_BOTTOM = 1u << 3;
 	gr_object *topbar_clicking_object;
 
 	//Variabili per gestire lo stato di resize o trascinamento
@@ -948,6 +954,50 @@ void render_heap_label()
 	heap_label->render();
 }
 
+// ========= Funzioni di aiuto per effettuare il resize delle finestre da cursore =========
+inline void resize_window_left(gr_window *wind, int delta_x, int& effective_delta_pos_x, int& effective_delta_size_x)
+{
+	int effective_delta = wind->offset_size_x(delta_x*-1);
+	wind->set_pos_x(win_man.focused_window->get_pos_x() + effective_delta*-1);
+	effective_delta_pos_x -= effective_delta;
+	effective_delta_size_x += effective_delta;
+}
+
+inline void resize_window_right(gr_window *wind, int delta_x, int& effective_delta_size_x)
+{
+	int effective_delta = wind->offset_size_x(delta_x);
+	effective_delta_size_x += effective_delta;
+}
+
+inline void resize_window_top(gr_window *wind, int delta_y, int& effective_delta_pos_y, int& effective_delta_size_y)
+{
+	int effective_delta = win_man.focused_window->offset_size_y(delta_y*-1);
+	wind->set_pos_y(wind->get_pos_y() + effective_delta*-1);
+	effective_delta_pos_y -= effective_delta;
+	effective_delta_size_y += effective_delta;
+}
+
+inline void resize_window_bottom(gr_window *wind, int delta_y, int& effective_delta_size_y)
+{
+	int effective_delta = wind->offset_size_y(delta_y);
+	effective_delta_size_y += effective_delta;
+}
+
+// funzione per settare il cursore del mouse in base al bordo
+inline void switch_mousecursor_by_border()
+{
+	if(!(win_man.dragging_border == win_man.BORDER_LEFT || win_man.dragging_border == win_man.BORDER_RIGHT
+		|| win_man.dragging_border == win_man.BORDER_TOP || win_man.dragging_border == win_man.BORDER_BOTTOM)
+		&& win_man.dragging_border)
+	{}
+	else if(win_man.dragging_border & win_man.BORDER_LEFT || win_man.dragging_border & win_man.BORDER_RIGHT)
+		switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
+	else if(win_man.dragging_border & win_man.BORDER_TOP || win_man.dragging_border & win_man.BORDER_BOTTOM)
+		switch_mousecursor_bitmap(cursor_v_resize, v_resize_cursor_click_x, v_resize_cursor_click_y);
+	else
+		switch_mousecursor_bitmap(cursor_arrow, main_cursor_click_x, main_cursor_click_y);
+}
+
 // funzione main del processo windows_manager
 void main_windows_manager(int n)
 {
@@ -1018,31 +1068,30 @@ void main_windows_manager(int n)
 						win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + newreq.delta_y);
 					}
 
+					//se stiamo ridimensionando una finestra
 					if(win_man.is_resizing && win_man.focused_window!=0)
 					{
-						if(win_man.dragging_border == win_man.focused_window->border_left_bitmap)
-						{
-							int effective_delta = win_man.focused_window->offset_size_x(newreq.delta_x*-1);
-							win_man.focused_window->set_pos_x(win_man.focused_window->get_pos_x() + effective_delta*-1);
-							win_man.focused_window->user_event_add_resize(effective_delta*-1, 0, effective_delta, 0);
-						}
-						else if(win_man.dragging_border == win_man.focused_window->border_right_bitmap)
-						{
-							int effective_delta = win_man.focused_window->offset_size_x(newreq.delta_x);
-							win_man.focused_window->user_event_add_resize(0, 0, effective_delta, 0);
-						}
-						else if(win_man.dragging_border == win_man.focused_window->border_top_bitmap)
-						{
-							int effective_delta = win_man.focused_window->offset_size_y(newreq.delta_y*-1);
-							win_man.focused_window->set_pos_y(win_man.focused_window->get_pos_y() + effective_delta*-1);
-							win_man.focused_window->user_event_add_resize(0, effective_delta*-1, 0, effective_delta);
-						}
-						else if(win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
-						{
-							int effective_delta = win_man.focused_window->offset_size_y(newreq.delta_y);
-							win_man.focused_window->user_event_add_resize(0, 0, 0, effective_delta);
-						}
+						//quando ridimensioniamo non possiamo rendere le size della finestra negative, per questo il delta
+						//non corrisponde necessariamente al delta effettivo, e ce lo dobbiamo conservare perchè
+						//all'utente notifichiamo quest'ultimo
+						int effective_delta_pos_x = 0;
+						int effective_delta_pos_y = 0;
+						int effective_delta_size_x = 0;
+						int effective_delta_size_y = 0;
 
+						if(win_man.dragging_border & win_man.BORDER_LEFT)
+							resize_window_left(win_man.focused_window, newreq.delta_x, effective_delta_pos_x, effective_delta_size_x);
+						if(win_man.dragging_border & win_man.BORDER_RIGHT)
+							resize_window_right(win_man.focused_window, newreq.delta_x, effective_delta_size_x);
+						if(win_man.dragging_border & win_man.BORDER_TOP)
+							resize_window_top(win_man.focused_window, newreq.delta_y, effective_delta_pos_y, effective_delta_size_y);
+						if(win_man.dragging_border & win_man.BORDER_BOTTOM)
+							resize_window_bottom(win_man.focused_window, newreq.delta_y, effective_delta_size_y);
+
+						//l'utente deve sapere che la finestra è stata ridimensionata
+						win_man.focused_window->user_event_add_resize(effective_delta_pos_x, effective_delta_pos_y, effective_delta_size_x, effective_delta_size_y);
+
+						//effettuiamo il resize grafico e renderizziamo
 						win_man.focused_window->resize();
 						win_man.focused_window->render();
 					}
@@ -1094,14 +1143,39 @@ void main_windows_manager(int n)
 						if(res.target != 0)
 						{
 							LOG_DEBUG("winman: il click è stato fatto sui bordi della finestra %d", window_of_clicked_object->get_id());
-							win_man.dragging_border = res.target;
 							win_man.is_resizing = true;
 
-							// cambio il cursore in h o v resize (a seconda del bordo)
-							if(win_man.dragging_border == win_man.focused_window->border_left_bitmap || win_man.dragging_border == win_man.focused_window->border_right_bitmap)
-								switch_mousecursor_bitmap(cursor_h_resize, h_resize_cursor_click_x, h_resize_cursor_click_y);
-							else if(win_man.dragging_border == win_man.focused_window->border_top_bitmap || win_man.dragging_border == win_man.focused_window->border_bottom_bitmap)
-								switch_mousecursor_bitmap(cursor_v_resize, v_resize_cursor_click_x, v_resize_cursor_click_y);
+							int rel_x_cursor = main_cursor.x - win_man.focused_window->get_pos_x();
+							int rel_y_cursor = main_cursor.y - win_man.focused_window->get_pos_y();
+
+							// individuo il bordo cliccato
+							if(res.target == win_man.focused_window->border_left_bitmap)
+								win_man.dragging_border |= win_man.BORDER_LEFT;
+							else if(res.target == win_man.focused_window->border_right_bitmap)
+								win_man.dragging_border |= win_man.BORDER_RIGHT;
+							else if(res.target == win_man.focused_window->border_top_bitmap)
+								win_man.dragging_border |= win_man.BORDER_TOP;
+							else if(res.target == win_man.focused_window->border_bottom_bitmap)
+								win_man.dragging_border |= win_man.BORDER_BOTTOM;
+
+							// valuto se selezionare anche il bordo ortogonale (resize di entrambi le dimensioni x e y)
+							if(res.target == win_man.focused_window->border_left_bitmap || res.target == win_man.focused_window->border_right_bitmap)
+							{
+								if(rel_y_cursor > win_man.focused_window->border_left_bitmap->get_size_y() - BORDER_ANGLE_SIZE)
+									win_man.dragging_border |= win_man.BORDER_BOTTOM;
+								else if(rel_y_cursor < BORDER_ANGLE_SIZE)
+									win_man.dragging_border |= win_man.BORDER_TOP;
+							}
+							else if(res.target == win_man.focused_window->border_top_bitmap || res.target == win_man.focused_window->border_bottom_bitmap)
+							{
+								if(rel_x_cursor > win_man.focused_window->border_top_bitmap->get_size_x() - BORDER_ANGLE_SIZE)
+									win_man.dragging_border |= win_man.BORDER_RIGHT;
+								else if(rel_x_cursor < BORDER_ANGLE_SIZE)
+									win_man.dragging_border |= win_man.BORDER_LEFT;
+							}
+
+							// imposto il cursore
+							switch_mousecursor_by_border();
 						}
 						else
 						{
@@ -1140,6 +1214,7 @@ void main_windows_manager(int n)
 				if(newreq.button==LEFT)
 				{
 					win_man.is_dragging=false;
+					win_man.dragging_border=0;
 					win_man.is_resizing=false;
 
 					if(win_man.focused_window!=0)
