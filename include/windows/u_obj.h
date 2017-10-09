@@ -2,6 +2,7 @@
 #define U_OBJ_
 
 #include "../io/windows/consts.h"
+#include "libce_guard.h"
 #include "windows/user_event.h"
 
 // costanti per controllare i cast (polimorfismo)
