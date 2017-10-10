@@ -191,12 +191,14 @@ void gr_window::resize()
 	this->inner_container->render();
 }
 
-void gr_window::set_size_x(int newval){
+void gr_window::set_content_size_x(int newval){
+	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
 		return;
 	this->size_x=newval + BORDER_TICK*2;
 }
-void gr_window::set_size_y(int newval){
+void gr_window::set_content_size_y(int newval){
+	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < 0)
 		return;
 	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK*2;
