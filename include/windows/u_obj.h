@@ -44,6 +44,10 @@ public:
 
 	}
 
+	virtual ~u_windowObject() {
+
+	}
+
 	void set_anchor(short flag_anchor)
 	{
 		anchor = flag_anchor;
