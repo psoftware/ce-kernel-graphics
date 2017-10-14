@@ -22,18 +22,14 @@ gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 
 gr_object& gr_object::operator=(const u_windowObject& u)
 {
-	bool must_realloc = false;
-	if(u.size_x != size_x || u.size_y != size_y)
-		must_realloc = true;
-
 	this->set_pos_x(u.pos_x);
 	this->set_pos_y(u.pos_y);
 	this->set_size_x(u.size_x);
 	this->set_size_y(u.size_y);
 	this->z_index = u.z_index;
 
-	if(must_realloc)
-		this->realloc_buffer();
+	// se le dimensioni sono cambiate vanno eseguite delle azioni definite nella do_resize()
+	this->do_resize();
 
 	return *this;
 }
@@ -259,7 +255,7 @@ void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object:
 	return;
 }
 
-void gr_object::realloc_buffer(){
+void gr_object::do_resize(){
 	delete buffer;
 	buffer = new PIXEL_UNIT[this->size_x*this->size_y];
 }

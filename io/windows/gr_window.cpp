@@ -130,8 +130,12 @@ gr_window::~gr_window() {
 	delete inner_container;
 }
 
-void gr_window::resize()
+void gr_window::do_resize()
 {
+	// lasciamo all'implementazione do_resize di gr_object la competenza di riallocare il buffer della finestra
+	gr_object::do_resize();
+
+	// se non ci sono modifiche, possiamo evitare tutto il lavoro
 	if(!is_size_modified())
 		return;
 
@@ -145,42 +149,42 @@ void gr_window::resize()
 
 	this->inner_container->set_size_x(this->size_x);
 	this->inner_container->set_size_y(this->inner_container->get_size_y() + delta_size_y);
-	this->inner_container->realloc_buffer();
+	this->inner_container->do_resize();
 
 	this->background_bitmap->set_size_x(this->background_bitmap->get_size_x() + delta_size_x);
 	this->background_bitmap->set_size_y(this->background_bitmap->get_size_y() + delta_size_y);
-	this->background_bitmap->realloc_buffer();
+	this->background_bitmap->do_resize();
 	this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 
 	this->topbar_container->set_size_x(this->topbar_container->get_size_x() + delta_size_x);
-	this->topbar_container->realloc_buffer();
+	this->topbar_container->do_resize();
 	this->topbar_bitmap->set_size_x(this->topbar_container->get_size_x());
-	this->topbar_bitmap->realloc_buffer();
+	this->topbar_bitmap->do_resize();
 	this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->border_left_bitmap->set_size_y(this->border_left_bitmap->get_size_y() + delta_size_y);
-	this->border_left_bitmap->realloc_buffer();
+	this->border_left_bitmap->do_resize();
 	this->border_left_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_right_bitmap->set_pos_x(this->border_right_bitmap->get_pos_x() + delta_size_x);
 	this->border_right_bitmap->set_size_y(this->border_right_bitmap->get_size_y() + delta_size_y);
-	this->border_right_bitmap->realloc_buffer();
+	this->border_right_bitmap->do_resize();
 	this->border_right_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_top_bitmap->set_size_x(this->border_top_bitmap->get_size_x() + delta_size_x);
-	this->border_top_bitmap->realloc_buffer();
+	this->border_top_bitmap->do_resize();
 	this->border_top_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_bottom_bitmap->set_pos_y(this->border_bottom_bitmap->get_pos_y() + delta_size_y);
 	this->border_bottom_bitmap->set_size_x(this->border_bottom_bitmap->get_size_x() + delta_size_x);
-	this->border_bottom_bitmap->realloc_buffer();
+	this->border_bottom_bitmap->do_resize();
 	this->border_bottom_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->close_button->set_pos_x(this->close_button->get_pos_x() + delta_size_x);
 	this->close_button->render();
 
-	this->realloc_buffer();
 
+	// ri-renderizziamo tutto
 	this->border_left_bitmap->render();
 	this->border_right_bitmap->render();
 	this->border_top_bitmap->render();

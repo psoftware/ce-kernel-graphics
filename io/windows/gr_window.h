@@ -46,7 +46,7 @@ public:
 	int offset_size_x(int offset);
 	int offset_size_y(int offset);
 	void set_title(const char *str);
-	void resize();
+	void do_resize();
 
 	// funzioni per gli oggetti passati dall'utente al nucleo
 	gr_object *add_user_object(u_windowObject * u_obj);

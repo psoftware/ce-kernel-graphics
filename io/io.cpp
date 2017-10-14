@@ -1101,7 +1101,7 @@ void main_windows_manager(int n)
 						win_man.focused_window->user_event_add_resize(effective_delta_pos_x, effective_delta_pos_y, effective_delta_size_x, effective_delta_size_y);
 
 						//effettuiamo il resize grafico e renderizziamo
-						win_man.focused_window->resize();
+						win_man.focused_window->do_resize();
 						win_man.focused_window->render();
 					}
 					else //cerco di capire su quale oggetto mi sono spostato e se fa parte di una finestra

@@ -66,8 +66,10 @@ public:
 	void set_trasparency(bool newval);
 	void set_visibility(bool newval);
 
-	//metodo per ricreare il buffer (necessario dopo il cambio delle dimensioni)
-	void realloc_buffer();
+	// quando cambio le dimensioni dell'oggetto potrebbe essere necessario applicare delle modifiche
+	// allo suo stato. L'implementazione fornita da gr_object si occupa di riallocare, se necessario,
+	// il buffer dell'oggetto. Può essere sostituito da classi base per gestire altri casi specifici.
+	virtual void do_resize();
 
 	virtual void render();
 
