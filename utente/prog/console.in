@@ -37,6 +37,12 @@ void console_close_handler(des_user_event event)
 	terminate_p();
 }
 
+void console_clear_text()
+{
+	copy("", console_label->text);
+	console_wind->update_object(console_label);
+}
+
 void console_concat_text(const char * temp_str)
 {
 	strcat(console_label->text, temp_str);
@@ -47,10 +53,17 @@ void execute(const char * command_str)
 {
 	if(!strcmp(command_str, "help"))
 		console_concat_text("\nNon ne avrai");
+	else if(!strcmp(command_str, "clear"))
+	{
+		console_clear_text();
+		return; // non dobbiamo far stampare il newline di fine funzione
+	}
 	else if(!strcmp(command_str, "ls") || !strcmp(command_str, "cd") || !strcmp(command_str, "pwd") || !strcmp(command_str, "dir"))
 		console_concat_text("\nQuesto nucleo non sa cosa sia un File System");
 	else
 		console_concat_text("\nComando non valido");
+
+	console_concat_text("\n");
 }
 
 void keyboard_char_handler(des_user_event event)
@@ -71,7 +84,7 @@ void keyboard_char_handler(des_user_event event)
 			execute(command_str_pointer);
 
 			// mandiamo a capo il testo e ri-settiamo il command_str_pointer
-			console_concat_text("\n> ");
+			console_concat_text("> ");
 			command_str_pointer = console_label->text + strlen(console_label->text);
 			break;
 		}
