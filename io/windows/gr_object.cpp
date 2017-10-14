@@ -256,6 +256,10 @@ void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object:
 }
 
 void gr_object::do_resize(){
+	// se non ci sono modifiche, possiamo evitare di deallocare e riallocare
+	if(!is_size_modified())
+		return;
+
 	delete buffer;
 	buffer = new PIXEL_UNIT[this->size_x*this->size_y];
 }
