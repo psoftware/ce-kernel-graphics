@@ -1211,7 +1211,8 @@ void main_windows_manager(int n)
 						// se ho cliccato su un oggetto della topbar
 						else if(win_man.focused_window->topbar_container->has_child(win_man.passing_on_window_object) != 0)
 						{
-							LOG_DEBUG("winman: il click è stato fatto sulla topbar della finestra %d", window_of_clicked_object->get_id());
+							LOG_DEBUG("winman: il click è stato fatto sulla topbar della finestra %d", win_man.focused_window->get_id());
+
 							// teniamo da parte l'oggetto cliccato sulla topbar perchè serve per l'evento MOUSEUP
 							win_man.topbar_clicking_object = win_man.passing_on_window_object;
 
@@ -1219,7 +1220,7 @@ void main_windows_manager(int n)
 							win_man.is_dragging = win_man.passing_on_window->click_on_topbar(win_man.passing_on_window_object, true);
 
 							// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
-							win_man.passing_on_window_object->render();
+							win_man.passing_on_window->render();
 						}
 						else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
 						{
