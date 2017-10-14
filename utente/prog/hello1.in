@@ -4,9 +4,7 @@
 #include <windows/u_obj.h>
 #include <winobj.h>
 
-process hello1 body hello_body1(0), 22, LIV_UTENTE;
-
-long int wait1=139999999;
+process resize_test body resize_test_init(0), 22, LIV_UTENTE;
 
 u_window * uwind;
 u_label * label1;
@@ -18,15 +16,15 @@ void button1_click_down_handler(des_user_event event)
 	uwind->update_object(label1);
 }
 
-void hello1_close_handler(des_user_event event)
+void resize_test_close_handler(des_user_event event)
 {
 	terminate_p();
 }
 
-process_body hello_body1(int a)
+void resize_test_body(int a)
 {
 	uwind = new u_window(128,160,20,80, "Resize Test");
-	uwind->handler_closed_window = hello1_close_handler;
+	uwind->handler_closed_window = resize_test_close_handler;
 	uwind->show();
 
 	label1 = new u_label();
@@ -85,18 +83,19 @@ process_body hello_body1(int a)
 	textbox2->border_color=0xff000000;
 	textbox2->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR | RIGHT_ANCHOR);
 	copy("", textbox2->text);
-
 	uwind->add_object(textbox2);
 	uwind->update_object(textbox2);
 
-	copy("Inizio processo 1!", label1->text);
-	uwind->update_object(label1);
-
-	while(--wait1);
 	copy("Prova a ridimensionare la finestra!", label1->text);
 	uwind->update_object(label1);
 
 	//event receive cycle
 	while(true)
 		uwind->next_event();
+}
+
+void application_add(const char name[], void (*start_point)(int));
+process_body resize_test_init(int a)
+{
+	application_add("Resize Test", resize_test_body);
 }

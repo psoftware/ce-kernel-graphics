@@ -7,7 +7,7 @@
 #define DEFAULT_X_SIZE 300
 #define DEFAULT_Y_SIZE 180
 
-process console body console_body(0), 22, LIV_UTENTE;
+process console body console_init(0), 22, LIV_UTENTE;
 
 u_window * console_wind;
 u_label * console_label;
@@ -83,7 +83,7 @@ void keyboard_char_handler(des_user_event event)
 	}
 }
 
-process_body console_body(int a)
+void console_body(int a)
 {
 	console_wind = new u_window(DEFAULT_X_SIZE,DEFAULT_Y_SIZE,450,80, "Console Emulator");
 	console_wind->show();
@@ -109,4 +109,10 @@ process_body console_body(int a)
 	//event receive cycle
 	while(true)
 		console_wind->next_event();
+}
+
+void application_add(const char name[], void (*start_point)(int));
+process_body console_init(int a)
+{
+	application_add("Console Emulator", console_body);
 }

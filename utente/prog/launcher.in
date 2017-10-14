@@ -1,0 +1,85 @@
+#include <sys.h>
+#include <lib.h>
+#include <newdelete.h>
+#include <windows/u_obj.h>
+#include <winobj.h>
+
+process launcher body launcher_body(0), 25, LIV_UTENTE;
+semaphore launcher_mutex value 0;
+
+const int MAX_LAUNCHER_APPS = 8;
+const int LAUNCHER_ENTRY_SIZE_Y = 24;
+const int LAUNCHER_SIZE_X = 150;
+const int LAUNCHER_SIZE_Y = MAX_LAUNCHER_APPS*LAUNCHER_ENTRY_SIZE_Y;
+
+struct application_entry
+{
+	void (*start_point)(int);
+	bool launched;
+	u_button *button;
+	application_entry() : start_point(0), launched(0), button(0) {
+
+	}
+};
+
+u_window *launcher_window;
+
+application_entry apps[MAX_LAUNCHER_APPS];
+int apps_count;
+
+void launcher_button_click_handler(des_user_event event)
+{
+	for(int i=0; i<apps_count; i++)
+		if(event.obj_id == apps[i].button->id)
+		{
+			if(apps[i].launched)
+				return;
+
+			flog(LOG_INFO, "Launcher: launching \033[0;32m%p\033[0m", apps[i].start_point);
+
+			apps[i].launched = true;
+			activate_p(apps[i].start_point, 0, 22, LIV_UTENTE);
+			return;
+		}
+}
+
+void application_add(const char name[], void (*start_point)(int))
+{
+	sem_wait(launcher_mutex);
+
+	apps[apps_count].start_point = start_point;
+	apps[apps_count].button = new u_button();
+	apps[apps_count].button->size_x = LAUNCHER_SIZE_X;
+	apps[apps_count].button->size_y = LAUNCHER_ENTRY_SIZE_Y;
+	apps[apps_count].button->pos_x = 0;
+	apps[apps_count].button->pos_y = LAUNCHER_ENTRY_SIZE_Y*apps_count;
+	apps[apps_count].button->handler_mouse_up = launcher_button_click_handler;
+	apps[apps_count].button->back_color = 0xff2980b9;
+	apps[apps_count].button->border_color = 0xff2980b9;
+	apps[apps_count].button->clicked_color = 0xff3498db;
+	apps[apps_count].button->text_color = 0xffffffff;
+	apps[apps_count].button->set_anchor(LEFT_ANCHOR | RIGHT_ANCHOR);
+	copy(name, apps[apps_count].button->text);
+	launcher_window->add_object(apps[apps_count].button);
+	apps_count++;
+
+	sem_signal(launcher_mutex);
+}
+
+void launcher_close_handler(des_user_event e)
+{
+	terminate_p();
+}
+
+process_body launcher_body()
+{
+	launcher_window = new u_window(LAUNCHER_SIZE_X, LAUNCHER_SIZE_Y, 400, 400,"Launcher");
+	launcher_window->handler_closed_window = launcher_close_handler;
+	launcher_window->show();
+
+	//sblocca processi che si vogliono registrare
+	sem_signal(launcher_mutex);
+
+	while(true)
+		launcher_window->next_event();
+}
