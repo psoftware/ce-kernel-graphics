@@ -51,7 +51,11 @@ void console_concat_text(const char * temp_str)
 
 void execute(const char * command_str)
 {
-	if(!strcmp(command_str, "help"))
+	if(*command_str=='\0')
+	{
+		//nulla da fare
+	}
+	else if(!strcmp(command_str, "help"))
 		console_concat_text("\nNon ne avrai");
 	else if(!strcmp(command_str, "clear"))
 	{
