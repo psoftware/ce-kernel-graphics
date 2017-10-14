@@ -448,9 +448,8 @@ struct des_window_req
 		int delta_y;			//mousebuton
 	};
 
-	des_window_req()
+	des_window_req() : window(0), p_id(0), to_sync(false), act(0)
 	{
-		to_sync = false;
 		if_sync = sem_ini(0);
 	}
 };
