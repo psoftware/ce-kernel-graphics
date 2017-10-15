@@ -193,10 +193,12 @@ void gr_object::set_pos_y(int newval){
 	this->pos_y=newval;
 }
 void gr_object::set_size_x(int newval){
-	this->size_x=newval;
+	if(newval >= 0)
+		this->size_x=newval;
 }
 void gr_object::set_size_y(int newval){
-	this->size_y=newval;
+	if(newval >= 0)
+		this->size_y=newval;
 }
 void gr_object::set_trasparency(bool newval){
 	this->trasparency=newval;
