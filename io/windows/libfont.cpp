@@ -54,7 +54,8 @@ int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nch
 			#ifdef BPP_32
 			// se il backColor non è completamente trasparente, allora lo usiamo per lo sfondo (senza considerare la sua semi-trasparenza)
 			if((backColor & 0xff000000) != 0)
-				buffer[MAX_X*y+x] = backColor;
+				set_pixel(buffer, x, y, MAX_X, MAX_Y, backColor);
+
 			// usiamo l'alpha blending perchè la bitmap dei font ci fornisce caratteri semi-trasparenti
 			set_pixel_alpha_blend(buffer, x+j-start, y+i, MAX_X, MAX_Y, (font_pixel & 0xff000000) | (text_color & 0x00ffffff));
 			#endif
