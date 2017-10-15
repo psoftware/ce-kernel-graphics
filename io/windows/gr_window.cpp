@@ -13,7 +13,10 @@ extern "C" natl sem_ini(int val);
 extern "C" void sem_signal(natl sem);
 
 gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char * title)
-: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index, false), event_head(0), event_tail(0)
+: gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index, false),
+	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
+	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
+	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), event_head(0), event_tail(0)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
@@ -127,8 +130,12 @@ gr_window::~gr_window() {
 	delete inner_container;
 }
 
-void gr_window::resize()
+void gr_window::do_resize()
 {
+	// lasciamo all'implementazione do_resize di gr_object la competenza di riallocare il buffer della finestra
+	gr_object::do_resize();
+
+	// se non ci sono modifiche, possiamo evitare tutto il lavoro
 	if(!is_size_modified())
 		return;
 
@@ -142,42 +149,42 @@ void gr_window::resize()
 
 	this->inner_container->set_size_x(this->size_x);
 	this->inner_container->set_size_y(this->inner_container->get_size_y() + delta_size_y);
-	this->inner_container->realloc_buffer();
+	this->inner_container->do_resize();
 
 	this->background_bitmap->set_size_x(this->background_bitmap->get_size_x() + delta_size_x);
 	this->background_bitmap->set_size_y(this->background_bitmap->get_size_y() + delta_size_y);
-	this->background_bitmap->realloc_buffer();
+	this->background_bitmap->do_resize();
 	//this->background_bitmap->paint_uniform(DEFAULT_WIN_BACKCOLOR);
 
 	this->topbar_container->set_size_x(this->topbar_container->get_size_x() + delta_size_x);
-	this->topbar_container->realloc_buffer();
+	this->topbar_container->do_resize();
 	this->topbar_bitmap->set_size_x(this->topbar_container->get_size_x());
-	this->topbar_bitmap->realloc_buffer();
+	this->topbar_bitmap->do_resize();
 	//this->topbar_bitmap->paint_uniform(TOPBAR_WIN_BACKCOLOR);
 
 	this->border_left_bitmap->set_size_y(this->border_left_bitmap->get_size_y() + delta_size_y);
-	this->border_left_bitmap->realloc_buffer();
+	this->border_left_bitmap->do_resize();
 	this->border_left_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_right_bitmap->set_pos_x(this->border_right_bitmap->get_pos_x() + delta_size_x);
 	this->border_right_bitmap->set_size_y(this->border_right_bitmap->get_size_y() + delta_size_y);
-	this->border_right_bitmap->realloc_buffer();
+	this->border_right_bitmap->do_resize();
 	this->border_right_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_top_bitmap->set_size_x(this->border_top_bitmap->get_size_x() + delta_size_x);
-	this->border_top_bitmap->realloc_buffer();
+	this->border_top_bitmap->do_resize();
 	this->border_top_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->border_bottom_bitmap->set_pos_y(this->border_bottom_bitmap->get_pos_y() + delta_size_y);
 	this->border_bottom_bitmap->set_size_x(this->border_bottom_bitmap->get_size_x() + delta_size_x);
-	this->border_bottom_bitmap->realloc_buffer();
+	this->border_bottom_bitmap->do_resize();
 	this->border_bottom_bitmap->paint_uniform(BORDER_WIN_COLOR);
 
 	this->close_button->set_pos_x(this->close_button->get_pos_x() + delta_size_x);
 	this->close_button->render();
 
-	this->realloc_buffer();
 
+	// ri-renderizziamo tutto
 	this->border_left_bitmap->render();
 	this->border_right_bitmap->render();
 	this->border_top_bitmap->render();
@@ -188,12 +195,14 @@ void gr_window::resize()
 	this->inner_container->render();
 }
 
-void gr_window::set_size_x(int newval){
+void gr_window::set_content_size_x(int newval){
+	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
 		return;
 	this->size_x=newval + BORDER_TICK*2;
 }
-void gr_window::set_size_y(int newval){
+void gr_window::set_content_size_y(int newval){
+	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < 0)
 		return;
 	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK*2;
@@ -214,6 +223,26 @@ int gr_window::offset_size_y(int offset){
 void gr_window::set_title(const char *str)
 {
 	this->title_label->set_text(str);
+}
+
+bool gr_window::get_draggable()
+{
+	return this->draggable;
+}
+
+void gr_window::set_draggable(bool draggable)
+{
+	this->draggable = draggable;
+}
+
+bool gr_window::get_resizable()
+{
+	return this->resizable;
+}
+
+void gr_window::set_resizable(bool resizable)
+{
+	this->resizable = resizable;
 }
 
 gr_object *gr_window::add_user_object(u_windowObject * u_obj)
@@ -349,7 +378,7 @@ bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
 
 	// non abbiamo niente da fare in questi casi, ma dobbiamo segnalare
 	// che va fatto il trascinamento dell'oggetto
-	if(dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label)
+	if((dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label) && draggable)
 		return true;
 
 	// eventi per close_button

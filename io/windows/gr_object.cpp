@@ -22,18 +22,14 @@ gr_object::gr_object(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 
 gr_object& gr_object::operator=(const u_windowObject& u)
 {
-	bool must_realloc = false;
-	if(u.size_x != size_x || u.size_y != size_y)
-		must_realloc = true;
-
 	this->set_pos_x(u.pos_x);
 	this->set_pos_y(u.pos_y);
 	this->set_size_x(u.size_x);
 	this->set_size_y(u.size_y);
 	this->z_index = u.z_index;
 
-	if(must_realloc)
-		this->realloc_buffer();
+	// se le dimensioni sono cambiate vanno eseguite delle azioni definite nella do_resize()
+	this->do_resize();
 
 	return *this;
 }
@@ -234,10 +230,12 @@ void gr_object::set_pos_y(int newval){
 	this->pos_y=newval;
 }
 void gr_object::set_size_x(int newval){
-	this->size_x=newval;
+	if(newval >= 0)
+		this->size_x=newval;
 }
 void gr_object::set_size_y(int newval){
-	this->size_y=newval;
+	if(newval >= 0)
+		this->size_y=newval;
 }
 void gr_object::set_trasparency(bool newval){
 	this->trasparency=newval;
@@ -296,8 +294,10 @@ void gr_object::search_tree(int parent_pos_x, int parent_pos_y, const gr_object:
 	return;
 }
 
-void gr_object::realloc_buffer(){
-	if(!this->buffered)
+void gr_object::do_resize(){
+	// se l'oggetto non è bufferato non abbiamo nulla da fare
+	// se non ci sono modifiche, possiamo evitare di deallocare e riallocare
+	if(!this->buffered || !is_size_modified())
 		return;
 
 	delete buffer;

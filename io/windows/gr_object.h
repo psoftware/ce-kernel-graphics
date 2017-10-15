@@ -64,13 +64,15 @@ public:
 	int get_size_y();
 	void set_pos_x(int newval);
 	void set_pos_y(int newval);
-	virtual void set_size_x(int newval);
-	virtual void set_size_y(int newval);
+	void set_size_x(int newval);
+	void set_size_y(int newval);
 	void set_trasparency(bool newval);
 	void set_visibility(bool newval);
 
-	//metodo per ricreare il buffer (necessario dopo il cambio delle dimensioni)
-	void realloc_buffer();
+	// quando cambio le dimensioni dell'oggetto potrebbe essere necessario applicare delle modifiche
+	// allo suo stato. L'implementazione fornita da gr_object si occupa di riallocare, se necessario,
+	// il buffer dell'oggetto. Può essere sostituito da classi base per gestire altri casi specifici.
+	virtual void do_resize();
 
 	//metodo per acquisire le render_unit da ogni discendente buffered in maniera ricorsiva (e ridefinibile dalle classi derivate).
 	// NOTA IMPORTANTE: questo metodo usa molti argomenti per passare dati da una chiamata all'altra, ma questi sono solo necessari

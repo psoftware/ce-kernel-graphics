@@ -1,3 +1,6 @@
+#ifndef NEWDELETE_H_
+#define NEWDELETE_H_
+
 void* mem_alloc(natl dim);
 void mem_free(void* p);
 
@@ -26,3 +29,5 @@ void operator delete[](void* obj)
 {
 	mem_free(obj);
 }
+
+#endif

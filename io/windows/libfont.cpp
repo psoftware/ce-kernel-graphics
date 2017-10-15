@@ -1,44 +1,74 @@
 #include "libce_guard.h"
 #include "libgr.h"
 #include "consts.h"
-#include "font.h"
+#include "libtga.h"
+#include "resources/resources.h"
 
+PIXEL_UNIT loaded_font_bitmap[16*16*256];
+unsigned short* loaded_font_width;
+
+bool libfont_initialized = false;
+
+void _libfont_init()
+{
+	if(libfont_initialized)
+		return;
+
+	#ifdef BPP_8
+	// nel caso di modalità di funzionamento a 8BPP usiamo sempre un charset di default (senza semi-trasparenza)
+	gr_memcpy(loaded_font_bitmap, font_bitmap_8BPP_mecha, 16*16*256);
+	loaded_font_width = tga_font_width_mecha;
+
+	#elif defined BPP_32
+	// carico la bitmap del font dal file tga indicato
+	TgaParser tgp(tga_font_bitmap_segoeui);
+	tgp.to_bitmap(loaded_font_bitmap);
+
+	// carico la lista delle larghezze dei caratteri
+	loaded_font_width = tga_font_width_segoeui;
+	#endif
+
+	libfont_initialized = true;
+}
 
 int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
 {
-	PIXEL_UNIT *font_bitmap_cast = reinterpret_cast<PIXEL_UNIT*>(font_bitmap);
+	PIXEL_UNIT *font_bitmap_cast = reinterpret_cast<PIXEL_UNIT*>(loaded_font_bitmap);
 	int row_off = nchar / 16;
 	int col_off = nchar % 16;
 
-	natb start = (16 - font_width[nchar])/2;
-	natb end = start + font_width[nchar];
+	natb start = (16 - loaded_font_width[nchar])/2;
+	natb end = start + loaded_font_width[nchar];
 
 	for(int i=0; i<16; i++)
 		for(int j=start; j<end; j++)
 		{
-			//purtroppo c'è poco da fare, le bitmap dei font sono fatte male
+			PIXEL_UNIT font_pixel = font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)];
+			// purtroppo c'è poco da fare, le bitmap dei font a 8PP sono fatte male (basterebbe una bitmap di booleani)
 			#ifdef BPP_8
-			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] == 0x00)
+			if(font_pixel == 0x00)
 				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
 			else
 				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, text_color);
 			#endif
 			#ifdef BPP_32
-			if(font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)] >> 24 < 0xff)
-				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
-			else
-				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, text_color);
+			// se il backColor non è completamente trasparente, allora lo usiamo per lo sfondo (senza considerare la sua semi-trasparenza)
+			if((backColor & 0xff000000) != 0)
+				set_pixel(buffer, x, y, MAX_X, MAX_Y, backColor);
+
+			// usiamo l'alpha blending perchè la bitmap dei font ci fornisce caratteri semi-trasparenti
+			set_pixel_alpha_blend(buffer, x+j-start, y+i, MAX_X, MAX_Y, (font_pixel & 0xff000000) | (text_color & 0x00ffffff));
 			#endif
 		}
 
-	return font_width[nchar];
+	return loaded_font_width[nchar];
 }
 
 int get_fontstring_width(const char * str)
 {
 	int res=0;
 	for(natb i=0; i<strlen(str); i++)
-		res+=font_width[(unsigned int)str[i]];
+		res+=loaded_font_width[(unsigned int)str[i]];
 	return res;
 }
 
@@ -55,7 +85,7 @@ int get_charfont_width(char c)
 	if(c=='\n' || c=='\0')
 		return 0;
 	else
-		return font_width[(int)c];
+		return loaded_font_width[(int)c];
 					
 }
 

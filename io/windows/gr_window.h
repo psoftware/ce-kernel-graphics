@@ -42,20 +42,27 @@ public:
 
 	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char* title);
 	~gr_window();
-	void set_size_x(int newval);
-	void set_size_y(int newval);
+	void set_content_size_x(int newval);
+	void set_content_size_y(int newval);
 	int offset_size_x(int offset);
 	int offset_size_y(int offset);
 	void set_title(const char *str);
-	void resize();
+	bool get_draggable();
+	bool get_resizable();
+	void set_draggable(bool draggable);
+	void set_resizable(bool resizable);
+	void do_resize();
 
 	// funzioni per gli oggetti passati dall'utente al nucleo
 	gr_object *add_user_object(u_windowObject * u_obj);
 	bool update_user_object(u_windowObject * u_obj);
 	gr_object *search_user_object(u_windowObject * u_obj);
 
-	// funzioni per la gestione degli eventi
 private:
+	bool draggable;
+	bool resizable;
+
+	// funzioni per la gestione degli eventi
 	gr_object *focused_object;
 	des_user_event *event_head;
 	des_user_event *event_tail;

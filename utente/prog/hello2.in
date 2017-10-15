@@ -1,12 +1,12 @@
 #include <sys.h>
 #include <lib.h>
 
-process hello2 body hello_body2(0), 21, LIV_UTENTE;
+process simple_animations body simple_animations_init(0), 21, LIV_UTENTE;
 
 long int wait2=89999999;
-process_body hello_body2(int a)
+process_body simple_animations_body(int a)
 {
-	int finestra = crea_finestra(128,128,160,40, "Objects Tests");
+	int finestra = crea_finestra(128,128,160,40, "Simple Animations");
 
 	u_label * label1 = new u_label();
 	label1->size_x=128;
@@ -73,3 +73,8 @@ process_body hello_body2(int a)
 	}
 }
 
+void application_add(const char name[], void (*start_point)(int));
+process_body simple_animations_init(int a)
+{
+	application_add("Simple Animations", simple_animations_body);
+}

@@ -2,6 +2,7 @@
 #define U_OBJ_
 
 #include "../io/windows/consts.h"
+#include "libce_guard.h"
 #include "windows/user_event.h"
 
 // costanti per controllare i cast (polimorfismo)
@@ -40,6 +41,10 @@ public:
 	void(*handler_keyboard_press)(des_user_event event);
 
 	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE) {
+
+	}
+
+	virtual ~u_windowObject() {
 
 	}
 
@@ -101,7 +106,7 @@ public:
 class u_button : public u_windowObject
 {
 	public:
-	char text[20];
+	char text[100];
 
 	PIXEL_UNIT border_color;
 	PIXEL_UNIT clicked_color;
@@ -129,7 +134,7 @@ class u_button : public u_windowObject
 class u_label : public u_windowObject
 {
 	public:
-	char text[120];
+	char text[1000];
 	PIXEL_UNIT text_color;
 	u_label() : u_windowObject(W_ID_LABEL)
 	{
@@ -146,7 +151,7 @@ class u_label : public u_windowObject
 class u_textbox : public u_windowObject
 {
 	public:
-	char text[100];
+	char text[1000];
 	PIXEL_UNIT border_color;
 	PIXEL_UNIT text_color;
 	u_textbox() : u_windowObject(W_ID_TEXTBOX)
