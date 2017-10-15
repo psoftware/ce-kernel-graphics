@@ -34,17 +34,30 @@ void gr_textbox::render()
 {
 	// stampo sfondo
 	gr_memset(this->buffer, this->back_color, this->size_x*this->size_y);
+
 	// renderizzo il testo
-	set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2, this->text, this->text_color, this->back_color, this->caret_print);
+	if(this->size_y > 2 && this->size_x > 2)
+		set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2,
+			this->text, this->text_color, this->back_color, this->caret_print);
 
 	// stampo i bordi
-	gr_memset(this->buffer, this->border_color, this->size_x);
-	for(natw y=1; y < this->size_y-1; y++)
-	{
-		set_pixel(this->buffer, 0, y, this->size_x, this->size_y, this->border_color);
-		set_pixel(this->buffer, size_x-1, y, this->size_x, this->size_y, this->border_color);
-	}
-	gr_memset(this->buffer + this->size_x*(this->size_y-1), this->border_color, this->size_x);
+	// il bordo superiore va stampato solo se l'oggetto ha una y non nulla
+	if(this->size_y > 0)
+		gr_memset(this->buffer, this->border_color, this->size_x);
+
+	// bordo destro
+	if(this->size_y > 2)
+		for(int y=1; y < this->size_y-1; y++)
+			set_pixel(this->buffer, 0, y, this->size_x, this->size_y, this->border_color);
+
+	// bordo sinistro
+	if(this->size_y > 2 && this->size_x > 1)
+		for(int y=1; y < this->size_y-1; y++)
+			set_pixel(this->buffer, this->size_x-1, y, this->size_x, this->size_y, this->border_color);
+
+	// il bordo inferiore va stampato solo se l'oggetto ha una y sufficiente
+	if(this->size_y > 1 && this->size_x > 1)
+		gr_memset(this->buffer + this->size_x*(this->size_y-1), this->border_color, this->size_x);
 
 	// indico l'area modificata
 	render_subset_unit *newunit = new render_subset_unit(0, 0, size_x, size_y);
