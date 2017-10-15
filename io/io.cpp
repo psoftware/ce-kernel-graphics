@@ -1223,8 +1223,8 @@ void main_windows_manager(int n)
 						}
 						else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
 						{
-							win_man.focused_window->set_focused_child(win_man.passing_on_window_object);
-							win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
+							if(win_man.focused_window->set_focused_child(win_man.passing_on_window_object))
+								win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEDOWN, newreq.button, main_cursor.x, main_cursor.y);
 						}
 
 						render_on_framebuffer();
