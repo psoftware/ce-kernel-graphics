@@ -812,6 +812,13 @@ void graphic_chiudi_finestra(gr_window *window)
 	if(win_man.focused_window == window)
 		win_man.focused_window = 0;
 
+	// dimentichiamoci che siamo posizionati sulla finestra, se era così
+	if(win_man.passing_on_window == window)
+	{
+		win_man.passing_on_window = 0;
+		win_man.passing_on_window_object = 0;
+	}
+
 	doubled_framebuffer_container->remove_child(window);
 	delete window;
 	render_on_framebuffer();
