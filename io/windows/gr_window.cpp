@@ -16,7 +16,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index),
 	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
 	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
-	close_button(0), title_label(0), focused_object(0), event_head(0), event_tail(0)
+	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), event_head(0), event_tail(0)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
@@ -225,6 +225,26 @@ void gr_window::set_title(const char *str)
 	this->title_label->set_text(str);
 }
 
+bool gr_window::get_draggable()
+{
+	return this->draggable;
+}
+
+void gr_window::set_draggable(bool draggable)
+{
+	this->draggable = draggable;
+}
+
+bool gr_window::get_resizable()
+{
+	return this->resizable;
+}
+
+void gr_window::set_resizable(bool resizable)
+{
+	this->resizable = resizable;
+}
+
 gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 {
 	gr_object* newobj;
@@ -358,7 +378,7 @@ bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
 
 	// non abbiamo niente da fare in questi casi, ma dobbiamo segnalare
 	// che va fatto il trascinamento dell'oggetto
-	if(dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label)
+	if((dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label) && draggable)
 		return true;
 
 	// eventi per close_button

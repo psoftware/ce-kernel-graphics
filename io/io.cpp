@@ -1132,8 +1132,8 @@ void main_windows_manager(int n)
 							filter.flags = gr_window::BORDER_FLAG;
 							win_man.passing_on_window->search_tree(main_cursor.x-win_man.passing_on_window->get_pos_x(), main_cursor.y-win_man.passing_on_window->get_pos_y(), filter, res);
 
-							// sono sul bordo?
-							if(res.target != 0)
+							// sono sul bordo? (devo escludere anche il caso in cui la finestra non è ridimensionabile)
+							if(res.target != 0 && win_man.passing_on_window->get_resizable())
 							{
 								int rel_x_cursor = main_cursor.x - win_man.passing_on_window->get_pos_x();
 								int rel_y_cursor = main_cursor.y - win_man.passing_on_window->get_pos_y();
@@ -1163,6 +1163,12 @@ void main_windows_manager(int n)
 									else if(rel_x_cursor < BORDER_ANGLE_SIZE)
 										win_man.dragging_border |= win_man.BORDER_LEFT;
 								}
+							}
+							else if(res.target != 0 && !win_man.passing_on_window->get_resizable())
+							{
+								// siamo nel caso in cui il mouse è posizionato su un bordo ma l'oggetto non è ridimensionabile:
+								// dobbiamo resettare lo stato dell'oggetto passing_on_window_object per evitare che vengano propagati altri eventi all'oggetto
+								win_man.passing_on_window_object = 0;
 							}
 							else // se sono arrivato qui è perchè l'oggetto sulla quale mi sono posizionato sta nell'inner_container della finestra
 							{
