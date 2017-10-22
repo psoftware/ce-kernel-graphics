@@ -25,8 +25,8 @@ public:
 
 verbose log;
 
-const uint32_t UPB = DIM_PAGINA / sizeof(uint32_t);
-const uint32_t BPU = sizeof(uint32_t) * 8;
+const uint32_t UPB = DIM_PAGINA / sizeof(uint64_t);
+const uint32_t BPU = sizeof(uint64_t) * 8;
 
 
 union entrata {
