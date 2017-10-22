@@ -11,6 +11,11 @@ void inline set_pixel(PIXEL_UNIT * buffer, int x, int y, int MAX_X, int MAX_Y, P
 		flog(LOG_INFO, "libgr: set_pixel() -> buffer overflow detected! at x=%d y=%d", x, y);
 }
 
+bool inline pixel_in_bound(int x, int y, int MAX_X, int MAX_Y, int offset_x, int offset_y, int limit_x, int limit_y, PIXEL_UNIT col)
+{
+	return (x>=offset_x && y>=offset_y && x<offset_x+limit_x && y<offset_y+limit_y);
+}
+
 // solo per 32BPP !!
 void inline set_pixel_alpha_blend(PIXEL_UNIT * buffer, int x, int y, int MAX_X, int MAX_Y, PIXEL_UNIT src_pixel)
 {

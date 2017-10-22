@@ -31,7 +31,7 @@ void _libfont_init()
 	libfont_initialized = true;
 }
 
-int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nchar, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
+int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int offset_x, int offset_y, int limit_x, int limit_y, int nchar, PIXEL_UNIT text_color, PIXEL_UNIT backColor)
 {
 	PIXEL_UNIT *font_bitmap_cast = reinterpret_cast<PIXEL_UNIT*>(loaded_font_bitmap);
 	int row_off = nchar / 16;
@@ -43,6 +43,9 @@ int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nch
 	for(int i=0; i<16; i++)
 		for(int j=start; j<end; j++)
 		{
+			if(!pixel_in_bound(x+j-start, y+i, MAX_X, MAX_Y, offset_x, offset_y, limit_x, limit_y, backColor))
+				continue;
+
 			PIXEL_UNIT font_pixel = font_bitmap_cast[(row_off*16 + i)*256 + (j + col_off*16)];
 			// purtroppo c'è poco da fare, le bitmap dei font a 8PP sono fatte male (basterebbe una bitmap di booleani)
 			#ifdef BPP_8
@@ -54,7 +57,7 @@ int set_fontchar(PIXEL_UNIT *buffer, int x, int y, int MAX_X, int MAX_Y, int nch
 			#ifdef BPP_32
 			// se il backColor non è completamente trasparente, allora lo usiamo per lo sfondo (senza considerare la sua semi-trasparenza)
 			if((backColor & 0xff000000) != 0)
-				set_pixel(buffer, x, y, MAX_X, MAX_Y, backColor);
+				set_pixel(buffer, x+j-start, y+i, MAX_X, MAX_Y, backColor);
 
 			// usiamo l'alpha blending perchè la bitmap dei font ci fornisce caratteri semi-trasparenti
 			set_pixel_alpha_blend(buffer, x+j-start, y+i, MAX_X, MAX_Y, (font_pixel & 0xff000000) | (text_color & 0x00ffffff));
@@ -89,7 +92,7 @@ int get_charfont_width(char c)
 					
 }
 
-void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, const char * str, PIXEL_UNIT text_color, PIXEL_UNIT backColor, bool print_caret)
+void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int bound_x, int bound_y, int offset_x, int offset_y, int limit_x, int limit_y, const char * str, PIXEL_UNIT text_color, PIXEL_UNIT backColor, bool print_caret)
 {
 	int slength = (int)strlen(str);
 	//int x_eff = ((i*16) % bound_x);
@@ -99,7 +102,7 @@ void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int 
 	for(int i=0; i<slength; i++)
 	{	
 		if(str[i] != '\n')
-			x_eff += set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, str[i], text_color, backColor);
+			x_eff += set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, offset_x, offset_y, limit_x, limit_y, str[i], text_color, backColor);
 
 		if(i==slength-1)
 			break;
@@ -121,5 +124,5 @@ void set_fontstring(PIXEL_UNIT *buffer, int MAX_X, int MAX_Y, int x, int y, int 
 		x_eff = 0;
 		y_eff++;
 	}
-	set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, ASCII_CARET, text_color, backColor);
+	set_fontchar(buffer, x+x_eff, y+(y_eff*16), MAX_X, MAX_Y, offset_x, offset_y, limit_x, limit_y, ASCII_CARET, text_color, backColor);
 }

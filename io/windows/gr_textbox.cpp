@@ -38,6 +38,7 @@ void gr_textbox::render()
 	// renderizzo il testo
 	if(this->size_y > 2 && this->size_x > 2)
 		set_fontstring(this->buffer, this->size_x, this->size_y, 2, 2, this->size_x-2, this->size_y-2,
+			0, 0, this->size_x, this->size_y,
 			this->text, this->text_color, this->back_color, this->caret_print);
 
 	// stampo i bordi
