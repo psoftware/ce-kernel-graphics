@@ -448,9 +448,9 @@ struct des_window_req
 		int delta_y;			//mousebuton
 	};
 
-	des_window_req() : window(0), p_id(0), to_sync(false), act(0)
+	des_window_req() : window(0), p_id(0), to_sync(false), if_sync(0), act(0)
 	{
-		if_sync = sem_ini(0);
+
 	}
 };
 
@@ -504,6 +504,8 @@ int windows_queue_insert(des_windows_man& win_cont, gr_window *window, natb p_id
 	win_cont.req_queue[win_cont.top].p_id = p_id;
 	win_cont.req_queue[win_cont.top].act = act;
 	win_cont.req_queue[win_cont.top].to_sync = sync;
+	if(win_cont.req_queue[win_cont.top].if_sync == 0)
+		win_cont.req_queue[win_cont.top].if_sync = sem_ini(0);
 	win_cont.top = (win_cont.top + 1) % MAX_REQ_QUEUE;
 
 	return resindex; // No errors
