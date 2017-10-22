@@ -401,6 +401,7 @@ int main(int argc, char* argv[])
 	long dim = swap->dimensione() / DIM_PAGINA;
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
+	log << "Swap: blocks " << dim << " bitmap " << nbmblocks << "\n";
 
 	bm_create(&blocks, new uint64_t[nbmblocks * UPB], dim);
 
