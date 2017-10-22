@@ -1,11 +1,11 @@
-START_SISTEMA=   0x0000000000200200
+START_SISTEMA=   0x0000000000200000
 SWAP=		 swap.img
 -include util/start.mk
 
 LIBCE ?= $(HOME)/CE
 
 NCC ?= g++
-NLD ?= ld
+NLD ?= ld.gold
 
 COMM_CFLAGS=$(CFLAGS) \
 	-Wall 			\
