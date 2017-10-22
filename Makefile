@@ -28,7 +28,7 @@ NCFLAGS=$(COMM_CFLAGS) -m64 -mcmodel=large
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif
-NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIBCE)/lib64/ce
+NLDFLAGS=$(COMM_LDFLAGS) -melf_x86_64 -L$(LIBCE)/lib64/ce
 NLDLIBS=$(COMM_LDLIBS) -lce64
 
 ifdef AUTOCORR
