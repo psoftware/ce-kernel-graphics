@@ -470,6 +470,22 @@ void gr_window::user_event_add_keypress(char key)
 
 void gr_window::user_event_add_resize(int delta_pos_x, int delta_pos_y, int delta_size_x, int delta_size_y)
 {
+	// questo metodo gestisce l'inserimento dell'evento resize in modo particolare:
+	// se l'ultima operazione di resize non è stata ancora completata quando una nuova ne viene inserita,
+	// è meglio andare ad aggiornare l'ultima richiesta e non inserine una nuova. In tal modo evitiamo
+	// di sovraccaricare il processo utente con troppe richieste, anche perchè se ne abbiamo trovata una ancora
+	// in coda, significa che il processo utente non riesce a processare velocemente le richieste.
+	// Se il processo è abbastanza veloce a processare tutte le richieste, non troveremo in coda eventi resize
+	// e il processo farà comunque un resize fluido. Lo scopo è bilanciare prestazioni e qualità del resize.
+	if(event_tail != 0 && event_tail->type == USER_EVENT_RESIZE)
+	{
+		event_tail->delta_pos_x+=delta_pos_x;
+		event_tail->delta_pos_y+=delta_pos_y;
+		event_tail->delta_size_x+=delta_size_x;
+		event_tail->delta_size_y+=delta_size_y;
+		return;
+	}
+
 	des_user_event * event = new des_user_event();
 	event->type=USER_EVENT_RESIZE;
 	event->delta_pos_x=delta_pos_x;
