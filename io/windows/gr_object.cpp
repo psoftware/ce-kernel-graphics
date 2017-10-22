@@ -406,37 +406,36 @@ void gr_object::build_render_areas(render_subset_unit *parent_restriction, gr_ob
 					}
 				}
 			}
+
+			// chiediamo al figlio quali sono le aree che ha modificato (le metterà nella sua lista di render area)
 			target_child->build_render_areas(&current_parent_restriction, target_ancestor, ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, modified || newarea_needed || ancestor_modified);
-		}
-	}
-	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
-	{
 
-	LOG_DEBUG("parent_restriction: %d %d %d %d", parent_restriction->pos_x, parent_restriction->pos_y, parent_restriction->size_x, parent_restriction->size_y);
-		// itero tutte le subset unit di this, le tolgo anche dalla lista
-		for(render_subset_unit *targetunit=this->pop_render_unit(); targetunit!=0; targetunit=this->pop_render_unit())
-		{
-			// se l'oggetto non è visibile, allora nessuna render unit dovrà essere applicata
-			if(!this->visible)
-				continue;
+			// e poi acquisiamole (le buttiamo in target_ancestor direttamente)
+			for(render_subset_unit *targetunit=target_child->pop_render_unit(); targetunit!=0; targetunit=target_child->pop_render_unit())
+			{
+				// se l'oggetto non è visibile, allora nessuna render unit dovrà essere applicata
+				if(!target_child->visible)
+					continue;
 
-			// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di target_ancestor, devo sistemare
-			// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
-			targetunit->offset_position(ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y);	// ora targetunit ha le coord che fanno riferimento a target_ancestor
+				// dopo aver estratto la render unit, visto che devo aggiungerla alla lista di target_ancestor, devo sistemare
+				// i riferimenti sulla posizione, perchè il genitore cambia. Aggiustare i riferimenti serve anche per intersects.
+				targetunit->offset_position(ancestors_offset_x + this->pos_x + target_child->pos_x, ancestors_offset_y + this->pos_y + target_child->pos_y);	// ora targetunit ha le coord che fanno riferimento a target_ancestor
 
-			// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
-			//LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
-			targetunit->intersect(parent_restriction);
-			LOG_DEBUG("intersected target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+				// la unit non deve sforare i bound di tutti gli antenati, quindi dopo aver cambiato i riferimenti lo restringo, se necessario
+				//LOG_DEBUG("1) target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+				targetunit->intersect(parent_restriction);
 
-			target_ancestor->push_render_unit(targetunit);
+				LOG_DEBUG("UNBUFFERED intersected target unit: %d %d %d %d", targetunit->pos_x, targetunit->pos_y, targetunit->size_x, targetunit->size_y);
+
+				target_ancestor->push_render_unit(targetunit);
+			}
 		}
 	}
 }
 
 void gr_object::recursive_render(render_subset_unit *child_restriction, gr_object *ancestor_to_render, int ancestors_offset_x, int ancestors_offset_y)
 {
-	LOG_DEBUG("#### recursive rendering v2 on (%d)", this->id);
+	LOG_DEBUG("---- recursive rendering v2 on (%d)", this->id);
 
 	// se l'oggetto non è bufferato ci aspettiamo che qualche suo discendente lo sia. per questo facciamo una visita anticipata
 	// (usiamo il for perchè l'albero è generico e non binario)
@@ -461,10 +460,10 @@ void gr_object::recursive_render(render_subset_unit *child_restriction, gr_objec
 		}
 		//flog(LOG_INFO, "<- no more child");
 	}
-	else // se l'oggetto è bufferato provvediamo ad acquisirne tutte le render unit (la radice va esclusa)
+	else // caso container bufferato, oggetto bufferato e oggetto non bufferato
 	{
 		//flog(LOG_INFO, "# render unit (%p) %d %d %d %d", subsetunit, subsetunit->pos_x, subsetunit->pos_y, subsetunit->size_x, subsetunit->size_y);
-		LOG_DEBUG("## BUFFERED or NOT CONTAINER stampo this (%d) con x=%d y=%d w=%d h=%d", this->id, this->pos_x,this->pos_y, this->size_x, this->size_y);
+		LOG_DEBUG("## BUFFERED CONTAINER or OBJECT stampo this (%d) con x=%d y=%d w=%d h=%d", this->id, this->pos_x,this->pos_y, this->size_x, this->size_y);
 		LOG_DEBUG("## (3) child_restriction %d %d %d %d", child_restriction->pos_x, child_restriction->pos_y, child_restriction->size_x, child_restriction->size_y);
 
 		// ASSERTION
@@ -473,6 +472,8 @@ void gr_object::recursive_render(render_subset_unit *child_restriction, gr_objec
 				LOG_ERROR("## OVERFLOW!!!!!!");*/
 
 		// procediamo con il draw del figlio sul buffer parente
+		LOG_DEBUG("drawing (%d) on asx %d asy %d %d %d %d %d", this->get_id(), ancestor_to_render->size_x, ancestor_to_render->size_y,
+				this->pos_x, this->pos_y, child_restriction->pos_x, child_restriction->pos_y);
 		if(this->buffered)	// nel caso in cui l'oggetto è buffered, va fatta una copia del buffer del figlio sull'ancestor
 			gr_object::draw(ancestor_to_render->buffer, ancestor_to_render->size_x, ancestor_to_render->size_y,
 				ancestors_offset_x + this->pos_x, ancestors_offset_y + this->pos_y, child_restriction);
@@ -491,7 +492,7 @@ void gr_object::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int ances
 		//int start_obj_y = child_restriction->pos_y - ancestors_offset_y - this->pos_y;
 		int start_pos_x = child_restriction->pos_x - total_offset_x;
 		int start_pos_y = child_restriction->pos_y - total_offset_y;
-		LOG_DEBUG("virtualizable_draw: start_pos_x=%d start_pos_y=%d", start_pos_x, start_pos_y);
+		LOG_DEBUG("default draw(): start_pos_x=%d start_pos_y=%d", start_pos_x, start_pos_y);
 
 		if(!this->trasparency)
 			for(int y=0; y<child_restriction->size_y; y++)
@@ -540,7 +541,7 @@ void gr_object::render()
 		return;
 	}
 
-	LOG_DEBUG("## --- inizio render()");
+	LOG_DEBUG("---------------------------------------------------------------------- inizio render()");
 	render_subset_unit pr(0, 0, this->size_x, this->size_y);
 
 	// step 1
