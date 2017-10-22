@@ -67,11 +67,6 @@ void mem_free(void* p)
 	sem_signal(mem_mutex);
 }
 
-extern "C" void do_log(log_sev sev, const char* msg, natl size)
-{
-	log(sev, msg, size);
-}
-
 extern "C" natl end;
 
 extern "C" void lib_init()
