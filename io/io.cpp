@@ -1172,6 +1172,10 @@ void main_windows_manager(int n)
 									else if(rel_x_cursor < BORDER_ANGLE_SIZE)
 										win_man.dragging_border |= win_man.BORDER_LEFT;
 								}
+
+								// anche in questo caso è meglio dimenticarci dell'ultimo oggetto su cui siamo passati, così da non mandare
+								// eventi di click all'oggetto mentre operiamo sui bordi
+								win_man.passing_on_window_object = 0;
 							}
 							else if(res.target != 0 && !win_man.passing_on_window->get_resizable())
 							{
@@ -1269,8 +1273,8 @@ void main_windows_manager(int n)
 							// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
 							win_man.focused_window->render();
 						}
-						else
-							// inoltriamo l'evento di click all'utente solo se non è avvenuto su topbar
+						else if(win_man.passing_on_window_object != 0)
+							// inoltriamo l'evento di click all'utente solo se non è avvenuto su topbar e c'è un oggetto di una finestra sotto il cursore
 							win_man.focused_window->user_event_add_mousebutton(USER_EVENT_MOUSEUP, newreq.button, main_cursor.x, main_cursor.y);
 					}
 
