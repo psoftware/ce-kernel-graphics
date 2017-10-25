@@ -23,6 +23,7 @@ public:
 	static const char TOPBAR_FLAG = 1u << 4;
 	static const char TEXTBOX_FLAG = 1u << 5;
 	static const char PROGRESSBAR_FLAG = 1u << 6;
+	static const char CHECKBOX_FLAG = 1u << 7;
 
 	// componenti della finestra
 public:

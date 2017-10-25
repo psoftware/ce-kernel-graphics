@@ -5,6 +5,7 @@
 #include "gr_label.h"
 #include "gr_textbox.h"
 #include "gr_progressbar.h"
+#include "gr_checkbox.h"
 #include "consts.h"
 #include "libgr.h"
 #include "log.h"
@@ -266,6 +267,10 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 			newobj = new gr_progressbar(static_cast<u_progressbar*>(u_obj));
 			newobj->set_search_flag(PROGRESSBAR_FLAG);
 			break;
+		case W_ID_CHECKBOX:
+			newobj = new gr_checkbox(static_cast<u_checkbox*>(u_obj));
+			newobj->set_search_flag(CHECKBOX_FLAG);
+			break;
 		default:
 			LOG_ERROR("c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			return 0;
@@ -307,6 +312,11 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 			if(!dest_obj->has_flag(gr_window::PROGRESSBAR_FLAG))
 				return false;
 			*(static_cast<gr_progressbar*>(dest_obj)) = *static_cast<u_progressbar*>(u_obj);
+			break;
+		case W_ID_CHECKBOX:
+			if(!dest_obj->has_flag(gr_window::CHECKBOX_FLAG))
+				return false;
+			*(static_cast<gr_checkbox*>(dest_obj)) = *static_cast<u_checkbox*>(u_obj);
 			break;
 		default:
 			LOG_ERROR("update_user_object: tipo oggetto %d errato", u_obj->TYPE);

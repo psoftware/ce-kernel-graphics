@@ -675,6 +675,10 @@ extern "C" void c_aggiorna_oggetto(int w_id, int o_id, u_windowObject * u_obj, b
 			if(!found_obj->has_flag(gr_window::PROGRESSBAR_FLAG))
 				goto err;
 			break;
+		case W_ID_CHECKBOX:
+			if(!found_obj->has_flag(gr_window::CHECKBOX_FLAG))
+				goto err;
+			break;
 		default:
 			flog(LOG_INFO, "c_aggiorna_oggetto: tipo oggetto %d errato", u_obj->TYPE);
 			goto err;
