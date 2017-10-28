@@ -524,20 +524,19 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 }
 
 // ======= Primitive messe a disposizione dell'utente =======
-extern "C" int c_crea_finestra(u_basicwindow * u_wind)
+extern "C" void c_crea_finestra(u_basicwindow * u_wind)
 {
 	sem_wait(win_man.mutex);
 
 	gr_window *newwindow = new gr_window(u_wind);
 	doubled_framebuffer_container->add_child(newwindow);
-	int newwindow_id = newwindow->get_id();
+
+	u_wind->w_id = newwindow->get_id();
 
 	LOG_DEBUG("c_crea_finestra: creata nuova finestra (%d) con pos_x=%d pos_y=%d size_x=%d size_y=%d",
-		newwindow_id, u_wind->pos_x, u_wind->pos_y, u_wind->size_x, u_wind->size_y);
+		u_wind->w_id, u_wind->pos_x, u_wind->pos_y, u_wind->size_x, u_wind->size_y);
 
 	sem_signal(win_man.mutex);
-
-	return newwindow_id;
 }
 
 extern "C" int c_chiudi_finestra(int w_id, bool sync)

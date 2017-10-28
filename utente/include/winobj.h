@@ -27,7 +27,7 @@ public:
 		sysprop.size_x = size_x;
 		sysprop.size_y = size_y;
 		copy(title, sysprop.title);
-		sysprop.w_id = crea_finestra(&sysprop);
+		crea_finestra(&sysprop);
 
 		objs_count=0;
 	}

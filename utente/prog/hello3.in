@@ -13,7 +13,9 @@ process_body hello_body3(int a)
 	syscallwind->size_x=128;
 	syscallwind->size_y=128;
 	copy("Close test", syscallwind->title);
-	int finestra = syscallwind->w_id = crea_finestra(syscallwind);
+	crea_finestra(syscallwind);
+
+	int finestra = syscallwind->w_id;
 
 	u_label * label1 = new u_label();
 	label1->size_x=120;
