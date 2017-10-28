@@ -216,4 +216,25 @@ class u_checkbox : public u_windowObject
 	}
 };
 
+// questo oggetto serve solo per le syscall usate per gestire le finestre.
+// infatti non ha neanche u_windowObject come classe padre
+class u_basicwindow {
+public:
+	int w_id;
+
+	int pos_x;
+	int pos_y;
+	int size_x;
+	int size_y;
+	char title[150];
+
+	bool visible;
+	bool draggable;
+	bool resizable;
+
+	u_basicwindow() : w_id(-1), pos_x(0), pos_y(0), size_x(0), size_y(0), visible(false), draggable(true), resizable(true) {
+		title[0] = '\0';
+	}
+};
+
 #endif

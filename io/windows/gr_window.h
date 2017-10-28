@@ -41,16 +41,32 @@ public:
 	gr_label * title_label;
 
 	gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, const char* title);
+
+	// costruttore usato con l'oggetto utente
+	gr_window(u_basicwindow* u_wind);
+
+	// construttore comune
+	void constructor(const char * title);
+
+	// distruttore
 	~gr_window();
+
+	// funzione per aggiornare lo stato della finetra attraverso un oggetto finestra utente
+	void update_window_from_user(u_basicwindow * u_wind);
+
+	// funzioni per la gestione delle coordinate
 	void set_content_size_x(int newval);
 	void set_content_size_y(int newval);
 	int offset_size_x(int offset);
 	int offset_size_y(int offset);
-	void set_title(const char *str);
 	bool get_draggable();
 	bool get_resizable();
 	void set_draggable(bool draggable);
 	void set_resizable(bool resizable);
+
+	void set_title(const char *str);
+
+	// metodo da invocare ogni qual volta viene fatto un resize della finestra (ridimensiona gli oggetti interni)
 	void do_resize();
 
 	// funzioni per gli oggetti passati dall'utente al nucleo

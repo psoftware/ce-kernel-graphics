@@ -328,7 +328,7 @@ fill_io_gates:
 	fill_io_gate	IO_TIPO_WSE0	a_writese_0
 	fill_io_gate	IO_TIPO_WINDC	a_crea_finestra
 	fill_io_gate	IO_TIPO_WINDCL	a_chiudi_finestra
-	fill_io_gate	IO_TIPO_WINDV	a_visualizza_finestra
+	fill_io_gate	IO_TIPO_WINDV	a_aggiorna_finestra
 	fill_io_gate	IO_TIPO_WINDOC	a_crea_oggetto
 	fill_io_gate	IO_TIPO_WINDUC	a_aggiorna_oggetto
 	fill_io_gate	IO_TIPO_WINDPE	a_preleva_evento
@@ -390,9 +390,9 @@ a_chiudi_finestra:
 	call c_chiudi_finestra
 	iretq
 
-	.extern c_visualizza_finestra
-a_visualizza_finestra:
-	call c_visualizza_finestra
+	.extern c_aggiorna_finestra
+a_aggiorna_finestra:
+	call c_aggiorna_finestra
 	iretq
 
 	.extern c_crea_oggetto

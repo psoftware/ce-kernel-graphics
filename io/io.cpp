@@ -437,6 +437,7 @@ struct des_window_req
 
 	natb act;
 	union {
+		u_basicwindow *u_wind;	//aggiorna_finestra
 		u_windowObject *obj;	//aggiorna_oggetto
 		int delta_x;			//mousebutton
 		int delta_z;			//mousez
@@ -523,13 +524,17 @@ bool windows_queue_extract(des_windows_man& win_cont, des_window_req& req)
 }
 
 // ======= Primitive messe a disposizione dell'utente =======
-extern "C" int c_crea_finestra(unsigned int size_x, unsigned int size_y, unsigned int pos_x, unsigned int pos_y, const char* title)
+extern "C" int c_crea_finestra(u_basicwindow * u_wind)
 {
 	sem_wait(win_man.mutex);
 
-	gr_window *newwindow = new gr_window(pos_x, pos_y, size_x, size_y, WINDOWS_PLANE_ZINDEX, title);
+	gr_window *newwindow = new gr_window(u_wind);
 	doubled_framebuffer_container->add_child(newwindow);
 	int newwindow_id = newwindow->get_id();
+
+	LOG_DEBUG("c_crea_finestra: creata nuova finestra (%d) con pos_x=%d pos_y=%d size_x=%d size_y=%d",
+		newwindow_id, u_wind->pos_x, u_wind->pos_y, u_wind->size_x, u_wind->size_y);
+
 	sem_signal(win_man.mutex);
 
 	return newwindow_id;
@@ -572,7 +577,7 @@ err:	sem_signal(win_man.mutex);
 	return -1;
 }
 
-extern "C" void c_visualizza_finestra(int w_id, bool sync)
+extern "C" void c_aggiorna_finestra(u_basicwindow * u_wind, bool sync)
 {
 	sem_wait(win_man.sync_notfull);
 	sem_wait(win_man.mutex);
@@ -580,7 +585,7 @@ extern "C" void c_visualizza_finestra(int w_id, bool sync)
 	gr_window *window;
 	int new_index;
 
-	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(w_id);
+	gr_object * found_obj = doubled_framebuffer_container->search_child_by_id(u_wind->w_id);
 	if(found_obj==0 || !found_obj->has_flag(gr_window::WINDOW_FLAG))
 		goto err;
 
@@ -595,6 +600,8 @@ extern "C" void c_visualizza_finestra(int w_id, bool sync)
 		flog(LOG_INFO, "Inserimento richiesta fallito");
 		goto err;
 	}
+
+	win_man.req_queue[new_index].u_wind = u_wind;
 
 	sem_signal(win_man.mutex);
 	sem_signal(win_man.sync_notempty);
@@ -805,9 +812,9 @@ inline void render_on_framebuffer()
 	framebuffer_container->clear_render_units();
 }
 
-void graphic_visualizza_finestra(gr_window *window)
+void graphic_aggiorna_finestra(gr_window *window, u_basicwindow *u_wind)
 {
-	window->set_visibility(true);
+	window->update_window_from_user(u_wind);
 	window->render();
 	render_on_framebuffer();
 }
@@ -1041,7 +1048,7 @@ void main_windows_manager(int n)
 		{
 			case PRIM_SHOW:
 				LOG_DEBUG("act(%d): Processo richiesta di renderizzazione finestra per finestra %d", newreq.act, newreq.window->get_id());
-				graphic_visualizza_finestra(newreq.window);
+				graphic_aggiorna_finestra(newreq.window, newreq.u_wind);
 				if(newreq.to_sync)
 					sem_signal(newreq.if_sync);
 			break;

@@ -4,13 +4,13 @@
 #include "virtual.h"
 #include "log.h"
 
-const int MAX_USER_OBJECTS=100;
 class u_window
 {
 private:
-	int w_id;
+	u_basicwindow sysprop;
 
 	// lista oggetti finestra (id e puntatori a struct)
+	static const int MAX_USER_OBJECTS=100;
 	int objs_ident[MAX_USER_OBJECTS];
 	u_windowObject * objs[MAX_USER_OBJECTS];
 	int objs_count;
@@ -22,13 +22,20 @@ public:
 
 	u_window(int size_x, int size_y, int pos_x, int pos_y, const char *title)
 	{
-		w_id = crea_finestra(size_x, size_y, pos_x, pos_y, title);
+		sysprop.pos_x = pos_x;
+		sysprop.pos_y = pos_y;
+		sysprop.size_x = size_x;
+		sysprop.size_y = size_y;
+		copy(title, sysprop.title);
+		sysprop.w_id = crea_finestra(&sysprop);
+
 		objs_count=0;
 	}
 
-	void show(bool async=false)
+	void show(bool sync=true)
 	{
-		visualizza_finestra(w_id, true);
+		sysprop.visible = true;
+		aggiorna_finestra(&sysprop, sync);
 	}
 
 	bool add_object(u_windowObject* obj)
@@ -46,7 +53,7 @@ public:
 		this->objs[this->objs_count] = obj;
 
 		//uso la primitiva per creare l'oggetto e mi mantengo l'identificatore per modifiche future
-		this->objs_ident[this->objs_count] = crea_oggetto(this->w_id, obj);
+		this->objs_ident[this->objs_count] = crea_oggetto(this->sysprop.w_id, obj);
 		objs_count++;
 
 		return true;
@@ -57,7 +64,7 @@ public:
 		for(int i=0; i<objs_count; i++)
 			if(this->objs[i]==obj)
 			{
-				aggiorna_oggetto(this->w_id, this->objs_ident[i], this->objs[i], async);
+				aggiorna_oggetto(this->sysprop.w_id, this->objs_ident[i], this->objs[i], async);
 				return true;
 			}
 		return false;
@@ -73,7 +80,7 @@ public:
 
 	void next_event()
 	{
-		des_user_event new_event = preleva_evento(w_id);
+		des_user_event new_event = preleva_evento(sysprop.w_id);
 
 		LOG_DEBUG("process_event: nuovo evento di tipo %d prelevato, rel_x %d rel_y %d delta_z", new_event.type, new_event.rel_x, new_event.rel_y);
 
@@ -99,7 +106,7 @@ public:
 				this->handler_closing_window(new_event);
 
 			// chiudiamo la finestra
-			chiudi_finestra(this->w_id);
+			chiudi_finestra(this->sysprop.w_id);
 
 			// evento post-chiusura (serve al processo per terminare)
 			if(this->handler_closed_window!=0)

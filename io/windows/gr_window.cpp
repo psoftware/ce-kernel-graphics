@@ -19,6 +19,24 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
 	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), event_head(0), event_tail(0)
 {
+	constructor(title);
+}
+
+gr_window::gr_window(u_basicwindow* u_wind)
+: gr_object(u_wind->pos_x, u_wind->pos_y, u_wind->size_x+BORDER_TICK*2, u_wind->size_y+BORDER_TICK*2+TOPBAR_HEIGHT, WINDOWS_PLANE_ZINDEX),
+	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
+	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
+	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), event_head(0), event_tail(0)
+{
+	constructor(u_wind->title);
+
+	this->set_resizable(u_wind->resizable);
+	this->set_draggable(u_wind->draggable);
+	this->set_visibility(u_wind->visible);
+}
+
+void gr_window::constructor(const char * title)
+{
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
 
@@ -131,6 +149,19 @@ gr_window::~gr_window() {
 	delete inner_container;
 }
 
+void gr_window::update_window_from_user(u_basicwindow * u_wind) {
+	this->set_pos_x(u_wind->pos_x);
+	this->set_pos_y(u_wind->pos_y);
+	this->set_content_size_x(u_wind->size_x);
+	this->set_content_size_y(u_wind->size_y);
+	this->set_title(u_wind->title);
+	this->set_resizable(u_wind->resizable);
+	this->set_draggable(u_wind->draggable);
+	this->set_visibility(u_wind->visible);
+
+	do_resize();
+}
+
 void gr_window::do_resize()
 {
 	// lasciamo all'implementazione do_resize di gr_object la competenza di riallocare il buffer della finestra
@@ -197,13 +228,11 @@ void gr_window::do_resize()
 }
 
 void gr_window::set_content_size_x(int newval){
-	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
 		return;
 	this->size_x=newval + BORDER_TICK*2;
 }
 void gr_window::set_content_size_y(int newval){
-	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < 0)
 		return;
 	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK*2;

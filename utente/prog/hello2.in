@@ -4,9 +4,16 @@
 process simple_animations body simple_animations_init(0), 21, LIV_UTENTE;
 
 long int wait2=89999999;
+
 process_body simple_animations_body(int a)
 {
-	int finestra = crea_finestra(128,128,160,40, "Simple Animations");
+	u_basicwindow *syscallwind = new u_basicwindow();
+	syscallwind->pos_x=160;
+	syscallwind->pos_y=40;
+	syscallwind->size_x=128;
+	syscallwind->size_y=128;
+	copy("Simple Animations", syscallwind->title);
+	int finestra = syscallwind->w_id = crea_finestra(syscallwind);
 
 	u_label * label1 = new u_label();
 	label1->size_x=128;
@@ -27,7 +34,8 @@ process_body simple_animations_body(int a)
 	progressbar1->progress_perc=1;
 	int progressbar_id = crea_oggetto(finestra, progressbar1);
 
-	visualizza_finestra(finestra, true);
+	syscallwind->visible = true;
+	aggiorna_finestra(syscallwind, true);
 	aggiorna_oggetto(finestra, label_id, label1, true);
 
 	copy("Inizio processo 2!", label1->text);
