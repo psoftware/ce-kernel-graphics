@@ -1351,6 +1351,7 @@ bool windows_init()
 	mouse_bitmap->render();
 	doubled_framebuffer_container->add_child(mouse_bitmap);
 
+	/*
 	//barra
 	gr_bitmap * screen_bar = new gr_bitmap(0,0, MAX_SCREENX, MAINBAR_SIZE, MAINBAR_ZINDEX);
 	#ifdef BPP_8
@@ -1363,6 +1364,7 @@ bool windows_init()
 	screen_bar->set_trasparency(true);
 	screen_bar->render();
 	doubled_framebuffer_container->add_child(screen_bar);
+	*/
 
 	//label memoria heap
 	heap_label = new gr_label(0,0,140,20,HEAP_LABEL_ZINDEX);
