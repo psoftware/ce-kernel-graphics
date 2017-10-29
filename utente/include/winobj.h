@@ -30,6 +30,21 @@ public:
 		crea_finestra(&sysprop);
 	}
 
+	void resizable(bool newval)
+	{
+		sysprop.resizable = newval;
+	}
+
+	void draggable(bool newval)
+	{
+		sysprop.draggable = newval;
+	}
+
+	void apply_changes(bool sync=true)
+	{
+		aggiorna_finestra(&sysprop, sync);
+	}
+
 	void show(bool sync=true)
 	{
 		sysprop.visible = true;
