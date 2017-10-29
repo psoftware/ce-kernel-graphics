@@ -40,7 +40,9 @@ public:
 	void(*handler_mouse_down)(des_user_event event);
 	void(*handler_keyboard_press)(des_user_event event);
 
-	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE) {
+	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE),
+		handler_mouse_z(0), handler_mouse_up(0), handler_mouse_down(0), handler_keyboard_press(0)
+	{
 
 	}
 

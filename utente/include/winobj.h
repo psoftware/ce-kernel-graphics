@@ -20,7 +20,7 @@ public:
 	void(*handler_closing_window)(des_user_event event);
 	void(*handler_closed_window)(des_user_event event);
 
-	u_window(int size_x, int size_y, int pos_x, int pos_y, const char *title)
+	u_window(int size_x, int size_y, int pos_x, int pos_y, const char *title) : objs_count(0), handler_closing_window(0), handler_closed_window(0)
 	{
 		sysprop.pos_x = pos_x;
 		sysprop.pos_y = pos_y;
@@ -28,8 +28,6 @@ public:
 		sysprop.size_y = size_y;
 		copy(title, sysprop.title);
 		crea_finestra(&sysprop);
-
-		objs_count=0;
 	}
 
 	void show(bool sync=true)
