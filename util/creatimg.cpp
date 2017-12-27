@@ -322,6 +322,9 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 }
 
 
+/* prepara le tabelle per uno heap di dimensione dim a partire
+ * da start_adddr. start_addr deve essere allineato alla pagina
+ */
 void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 	TabCache c;
 	for (uint64_t addr = start_addr; addr < start_addr + dim; addr += sizeof(pagina)) {
@@ -422,6 +425,8 @@ int main(int argc, char* argv[])
 	superblock.io_end = last_address;
 
 	// le tabelle condivise per lo heap:
+	// allineamento alla prossima pagina
+	last_address = (last_address + sizeof(pagina) - 1) & ~(sizeof(pagina) - 1);
 	log << "==> I/O HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
 			last_address << "\n";
 	do_heap(argv[2], last_address, DIM_IO_HEAP);
@@ -431,6 +436,7 @@ int main(int argc, char* argv[])
 	superblock.user_end = last_address;
 
 	// le tabelle condivise per lo heap:
+	last_address = (last_address + sizeof(pagina) - 1) & ~(sizeof(pagina) - 1);
 	log << "==> HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
 			last_address << "\n";
 	do_heap(argv[1], last_address, DIM_USR_HEAP);

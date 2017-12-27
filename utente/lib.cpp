@@ -76,6 +76,8 @@ extern "C" natl end;
 
 extern "C" void lib_init()
 {
+	unsigned long long end_ = (unsigned long long)&end;
 	mem_mutex = sem_ini(1);
-	heap_init(&end, DIM_USR_HEAP);
+	end_ = (end_ + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
+	heap_init((void *)end_, DIM_USR_HEAP);
 }
