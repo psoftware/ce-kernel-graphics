@@ -1172,8 +1172,8 @@ des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale) //
 {
 	des_pf *ppf, *dpf_vittima;
 	ppf = &dpf[0];
-	while ( (ppf < &dpf[N_DPF] && ppf->residente) ||
-			vietato(ppf, proc, liv, ind_virtuale))
+	while ( ppf < &dpf[N_DPF] &&
+		(ppf->residente || vietato(ppf, proc, liv, ind_virtuale)))
 		ppf++;
 	if (ppf == &dpf[N_DPF]) return 0;
 	dpf_vittima = ppf;
