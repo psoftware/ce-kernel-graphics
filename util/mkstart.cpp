@@ -24,8 +24,8 @@ int main()
 	startmk.close();
 
 	ofstream startgdb("util/start.gdb");
-	startgdb << "set $START_IO="      << start_io << endl;
-	startgdb << "set $START_UTENTE="  << start_utente << endl;
+	startgdb << "set $START_IO="      << start_io + 0xe8 << endl;
+	startgdb << "set $START_UTENTE="  << start_utente + 0xe8 << endl;
 	startgdb.close();
 
 	ofstream startpl("util/start.pl");
