@@ -956,7 +956,7 @@ extern "C" void cmain(int sem_io)
 		flog(LOG_ERR, "impossible creare semaforo mem_mutex");
 		abort_p();
 	}
-	unsigned long long end_ = (unsigned long long)end;
+	unsigned long long end_ = (unsigned long long)&end;
 	end_ = (end_ + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
 	heap_init((void *)end_, DIM_IO_HEAP);
 	if (!console_init())
