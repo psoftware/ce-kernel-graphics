@@ -345,7 +345,10 @@ extern "C" void c_pre_routine_pf(	//
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
 	if ((errore.user == 0 && rip < &end)|| errore.res == 1) {
-		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
+		addr v = readCR2();
+		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", v, rip);
+		if ((natq)v < DIM_PAGINA)
+			flog(LOG_ERR, "Probabile puntatore NULL");
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
