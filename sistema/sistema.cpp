@@ -317,7 +317,7 @@ struct pf_error {
 };
 // *)
 
-void c_routine_pf();
+bool c_routine_pf();
 // (* c_pre_routine_pf() e' la routine che viene chiamata in caso di page
 //    fault. Effettua dei controlli aggiuntivi prima di chiamare la
 //    routine c_routine_pf() che provvede a caricare le tabelle e pagine
@@ -371,7 +371,12 @@ extern "C" void c_pre_routine_pf(	//
 	// *)
 
 
-	c_routine_pf();
+	if (!c_routine_pf()) {
+		addr v = readCR2();
+		flog(LOG_WARN, "PAGE FAULT a %p, rip=%lx non risolto", v, rip);
+		in_pf = false;
+		abort_p();
+	}
 
 	in_pf = false;	//* fine della gestione del page fault
 }
@@ -1147,7 +1152,7 @@ des_pf* swap(natl proc, int livello, addr ind_virt)
 	return ppf;
 }
 
-void c_routine_pf()	//
+bool c_routine_pf()
 {
 	addr ind_virt = readCR2();
 
@@ -1157,9 +1162,10 @@ void c_routine_pf()	//
 		if (!bitP) {
 			des_pf *ppf = swap(esecuzione->id, i, ind_virt);
 			if (!ppf)
-				abort_p();
+				return false;
 		}
 	}
+	return true;
 }
 
 bool vietato(des_pf* ppf, natl proc, int liv, addr ind_virt)
