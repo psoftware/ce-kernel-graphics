@@ -24,7 +24,7 @@ COMM_LDFLAGS=\
 
 COMM_LDLIBS=
 
-NCFLAGS=$(COMM_CFLAGS) -m64
+NCFLAGS=$(COMM_CFLAGS) -m64 -Wno-builtin-declaration-mismatch
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif
