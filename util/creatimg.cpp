@@ -25,8 +25,8 @@ public:
 
 verbose log;
 
-const uint32_t UPB = DIM_PAGINA / sizeof(uint32_t);
-const uint32_t BPU = sizeof(uint32_t) * 8;
+const uint32_t UPB = DIM_PAGINA / sizeof(uint64_t);
+const uint32_t BPU = sizeof(uint64_t) * 8;
 
 
 union entrata {
@@ -170,8 +170,10 @@ class TabCache {
 public:
 
 	TabCache() {
-		for (int i = 0; i < 3; i++)
+		for (int i = 0; i < 3; i++) {
 			valid[i] = false;
+			dirty[i] = false;
+		}
 	}
 
 	~TabCache() {
@@ -325,7 +327,7 @@ void do_map(char* fname, int liv, uint64_t& entry_point, uint64_t& last_address)
 /* prepara le tabelle per uno heap di dimensione dim a partire
  * da start_adddr. start_addr deve essere allineato alla pagina
  */
-void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
+void do_heap(const char *name, int liv, uint64_t start_addr, uint64_t dim) {
 	TabCache c;
 	for (uint64_t addr = start_addr; addr < start_addr + dim; addr += sizeof(pagina)) {
 		entrata *e[5];
@@ -344,7 +346,7 @@ void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 				e[l]->a.PWT   = 0;
 				e[l]->a.PCD   = 0;
 				e[l]->a.RW    = 1;
-				e[l]->a.US    = 1;
+				e[l]->a.US    = liv;
 				e[l]->a.P     = 0;
 				c.scrivi(l);
 			} else {
@@ -369,7 +371,7 @@ void do_heap(const char *name, uint64_t start_addr, uint64_t dim) {
 		e[1]->a.PWT = 0;
 		e[1]->a.PCD = 0;
 		e[1]->a.RW |= 1;
-		e[1]->a.US |= 1;
+		e[1]->a.US |= liv;
 		c.scrivi(1);
 
 	}
@@ -404,6 +406,7 @@ int main(int argc, char* argv[])
 	long dim = swap->dimensione() / DIM_PAGINA;
 	int nlong = dim / BPU + (dim % BPU ? 1 : 0);
 	int nbmblocks = nlong / UPB + (nlong % UPB ? 1 : 0);
+	log << "Swap: blocks " << dim << " bitmap " << nbmblocks << "\n";
 
 	bm_create(&blocks, new uint64_t[nbmblocks * UPB], dim);
 
@@ -429,7 +432,7 @@ int main(int argc, char* argv[])
 	last_address = (last_address + sizeof(pagina) - 1) & ~(sizeof(pagina) - 1);
 	log << "==> I/O HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
 			last_address << "\n";
-	do_heap(argv[2], last_address, DIM_IO_HEAP);
+	do_heap(argv[2], 0, last_address, DIM_IO_HEAP);
 
 	log << "Loading " << argv[3] << "\n";
 	do_map(argv[3], 1, superblock.user_entry, last_address);
@@ -439,7 +442,7 @@ int main(int argc, char* argv[])
 	last_address = (last_address + sizeof(pagina) - 1) & ~(sizeof(pagina) - 1);
 	log << "==> HEAP dim " << std::hex << DIM_USR_HEAP << " addr " <<
 			last_address << "\n";
-	do_heap(argv[1], last_address, DIM_USR_HEAP);
+	do_heap(argv[1], 1, last_address, DIM_USR_HEAP);
 
 	superblock.magic[0] = 'C';
 	superblock.magic[1] = 'E';

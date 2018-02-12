@@ -28,7 +28,7 @@ NCFLAGS=$(COMM_CFLAGS) -m64 -Wno-builtin-declaration-mismatch
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif
-NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIB64)
+NLDFLAGS=$(COMM_LDFLAGS) -melf_x86_64 -L$(LIB64)
 NLDLIBS=$(COMM_LDLIBS) -lce64
 
 ifdef AUTOCORR
@@ -118,7 +118,7 @@ clean:
 	rm -f util/start.mk util/start.gdb util/start.pl
 
 reset: clean
-	rm -f build/* swap
+	rm -f build/* $(SWAP) .swap
 
 build:
 	mkdir -p $@

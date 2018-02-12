@@ -23,7 +23,6 @@ extern "C" void sem_signal(natl sem);
 extern "C" natl sem_ini(int val);
 extern "C" void wfi();	//
 extern "C" void abort_p();
-extern "C" void log(log_sev sev, const char* buf, int quanti);
 extern "C" addr trasforma(addr ff);
 extern "C" void panic(const char *msg);
 
@@ -909,11 +908,6 @@ bool hd_init()
 	return true;
 }
 
-
-extern "C" void do_log(log_sev sev, const char* buf, natl l)
-{
-	log(sev, buf, l);
-}
 
 natl mem_mutex;
 
