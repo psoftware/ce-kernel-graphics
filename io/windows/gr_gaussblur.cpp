@@ -39,7 +39,7 @@ void gr_gaussblur::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int an
 	{
 		for(int x=0; x<child_restriction->size_x; x++)
 		{	// algoritmo per realizzare l'alpha blending
-			natw sum=0;
+			natl sum=0;
 			PIXEL_UNIT dst_pixel = *(ancestor_buffer + child_restriction->pos_x + x + (y+child_restriction->pos_y)*ancestor_size_x);
 			//natb alpha = src_pixel >> 24;
 			natl dst_red = (dst_pixel >> 16) & 0xff;
