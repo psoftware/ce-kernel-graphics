@@ -32,7 +32,7 @@
 #define BACKGROUND_ZINDEX 0
 
 // constanti per gr_window
-#define TOPBAR_HEIGHT 20
+#define TOPBAR_HEIGHT 25
 #define CLOSEBUTTON_SIZE 18
 #define CLOSEBUTTON_PADDING_X 1
 #define CLOSEBUTTON_PADDING_Y 1

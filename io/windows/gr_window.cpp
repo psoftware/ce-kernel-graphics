@@ -24,8 +24,8 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	this->set_search_flag(WINDOW_FLAG);
 	this->topbar_container = new gr_object(BORDER_TICK,BORDER_TICK,this->get_size_x()-BORDER_TICK*2,TOPBAR_HEIGHT,0,false);
 	this->topbar_container->set_search_flag(TOPBAR_FLAG);
-	this->topbar_bitmap = new gr_uniform_bitmap(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
-	this->topbar_bitmap->set_color(TOPBAR_WIN_BACKCOLOR);
+	this->topbar_bitmap = new gr_gaussblur(0,0,this->topbar_container->get_size_x(),this->topbar_container->get_size_y(),0);
+	//this->topbar_bitmap->set_color(TOPBAR_WIN_BACKCOLOR);
 	this->topbar_bitmap->render();
 	this->topbar_container->add_child(this->topbar_bitmap);
 	this->add_child(this->topbar_container);
@@ -45,7 +45,8 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 	this->title_label = new gr_label(TITLELABEL_PADDING_X,TITLELABEL_PADDING_Y,this->close_button->get_pos_x()-TITLELABEL_PADDING_X,
 		TOPBAR_HEIGHT-TITLELABEL_PADDING_Y,TITLELABEL_ZINDEX);
 	this->title_label->set_text_color(TITLELABEL_TEXTCOLOR);
-	this->title_label->set_back_color(TOPBAR_WIN_BACKCOLOR);
+	this->title_label->set_back_color(TOPBAR_WIN_BACKCOLOR && 0x00ffffff);
+	this->title_label->set_trasparency(true);
 	this->title_label->set_text(title);
 	this->title_label->render();
 	this->topbar_container->add_child(this->title_label);
