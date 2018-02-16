@@ -55,7 +55,7 @@ void gr_gaussblur::draw(PIXEL_UNIT *ancestor_buffer, int ancestor_size_x, int an
 			for(int line=BLUR_BOX_HALF_SIZE*-1+1; line<BLUR_BOX_HALF_SIZE; line++)
 				if(child_restriction->pos_y - total_offset_x - line < 0 || y!=child_restriction->size_y-line)
 				{
-					for(int i=0; i<BLUR_BOX_HALF_SIZE; i++)
+					for(int i=0; i<=BLUR_BOX_HALF_SIZE; i++)
 						if(x!=child_restriction->size_x-i)
 						{
 							natb multiplier = (BLUR_BOX_HALF_SIZE-i)*KERNEL_MULTIPLIER;
