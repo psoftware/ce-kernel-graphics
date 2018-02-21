@@ -996,7 +996,7 @@ void distruggi_processo(proc_elem* p)
 void rilascia_ric(addr tab, int liv, natl i, natl n)
 {
 	for (natl j = i; j < i + n && j < 512; j++) {
-		natq dt = get_entry(tab, j);
+		natq& dt = get_entry(tab, j);
 		natl blocco;
 		if (extr_P(dt)) {
 			addr sub = extr_IND_FISICO(dt);
@@ -1009,6 +1009,7 @@ void rilascia_ric(addr tab, int liv, natl i, natl n)
 			blocco = extr_IND_MASSA(dt);
 		}
 		dealloca_blocco(blocco);
+		dt = 0;
 	}
 }
 
