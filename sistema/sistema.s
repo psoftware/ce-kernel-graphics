@@ -162,7 +162,7 @@ carica_stato:
 .set pres_bit,   0b10000000
 	.global alloca_tss
 alloca_tss:
-	movq $des_tss, %rdx
+	movq last_tss, %rdx
 iter_tss:
 	// usiamo il bit di presenza nel descrittore per
 	// distiunguere i descrittori liberi da quelli allocati
@@ -170,10 +170,15 @@ iter_tss:
 	jz set_entry_tss	// libero, saltiamo all'inizializzazione
 	addq $16, %rdx		// occupato, passiamo al prossimo
 	cmpq $end_gdt, %rdx
+	jne advance_tss
+	movq $des_tss, %rdx
+advance_tss:
+	cmpq last_tss, %rdx
 	jne iter_tss
 	movq $0, %rax		// terminati, restituiamo 0
 	jmp end_tss
 set_entry_tss:
+	movq %rdx, last_tss
 	movw $DIM_DESP, (%rdx) 	//[15:0] = limit[15:0]
 	decw (%rdx)
 	movq %rdi, %rax
@@ -465,7 +470,7 @@ a_panic:	// routine int $tipo_p
 
 	.extern c_abort_p
 a_abort_p:
-	movl $terminate_stack_end, %esp
+	movq $terminate_stack_end, %rsp
         call c_abort_p
 	call carica_stato
 	iretq
@@ -837,6 +842,8 @@ des_tss:
 	.space 16*NUM_TSS,0	//segmento tss, riempito a runtime
 end_gdt:
 
+last_tss:
+.quad	des_tss
 
 .bss
 .balign 16

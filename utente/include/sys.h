@@ -9,7 +9,7 @@
 #include <costanti.h>
 #include <windows/u_obj.h>
 
-extern "C" void log(log_sev sev, const char* buf, natl quanti);
+extern "C" void do_log(log_sev sev, const char* buf, natl quanti);
 
 extern "C" natl activate_p(void f(int), int a, natl prio, natl liv);
 extern "C" void terminate_p();

@@ -51,15 +51,12 @@ void mem_free(void* p)
 	sem_signal(mem_mutex);
 }
 
-extern "C" void do_log(log_sev sev, const char* msg, natl size)
-{
-	log(sev, msg, size);
-}
-
 extern "C" natl end;
 
 extern "C" void lib_init()
 {
+	unsigned long long end_ = (unsigned long long)&end;
 	mem_mutex = sem_ini(1);
-	heap_init(&end, DIM_USR_HEAP);
+	end_ = (end_ + DIM_PAGINA - 1) & ~(DIM_PAGINA - 1);
+	heap_init((void *)end_, DIM_USR_HEAP);
 }

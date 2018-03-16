@@ -107,8 +107,8 @@ dmawritehd_n:
 	ret
 
 
-	.global log
-log:
+	.global do_log
+do_log:
 	int $TIPO_L
 	ret
 

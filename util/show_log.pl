@@ -1,7 +1,7 @@
 #!/usr/bin/perl -n
 
 BEGIN {
-	do 'util/start.pl';
+	do './util/start.pl';
 
 	my $hex = qr/[a-fA-F0-9]/;
 

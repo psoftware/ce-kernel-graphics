@@ -20,8 +20,9 @@ public:
 
 class FileSwap: public Swap {
 	FILE* img;
+	uint64_t dim;
 public:
-	FileSwap(FILE* img): img(img) {}
+	FileSwap(FILE* img): img(img) { dim = ftell(img); }
 	~FileSwap();
 	unsigned int dimensione() const;
 protected:
@@ -50,16 +51,20 @@ FileSwap::~FileSwap()
 
 unsigned int FileSwap::dimensione() const
 {
-	return ftell(img);
+	return dim;
 }
 
 bool FileSwap::scrivi(unsigned int off, const void* buf, unsigned int size)
 {
+	if (off >= dim)
+		return false;
 	return (fseek(img, off, SEEK_SET) == 0 && fwrite(buf, size, 1, img) == 1);
 }
 
 bool FileSwap::leggi(unsigned int off, void* buf, unsigned int size)
 {
+	if (off >= dim)
+		return false;
 	return (fseek(img, off, SEEK_SET) == 0 && fread(buf, size, 1, img) == 1);
 }
 
