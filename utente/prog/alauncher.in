@@ -4,8 +4,8 @@
 #include <windows/u_obj.h>
 #include <winobj.h>
 
-process launcher body launcher_body(0), 25, LIV_UTENTE;
 semaphore launcher_mutex value 0;
+process launcher body launcher_body(0), 25, LIV_UTENTE;
 
 const int MAX_LAUNCHER_APPS = 8;
 const int LAUNCHER_ENTRY_SIZE_Y = 40;
