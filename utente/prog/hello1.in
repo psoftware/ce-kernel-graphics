@@ -89,6 +89,22 @@ void resize_test_body(int a)
 	copy("Prova a ridimensionare la finestra!", label1->text);
 	uwind->update_object(label1);
 
+	u_checkbox * checkbox1 = new u_checkbox();
+	checkbox1->pos_x=4;
+	checkbox1->pos_y=135;
+	checkbox1->z_index=0;
+	checkbox1->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR);
+	uwind->add_object(checkbox1);
+	uwind->update_object(checkbox1);
+
+	u_checkbox * checkbox2 = new u_checkbox();
+	checkbox2->pos_x=22;
+	checkbox2->pos_y=135;
+	checkbox2->z_index=0;
+	checkbox2->set_anchor(BOTTOM_ANCHOR | LEFT_ANCHOR);
+	uwind->add_object(checkbox2);
+	uwind->update_object(checkbox2);
+
 	//event receive cycle
 	while(true)
 		uwind->next_event();

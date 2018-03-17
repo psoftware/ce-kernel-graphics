@@ -383,7 +383,7 @@ struct pf_error {
 };
 // *)
 
-void c_routine_pf();
+bool c_routine_pf();
 // (* c_pre_routine_pf() e' la routine che viene chiamata in caso di page
 //    fault. Effettua dei controlli aggiuntivi prima di chiamare la
 //    routine c_routine_pf() che provvede a caricare le tabelle e pagine
@@ -411,7 +411,10 @@ extern "C" void c_pre_routine_pf(	//
 	//   dalle primitie di nucleo , quindi, se cio' si e' verificato,
 	//   si tratta di un bug
 	if ((errore.user == 0 && rip < &end)|| errore.res == 1) {
-		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", readCR2(), rip);
+		addr v = readCR2();
+		flog(LOG_ERR, "PAGE FAULT a %p, rip=%lx", v, rip);
+		if ((natq)v < DIM_PAGINA)
+			flog(LOG_ERR, "Probabile puntatore NULL");
 		flog(LOG_ERR, "dettagli: %s, %s, %s, %s",
 			errore.prot  ? "protezione"	: "pag/tab assente",
 			errore.write ? "scrittura"	: "lettura",
@@ -434,7 +437,12 @@ extern "C" void c_pre_routine_pf(	//
 	// *)
 
 
-	c_routine_pf();
+	if (!c_routine_pf()) {
+		addr v = readCR2();
+		flog(LOG_WARN, "PAGE FAULT a %p, rip=%lx non risolto", v, rip);
+		in_pf = false;
+		abort_p();
+	}
 
 	in_pf = false;	//* fine della gestione del page fault
 }
@@ -1055,7 +1063,7 @@ void distruggi_processo(proc_elem* p)
 void rilascia_ric(addr tab, int liv, natl i, natl n)
 {
 	for (natl j = i; j < i + n && j < 512; j++) {
-		natq dt = get_entry(tab, j);
+		natq& dt = get_entry(tab, j);
 		natl blocco;
 		if (extr_P(dt)) {
 			addr sub = extr_IND_FISICO(dt);
@@ -1068,6 +1076,7 @@ void rilascia_ric(addr tab, int liv, natl i, natl n)
 			blocco = extr_IND_MASSA(dt);
 		}
 		dealloca_blocco(blocco);
+		dt = 0;
 	}
 }
 
@@ -1229,7 +1238,7 @@ des_pf* swap(natl proc, int livello, addr ind_virt)
 	return ppf;
 }
 
-void c_routine_pf()	//
+bool c_routine_pf()
 {
 	addr ind_virt = readCR2();
 
@@ -1239,9 +1248,10 @@ void c_routine_pf()	//
 		if (!bitP) {
 			des_pf *ppf = swap(esecuzione->id, i, ind_virt);
 			if (!ppf)
-				abort_p();
+				return false;
 		}
 	}
+	return true;
 }
 
 bool vietato(des_pf* ppf, natl proc, int liv, addr ind_virt)
@@ -1257,8 +1267,8 @@ des_pf* scegli_vittima(natl proc, int liv, addr ind_virtuale) //
 {
 	des_pf *ppf, *dpf_vittima;
 	ppf = &dpf[0];
-	while ( (ppf < &dpf[N_DPF] && ppf->residente) ||
-			vietato(ppf, proc, liv, ind_virtuale))
+	while ( ppf < &dpf[N_DPF] &&
+		(ppf->residente || vietato(ppf, proc, liv, ind_virtuale)))
 		ppf++;
 	if (ppf == &dpf[N_DPF]) return 0;
 	dpf_vittima = ppf;

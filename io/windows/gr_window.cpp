@@ -5,6 +5,7 @@
 #include "gr_label.h"
 #include "gr_textbox.h"
 #include "gr_progressbar.h"
+#include "gr_checkbox.h"
 #include "consts.h"
 #include "libgr.h"
 #include "log.h"
@@ -16,7 +17,25 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 : gr_object(pos_x, pos_y, size_x+BORDER_TICK*2, size_y+BORDER_TICK*2+TOPBAR_HEIGHT, z_index, false),
 	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
 	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
-	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), event_head(0), event_tail(0)
+	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), clicked_down_object(0), event_head(0), event_tail(0)
+{
+	constructor(title);
+}
+
+gr_window::gr_window(u_basicwindow* u_wind)
+: gr_object(u_wind->pos_x, u_wind->pos_y, u_wind->size_x+BORDER_TICK*2, u_wind->size_y+BORDER_TICK*2+TOPBAR_HEIGHT, WINDOWS_PLANE_ZINDEX),
+	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
+	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
+	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), clicked_down_object(0), event_head(0), event_tail(0)
+{
+	constructor(u_wind->title);
+
+	this->set_resizable(u_wind->resizable);
+	this->set_draggable(u_wind->draggable);
+	this->set_visibility(u_wind->visible);
+}
+
+void gr_window::constructor(const char * title)
 {
 	// la finestra è composta da tre container: uno che contiene la topbar, uno che contiene gli oggetti della finestra, e uno che
 	// contiene entrambi i contenitori (main_container), il quale è aggiunto al doubled_framebuffer
@@ -130,6 +149,19 @@ gr_window::~gr_window() {
 	delete inner_container;
 }
 
+void gr_window::update_window_from_user(u_basicwindow * u_wind) {
+	this->set_pos_x(u_wind->pos_x);
+	this->set_pos_y(u_wind->pos_y);
+	this->set_content_size_x(u_wind->size_x);
+	this->set_content_size_y(u_wind->size_y);
+	this->set_title(u_wind->title);
+	this->set_resizable(u_wind->resizable);
+	this->set_draggable(u_wind->draggable);
+	this->set_visibility(u_wind->visible);
+
+	do_resize();
+}
+
 void gr_window::do_resize()
 {
 	// lasciamo all'implementazione do_resize di gr_object la competenza di riallocare il buffer della finestra
@@ -196,13 +228,11 @@ void gr_window::do_resize()
 }
 
 void gr_window::set_content_size_x(int newval){
-	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < BORDER_TICK*2 + CLOSEBUTTON_PADDING_X*2 + CLOSEBUTTON_SIZE)
 		return;
 	this->size_x=newval + BORDER_TICK*2;
 }
 void gr_window::set_content_size_y(int newval){
-	flog(LOG_INFO, "dasdasdsadsa");
 	if(newval < 0)
 		return;
 	this->size_y=newval + TOPBAR_HEIGHT + BORDER_TICK*2;
@@ -245,6 +275,54 @@ void gr_window::set_resizable(bool resizable)
 	this->resizable = resizable;
 }
 
+border_flags gr_window::get_clicked_borders(int rel_pos_x, int rel_pos_y)
+{
+	// devo capire se mi sono effettivamente mosso su un bordo
+	gr_object::search_filter filter;
+	gr_object::search_result res;
+
+	memset(&filter, 0, sizeof(filter));
+	//filter.skip_id = mouse_bitmap->get_id();
+	filter.skip_id = -1;
+	filter.padding_x = 5;
+	filter.padding_y = 5;
+	filter.flags = gr_window::BORDER_FLAG;
+	this->search_tree(rel_pos_x, rel_pos_y, filter, res);
+
+	border_flags result = 0;
+
+	// in questo caso il click non è avvenuto su un bordo (considerando anche il padding)
+	if(res.target == 0)
+		return result; 	// no flags
+
+	if(res.target == this->border_left_bitmap)
+		result |= BORDER_LEFT;
+	else if(res.target == this->border_right_bitmap)
+		result |= BORDER_RIGHT;
+	else if(res.target == this->border_top_bitmap)
+		result |= BORDER_TOP;
+	else if(res.target == this->border_bottom_bitmap)
+		result |= BORDER_BOTTOM;
+
+	// valuto se selezionare anche il bordo ortogonale (resize di entrambi le dimensioni x e y)
+	if(res.target == this->border_left_bitmap || res.target == this->border_right_bitmap)
+	{
+		if(rel_pos_y > this->border_left_bitmap->get_size_y() - BORDER_ANGLE_SIZE)
+			result |= BORDER_BOTTOM;
+		else if(rel_pos_y < BORDER_ANGLE_SIZE)
+			result |= BORDER_TOP;
+	}
+	else if(res.target == this->border_top_bitmap || res.target == this->border_bottom_bitmap)
+	{
+		if(rel_pos_x > this->border_top_bitmap->get_size_x() - BORDER_ANGLE_SIZE)
+			result |= BORDER_RIGHT;
+		else if(rel_pos_x < BORDER_ANGLE_SIZE)
+			result |= BORDER_LEFT;
+	}
+
+	return result;
+}
+
 gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 {
 	gr_object* newobj;
@@ -265,6 +343,10 @@ gr_object *gr_window::add_user_object(u_windowObject * u_obj)
 		case W_ID_PROGRESSBAR:
 			newobj = new gr_progressbar(static_cast<u_progressbar*>(u_obj));
 			newobj->set_search_flag(PROGRESSBAR_FLAG);
+			break;
+		case W_ID_CHECKBOX:
+			newobj = new gr_checkbox(static_cast<u_checkbox*>(u_obj));
+			newobj->set_search_flag(CHECKBOX_FLAG);
 			break;
 		default:
 			LOG_ERROR("c_crea_oggetto: tipo oggetto %d errato", u_obj->TYPE);
@@ -308,6 +390,11 @@ bool gr_window::update_user_object(u_windowObject * u_obj)
 				return false;
 			*(static_cast<gr_progressbar*>(dest_obj)) = *static_cast<u_progressbar*>(u_obj);
 			break;
+		case W_ID_CHECKBOX:
+			if(!dest_obj->has_flag(gr_window::CHECKBOX_FLAG))
+				return false;
+			*(static_cast<gr_checkbox*>(dest_obj)) = *static_cast<u_checkbox*>(u_obj);
+			break;
 		default:
 			LOG_ERROR("update_user_object: tipo oggetto %d errato", u_obj->TYPE);
 			return true;
@@ -331,6 +418,10 @@ bool gr_window::set_focused_child(gr_object *obj)
 {
 	if(obj == 0)
 		return false;
+
+	// se l'oggetto non è cambiato non c'è bisogno di fare altro
+	if(obj == this->focused_object)
+		return true;
 
 	// controllo che l'oggetto a cui andrò ad assegnare il focus faccia effettivamente parte
 	// di questa finestra (dell'inner_container in particolare)
@@ -371,24 +462,26 @@ void gr_window::process_tick_event()
 	inner_container->render();
 }
 
-bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
+window_action gr_window::click_on_topbar(gr_object * dest_obj, mouse_button butt, bool mouse_down)
 {
-	if(dest_obj==0)
-		return false;
+	if(dest_obj==0 || butt!=LEFT)
+		return NOTHING;
 
 	// non abbiamo niente da fare in questi casi, ma dobbiamo segnalare
 	// che va fatto il trascinamento dell'oggetto
-	if((dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label) && draggable)
-		return true;
+	if((dest_obj==this->topbar_bitmap || dest_obj==this->topbar_container || dest_obj==this->title_label) && this->draggable)
+		return DRAG;
 
 	// eventi per close_button
 	if(dest_obj == this->close_button && mouse_down)
 	{
+		this->clicked_down_object = dest_obj;
 		this->close_button->set_clicked(true);
 		this->close_button->render();
 	}
 	else if(dest_obj == this->close_button && !mouse_down)
 	{
+		this->clicked_down_object = 0;
 		this->close_button->set_clicked(false);
 		this->close_button->render();
 		this->user_event_add_close_window();
@@ -398,7 +491,51 @@ bool gr_window::click_on_topbar(gr_object * dest_obj, bool mouse_down)
 
 	// il trascinamento non va segnalato se stiamo gestendo eventi
 	// su oggetti interni alla topbar (esclusa la bitmap)
-	return false;
+	return NOTHING;
+}
+
+window_action gr_window::click_event(gr_object *dest_obj, int abs_pos_x, int abs_pos_y, mouse_button butt, bool mouse_down)
+{
+	// l'evento di mouseup ha sempre come target l'evento su cui è stato precedentemente mandato un evento di mousedown
+	if(!mouse_down)
+		dest_obj = this->clicked_down_object;
+
+	if(!dest_obj)
+		return NOTHING;
+
+	// se il click è stato fatto nella topbar
+	if(this->topbar_container->has_child(dest_obj))
+	{
+		LOG_DEBUG("gr_window: il click è stato fatto sulla topbar della finestra (%d) con mouse_down=%d", this->get_id(), mouse_down);
+
+		// questo metodo processa gli eventi per la topbar e ci comunica se va fatto il trascinamento o meno
+		window_action result = this->click_on_topbar(dest_obj, butt, mouse_down);
+
+		// in questo caso è richiesto il rendering della finestra perchè ho processato eventi per gli oggetti della topbar
+		// CASO ECCEZIONALE: il rendering della finestra è fatto sempre dal gestore delle finestre, ma in questo caso non possiamo
+		// fare altrimenti (per ottimizzare)
+		this->render();
+
+		return result;
+	}
+	else // altrimenti devo generare un evento utente perchè il click è stato fatto dentro la finestra (esclusi bordi e topbar)
+	{
+		if(mouse_down)
+		{
+			if(this->set_focused_child(dest_obj))	// devo anche controllare se l'oggetto è valido (cioè se è un oggetto dell'inner_container)
+			{
+				this->user_event_add_mousebutton((mouse_down) ? USER_EVENT_MOUSEDOWN : USER_EVENT_MOUSEUP, butt, abs_pos_x, abs_pos_y);
+				this->clicked_down_object = dest_obj;
+			}
+		}
+		else
+		{
+			this->user_event_add_mousebutton((mouse_down) ? USER_EVENT_MOUSEDOWN : USER_EVENT_MOUSEUP, butt, abs_pos_x, abs_pos_y);
+			this->clicked_down_object = 0;
+		}
+	}
+
+	return NOTHING;
 }
 
 // gestione degli eventi per utente
