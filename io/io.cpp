@@ -1366,7 +1366,7 @@ bool windows_init()
 	*/
 
 	//label memoria heap
-	heap_label = new gr_label(0,0,140,20,HEAP_LABEL_ZINDEX);
+	heap_label = new gr_label(122,0,140,20,HEAP_LABEL_ZINDEX);
 	render_heap_label();
 	doubled_framebuffer_container->add_child(heap_label);
 
