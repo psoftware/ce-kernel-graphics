@@ -1,0 +1,30 @@
+Se vuoi usare al meglio le funzionalità grafiche del nucleo potrai seguire queste istruzioni:
+
+## Installare QEMU con supporto a libsdl2
+Innanzitutto va installata la libreria sdl2
+
+apt-get install libsdl2-dev
+
+Successivamente va ricompilato QEMU (stock oppure quello fornito dal corso) con il supporto
+per questa libreria. Tra i parametri di compilazione di ./configure va inserito
+
+--enable-sdl \
+--with-sdlabi=2.0 \
+
+## Come usare QEMU
+
+Utilizzare QEMU con --enable-kvm per sfruttare l'accelerazione hardware del processore (se supportata).
+Questo darà un boost notevole sulle performance della macchina virtuale e sulla fluidità dell'interfaccia
+grafica.
+
+## Problemi conosciuti
+
+- Usando --enable-kvm si noterà un lungo tempo di caricamento delle risorse: questo è dovuto al fatto
+  che con le api kvm alcune operazioni di IO sono notevolmente rallentate. In questo caso parliamo delle
+  operazioni di accesso al disco per caricare le pagine (swap in), che sono effettuate in modalità PIO
+  piuttosto che DMA;
+- Usando il resize è molto probabile avere dei crash dovuti al riempimento dell'HEAP, andrebbero gestiti
+  meglio. E' fornito un algoritmo migliorato (branch feat-unbuffered) che alloca la memoria in maniera
+  più efficiente, ma che comunque non previene i crash;
+- Non è possibile avviare due volte una stessa applicazione dal launcher per via della natura delle
+  applicazioni utente;
