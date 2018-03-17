@@ -23,7 +23,7 @@ gr_window::gr_window(int pos_x, int pos_y, int size_x, int size_y, int z_index, 
 }
 
 gr_window::gr_window(u_basicwindow* u_wind)
-: gr_object(u_wind->pos_x, u_wind->pos_y, u_wind->size_x+BORDER_TICK*2, u_wind->size_y+BORDER_TICK*2+TOPBAR_HEIGHT, WINDOWS_PLANE_ZINDEX),
+: gr_object(u_wind->pos_x, u_wind->pos_y, u_wind->size_x+BORDER_TICK*2, u_wind->size_y+BORDER_TICK*2+TOPBAR_HEIGHT, WINDOWS_PLANE_ZINDEX, false),
 	topbar_container(0), topbar_bitmap(0), inner_container(0), background_bitmap(0),
 	border_left_bitmap(0), border_right_bitmap(0), border_top_bitmap(0), border_bottom_bitmap(0),
 	close_button(0), title_label(0), draggable(true), resizable(true), focused_object(0), clicked_down_object(0), event_head(0), event_tail(0)
