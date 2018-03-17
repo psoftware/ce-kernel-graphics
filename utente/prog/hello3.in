@@ -4,9 +4,18 @@
 process hello3 body hello_body3(0), 20, LIV_UTENTE;
 
 long int wait3=39999999;
+
 process_body hello_body3(int a)
 {
-	int finestra = crea_finestra(128,128,320,30, "Close test");
+	u_basicwindow *syscallwind = new u_basicwindow();
+	syscallwind->pos_x=320;
+	syscallwind->pos_y=30;
+	syscallwind->size_x=128;
+	syscallwind->size_y=128;
+	copy("Close test", syscallwind->title);
+	crea_finestra(syscallwind);
+
+	int finestra = syscallwind->w_id;
 
 	u_label * label1 = new u_label();
 	label1->size_x=120;
@@ -18,7 +27,9 @@ process_body hello_body3(int a)
 	copy("", label1->text);
 	int label_id = crea_oggetto(finestra, label1);
 
-	visualizza_finestra(finestra, true);
+	syscallwind->visible = true;
+	aggiorna_finestra(syscallwind, true);
+
 	aggiorna_oggetto(finestra, label_id, label1, true);
 
 	copy("Inizio processo 3!", label1->text);

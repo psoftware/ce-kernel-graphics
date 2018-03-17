@@ -66,8 +66,8 @@ chiudi_finestra:
 	int $IO_TIPO_WINDCL
 	ret
 
-	.global visualizza_finestra
-visualizza_finestra:
+	.global aggiorna_finestra
+aggiorna_finestra:
 	int $IO_TIPO_WINDV
 	ret
 
@@ -107,8 +107,8 @@ dmawritehd_n:
 	ret
 
 
-	.global log
-log:
+	.global do_log
+do_log:
 	int $TIPO_L
 	ret
 

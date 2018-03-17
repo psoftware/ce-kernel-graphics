@@ -6,7 +6,7 @@
 #include "windows/user_event.h"
 
 // costanti per controllare i cast (polimorfismo)
-enum u_obj_type {W_ID_LABEL, W_ID_BUTTON, W_ID_TEXTBOX, W_ID_PROGRESSBAR};
+enum u_obj_type {W_ID_LABEL, W_ID_BUTTON, W_ID_TEXTBOX, W_ID_PROGRESSBAR, W_ID_CHECKBOX};
 
 // costanti per la variabile anchor
 const natb LEFT_ANCHOR = 1u;
@@ -40,7 +40,9 @@ public:
 	void(*handler_mouse_down)(des_user_event event);
 	void(*handler_keyboard_press)(des_user_event event);
 
-	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE) {
+	u_windowObject(u_obj_type TYPE) : anchor(TOP_ANCHOR | LEFT_ANCHOR), TYPE(TYPE),
+		handler_mouse_z(0), handler_mouse_up(0), handler_mouse_down(0), handler_keyboard_press(0)
+	{
 
 	}
 
@@ -194,6 +196,46 @@ class u_progressbar : public u_windowObject
 		u_windowObject::process_event(event);
 
 		//nessun evento da gestire
+	}
+};
+
+class u_checkbox : public u_windowObject
+{
+	public:
+	bool selected;
+
+	u_checkbox() : u_windowObject(W_ID_CHECKBOX), selected(false)
+	{
+
+	}
+
+	void process_event(des_user_event event)
+	{
+		u_windowObject::process_event(event);
+
+		if(event.type==USER_EVENT_MOUSEUP)
+			selected = !selected;
+	}
+};
+
+// questo oggetto serve solo per le syscall usate per gestire le finestre.
+// infatti non ha neanche u_windowObject come classe padre
+class u_basicwindow {
+public:
+	int w_id;
+
+	int pos_x;
+	int pos_y;
+	int size_x;
+	int size_y;
+	char title[150];
+
+	bool visible;
+	bool draggable;
+	bool resizable;
+
+	u_basicwindow() : w_id(-1), pos_x(0), pos_y(0), size_x(0), size_y(0), visible(false), draggable(true), resizable(true) {
+		title[0] = '\0';
 	}
 };
 

@@ -4,13 +4,13 @@
 #include <windows/u_obj.h>
 #include <winobj.h>
 
-process launcher body launcher_body(0), 25, LIV_UTENTE;
 semaphore launcher_mutex value 0;
+process launcher body launcher_body(0), 25, LIV_UTENTE;
 
 const int MAX_LAUNCHER_APPS = 8;
-const int LAUNCHER_ENTRY_SIZE_Y = 24;
-const int LAUNCHER_SIZE_X = 150;
-const int LAUNCHER_SIZE_Y = MAX_LAUNCHER_APPS*LAUNCHER_ENTRY_SIZE_Y;
+const int LAUNCHER_ENTRY_SIZE_Y = 40;
+const int LAUNCHER_SIZE_X = 120;
+const int LAUNCHER_SIZE_Y = 700;
 
 struct application_entry
 {
@@ -73,8 +73,10 @@ void launcher_close_handler(des_user_event e)
 
 process_body launcher_body()
 {
-	launcher_window = new u_window(LAUNCHER_SIZE_X, LAUNCHER_SIZE_Y, 400, 400,"Launcher");
+	launcher_window = new u_window(LAUNCHER_SIZE_X, LAUNCHER_SIZE_Y, 0, 0,"Launcher");
 	launcher_window->handler_closed_window = launcher_close_handler;
+	launcher_window->resizable(false);
+	launcher_window->draggable(false);
 	launcher_window->show();
 
 	//sblocca processi che si vogliono registrare

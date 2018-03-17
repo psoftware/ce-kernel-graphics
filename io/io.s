@@ -125,8 +125,8 @@ delay:
 	int $TIPO_D
 	ret
 
-	.global log
-log:
+	.global do_log
+do_log:
 	int $TIPO_L
 	ret
 
@@ -328,7 +328,7 @@ fill_io_gates:
 	fill_io_gate	IO_TIPO_WSE0	a_writese_0
 	fill_io_gate	IO_TIPO_WINDC	a_crea_finestra
 	fill_io_gate	IO_TIPO_WINDCL	a_chiudi_finestra
-	fill_io_gate	IO_TIPO_WINDV	a_visualizza_finestra
+	fill_io_gate	IO_TIPO_WINDV	a_aggiorna_finestra
 	fill_io_gate	IO_TIPO_WINDOC	a_crea_oggetto
 	fill_io_gate	IO_TIPO_WINDUC	a_aggiorna_oggetto
 	fill_io_gate	IO_TIPO_WINDPE	a_preleva_evento
@@ -374,7 +374,8 @@ a_writese_0:
 	cavallo_di_troia %rsi
 	cavallo_di_troia %rdx
 	cavallo_di_troia2 %rdx $4
-	cavallo_di_troia2 %rsi (%rdx)
+	movslq (%rdx), %r8
+	cavallo_di_troia2 %rsi %r8
 	call c_writese_0
 	iretq
 
@@ -390,9 +391,9 @@ a_chiudi_finestra:
 	call c_chiudi_finestra
 	iretq
 
-	.extern c_visualizza_finestra
-a_visualizza_finestra:
-	call c_visualizza_finestra
+	.extern c_aggiorna_finestra
+a_aggiorna_finestra:
+	call c_aggiorna_finestra
 	iretq
 
 	.extern c_crea_oggetto

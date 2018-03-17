@@ -1,11 +1,12 @@
-START_SISTEMA=   0x0000000000200200
+PREFIX=$(HOME)/CE
+include $(PREFIX)/etc/libce.conf
+
+START_SISTEMA=   0x0000000000200000
 SWAP=		 swap.img
 -include util/start.mk
 
-LIBCE ?= $(HOME)/CE
-
 NCC ?= g++
-NLD ?= ld
+NLD ?= ld.gold
 
 COMM_CFLAGS=$(CFLAGS) \
 	-Wall 			\
@@ -13,9 +14,8 @@ COMM_CFLAGS=$(CFLAGS) \
 	-fno-exceptions 	\
 	-fno-rtti 		\
 	-fno-stack-protector 	\
-	-fno-pic 		\
 	-Iinclude		\
-	-I$(LIBCE)/include/ce	\
+	-I$(INCLUDE)		\
 	-mno-red-zone		\
 	-O2			\
 	-gdwarf-2
@@ -25,11 +25,11 @@ COMM_LDFLAGS=\
 
 COMM_LDLIBS=
 
-NCFLAGS=$(COMM_CFLAGS) -m64 -mcmodel=large
+NCFLAGS=$(COMM_CFLAGS) -m64 -Wno-builtin-declaration-mismatch
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif
-NLDFLAGS=$(COMM_LDLIBS) -melf_x86_64 -L$(LIBCE)/lib64/ce
+NLDFLAGS=$(COMM_LDFLAGS) -melf_x86_64 -L$(LIB64)
 NLDLIBS=$(COMM_LDLIBS) -lce64
 
 ifdef AUTOCORR
@@ -71,15 +71,15 @@ io/io_s.o: io/io.s include/costanti.h
 	$(NCC) $(NCFLAGS) -x assembler-with-cpp -c io/io.s -o io/io_s.o
 
 io/io_cpp.o: io/io.cpp include/costanti.h io/windows/consts.h
-	$(NCC) $(NCFLAGS) -c io/io.cpp -o io/io_cpp.o
+	$(NCC) $(NCFLAGS) -fpic -c io/io.cpp -o io/io_cpp.o
 
 ## compilazione modulo windows di io
 io/windows/%.o: io/windows/%.cpp
-	$(NCC) $(NCFLAGS) -c -o $@ $<
+	$(NCC) $(NCFLAGS) -fpic -c -o $@ $<
 
 ## compilazione risorse per modulo windows dell'io
 io/windows/resources/%.o: io/windows/resources/%.cpp
-	$(NCC) $(NCFLAGS) -c -o $@ $<
+	$(NCC) $(NCFLAGS) -fpic -c -o $@ $<
 
 # compilazione di utente.s e utente.cpp
 utente/uten_s.o: utente/utente.s include/costanti.h
@@ -89,10 +89,10 @@ utente/utente.cpp: build/parse  utente/prog/*.in utente/include/* utente/prog
 	build/parse -o utente/utente.cpp utente/prog/*.in
 
 utente/uten_cpp.o: utente/utente.cpp
-	$(NCC) $(NCFLAGS) -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
+	$(NCC) $(NCFLAGS) -fpic -Iutente/include -c utente/utente.cpp -o utente/uten_cpp.o
 
 utente/lib.o: utente/lib.cpp utente/include/lib.h
-	$(NCC) $(NCFLAGS) -Iutente/include -c utente/lib.cpp -o utente/lib.o
+	$(NCC) $(NCFLAGS) -fpic -Iutente/include -c utente/lib.cpp -o utente/lib.o
 
 # creazione di parse e createimg
 build/parse: util/parse.c util/src.h
@@ -143,7 +143,7 @@ clean-all: \
 	clean-res
 
 reset: clean
-	rm -f build/* swap
+	rm -f build/* $(SWAP) .swap
 
 build:
 	mkdir -p $@
