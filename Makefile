@@ -17,7 +17,6 @@ COMM_CFLAGS=$(CFLAGS) \
 	-Iinclude		\
 	-I$(INCLUDE)		\
 	-mno-red-zone		\
-	-O2			\
 	-gdwarf-2
 
 COMM_LDFLAGS=\
@@ -25,7 +24,7 @@ COMM_LDFLAGS=\
 
 COMM_LDLIBS=
 
-NCFLAGS=$(COMM_CFLAGS) -m64 -Wno-builtin-declaration-mismatch
+NCFLAGS=$(COMM_CFLAGS) -m64 -Wno-builtin-declaration-mismatch -DX86_64
 ifdef DEBUG
 	NCFLAGS+=-DDEBUG
 endif

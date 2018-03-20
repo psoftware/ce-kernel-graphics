@@ -30,4 +30,9 @@ void operator delete[](void* obj)
 	mem_free(obj);
 }
 
+void operator delete(void *obj, unsigned long)
+{
+	mem_free(obj);
+}
+
 #endif
